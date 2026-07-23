@@ -1,14 +1,11 @@
 // import type은 실행 코드가 아니라 TypeScript의 자료형 검사에만 사용하는 가져오기입니다.
 import type {
   CurriculumItem,
-  EncouragementMessage,
-  GuardianComment,
   LessonMaterial,
   LearningEvent,
   LearningRecord,
   RecommendedCurriculumItem,
   ReportVersion,
-  ShareLink,
   Student,
   TeacherNote,
   TrainingSession,
@@ -641,52 +638,6 @@ export const teacherNotes: TeacherNote[] = [
   },
 ]
 
-export const encouragementMessages: EncouragementMessage[] = [
-  {
-    id: 301,
-    studentId: 1,
-    source: 'teacher',
-    audience: 'child',
-    status: 'seen-by-child',
-    author: '이OO 선생님',
-    originalText: '어려운 받침도 끝까지 읽어 낸 노력이 정말 멋졌어!',
-    deliveryText: '어려운 받침도 끝까지 읽어 낸 노력이 정말 멋졌어!',
-    deliveryTiming: 'immediate',
-    deliveredAt: '2026-07-17 16:42',
-    seenAt: '2026-07-17 18:03',
-    createdAt: '2026-07-17 16:40',
-    updatedAt: '2026-07-17 18:03',
-  },
-  {
-    id: 302,
-    studentId: 1,
-    source: 'guardian',
-    audience: 'child',
-    status: 'pending-approval',
-    author: '이OO 보호자',
-    originalText: '요즘 스스로 책을 펼치는 모습이 대견해. 천천히 해도 괜찮아!',
-    deliveryText: '스스로 책을 펼치는 모습이 정말 대견해. 천천히 해도 괜찮아!',
-    deliveryTiming: 'next-login',
-    createdAt: '2026-07-20 20:14',
-    updatedAt: '2026-07-20 20:14',
-  },
-]
-
-export const guardianComments: GuardianComment[] = [
-  {
-    id: 401,
-    studentId: 1,
-    source: 'guardian',
-    audience: 'teacher-only',
-    status: 'unread',
-    author: '이OO 보호자',
-    reportVersion: 1,
-    text: '집에서도 소리 내어 읽는 시간이 늘었습니다. 다음 단계에서 집에서 도울 방법이 있을까요?',
-    createdAt: '2026-07-20 20:09',
-    updatedAt: '2026-07-20 20:09',
-  },
-]
-
 export const reportVersions: ReportVersion[] = [
   {
     id: 601,
@@ -705,7 +656,7 @@ export const reportVersions: ReportVersion[] = [
     id: 600,
     studentId: 1,
     version: 1,
-    status: 'shared',
+    status: 'published',
     periodStart: '2026-05-15',
     periodEnd: '2026-06-14',
     teacherOpinion:
@@ -715,17 +666,3 @@ export const reportVersions: ReportVersion[] = [
     publishedAt: '2026-06-18 11:05',
   },
 ]
-
-export const activeShareLink: ShareLink = {
-  id: 501,
-  reportVersionId: 1,
-  status: 'active',
-  maskedUrl: 'iread.kr/r/••••••8K2P',
-  copyValue: 'https://iread.kr/r/mock-8K2P',
-  expiresAt: '2026-08-20',
-  createdAt: '2026-07-20 18:30',
-  firstViewedAt: '2026-07-20 20:02',
-  lastViewedAt: '2026-07-20 20:14',
-  guardianAuthentication: 'verified',
-  guardianContactHint: '010-****-5678',
-}

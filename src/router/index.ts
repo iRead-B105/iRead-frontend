@@ -29,12 +29,6 @@ const router = createRouter({
       component: () => import('@/views/teacher/TeacherResetPasswordView.vue'),
     },
     {
-      path: '/shared-report/:token',
-      name: 'guardian-shared-report',
-      component: () => import('@/views/guardian/GuardianReportView.vue'),
-      meta: { title: '보호자 공유 보고서' },
-    },
-    {
       path: '/teacher',
       // import()는 해당 화면이 필요할 때 파일을 내려받는 '지연 로딩' 방식입니다.
       component: () => import('@/layouts/TeacherLayout.vue'),

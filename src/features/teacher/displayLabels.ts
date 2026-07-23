@@ -1,11 +1,9 @@
 import type {
   Audience,
-  EncouragementStatus,
   LearningEventStatus,
   LearningEventType,
   MessageSource,
   ReportStatus,
-  ShareLinkStatus,
 } from './types'
 
 export const audienceLabels = {
@@ -33,24 +31,7 @@ export const learningEventStatusLabels = {
   'follow-up-needed': '후속 지도 필요',
 } satisfies Record<LearningEventStatus, string>
 
-export const encouragementStatusLabels = {
-  'pending-approval': '승인 대기',
-  scheduled: '전달 예정',
-  delivered: '전달 완료',
-  'seen-by-child': '아동 확인',
-  'on-hold': '보류',
-  archived: '보관',
-} satisfies Record<EncouragementStatus, string>
-
 export const reportStatusLabels = {
   draft: '초안',
   published: '발행됨',
-  shared: '공유 중',
-  'share-ended': '공유 종료',
 } satisfies Record<ReportStatus, string>
-
-export const shareLinkStatusLabels = {
-  active: '사용 가능',
-  expired: '기간 만료',
-  revoked: '폐기됨',
-} satisfies Record<ShareLinkStatus, string>

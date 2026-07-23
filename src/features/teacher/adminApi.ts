@@ -120,15 +120,6 @@ export interface Report {
   teacherMemo: string
 }
 
-export interface ReportShare {
-  shareId: number
-  reportId: number
-  shareUrl?: string
-  expiresAt: string
-  createdAt: string
-  expired?: boolean
-}
-
 export const authApi = {
   login: (email: string, password: string) =>
     apiRequest<TeacherInfo>('/api/auth/login', {
@@ -218,20 +209,4 @@ export const reportApi = {
       body: jsonBody({ studentId, startDate, endDate, teacherMemo }),
     }),
   get: (reportId: number) => apiRequest<Report>(`/api/admin/report/${reportId}`),
-  createShare: (reportId: number) =>
-    apiRequest<ReportShare>(`/api/admin/report/${reportId}/shares`, { method: 'POST' }),
-  shares: (reportId: number) =>
-    apiRequest<ReportShare[]>(`/api/admin/report/${reportId}/shares`),
-  feedbacks: (unreadOnly = false) =>
-    apiRequest<Array<{
-      feedbackId: number
-      reportId: number
-      studentId: number
-      studentName: string
-      content: string
-      createdAt: string
-      readAt: string | null
-    }>>(`/api/admin/report/feedbacks?unreadOnly=${unreadOnly}`),
-  markFeedbackRead: (feedbackId: number) =>
-    apiRequest<void>(`/api/admin/report/feedbacks/${feedbackId}/read`, { method: 'PATCH' }),
 }

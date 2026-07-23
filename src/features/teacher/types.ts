@@ -93,17 +93,7 @@ export type LearningEventType =
 
 export type LearningEventStatus = 'needs-review' | 'reviewed' | 'follow-up-needed'
 
-export type EncouragementStatus =
-  | 'pending-approval'
-  | 'scheduled'
-  | 'delivered'
-  | 'seen-by-child'
-  | 'on-hold'
-  | 'archived'
-
-export type ReportStatus = 'draft' | 'published' | 'shared' | 'share-ended'
-
-export type ShareLinkStatus = 'active' | 'expired' | 'revoked'
+export type ReportStatus = 'draft' | 'published'
 
 export interface LearningRecord {
   id: number
@@ -150,27 +140,6 @@ export interface TeacherNote extends MessageBase<'active' | 'archived'> {
   text: string
 }
 
-export interface EncouragementMessage extends MessageBase<EncouragementStatus> {
-  author: string
-  originalText: string
-  deliveryText: string
-  deliveryTiming: 'immediate' | 'next-login'
-  scheduledAt?: string
-  deliveredAt?: string
-  seenAt?: string
-  approvedBy?: string
-  approvedAt?: string
-  holdReason?: string
-  deliveryStatusPending?: boolean
-}
-
-export interface GuardianComment extends MessageBase<'unread' | 'read' | 'archived'> {
-  author: string
-  reportVersion: number
-  text: string
-  readAt?: string
-}
-
 export interface ReportVersion {
   id: number
   studentId: number
@@ -182,20 +151,4 @@ export interface ReportVersion {
   createdAt: string
   updatedAt: string
   publishedAt?: string
-}
-
-export interface ShareLink {
-  id: number
-  reportVersionId: number
-  status: ShareLinkStatus
-  maskedUrl: string
-  copyValue: string
-  expiresAt: string
-  createdAt: string
-  firstViewedAt?: string
-  lastViewedAt?: string
-  pdfSavedAt?: string
-  revokedAt?: string
-  guardianAuthentication: 'not-attempted' | 'verified' | 'failed'
-  guardianContactHint: string
 }

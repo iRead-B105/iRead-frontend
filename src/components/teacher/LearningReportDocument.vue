@@ -178,7 +178,6 @@ function formatDate(value: string) {
       <slot name="actions"></slot>
     </section>
 
-    <slot name="share-status"></slot>
 
     <footer class="learning-report__footer">
       <span>iRead 학습 관리</span>

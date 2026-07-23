@@ -89,6 +89,20 @@ async function signup() {
           <label for="signup-organization">소속기관</label>
           <Input id="signup-organization" v-model="form.organization" class="input" required placeholder="소속 기관명" />
         </div>
+
+        <fieldset class="field gender-field">
+          <legend>성별</legend>
+          <div class="gender-options">
+            <label :class="{ selected: form.gender === 'FEMALE' }">
+              <input v-model="form.gender" type="radio" name="gender" value="FEMALE" required />
+              <span>여성</span>
+            </label>
+            <label :class="{ selected: form.gender === 'MALE' }">
+              <input v-model="form.gender" type="radio" name="gender" value="MALE" required />
+              <span>남성</span>
+            </label>
+          </div>
+        </fieldset>
       </section>
 
       <p v-if="errorMessage" class="signup-error" role="alert">{{ errorMessage }}</p>
@@ -124,6 +138,31 @@ async function signup() {
 .signup-fields { display: grid; gap: 19px; }
 .signup-fields .input { height: 46px; }
 .field-help { margin: -2px 0 0; color: var(--slate-500); font-size: 11px; }
+.gender-field { min-width: 0; margin: 0; padding: 0; border: 0; }
+.gender-field legend { margin-bottom: 8px; font-size: 13px; font-weight: 700; }
+.gender-options { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.gender-options label {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  color: var(--slate-600);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+.gender-options label:hover { border-color: var(--primary-300); background: var(--primary-50); }
+.gender-options label.selected {
+  border-color: var(--primary-500);
+  background: var(--primary-50);
+  color: var(--primary-700);
+  box-shadow: 0 0 0 1px var(--primary-500);
+}
+.gender-options input { width: 16px; height: 16px; accent-color: var(--primary-600); }
 .signup-divider { height: 1px; margin: 30px 0; background: var(--slate-200); }
 .signup-error { padding: 10px 13px; border-radius: 8px; background: #fff1f2; color: var(--danger-600); font-size: 12px; }
 .signup-submit { width: 100%; min-height: 50px; margin-top: 30px; }
