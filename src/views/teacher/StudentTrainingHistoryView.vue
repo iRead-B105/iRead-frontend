@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 훈련 세션을 선택해 상세 결과와 읽기 속도 변화를 확인하는 화면입니다.
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import type { EChartsOption } from 'echarts'
 import ChartPanel from '@/components/common/ChartPanel.vue'
@@ -8,14 +8,6 @@ import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { chartColors } from '@/features/teacher/chartTheme'
 import { studentApi } from '@/features/teacher/adminApi'
 import type { ReadingSpeedTrend } from '@/features/teacher/adminApi'
@@ -25,7 +17,6 @@ const route = useRoute()
 const trainingSessions = ref<TrainingSession[]>([])
 // 첫 훈련을 기본 선택하며 데이터가 비어 있으면 id 1을 임시 기본값으로 씁니다.
 const selectedSessionId = ref(1)
-const period = ref('최근 30일')
 const readingSpeedTrend = ref<ReadingSpeedTrend>()
 type ReadingSpeedBasis = 'voice' | 'gaze'
 
@@ -84,12 +75,6 @@ onMounted(async () => {
   readingSpeedTrend.value = trend
 })
 
-watch(period, () => {
-  void fetchReadingSpeedTrend(Number(route.params.id)).then((trend) => {
-    readingSpeedTrend.value = trend
-  })
-})
-
 // 선택한 산출 기준에 맞춰 차트의 설명과 계열 데이터를 함께 전환합니다.
 const speedChart = computed<EChartsOption>(() => ({
   tooltip: { trigger: 'axis', valueFormatter: (value) => `${value}단어/분` },
@@ -119,24 +104,7 @@ const speedChart = computed<EChartsOption>(() => ({
 }))
 
 async function fetchReadingSpeedTrend(studentId: number) {
-  const { from, to } = readingSpeedPeriod()
-  return studentApi.readingSpeedTrend(studentId, from, to)
-}
-
-function readingSpeedPeriod() {
-  const to = new Date()
-  const from = new Date(to)
-  if (period.value === '최근 3개월') {
-    from.setMonth(from.getMonth() - 3)
-  } else {
-    from.setDate(from.getDate() - 29)
-  }
-  return { from: formatApiDate(from), to: formatApiDate(to) }
-}
-
-function formatApiDate(value: Date) {
-  const pad = (number: number) => String(number).padStart(2, '0')
-  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+  return studentApi.readingSpeedTrend(studentId)
 }
 
 function formatChartDate(value: string) {
@@ -298,22 +266,6 @@ function downloadJsonData() {
       </div>
 
       <Card class="training-detail">
-        <div class="detail-filter">
-          <div class="detail-filter__field">
-            <Label for="training-period">조회 기간</Label>
-            <Select v-model="period">
-              <SelectTrigger id="training-period" class="select !h-9 !w-[148px] px-3">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="최근 30일">최근 30일</SelectItem>
-                <SelectItem value="최근 3개월">최근 3개월</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <span>{{ period }} · 훈련 {{ trainingSessions.length }}건</span>
-        </div>
-
         <header class="detail-heading">
           <div>
             <span>선택한 훈련</span>
@@ -392,30 +344,6 @@ function downloadJsonData() {
   gap: 20px;
   container-type: inline-size;
 }
-.detail-filter {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
-}
-.detail-filter__field {
-  display: grid;
-  gap: 6px;
-}
-.detail-filter label {
-  color: var(--slate-600);
-  font-size: 11px;
-  font-weight: 700;
-}
-.detail-filter > span {
-  padding-bottom: 9px;
-  color: var(--slate-500);
-  font-size: 11px;
-  white-space: nowrap;
-}
 .training-workspace {
   display: grid;
   align-items: stretch;
@@ -454,7 +382,9 @@ function downloadJsonData() {
   font-size: 12px;
 }
 .session-table {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: min(640px, calc(100vh - 250px));
   margin-top: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -467,10 +397,13 @@ function downloadJsonData() {
   grid-template-columns: 120px minmax(0, 1fr) 88px;
 }
 .session-table__head {
+  position: sticky;
+  z-index: 2;
+  top: 0;
   min-height: 40px;
   padding: 9px 14px;
   border-bottom: 1px solid var(--slate-300);
-  background: color-mix(in oklch, var(--muted) 42%, transparent);
+  background: var(--muted);
   color: var(--slate-500);
   font-size: 12px;
   font-weight: 600;

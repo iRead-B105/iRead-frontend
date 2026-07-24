@@ -219,10 +219,13 @@ export const studentApi = {
     apiRequest<void>(`/api/admin/student/${studentId}`, { method: 'DELETE' }),
   accuracyTrend: (studentId: number) =>
     apiRequest<AccuracyTrend[]>(`/api/admin/student/${studentId}/accuracy-trend`),
-  readingSpeedTrend: (studentId: number, from: string, to: string) => {
-    const query = new URLSearchParams({ from, to })
+  readingSpeedTrend: (studentId: number, from?: string, to?: string) => {
+    const query = new URLSearchParams()
+    if (from) query.set('from', from)
+    if (to) query.set('to', to)
+    const suffix = query.size ? `?${query}` : ''
     return apiRequest<ReadingSpeedTrend>(
-      `/api/admin/student/${studentId}/reading-speed-trend?${query}`,
+      `/api/admin/student/${studentId}/reading-speed-trend${suffix}`,
     )
   },
   trainingHistory: (studentId: number) =>
