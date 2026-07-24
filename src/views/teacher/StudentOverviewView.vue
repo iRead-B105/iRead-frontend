@@ -37,7 +37,8 @@ const accuracyTrend = ref<AccuracyTrend[]>([])
 const trainingCatalog = ref<TrainingCatalog[]>([])
 const learningRecords = ref<LearningRecord[]>([])
 const learningRecordsState = ref<AsyncContentState>('loading')
-const referenceDate = new Date('2026-07-20T00:00:00')
+const referenceDate = new Date()
+referenceDate.setHours(0, 0, 0, 0)
 const eventItems = ref<LearningEvent[]>(initialLearningEvents.map((event) => ({ ...event })))
 const draftsByStudent = reactive<Record<number, CommunicationDraft>>(
   Object.fromEntries(mockStudents.map((student) => [student.id, { note: '' }])),
@@ -103,7 +104,8 @@ const oldestActionLabel = computed(() => {
 
 const currentDraft = computed(() => {
   const studentId = currentStudent.value.id
-  return draftsByStudent[studentId]!
+  draftsByStudent[studentId] ??= { note: '' }
+  return draftsByStudent[studentId]
 })
 const noteDraft = computed({
   get: () => currentDraft.value.note,
@@ -115,7 +117,10 @@ const noteDraft = computed({
 const recentLearningLabel = computed(() => {
   if (!currentStudent.value.lastLearningDate) return '-'
   const learningDate = new Date(`${currentStudent.value.lastLearningDate}T00:00:00`)
-  const days = Math.floor((referenceDate.getTime() - learningDate.getTime()) / 86_400_000)
+  const days = Math.max(
+    0,
+    Math.floor((referenceDate.getTime() - learningDate.getTime()) / 86_400_000),
+  )
   if (days === 0) return '오늘'
   if (days === 1) return '어제'
   return `${days}일 전`

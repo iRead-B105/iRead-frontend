@@ -48,17 +48,47 @@ export interface StudentPayload {
   imageUrl?: string | null
 }
 
+export interface CreateStudentResponse {
+  studentId: number
+}
+
 export interface AccuracyTrend {
   date: string
   accuracy: number
 }
 
+export interface ReadingSpeedTrend {
+  from: string
+  to: string
+  unit: 'WORDS_PER_MINUTE'
+  voiceChangeRate: number | null
+  gazeChangeRate: number | null
+  points: Array<{
+    date: string
+    voiceSpeed: number | null
+    gazeSpeed: number | null
+    voiceWordCount: number | null
+    gazeWordCount: number | null
+    voiceDurationMs: number | null
+    gazeDurationMs: number | null
+    trainingCount: number
+  }>
+}
+
 export interface TrainingHistory {
+  trainingId: number
   date: string
   learningType: string
   startedAt: string | null
   finishedAt: string | null
   achievement: number | null
+  questions: Array<{
+    questionNumber: number
+    question: string | null
+    correct: boolean
+    selectedAnswer: string | null
+    correctAnswer: string | null
+  }>
 }
 
 export interface TrainingCatalog {
@@ -84,6 +114,18 @@ export interface DailyCurriculum {
     unitName: string
     trainingName: string
   }>
+}
+
+export interface GeneratedTrainingQuestion {
+  questionId: string
+  sequence: number
+  problem: Record<string, unknown>
+  answer: Record<string, unknown>
+}
+
+export interface GeneratedTraining {
+  questions: GeneratedTrainingQuestion[]
+  [key: string]: unknown
 }
 
 export interface TestListItem {
@@ -164,7 +206,10 @@ export const studentApi = {
   list: () => apiRequest<StudentListItem[]>('/api/admin/student/list'),
   get: (studentId: number) => apiRequest<StudentDetail>(`/api/admin/student/${studentId}`),
   create: (payload: StudentPayload) =>
-    apiRequest<void>('/api/admin/student', { method: 'POST', body: jsonBody(payload) }),
+    apiRequest<CreateStudentResponse>('/api/admin/student', {
+      method: 'POST',
+      body: jsonBody(payload),
+    }),
   update: (studentId: number, payload: StudentPayload) =>
     apiRequest<void>(`/api/admin/student/${studentId}`, {
       method: 'PATCH',
@@ -174,6 +219,12 @@ export const studentApi = {
     apiRequest<void>(`/api/admin/student/${studentId}`, { method: 'DELETE' }),
   accuracyTrend: (studentId: number) =>
     apiRequest<AccuracyTrend[]>(`/api/admin/student/${studentId}/accuracy-trend`),
+  readingSpeedTrend: (studentId: number, from: string, to: string) => {
+    const query = new URLSearchParams({ from, to })
+    return apiRequest<ReadingSpeedTrend>(
+      `/api/admin/student/${studentId}/reading-speed-trend?${query}`,
+    )
+  },
   trainingHistory: (studentId: number) =>
     apiRequest<TrainingHistory[]>(`/api/admin/student/${studentId}/training-history`),
   updateTeacherMemo: (studentId: number, teacherMemo: string) =>
@@ -194,6 +245,11 @@ export const trainingApi = {
     apiRequest<DailyCurriculum>(
       `/api/admin/training/${studentId}/${curriculumId}`,
     ),
+  createCurriculum: (studentId: number, trainingTemplateIds: number[]) =>
+    apiRequest<DailyCurriculum>(`/api/admin/training/${studentId}/curriculum`, {
+      method: 'POST',
+      body: jsonBody({ trainingTemplateIds }),
+    }),
   updateCurriculum: (studentId: number, curriculumId: number, trainingTemplateIds: number[]) =>
     apiRequest<void>(`/api/admin/training/${studentId}/${curriculumId}`, {
       method: 'PATCH',
@@ -214,9 +270,22 @@ export const trainingApi = {
       { method: 'DELETE' },
     ),
   generate: (studentId: number, trainingId: number) =>
-    apiRequest<Record<string, unknown>>(
+    apiRequest<GeneratedTraining>(
       `/api/admin/training/${studentId}/${trainingId}/generate`,
       { method: 'POST' },
+    ),
+  complete: (
+    studentId: number,
+    trainingId: number,
+    result: Record<string, unknown>,
+    completedAt?: string,
+  ) =>
+    apiRequest<{ accuracy: number }>(
+      `/api/admin/training/${studentId}/${trainingId}/complete`,
+      {
+        method: 'POST',
+        body: jsonBody({ result, completedAt }),
+      },
     ),
 }
 

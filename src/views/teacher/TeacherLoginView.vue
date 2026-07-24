@@ -9,7 +9,44 @@ const router = useRouter()
 const form = reactive({ loginId: '', password: '' })
 const showPassword = ref(false)
 const submitting = ref(false)
+const insertingTeacher = ref(false)
 const errorMessage = ref('')
+const exampleMessage = ref('')
+
+const exampleTeacher = {
+  email: 'professor@example.com',
+  password: 'professor123',
+  name: '예시교수',
+  organization: '아이리드 학습센터',
+  gender: 'Female' as const,
+}
+
+function fillExampleLogin() {
+  form.loginId = exampleTeacher.email
+  form.password = exampleTeacher.password
+}
+
+async function insertTeacherData() {
+  if (insertingTeacher.value) return
+  insertingTeacher.value = true
+  errorMessage.value = ''
+  exampleMessage.value = ''
+
+  try {
+    await authApi.signup(exampleTeacher)
+    fillExampleLogin()
+    exampleMessage.value = '교수 데이터를 생성하고 로그인 정보를 입력했습니다.'
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('이미 사용 중인 이메일')) {
+      fillExampleLogin()
+      exampleMessage.value = '기존 교수 데이터의 로그인 정보를 입력했습니다.'
+    } else {
+      errorMessage.value = error instanceof Error ? error.message : '교수 데이터 삽입에 실패했습니다.'
+    }
+  } finally {
+    insertingTeacher.value = false
+  }
+}
 
 async function login() {
   if (submitting.value) return
@@ -81,8 +118,19 @@ async function login() {
           {{ submitting ? '로그인 중...' : '로그인' }}
         </Button>
         <p class="login-signup-link">
-          아직 계정이 없으신가요? <RouterLink to="/signup">회원가입</RouterLink>
+          <span>아직 계정이 없으신가요? <RouterLink to="/signup">회원가입</RouterLink></span>
+          <Button
+            class="teacher-data-button"
+            type="button"
+            variant="outline"
+            size="sm"
+            :disabled="insertingTeacher"
+            @click="insertTeacherData"
+          >
+            {{ insertingTeacher ? '삽입 중...' : '교수 데이터 삽입' }}
+          </Button>
         </p>
+        <p v-if="exampleMessage" class="example-message" role="status">{{ exampleMessage }}</p>
       </form>
     </section>
   </main>
@@ -215,14 +263,32 @@ async function login() {
 }
 
 .login-signup-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   margin: 22px 0 0;
   color: var(--slate-500);
   text-align: center;
+  flex-wrap: wrap;
 }
 
 .login-signup-link a {
   color: var(--primary-600);
   font-weight: 800;
+}
+
+.teacher-data-button {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+.example-message {
+  margin: 10px 0 0;
+  color: var(--primary-700);
+  font-size: 12px;
+  text-align: center;
 }
 
 @media (max-height: 700px) {

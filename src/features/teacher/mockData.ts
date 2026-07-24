@@ -533,6 +533,7 @@ export const trainingSessions: TrainingSession[] = [
     achievement: 88,
     curriculum: '파닉스(ㄱㄴㄷㄹㅁㅂ 받침 훈련)',
     summary: '받침이 포함된 낱말 12개 중 10개를 정확하게 읽었습니다.',
+    questions: [],
   },
   {
     id: 2,
@@ -541,6 +542,7 @@ export const trainingSessions: TrainingSession[] = [
     achievement: 100,
     curriculum: '유창성(짧은 문장 읽기)',
     summary: '문장 속도와 억양이 안정적으로 유지되었습니다.',
+    questions: [],
   },
   {
     id: 3,
@@ -549,6 +551,7 @@ export const trainingSessions: TrainingSession[] = [
     achievement: 50,
     curriculum: '이해력(핵심 내용 찾기)',
     summary: '핵심어를 찾는 과정에서 교수자의 추가 안내가 필요했습니다.',
+    questions: [],
   },
 ]
 

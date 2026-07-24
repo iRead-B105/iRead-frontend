@@ -66,6 +66,13 @@ export interface TrainingSession {
   achievement: number
   curriculum: string
   summary: string
+  questions: Array<{
+    questionNumber: number
+    question: string | null
+    correct: boolean
+    selectedAnswer: string | null
+    correctAnswer: string | null
+  }>
 }
 
 export interface RecommendedCurriculumItem {

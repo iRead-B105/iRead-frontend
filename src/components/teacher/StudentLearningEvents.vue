@@ -60,7 +60,6 @@ function formatDate(value: string) {
     <header class="learning-events__heading">
       <div>
         <h2 id="recent-learning-title">최근 학습 기록</h2>
-        <p>예외가 발생한 기록만 확인 상태를 표시합니다.</p>
       </div>
     </header>
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 훈련 세션을 선택해 상세 결과와 읽기 속도 변화를 확인하는 화면입니다.
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { EChartsOption } from 'echarts'
 import ChartPanel from '@/components/common/ChartPanel.vue'
@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select'
 import { chartColors } from '@/features/teacher/chartTheme'
 import { studentApi } from '@/features/teacher/adminApi'
+import type { ReadingSpeedTrend } from '@/features/teacher/adminApi'
 import type { TrainingSession } from '@/features/teacher/types'
 
 const route = useRoute()
@@ -25,42 +26,88 @@ const trainingSessions = ref<TrainingSession[]>([])
 // 첫 훈련을 기본 선택하며 데이터가 비어 있으면 id 1을 임시 기본값으로 씁니다.
 const selectedSessionId = ref(1)
 const period = ref('최근 30일')
+const readingSpeedTrend = ref<ReadingSpeedTrend>()
+type ReadingSpeedBasis = 'voice' | 'gaze'
+
+const speedBasis = ref<ReadingSpeedBasis>('voice')
+const speedBasisOptions = [
+  {
+    value: 'voice',
+    label: '음성 기준',
+    description: '발화 시간을 기준으로 계산한 분당 정확 단어 수',
+    seriesName: '음성 기준 읽기 속도',
+  },
+  {
+    value: 'gaze',
+    label: '아이 트래킹 기준',
+    description: '시선 이동 시간을 기준으로 계산한 분당 읽은 단어 수',
+    seriesName: '아이 트래킹 기준 읽기 속도',
+  },
+] as const
+
+const activeSpeedBasis = computed(
+  () => speedBasisOptions.find((option) => option.value === speedBasis.value) ?? speedBasisOptions[0],
+)
 // 선택 id가 바뀔 때 해당 훈련 객체를 다시 찾아 오른쪽 상세 내용도 갱신합니다.
 const selectedSession = computed(() =>
   trainingSessions.value.find((session) => session.id === selectedSessionId.value),
 )
 
+const activeChangeRate = computed(() =>
+  speedBasis.value === 'voice'
+    ? readingSpeedTrend.value?.voiceChangeRate
+    : readingSpeedTrend.value?.gazeChangeRate,
+)
+
+const activeSpeedData = computed(() =>
+  (readingSpeedTrend.value?.points ?? []).map((point) =>
+    speedBasis.value === 'voice' ? point.voiceSpeed : point.gazeSpeed,
+  ),
+)
+
 onMounted(async () => {
-  const history = await studentApi.trainingHistory(Number(route.params.id))
-  trainingSessions.value = history.map((item, index) => ({
-    id: index + 1,
+  const studentId = Number(route.params.id)
+  const [history, trend] = await Promise.all([
+    studentApi.trainingHistory(studentId),
+    fetchReadingSpeedTrend(studentId),
+  ])
+  trainingSessions.value = history.map((item) => ({
+    id: item.trainingId,
     title: item.learningType,
     date: item.finishedAt ?? item.startedAt ?? item.date,
     achievement: Number(item.achievement ?? 0),
     curriculum: item.learningType,
     summary: `${item.date} 학습 기록`,
+    questions: item.questions,
   }))
   selectedSessionId.value = trainingSessions.value[0]?.id ?? 1
+  readingSpeedTrend.value = trend
 })
 
-// 날짜별 분당 읽은 단어 수를 선 그래프로 표현하는 ECharts 설정입니다.
-const speedChart: EChartsOption = {
+watch(period, () => {
+  void fetchReadingSpeedTrend(Number(route.params.id)).then((trend) => {
+    readingSpeedTrend.value = trend
+  })
+})
+
+// 선택한 산출 기준에 맞춰 차트의 설명과 계열 데이터를 함께 전환합니다.
+const speedChart = computed<EChartsOption>(() => ({
   tooltip: { trigger: 'axis', valueFormatter: (value) => `${value}단어/분` },
   grid: { left: 48, right: 24, top: 28, bottom: 34 },
   xAxis: {
     type: 'category',
-    data: ['5/1', '5/5', '5/8', '5/12', '5/15', '5/19', '5/22', '5/26', '5/29'],
+    data: (readingSpeedTrend.value?.points ?? []).map((point) => formatChartDate(point.date)),
   },
-  yAxis: { type: 'value', min: 60, max: 180 },
+  yAxis: { type: 'value', min: 0 },
   series: [
     {
-      name: '읽기 속도',
+      name: activeSpeedBasis.value.seriesName,
       type: 'line',
       smooth: false,
       showSymbol: true,
       symbol: 'circle',
       symbolSize: 5,
-      data: [98, 126, 84, 151, 114, 148, 102, 128, 164],
+      data: activeSpeedData.value.map((value) => value ?? '-'),
       lineStyle: { color: chartColors.blue, width: 2.5 },
       itemStyle: {
         color: chartColors.white,
@@ -69,12 +116,49 @@ const speedChart: EChartsOption = {
       },
     },
   ],
+}))
+
+async function fetchReadingSpeedTrend(studentId: number) {
+  const { from, to } = readingSpeedPeriod()
+  return studentApi.readingSpeedTrend(studentId, from, to)
+}
+
+function readingSpeedPeriod() {
+  const to = new Date()
+  const from = new Date(to)
+  if (period.value === '최근 3개월') {
+    from.setMonth(from.getMonth() - 3)
+  } else {
+    from.setDate(from.getDate() - 29)
+  }
+  return { from: formatApiDate(from), to: formatApiDate(to) }
+}
+
+function formatApiDate(value: Date) {
+  const pad = (number: number) => String(number).padStart(2, '0')
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+}
+
+function formatChartDate(value: string) {
+  const [, month, day] = value.split('-').map(Number)
+  return `${month}/${day}`
+}
+
+function formatChangeRate(value: number | null | undefined) {
+  if (value == null) return '-'
+  const prefix = value > 0 ? '+' : ''
+  return `${prefix}${Number(value.toFixed(2))}%`
 }
 
 function formatSessionDate(value: string) {
-  const [date = '', time = ''] = value.split(' ')
-  const [, month = '01', day = '01'] = date.split('-')
-  return `${Number(month)}월 ${Number(day)}일 ${time}`
+  if (!value) return '-'
+
+  const [date = '', time = ''] = value.trim().replace('T', ' ').split(/\s+/)
+  const [, month, day] = date.split('-').map(Number)
+  if (!Number.isFinite(month) || !Number.isFinite(day)) return '-'
+
+  const displayTime = time ? ` ${time.slice(0, 5)}` : ''
+  return `${month}월 ${day}일${displayTime}`
 }
 
 function getLearningStatus(score: number) {
@@ -92,9 +176,14 @@ function downloadRawData() {
     ['학습일', session.date],
     ['진행률', `${session.achievement}%`],
     ['훈련 요약', session.summary],
-    ['소리 구분 정확도', `${session.achievement}%`],
-    ['낱말 읽기 정확도', `${Math.max(50, session.achievement - 8)}%`],
-    ['문장 읽기 정확도', `${Math.max(50, session.achievement - 16)}%`],
+    [],
+    ['문항', '정답 여부', '학생의 답', '옳은 답'],
+    ...session.questions.map((question) => [
+      `${question.questionNumber}. ${question.question ?? '-'}`,
+      question.correct ? '정답' : '오답',
+      question.selectedAnswer ?? '-',
+      question.correctAnswer ?? '-',
+    ]),
   ]
   const csv = rows
     .map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(','))
@@ -111,16 +200,6 @@ function downloadJsonData() {
   const session = selectedSession.value
   if (!session) return
 
-  const activities = ['소리 구분', '낱말 읽기', '문장 읽기'].map((name, index) => {
-    const accuracy = Math.max(50, session.achievement - index * 8)
-    return {
-      name,
-      questionCount: 8 + index * 2,
-      durationMinutes: 10 + index * 3,
-      accuracy,
-      status: getLearningStatus(accuracy),
-    }
-  })
   const json = JSON.stringify(
     {
       trainingId: session.id,
@@ -130,7 +209,7 @@ function downloadJsonData() {
       achievement: session.achievement,
       status: getLearningStatus(session.achievement),
       summary: session.summary,
-      activities,
+      questions: session.questions,
     },
     null,
     2,
@@ -159,7 +238,7 @@ function downloadJsonData() {
 
           <div class="session-table">
             <div class="session-table__head">
-              <span>학습일</span><span>커리큘럼</span><span>결과</span>
+              <span>학습일</span><span>훈련명</span><span>결과</span>
             </div>
             <Button
               v-for="session in trainingSessions"
@@ -184,14 +263,37 @@ function downloadJsonData() {
           <header class="section-heading">
             <div>
               <h2>읽기 속도 추이</h2>
-              <p>분당 정확하게 읽은 단어 수</p>
+              <p>{{ activeSpeedBasis.description }}</p>
             </div>
             <div class="trend-summary">
-              <strong>+18%</strong>
+              <strong>{{ formatChangeRate(activeChangeRate) }}</strong>
               <span>기간 시작 대비</span>
             </div>
           </header>
-          <ChartPanel :option="speedChart" height="250px" aria-label="읽기 속도 추이 차트" />
+          <div class="speed-basis" role="group" aria-label="읽기 속도 산출 기준">
+            <Button
+              v-for="option in speedBasisOptions"
+              :key="option.value"
+              class="speed-basis__button"
+              :class="{ active: speedBasis === option.value }"
+              variant="ghost"
+              size="sm"
+              type="button"
+              :aria-pressed="speedBasis === option.value"
+              @click="speedBasis = option.value"
+            >
+              {{ option.label }}
+            </Button>
+          </div>
+          <p v-if="!readingSpeedTrend?.points.length" class="speed-trend__empty">
+            해당 기간의 읽기 속도 데이터가 없습니다.
+          </p>
+          <ChartPanel
+            v-else
+            :option="speedChart"
+            height="250px"
+            :aria-label="`${activeSpeedBasis.label} 읽기 속도 추이 차트`"
+          />
         </Card>
       </div>
 
@@ -229,19 +331,36 @@ function downloadJsonData() {
           <p>{{ selectedSession?.summary }}</p>
         </div>
 
-        <div class="detail-list">
-          <article v-for="(label, index) in ['소리 구분', '낱말 읽기', '문장 읽기']" :key="label">
-            <div>
-              <strong>{{ label }}</strong>
-              <p>{{ 8 + index * 2 }}개 문항 · {{ 10 + index * 3 }}분 학습</p>
+        <div class="question-results">
+          <div class="question-results__table">
+            <div class="question-results__head">
+              <span>문항</span>
+              <span>정답 여부</span>
+              <span>학생의 답</span>
+              <span>옳은 답</span>
             </div>
-            <span>
-              <b>{{ Math.max(50, (selectedSession?.achievement ?? 0) - index * 8) }}%</b>
-              <small>{{
-                getLearningStatus(Math.max(50, (selectedSession?.achievement ?? 0) - index * 8))
-              }}</small>
-            </span>
-          </article>
+            <div
+              v-for="question in selectedSession?.questions ?? []"
+              :key="question.questionNumber"
+              class="question-results__row"
+            >
+              <span class="question-results__question">
+                <b>{{ question.questionNumber }}</b>
+                {{ question.question ?? '-' }}
+              </span>
+              <span
+                class="question-results__status"
+                :class="question.correct ? 'is-correct' : 'is-incorrect'"
+              >
+                {{ question.correct ? '정답' : '오답' }}
+              </span>
+              <span>{{ question.selectedAnswer ?? '-' }}</span>
+              <span>{{ question.correctAnswer ?? '-' }}</span>
+            </div>
+            <p v-if="!selectedSession?.questions.length" class="question-results__empty">
+              저장된 문항 결과가 없습니다.
+            </p>
+          </div>
         </div>
 
         <div class="download-actions">
@@ -413,6 +532,27 @@ function downloadJsonData() {
 .speed-trend {
   margin-top: 0;
 }
+.speed-basis {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 2px;
+  margin-top: 14px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in oklch, var(--muted) 62%, transparent);
+}
+.speed-basis__button {
+  min-width: 86px;
+  color: var(--slate-500);
+  font-size: 11px;
+}
+.speed-basis__button.active {
+  background: var(--card);
+  color: var(--primary-700);
+  box-shadow: var(--shadow-sm);
+}
 .trend-summary {
   display: grid;
   justify-items: end;
@@ -428,6 +568,14 @@ function downloadJsonData() {
 }
 .speed-trend :deep(.chart-panel) {
   padding-top: 3px;
+}
+.speed-trend__empty {
+  display: grid;
+  min-height: 250px;
+  margin: 0;
+  color: var(--slate-500);
+  font-size: 12px;
+  place-items: center;
 }
 .detail-heading {
   display: flex;
@@ -484,42 +632,78 @@ function downloadJsonData() {
   font-size: 13px;
   line-height: 1.6;
 }
-.detail-list {
-  display: grid;
-  gap: 8px;
-}
-.detail-list article {
-  display: grid;
-  min-height: 66px;
-  align-items: center;
-  gap: 16px;
-  padding: 12px;
+.question-results {
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: color-mix(in oklch, var(--muted) 30%, transparent);
-  grid-template-columns: minmax(0, 1fr) auto;
 }
-.detail-list strong {
-  color: var(--slate-800);
-  font-size: 13px;
+.question-results__table {
+  min-width: 620px;
 }
-.detail-list p {
-  margin: 4px 0 0;
-  color: var(--slate-500);
-  font-size: 12px;
-}
-.detail-list article > span {
+.question-results__head,
+.question-results__row {
   display: grid;
-  justify-items: end;
-  gap: 1px;
+  align-items: center;
+  gap: 12px;
+  grid-template-columns: minmax(210px, 1.5fr) 72px minmax(100px, 0.75fr) minmax(100px, 0.75fr);
 }
-.detail-list article > span b {
-  color: var(--slate-800);
-  font-size: 13px;
+.question-results__head {
+  min-height: 38px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--slate-300);
+  background: color-mix(in oklch, var(--muted) 42%, transparent);
+  color: var(--slate-500);
+  font-size: 11px;
+  font-weight: 700;
 }
-.detail-list article > span small {
+.question-results__row {
+  min-height: 50px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--slate-200);
+  color: var(--slate-700);
+  font-size: 12px;
+}
+.question-results__row:last-of-type {
+  border-bottom: 0;
+}
+.question-results__question {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.45;
+}
+.question-results__question b {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 50%;
+  background: var(--slate-100);
+  color: var(--slate-600);
+  font-size: 10px;
+  place-items: center;
+}
+.question-results__status {
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.question-results__status.is-correct {
+  background: color-mix(in oklch, var(--success-600) 12%, transparent);
+  color: var(--success-600);
+}
+.question-results__status.is-incorrect {
+  background: color-mix(in oklch, var(--destructive) 10%, transparent);
+  color: var(--destructive);
+}
+.question-results__empty {
+  margin: 0;
+  padding: 28px 16px;
   color: var(--slate-500);
   font-size: 12px;
+  text-align: center;
 }
 .download-actions {
   display: flex;

@@ -27,7 +27,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { Student } from '@/features/teacher/types'
-import { studentApi } from '@/features/teacher/adminApi'
+import {
+  studentApi,
+  trainingApi,
+  type GeneratedTraining,
+  type GeneratedTrainingQuestion,
+} from '@/features/teacher/adminApi'
 import { useTeacherAdmin } from '@/features/teacher/useTeacherAdmin'
 
 const router = useRouter()
@@ -38,10 +43,49 @@ const periodFilter = ref('전체 기간')
 const page = ref(1)
 const pageSize = 10
 const studentPendingDeletion = ref<Student>()
-const referenceDate = new Date('2026-07-20T00:00:00')
+const exampleInsertState = ref<'idle' | 'loading' | 'success' | 'error'>('idle')
+const readingTrainingTemplateIds = new Set([15, 16, 17])
+const referenceDate = new Date()
+referenceDate.setHours(0, 0, 0, 0)
+
+const exampleStudents = [
+  {
+    name: '김하늘',
+    birthday: '2018-03-15',
+    gender: 'Girl' as const,
+    school: '새봄초등학교',
+    guardian: '김민지',
+    guardianContact: '010-1234-5678',
+    guardianEmail: 'haneul.guardian@example.com',
+    address: '서울특별시 강남구',
+  },
+  {
+    name: '이도윤',
+    birthday: '2017-09-08',
+    gender: 'Boy' as const,
+    school: '한빛초등학교',
+    guardian: '이현우',
+    guardianContact: '010-2345-6789',
+    guardianEmail: 'doyun.guardian@example.com',
+    address: '서울특별시 송파구',
+  },
+  {
+    name: '박서아',
+    birthday: '2019-01-21',
+    gender: 'Girl' as const,
+    school: '푸른초등학교',
+    guardian: '박지영',
+    guardianContact: '010-3456-7890',
+    guardianEmail: 'seoa.guardian@example.com',
+    address: '서울특별시 마포구',
+  },
+]
 
 function daysSince(date: string) {
-  return Math.floor((referenceDate.getTime() - new Date(`${date}T00:00:00`).getTime()) / 86_400_000)
+  const days = Math.floor(
+    (referenceDate.getTime() - new Date(`${date}T00:00:00`).getTime()) / 86_400_000,
+  )
+  return Math.max(0, days)
 }
 
 function formatLearningRecency(date: string) {
@@ -111,11 +155,162 @@ function requestStudentDeletion(student: Student) {
   studentPendingDeletion.value = student
 }
 
+function firstString(source: Record<string, unknown>, keys: string[], fallback: string) {
+  for (const key of keys) {
+    const value = source[key]
+    if (typeof value === 'string' && value.trim()) return value
+  }
+  return fallback
+}
+
+function createExampleTrainingResult(
+  generated: GeneratedTraining,
+  trainingIndex: number,
+): Record<string, unknown> {
+  if (!Array.isArray(generated.questions) || generated.questions.length === 0) {
+    throw new Error('생성된 예시 훈련에 문항이 없습니다.')
+  }
+  const correctCount = Math.min(
+    generated.questions.length,
+    Math.max(1, 3 + (trainingIndex % 3)),
+  )
+  const wordAttempts: Array<Record<string, unknown>> = []
+  let elapsedMs = 0
+
+  const questions = generated.questions.map(
+    (item: GeneratedTrainingQuestion, questionIndex: number) => {
+      const fallbackAnswer = `예시 정답 ${questionIndex + 1}`
+      const correctAnswer = firstString(
+        item.answer,
+        ['correctText', 'canonicalText', 'targetText'],
+        fallbackAnswer,
+      )
+      const question = firstString(
+        item.problem,
+        ['instruction', 'question', 'prompt', 'targetText'],
+        `예시 문제 ${questionIndex + 1}`,
+      )
+      const isCorrect = questionIndex < correctCount
+      const attemptWords = correctAnswer
+        .split(/\s+/)
+        .map((word) => word.replace(/[.,!?;:'"()[\]{}…]/g, '').trim())
+        .filter(Boolean)
+        .map((word) => word.slice(0, 50))
+
+      for (const [wordIndex, surfaceText] of attemptWords.entries()) {
+        const variation = ((questionIndex + wordIndex) % 3) * 25
+        const speechDurationMs = Math.max(320, 610 - trainingIndex * 35 + variation)
+        const gazeDurationMs = Math.max(260, speechDurationMs - 70)
+        const gazeStartOffsetMs = elapsedMs
+        const speechStartOffsetMs = elapsedMs + 60
+        const gazeEndOffsetMs = gazeStartOffsetMs + gazeDurationMs
+        const speechEndOffsetMs = speechStartOffsetMs + speechDurationMs
+
+        wordAttempts.push({
+          surfaceText,
+          hasGazeData: true,
+          hasAudioData: true,
+          fixationDurationMs: Math.min(gazeDurationMs, isCorrect ? 280 : 360),
+          fixationCount: isCorrect ? 1 : 2,
+          gazeStartOffsetMs,
+          gazeEndOffsetMs,
+          isSkipped: false,
+          regressionCount: isCorrect ? 0 : 1,
+          recognizedText: isCorrect ? surfaceText : `오독-${surfaceText}`,
+          speechStartOffsetMs,
+          speechEndOffsetMs,
+          isCorrect,
+        })
+        elapsedMs = Math.max(gazeEndOffsetMs, speechEndOffsetMs) + 140
+      }
+
+      return {
+        questionNumber: questionIndex + 1,
+        questionId: item.questionId,
+        question,
+        isCorrect,
+        correctAnswer,
+        selectedAnswer: isCorrect ? correctAnswer : '예시 오답',
+      }
+    },
+  )
+
+  return {
+    version: 1,
+    questions,
+    wordAttempts,
+  }
+}
+
+function exampleCompletedAt(daysAgo: number, trainingIndex: number) {
+  const completedAt = new Date()
+  completedAt.setDate(completedAt.getDate() - daysAgo)
+  completedAt.setHours(15, trainingIndex * 10, 0, 0)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return [
+    `${completedAt.getFullYear()}-${pad(completedAt.getMonth() + 1)}-${pad(completedAt.getDate())}`,
+    `${pad(completedAt.getHours())}:${pad(completedAt.getMinutes())}:00`,
+  ].join('T')
+}
+
 async function confirmStudentDeletion() {
   if (!studentPendingDeletion.value) return
   await studentApi.remove(studentPendingDeletion.value.id)
   studentPendingDeletion.value = undefined
   await loadAdminData(true)
+}
+
+async function insertExampleStudent() {
+  if (exampleInsertState.value === 'loading') return
+  exampleInsertState.value = 'loading'
+  try {
+    const example = exampleStudents[students.length % exampleStudents.length]
+    if (!example) return
+    const { studentId } = await studentApi.create(example)
+    const catalog = await trainingApi.catalog(studentId)
+    const readingTemplates = catalog.filter((training) =>
+      readingTrainingTemplateIds.has(training.trainingId),
+    )
+    const foundationTemplates = catalog.filter(
+      (training) => !readingTrainingTemplateIds.has(training.trainingId),
+    )
+    if (readingTemplates.length < 3 || foundationTemplates.length < 13) {
+      throw new Error('예시 커리큘럼 생성에 필요한 훈련 템플릿이 부족합니다.')
+    }
+
+    for (const [dayIndex, daysAgo] of [3, 2, 1].entries()) {
+      const dailyTemplates = [
+        ...foundationTemplates.slice(dayIndex * 3, dayIndex * 3 + 3),
+        readingTemplates[dayIndex]!,
+      ]
+      const completedCurriculum = await trainingApi.createCurriculum(
+        studentId,
+        dailyTemplates.map((training) => training.trainingId),
+      )
+      for (const [trainingIndex, training] of completedCurriculum.trainings.entries()) {
+        const generated = await trainingApi.generate(studentId, training.trainingId)
+        await trainingApi.complete(
+          studentId,
+          training.trainingId,
+          createExampleTrainingResult(generated, dayIndex + trainingIndex),
+          exampleCompletedAt(daysAgo, trainingIndex),
+        )
+      }
+    }
+
+    await trainingApi.createCurriculum(
+      studentId,
+      foundationTemplates.slice(9, 13).map((training) => training.trainingId),
+    )
+    await loadAdminData(true)
+    exampleInsertState.value = 'success'
+  } catch {
+    exampleInsertState.value = 'error'
+  } finally {
+    window.setTimeout(() => {
+      exampleInsertState.value = 'idle'
+    }, 1800)
+  }
 }
 
 onMounted(() => void loadAdminData())
@@ -129,13 +324,33 @@ onMounted(() => void loadAdminData())
           <h1>아동 목록</h1>
           <p>담당 아동을 검색하고 학습 현황을 확인합니다.</p>
         </div>
-        <Button
-          class="register-button"
-          type="button"
-          @click="router.push('/teacher/students/new')"
-        >
-          ＋ 아동 등록
-        </Button>
+        <div class="list-toolbar__actions">
+          <Button
+            class="example-data-button"
+            type="button"
+            variant="outline"
+            size="sm"
+            :disabled="exampleInsertState === 'loading'"
+            @click="insertExampleStudent"
+          >
+            {{
+              exampleInsertState === 'loading'
+                ? '삽입 중...'
+                : exampleInsertState === 'success'
+                  ? '삽입 완료'
+                  : exampleInsertState === 'error'
+                    ? '삽입 실패'
+                    : '예시 데이터 삽입'
+            }}
+          </Button>
+          <Button
+            class="register-button"
+            type="button"
+            @click="router.push('/teacher/students/new')"
+          >
+            ＋ 아동 등록
+          </Button>
+        </div>
       </div>
 
       <Card class="list-controls">
@@ -205,7 +420,7 @@ onMounted(() => void loadAdminData())
                   }}</span>
                   <div>
                     <strong>{{ student.name }}</strong>
-                    <span>{{ student.school }} · {{ student.age }}세</span>
+                    <span>{{ student.school }} {{ student.age }}세</span>
                   </div>
                 </Button>
               </TableCell>
@@ -320,6 +535,16 @@ onMounted(() => void loadAdminData())
   color: var(--slate-500);
   font-size: 12px;
   line-height: 1.55;
+}
+.list-toolbar__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+.example-data-button {
+  color: var(--slate-600);
+  white-space: nowrap;
 }
 .filter-row {
   display: flex;
@@ -632,6 +857,10 @@ td:last-child {
   }
 
   .register-button {
+    align-self: flex-start;
+  }
+
+  .list-toolbar__actions {
     align-self: flex-start;
   }
 
