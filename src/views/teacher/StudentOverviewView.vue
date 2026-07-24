@@ -13,14 +13,16 @@ import { chartColors } from '@/features/teacher/chartTheme'
 import { learningEventTypeLabels } from '@/features/teacher/displayLabels'
 import {
   learningEvents as initialLearningEvents,
-  learningRecords,
-  recommendedCurriculum,
   selectedStudent,
   students as mockStudents,
-  teacherNotes as initialTeacherNotes,
 } from '@/features/teacher/mockData'
-import type { LearningEvent, TeacherNote } from '@/features/teacher/types'
-import { studentApi, type AccuracyTrend } from '@/features/teacher/adminApi'
+import type { AsyncContentState, LearningEvent, LearningRecord } from '@/features/teacher/types'
+import {
+  studentApi,
+  trainingApi,
+  type AccuracyTrend,
+  type TrainingCatalog,
+} from '@/features/teacher/adminApi'
 import { useTeacherAdmin } from '@/features/teacher/useTeacherAdmin'
 
 type CommunicationDraft = { note: string }
@@ -32,18 +34,42 @@ const currentStudent = computed(
   () => adminStudents.find((student) => student.id === Number(route.params.id)) ?? selectedStudent,
 )
 const accuracyTrend = ref<AccuracyTrend[]>([])
+const trainingCatalog = ref<TrainingCatalog[]>([])
+const learningRecords = ref<LearningRecord[]>([])
+const learningRecordsState = ref<AsyncContentState>('loading')
 const referenceDate = new Date('2026-07-20T00:00:00')
 const eventItems = ref<LearningEvent[]>(initialLearningEvents.map((event) => ({ ...event })))
-const noteItems = ref<TeacherNote[]>(initialTeacherNotes.map((note) => ({ ...note })))
 const draftsByStudent = reactive<Record<number, CommunicationDraft>>(
   Object.fromEntries(mockStudents.map((student) => [student.id, { note: '' }])),
 )
 
 onMounted(async () => {
-  await loadAdminData()
   const studentId = Number(route.params.id)
   draftsByStudent[studentId] ??= { note: '' }
-  accuracyTrend.value = await studentApi.accuracyTrend(studentId)
+  learningRecordsState.value = 'loading'
+  try {
+    await loadAdminData()
+    const [detail, trend, history, catalog] = await Promise.all([
+      studentApi.get(studentId),
+      studentApi.accuracyTrend(studentId),
+      studentApi.trainingHistory(studentId),
+      trainingApi.catalog(studentId),
+    ])
+    accuracyTrend.value = trend
+    trainingCatalog.value = catalog
+    learningRecords.value = history.slice(0, 3).map((item, index) => ({
+      id: index + 1,
+      studentId,
+      occurredAt: (item.startedAt ?? `${item.date}T00:00:00`).replace('T', ' '),
+      activity: item.learningType,
+      result: item.finishedAt ? 'completed' : 'started',
+      score: item.achievement == null ? undefined : Number(item.achievement),
+    }))
+    draftsByStudent[studentId]!.note = detail.teacherMemo ?? ''
+    learningRecordsState.value = 'ready'
+  } catch {
+    learningRecordsState.value = 'error'
+  }
 })
 const busyId = ref<number | null>(null)
 const noticeMessage = ref('변경 사항이 반영되었습니다.')
@@ -53,13 +79,10 @@ const communicationSection = ref<HTMLElement | null>(null)
 const communicationPanel = ref<CommunicationPanelExpose | null>(null)
 
 const currentRecords = computed(() =>
-  learningRecords.filter((record) => record.studentId === currentStudent.value.id).slice(0, 3),
+  learningRecords.value.filter((record) => record.studentId === currentStudent.value.id),
 )
 const currentEvents = computed(() =>
   eventItems.value.filter((event) => event.studentId === currentStudent.value.id),
-)
-const currentNotes = computed(() =>
-  noteItems.value.filter((note) => note.studentId === currentStudent.value.id),
 )
 const reviewCount = computed(
   () => currentEvents.value.filter((event) => event.status !== 'reviewed').length,
@@ -90,6 +113,7 @@ const noteDraft = computed({
 })
 
 const recentLearningLabel = computed(() => {
+  if (!currentStudent.value.lastLearningDate) return '-'
   const learningDate = new Date(`${currentStudent.value.lastLearningDate}T00:00:00`)
   const days = Math.floor((referenceDate.getTime() - learningDate.getTime()) / 86_400_000)
   if (days === 0) return '오늘'
@@ -97,7 +121,26 @@ const recentLearningLabel = computed(() => {
   return `${days}일 전`
 })
 
-const nextTraining = computed(() => recommendedCurriculum[0]?.title ?? '다음 훈련 확인 필요')
+const nextTraining = computed(
+  () =>
+    trainingCatalog.value.find((training) => training.studentAchievement === null)?.trainingName
+    ?? trainingCatalog.value[0]?.trainingName
+    ?? '다음 훈련 확인 필요',
+)
+const accuracyChange = computed(() => {
+  if (accuracyTrend.value.length < 2) return null
+  return Number(accuracyTrend.value.at(-1)?.accuracy) - Number(accuracyTrend.value[0]?.accuracy)
+})
+const accuracyChangeLabel = computed(() => {
+  if (accuracyChange.value === null) return '-'
+  return `${accuracyChange.value > 0 ? '+' : ''}${accuracyChange.value}%p`
+})
+const accuracyAnalysis = computed(() => {
+  if (accuracyChange.value === null) return '정확도 데이터가 더 쌓이면 변화 추이를 확인할 수 있습니다.'
+  if (accuracyChange.value > 0) return `첫 학습 대비 읽기 정확도가 ${accuracyChange.value}%p 상승했습니다.`
+  if (accuracyChange.value < 0) return `첫 학습 대비 읽기 정확도가 ${Math.abs(accuracyChange.value)}%p 하락했습니다.`
+  return '첫 학습과 비교해 읽기 정확도가 동일하게 유지되고 있습니다.'
+})
 const formattedLastLearningDate = computed(() =>
   currentStudent.value.lastLearningDate.replaceAll('-', '.'),
 )
@@ -126,29 +169,16 @@ function addEventToNote(eventId: number) {
   communicationSection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-function saveNote(noteId: number | null, text: string) {
-  if (noteId) {
-    noteItems.value = noteItems.value.map((note) =>
-      note.id === noteId ? { ...note, text, updatedAt: '2026-07-21 14:24' } : note,
-    )
-  } else {
-    noteItems.value = [
-      {
-        id: Date.now(),
-        studentId: currentStudent.value.id,
-        source: 'teacher',
-        audience: 'teacher-only',
-        status: 'active',
-        author: '이OO 선생님',
-        text,
-        createdAt: '2026-07-21 14:24',
-        updatedAt: '2026-07-21 14:24',
-      },
-      ...noteItems.value,
-    ]
+async function saveNote(_noteId: number | null, text: string) {
+  const studentId = currentStudent.value.id
+  busyId.value = studentId
+  try {
+    await studentApi.updateTeacherMemo(studentId, text)
+    noteDraft.value = text
+    notify('교수자 내부 메모가 저장되었습니다.')
+  } finally {
+    busyId.value = null
   }
-  noteDraft.value = ''
-  notify('교수자 내부 메모가 저장되었습니다.')
 }
 
 const levelChart = computed<EChartsOption>(() => ({
@@ -247,7 +277,7 @@ const levelChart = computed<EChartsOption>(() => ({
           </dd>
         </div>
       </dl>
-      <div class="action-summary" :class="{ 'is-complete': totalActionCount === 0 }">
+      <div v-if="false" class="action-summary" :class="{ 'is-complete': totalActionCount === 0 }">
         <div v-if="totalActionCount > 0">
           <strong>확인할 항목 {{ totalActionCount }}건</strong>
           <span>
@@ -269,13 +299,13 @@ const levelChart = computed<EChartsOption>(() => ({
             <h2>읽기 정확도</h2>
             <p>훈련 변경과 메모 시점 표시</p>
           </div>
-          <div class="trend-summary"><span>최근 변화</span><strong>+12%p</strong></div>
+          <div class="trend-summary"><span>최근 변화</span><strong>{{ accuracyChangeLabel }}</strong></div>
         </header>
         <ChartPanel :option="levelChart" height="220px" aria-label="최근 6주 읽기 정확도 변화" />
         <div class="analysis-followup">
           <div>
             <span class="followup-label">변화 해석</span>
-            <p>6월 27일 받침 훈련 이후 정확도가 상승했지만 회차별 편차가 있습니다.</p>
+            <p>{{ accuracyAnalysis }}</p>
           </div>
           <div class="next-training">
             <span class="followup-label">다음 권장 훈련</span><strong>{{ nextTraining }}</strong>
@@ -291,6 +321,7 @@ const levelChart = computed<EChartsOption>(() => ({
         <StudentLearningEvents
           :records="currentRecords"
           :events="currentEvents"
+          :state="learningRecordsState"
           @review="reviewEvent"
           @add-to-note="addEventToNote"
         />
@@ -308,7 +339,6 @@ const levelChart = computed<EChartsOption>(() => ({
         :key="currentStudent.id"
         ref="communicationPanel"
         v-model:note-draft="noteDraft"
-        :notes="currentNotes"
         :busy-id="busyId"
         @save-note="saveNote"
       />

@@ -1,13 +1,14 @@
 import { apiRequest, jsonBody } from '@/lib/api'
 
-export type Gender = 'MALE' | 'FEMALE'
+export type TeacherGender = 'Male' | 'Female'
+export type StudentGender = 'Boy' | 'Girl'
 
 export interface TeacherInfo {
   id?: number
   email: string
   name: string
   organization: string
-  gender: Gender
+  gender: TeacherGender
   imagesId?: number | null
   profileImageUrl?: string | null
 }
@@ -24,18 +25,28 @@ export interface StudentListItem {
 export interface StudentDetail {
   id: number
   name: string
-  studentCode: string
   birthday: string
-  gender: Gender
+  gender: StudentGender
   school: string
   guardian: string
   guardianContact: string
   guardianEmail: string
   address: string
-  imageId: number | null
+  imageUrl: string | null
+  teacherMemo: string | null
 }
 
-export type StudentPayload = Omit<StudentDetail, 'id'>
+export interface StudentPayload {
+  name: string
+  birthday: string
+  gender: StudentGender
+  school: string
+  guardian: string
+  guardianContact: string
+  guardianEmail: string
+  address: string
+  imageUrl?: string | null
+}
 
 export interface AccuracyTrend {
   date: string
@@ -45,9 +56,9 @@ export interface AccuracyTrend {
 export interface TrainingHistory {
   date: string
   learningType: string
-  startedAt: string
-  finishedAt: string
-  achievement: number
+  startedAt: string | null
+  finishedAt: string | null
+  achievement: number | null
 }
 
 export interface TrainingCatalog {
@@ -63,6 +74,16 @@ export interface CurriculumLog {
   date: string
   achievement: number
   trainings: Array<{ trainingId: number; unitName: string; trainingName: string }>
+}
+
+export interface DailyCurriculum {
+  curriculumId: number
+  trainings: Array<{
+    trainingId: number
+    trainingTemplateId: number
+    unitName: string
+    trainingName: string
+  }>
 }
 
 export interface TestListItem {
@@ -126,7 +147,7 @@ export const authApi = {
       method: 'POST',
       body: jsonBody({ email, password }),
     }),
-  signup: (payload: { email: string; password: string; name: string; organization: string; gender: Gender }) =>
+  signup: (payload: { email: string; password: string; name: string; organization: string; gender: TeacherGender }) =>
     apiRequest<TeacherInfo>('/api/auth/sign-up', {
       method: 'POST',
       body: jsonBody(payload),
@@ -155,6 +176,11 @@ export const studentApi = {
     apiRequest<AccuracyTrend[]>(`/api/admin/student/${studentId}/accuracy-trend`),
   trainingHistory: (studentId: number) =>
     apiRequest<TrainingHistory[]>(`/api/admin/student/${studentId}/training-history`),
+  updateTeacherMemo: (studentId: number, teacherMemo: string) =>
+    apiRequest<void>(`/api/admin/student/${studentId}/teacher-memo`, {
+      method: 'PATCH',
+      body: jsonBody({ teacherMemo }),
+    }),
 }
 
 export const trainingApi = {
@@ -162,8 +188,10 @@ export const trainingApi = {
     apiRequest<TrainingCatalog[]>(`/api/admin/training/${studentId}`),
   curriculumLogs: (studentId: number) =>
     apiRequest<CurriculumLog[]>(`/api/admin/training/${studentId}/curriculum-log`),
+  currentCurriculum: (studentId: number) =>
+    apiRequest<DailyCurriculum>(`/api/admin/training/${studentId}/current`),
   dailyCurriculum: (studentId: number, curriculumId: number) =>
-    apiRequest<{ curriculumId: number; trainings: CurriculumLog['trainings'] }>(
+    apiRequest<DailyCurriculum>(
       `/api/admin/training/${studentId}/${curriculumId}`,
     ),
   updateCurriculum: (studentId: number, curriculumId: number, trainingTemplateIds: number[]) =>

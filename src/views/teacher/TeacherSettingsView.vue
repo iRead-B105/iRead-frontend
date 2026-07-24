@@ -49,7 +49,7 @@ onMounted(async () => {
   form.name = teacher.name
   form.organization = teacher.organization
   form.email = teacher.email
-  form.gender = teacher.gender === 'MALE' ? '남자' : '여자'
+  form.gender = teacher.gender === 'Male' ? '남자' : '여자'
   savedSnapshot.value = JSON.stringify(form)
 })
 </script>

@@ -35,7 +35,7 @@ onMounted(async () => {
   trainingSessions.value = history.map((item, index) => ({
     id: index + 1,
     title: item.learningType,
-    date: item.finishedAt,
+    date: item.finishedAt ?? item.startedAt ?? item.date,
     achievement: Number(item.achievement ?? 0),
     curriculum: item.learningType,
     summary: `${item.date} 학습 기록`,

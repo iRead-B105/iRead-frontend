@@ -15,6 +15,7 @@ const route = useRoute()
 const studentId = computed(() => Number(route.params.id) || 1)
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 const curriculumItems = ref<CurriculumItem[]>([])
+const currentCurriculumId = ref<number>()
 const selectedItemId = ref(1)
 const editingRecommendationId = ref<number>()
 const editingItem = ref<CurriculumItem>()
@@ -44,14 +45,35 @@ async function loadStudentCurriculum(id: number) {
       updatedAt: '',
     },
   }))
-  recommendations.value = curriculumItems.value.slice(0, 3).map((item, index) => ({
-    id: index + 1,
-    trainingId: item.id,
-    category: item.category,
-    title: item.title,
-    count: 1,
-    material: clone(item.material),
-  }))
+  recommendations.value = []
+  currentCurriculumId.value = undefined
+  try {
+    const currentCurriculum = await trainingApi.currentCurriculum(id)
+    currentCurriculumId.value = currentCurriculum.curriculumId
+    for (const training of currentCurriculum.trainings) {
+      const item = curriculumItems.value.find(
+        (candidate) => candidate.id === training.trainingTemplateId,
+      )
+      if (!item) continue
+      const existing = recommendations.value.find(
+        (recommendation) => recommendation.trainingId === item.id,
+      )
+      if (existing) {
+        existing.count += 1
+        continue
+      }
+      recommendations.value.push({
+        id: recommendations.value.length + 1,
+        trainingId: item.id,
+        category: item.category,
+        title: item.title,
+        count: 1,
+        material: clone(item.material),
+      })
+    }
+  } catch {
+    currentCurriculumId.value = undefined
+  }
   selectedItemId.value = curriculumItems.value[0]?.id ?? 1
   editingRecommendationId.value = undefined
   editingItem.value = undefined
@@ -148,8 +170,16 @@ function closeLessonMaterial() {
   editingItem.value = undefined
 }
 
-function saveChanges() {
-  if (!hasChanges.value) return
+async function saveChanges() {
+  if (!hasChanges.value || currentCurriculumId.value === undefined) return
+  const trainingTemplateIds = recommendations.value.flatMap((item) =>
+    Array.from({ length: item.count }, () => item.trainingId),
+  )
+  await trainingApi.updateCurriculum(
+    studentId.value,
+    currentCurriculumId.value,
+    trainingTemplateIds,
+  )
   hasChanges.value = false
   editRecommendations.value = false
   showSaved()
@@ -421,7 +451,9 @@ function saveLessonMaterial(item: CurriculumItem) {
   font-weight: 600;
 }
 .curriculum-table {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: min(640px, calc(100vh - 250px));
   margin: 18px 0 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -431,13 +463,16 @@ function saveLessonMaterial(item: CurriculumItem) {
   display: grid;
   align-items: center;
   gap: 12px;
-  grid-template-columns: 46px 86px minmax(0, 1fr) 94px;
+  grid-template-columns: 46px 140px minmax(0, 1fr) 94px;
 }
 .curriculum-table__head {
+  position: sticky;
+  z-index: 2;
+  top: 0;
   min-height: 40px;
   padding: 9px 14px;
   border-bottom: 1px solid var(--slate-300);
-  background: color-mix(in oklch, var(--muted) 42%, transparent);
+  background: var(--muted);
   color: var(--slate-500);
   font-size: 12px;
   font-weight: 600;
@@ -452,6 +487,10 @@ function saveLessonMaterial(item: CurriculumItem) {
   background: transparent;
   color: var(--slate-700);
   text-align: left;
+}
+.curriculum-row > span:not(.achievement) {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .curriculum-row::before {
   position: absolute;

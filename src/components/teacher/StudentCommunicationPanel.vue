@@ -1,14 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { audienceLabels } from '@/features/teacher/displayLabels'
-import type { TeacherNote } from '@/features/teacher/types'
 
 const props = withDefaults(
   defineProps<{
-    notes: TeacherNote[]
     noteDraft: string
     busyId?: number | null
   }>(),
@@ -20,29 +16,13 @@ const emit = defineEmits<{
   saveNote: [noteId: number | null, text: string]
 }>()
 
-const editingNoteId = ref<number | null>(null)
-
-function editNote(note: TeacherNote) {
-  editingNoteId.value = note.id
-  emit('update:noteDraft', note.text)
-}
-
 function saveNote() {
   const text = props.noteDraft.trim()
   if (!text) return
-  emit('saveNote', editingNoteId.value, text)
-  editingNoteId.value = null
-}
-
-function cancelNoteEdit() {
-  editingNoteId.value = null
-  emit('update:noteDraft', '')
+  emit('saveNote', null, text)
 }
 
 function openTab() {}
-function formatDate(value: string) {
-  return value.replaceAll('-', '.').slice(0, 16)
-}
 
 defineExpose({ openTab })
 </script>
@@ -55,35 +35,20 @@ defineExpose({ openTab })
     </header>
 
     <div class="note-editor">
-      <Label for="internal-note">{{ editingNoteId ? '내부 메모 수정' : '내부 메모 추가' }}</Label>
+      <Label for="internal-note">내부 메모 수정</Label>
       <Textarea
         id="internal-note"
         class="textarea"
-        :value="noteDraft"
-        placeholder="학습 지도와 상담에 필요한 내부 기록을 작성합니다."
-        @input="emit('update:noteDraft', ($event.target as HTMLTextAreaElement).value)"
+        :model-value="noteDraft"
+        placeholder="학습 지도와 상담에 필요한 내부 메모를 작성합니다."
+        @update:model-value="emit('update:noteDraft', String($event))"
       />
       <div>
-        <Button v-if="editingNoteId || noteDraft" variant="outline" size="sm" type="button" @click="cancelNoteEdit">
-          취소
-        </Button>
-        <Button size="sm" type="button" :disabled="!noteDraft.trim()" @click="saveNote">
-          {{ editingNoteId ? '수정 저장' : '메모 추가' }}
+        <Button size="sm" type="button" :disabled="!noteDraft.trim() || busyId !== null" @click="saveNote">
+          메모 저장
         </Button>
       </div>
     </div>
-
-    <p v-if="notes.length === 0" class="panel-state">작성된 내부 메모가 없습니다.</p>
-    <ol v-else class="note-history">
-      <li v-for="note in notes" :key="note.id">
-        <div>
-          <strong>{{ note.author }}</strong>
-          <span>{{ formatDate(note.updatedAt) }} · {{ audienceLabels[note.audience] }}</span>
-        </div>
-        <p>{{ note.text }}</p>
-        <Button variant="link" size="sm" type="button" @click="editNote(note)">수정</Button>
-      </li>
-    </ol>
   </section>
 </template>
 

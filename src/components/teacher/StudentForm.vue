@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import type { Student } from '@/features/teacher/types'
-import { studentApi, type Gender, type StudentPayload } from '@/features/teacher/adminApi'
+import { studentApi, type StudentGender, type StudentPayload } from '@/features/teacher/adminApi'
 import { useTeacherAdmin } from '@/features/teacher/useTeacherAdmin'
 
 const props = defineProps<{
@@ -31,6 +31,8 @@ const { loadAdminData } = useTeacherAdmin()
 const { visible: saved, show: showSaved } = useTemporaryNotice()
 const photoChanged = ref(false)
 const deleteDialogOpen = ref(false)
+const submitting = ref(false)
+const errorMessage = ref('')
 
 const emptyStudent: Student = {
   id: 0,
@@ -66,15 +68,7 @@ const studentInitial = computed(() => form.name.trim().charAt(0) || '학')
 const formChanged = computed(
   () => JSON.stringify(form) !== savedSnapshot.value || photoChanged.value,
 )
-const requiredFieldsEntered = computed(
-  () =>
-    Boolean(form.name.trim()) &&
-    Boolean(form.birthDate) &&
-    Boolean(form.school.trim()) &&
-    Boolean(form.guardianName.trim()) &&
-    Boolean(form.guardianPhone.trim()),
-)
-const canSubmit = computed(() => formChanged.value && requiredFieldsEntered.value)
+const canSubmit = computed(() => formChanged.value && !submitting.value)
 
 function markPhotoChanged() {
   photoChanged.value = true
@@ -83,28 +77,36 @@ function markPhotoChanged() {
 function toPayload(): StudentPayload {
   return {
     name: form.name,
-    studentCode: form.id ? String(form.id) : `STU-${Date.now()}`,
     birthday: form.birthDate,
-    gender: (form.gender === '남자' ? 'MALE' : 'FEMALE') as Gender,
+    gender: (form.gender === '남자' ? 'Boy' : 'Girl') as StudentGender,
     school: form.school,
     guardian: form.guardianName,
     guardianContact: form.guardianPhone,
     guardianEmail: form.guardianEmail,
     address: form.address,
-    imageId: null,
+    imageUrl: null,
   }
 }
 
 async function submitForm() {
   if (!canSubmit.value) return
 
-  if (props.mode === 'create') await studentApi.create(toPayload())
-  else await studentApi.update(form.id, toPayload())
-  await loadAdminData(true)
-  savedSnapshot.value = JSON.stringify(form)
-  photoChanged.value = false
-  showSaved()
-  if (props.mode === 'create') await router.push('/teacher/dashboard')
+  submitting.value = true
+  errorMessage.value = ''
+  try {
+    if (props.mode === 'create') await studentApi.create(toPayload())
+    else await studentApi.update(form.id, toPayload())
+    await loadAdminData(true)
+    savedSnapshot.value = JSON.stringify(form)
+    photoChanged.value = false
+    showSaved()
+    if (props.mode === 'create') await router.push('/teacher/dashboard')
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error ? error.message : '학생 정보를 저장하지 못했습니다.'
+  } finally {
+    submitting.value = false
+  }
 }
 
 async function confirmStudentDeletion() {
@@ -197,6 +199,7 @@ async function confirmStudentDeletion() {
     </SettingsSection>
 
     <div class="student-form__footer">
+      <p v-if="errorMessage" class="student-form__error" role="alert">{{ errorMessage }}</p>
       <FormActions
         :saved="saved"
         :disabled="!canSubmit"
@@ -257,6 +260,12 @@ async function confirmStudentDeletion() {
   display: grid;
   gap: 16px;
   padding-top: 2px;
+}
+
+.student-form__error {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 14px;
 }
 
 .danger-zone {

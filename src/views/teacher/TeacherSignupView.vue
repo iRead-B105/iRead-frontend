@@ -3,18 +3,17 @@ import { reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { authApi, type Gender } from '@/features/teacher/adminApi'
+import { authApi, type TeacherGender } from '@/features/teacher/adminApi'
 
 const router = useRouter()
 const errorMessage = ref('')
 const form = reactive({
-  loginId: '',
   email: '',
   password: '',
   passwordConfirm: '',
   name: '',
   organization: '',
-  gender: 'FEMALE' as Gender,
+  gender: 'Female' as TeacherGender,
 })
 const submitting = ref(false)
 
@@ -56,11 +55,6 @@ async function signup() {
 
       <section class="signup-fields" aria-label="계정 정보">
         <div class="field">
-          <label for="signup-id">아이디</label>
-          <Input id="signup-id" v-model="form.loginId" class="input" required placeholder="로그인에 사용할 아이디" />
-        </div>
-
-        <div class="field">
           <label for="signup-email">이메일</label>
           <Input id="signup-email" v-model="form.email" class="input" required type="email" placeholder="example@email.com" />
         </div>
@@ -93,12 +87,12 @@ async function signup() {
         <fieldset class="field gender-field">
           <legend>성별</legend>
           <div class="gender-options">
-            <label :class="{ selected: form.gender === 'FEMALE' }">
-              <input v-model="form.gender" type="radio" name="gender" value="FEMALE" required />
+            <label :class="{ selected: form.gender === 'Female' }">
+              <input v-model="form.gender" type="radio" name="gender" value="Female" required />
               <span>여성</span>
             </label>
-            <label :class="{ selected: form.gender === 'MALE' }">
-              <input v-model="form.gender" type="radio" name="gender" value="MALE" required />
+            <label :class="{ selected: form.gender === 'Male' }">
+              <input v-model="form.gender" type="radio" name="gender" value="Male" required />
               <span>남성</span>
             </label>
           </div>
