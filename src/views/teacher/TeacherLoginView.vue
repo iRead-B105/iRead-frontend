@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { authApi } from '@/features/teacher/adminApi'
 
 const router = useRouter()
-const form = reactive({ loginId: '', password: '' })
+const form = reactive({ email: '', password: '' })
 const showPassword = ref(false)
 const submitting = ref(false)
 const insertingTeacher = ref(false)
@@ -22,7 +22,7 @@ const exampleTeacher = {
 }
 
 function fillExampleLogin() {
-  form.loginId = exampleTeacher.email
+  form.email = exampleTeacher.email
   form.password = exampleTeacher.password
 }
 
@@ -53,7 +53,7 @@ async function login() {
   submitting.value = true
   errorMessage.value = ''
   try {
-    await authApi.login(form.loginId, form.password)
+    await authApi.login(form.email, form.password)
     await router.push('/teacher/dashboard')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '로그인에 실패했습니다.'
@@ -79,8 +79,15 @@ async function login() {
 
         <div class="login-fields">
           <div class="field">
-            <label for="login-id">아이디</label>
-            <Input id="login-id" v-model="form.loginId" class="input" required placeholder="아이디 입력" />
+            <label for="login-email">이메일</label>
+            <Input
+              id="login-email"
+              v-model="form.email"
+              class="input"
+              type="email"
+              required
+              placeholder="example@iread.co.kr"
+            />
           </div>
           <div class="field">
             <label for="login-password">비밀번호</label>
@@ -108,7 +115,7 @@ async function login() {
         </div>
 
         <div class="login-help-links">
-          <RouterLink to="/find-id">아이디 찾기</RouterLink>
+          <RouterLink to="/find-id">로그인 이메일 확인</RouterLink>
           <span aria-hidden="true"></span>
           <RouterLink to="/reset-password">비밀번호 찾기</RouterLink>
         </div>
