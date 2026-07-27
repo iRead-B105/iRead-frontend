@@ -1,13 +1,27 @@
 <script setup lang="ts">
 // 교수자 화면을 좌측 사이드바와 우측 메인 영역으로 나누는 공통 레이아웃입니다.
+import { watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { RouterView } from 'vue-router'
 import DataSourceNotice from '@/components/common/DataSourceNotice.vue'
 import TeacherSidebar from '@/components/teacher/TeacherSidebar.vue'
 import { dataSource } from '@/config/dataSource'
-import { provideTeacherAdmin } from '@/features/teacher/useTeacherAdmin'
+import { useSessionStore } from '@/stores/session'
+import { useStudentStore } from '@/stores/students'
 
-// 교수자 레이아웃 아래의 사이드바와 화면들이 같은 조회 상태를 사용합니다.
-provideTeacherAdmin()
+const sessionStore = useSessionStore()
+const studentStore = useStudentStore()
+const { status, teacher } = storeToRefs(sessionStore)
+
+watch(
+  () => teacher.value?.email ?? null,
+  (nextEmail, previousEmail) => {
+    if (previousEmail && nextEmail !== previousEmail) studentStore.reset()
+  },
+)
+watch(status, (nextStatus) => {
+  if (nextStatus === 'anonymous') studentStore.reset()
+})
 </script>
 
 <template>

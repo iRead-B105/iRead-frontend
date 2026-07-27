@@ -1,26 +1,30 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { buttonVariants } from '@/components/ui/button'
+import { validateStudentImage } from '@/features/teacher/student'
 import { cn } from '@/lib/utils'
 
 const props = withDefaults(
   defineProps<{
     inputId: string
     label: string
-    imageUrl?: string
+    imageUrl?: string | null
     fallback: string
     help?: string
     buttonLabel?: string
+    previewVersion?: number
   }>(),
   {
     imageUrl: '',
     help: 'JPG 또는 PNG, 최대 5MB',
     buttonLabel: '사진 변경',
+    previewVersion: 0,
   },
 )
 
 const emit = defineEmits<{
   select: [file: File]
+  error: [message: string | null]
 }>()
 
 const previewUrl = ref(props.imageUrl)
@@ -33,15 +37,33 @@ watch(
   },
 )
 
+watch(
+  () => props.previewVersion,
+  () => {
+    if (temporaryUrl) URL.revokeObjectURL(temporaryUrl)
+    temporaryUrl = ''
+    previewUrl.value = props.imageUrl
+  },
+)
+
 function selectImage(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
 
+  const validationError = validateStudentImage(file)
+  if (validationError) {
+    input.value = ''
+    emit('error', validationError)
+    return
+  }
+
   if (temporaryUrl) URL.revokeObjectURL(temporaryUrl)
   temporaryUrl = URL.createObjectURL(file)
   previewUrl.value = temporaryUrl
+  emit('error', null)
   emit('select', file)
+  input.value = ''
 }
 
 onBeforeUnmount(() => {

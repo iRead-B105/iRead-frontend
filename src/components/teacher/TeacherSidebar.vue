@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,18 +11,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import type { Student } from '@/features/teacher/types'
-import { useTeacherAdmin } from '@/features/teacher/useTeacherAdmin'
+import type { StudentNavigationItem } from '@/features/teacher/student'
+import { useSessionStore } from '@/stores/session'
+import { useStudentStore } from '@/stores/students'
 import SidebarIcon from '@/components/teacher/SidebarIcon.vue'
 import StudentSwitcher from '@/components/teacher/StudentSwitcher.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { students, teacher, loadAdminData, logout: logoutSession } = useTeacherAdmin()
-const logoutPending = ref(false)
+const sessionStore = useSessionStore()
+const studentStore = useStudentStore()
+const { teacher, logoutPending } = storeToRefs(sessionStore)
+const { navigationItems, navigationItemsById, selectedStudentId } = storeToRefs(studentStore)
 const logoutError = ref('')
 const currentStudent = computed(
-  () => students.find((student) => student.id === Number(route.params.id)) ?? students[0] ?? null,
+  () =>
+    navigationItemsById.value[Number(route.params.id)] ??
+    (selectedStudentId.value === null
+      ? null
+      : navigationItemsById.value[selectedStudentId.value]) ??
+    navigationItems.value[0] ??
+    null,
 )
 const profileImageUrl = computed(
   () => teacher.value?.profileImageUrl ?? '/images/teacher-profile.png',
@@ -35,11 +45,12 @@ const studentRouteNames = new Set([
   'student-edit',
 ])
 
-function selectStudent(student: Student) {
+function selectStudent(student: StudentNavigationItem) {
   const routeName = studentRouteNames.has(String(route.name))
     ? String(route.name)
     : 'student-overview'
-  router.push({ name: routeName, params: { id: student.id } })
+  studentStore.rememberStudent(student)
+  router.push({ name: routeName, params: { id: student.studentId } })
 }
 
 function openProfileSettings() {
@@ -48,21 +59,20 @@ function openProfileSettings() {
 
 async function logout() {
   if (logoutPending.value) return
-
-  logoutPending.value = true
   logoutError.value = ''
   try {
-    await logoutSession()
+    await sessionStore.logout()
+    studentStore.reset()
     await router.push('/login')
   } catch {
     logoutError.value = '로그아웃에 실패했습니다. 잠시 후 다시 시도해 주세요.'
-  } finally {
-    logoutPending.value = false
   }
 }
 
 onMounted(() => {
-  void loadAdminData().catch(() => undefined)
+  if (studentStore.navigationStatus === 'idle') {
+    void studentStore.loadNavigation({ reset: true })
+  }
 })
 </script>
 
@@ -75,7 +85,6 @@ onMounted(() => {
     <div class="sidebar-panel">
       <StudentSwitcher
         v-if="currentStudent"
-        :students="students"
         :current-student="currentStudent"
         @select="selectStudent"
         @manage="router.push('/teacher/students')"
@@ -100,29 +109,29 @@ onMounted(() => {
           <strong>아동 목록</strong>
         </RouterLink>
         <template v-if="currentStudent">
-          <RouterLink :to="{ name: 'student-overview', params: { id: currentStudent.id } }">
+          <RouterLink :to="{ name: 'student-overview', params: { id: currentStudent.studentId } }">
             <span class="sidebar-nav__icon"><SidebarIcon name="home" /></span
             ><strong>학습 현황</strong>
           </RouterLink>
-          <RouterLink :to="{ name: 'student-curriculum', params: { id: currentStudent.id } }">
+          <RouterLink :to="{ name: 'student-curriculum', params: { id: currentStudent.studentId } }">
             <span class="sidebar-nav__icon"><SidebarIcon name="book" /></span
             ><strong>커리큘럼 관리</strong>
           </RouterLink>
           <RouterLink
-            :to="{ name: 'student-training-history', params: { id: currentStudent.id } }"
+            :to="{ name: 'student-training-history', params: { id: currentStudent.studentId } }"
           >
             <span class="sidebar-nav__icon"><SidebarIcon name="chart" /></span
             ><strong>훈련 이력</strong>
           </RouterLink>
-          <RouterLink :to="{ name: 'student-test-history', params: { id: currentStudent.id } }">
+          <RouterLink :to="{ name: 'student-test-history', params: { id: currentStudent.studentId } }">
             <span class="sidebar-nav__icon"><SidebarIcon name="clipboard" /></span
             ><strong>테스트 이력</strong>
           </RouterLink>
-          <RouterLink :to="{ name: 'student-report', params: { id: currentStudent.id } }">
+          <RouterLink :to="{ name: 'student-report', params: { id: currentStudent.studentId } }">
             <span class="sidebar-nav__icon"><SidebarIcon name="report" /></span
             ><strong>보고서</strong>
           </RouterLink>
-          <RouterLink :to="{ name: 'student-edit', params: { id: currentStudent.id } }">
+          <RouterLink :to="{ name: 'student-edit', params: { id: currentStudent.studentId } }">
             <span class="sidebar-nav__icon"><SidebarIcon name="edit" /></span
             ><strong>아동 정보 관리</strong>
           </RouterLink>

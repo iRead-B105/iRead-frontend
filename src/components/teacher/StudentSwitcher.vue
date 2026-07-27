@@ -1,89 +1,82 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { Student } from '@/features/teacher/types'
+import type { StudentNavigationItem } from '@/features/teacher/student'
+import { useStudentStore } from '@/stores/students'
 
 const props = defineProps<{
-  students: Student[]
-  currentStudent: Student
+  currentStudent: StudentNavigationItem
 }>()
 
 const emit = defineEmits<{
-  select: [student: Student]
+  select: [student: StudentNavigationItem]
   manage: []
 }>()
 
+const studentStore = useStudentStore()
+const {
+  navigationItems,
+  navigationHasNextPage,
+  navigationStatus,
+  navigationError,
+  recentStudents,
+} = storeToRefs(studentStore)
 const root = ref<HTMLElement>()
 const isOpen = ref(false)
-const query = ref('')
-const recentStudentIds = ref<number[]>([props.currentStudent.id])
+const keyword = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | undefined
 
-const normalizedQuery = computed(() => query.value.trim().toLowerCase())
-const searchResults = computed(() =>
-  props.students.filter((student) => {
-    if (!normalizedQuery.value) return true
-    return (
-      student.name.toLowerCase().includes(normalizedQuery.value) ||
-      student.school.toLowerCase().includes(normalizedQuery.value)
-    )
-  }),
-)
-const recentStudents = computed(() =>
-  recentStudentIds.value
-    .map((id) => props.students.find((student) => student.id === id))
-    .filter((student): student is Student => Boolean(student)),
-)
+const recentIds = computed(() => new Set(recentStudents.value.map((student) => student.studentId)))
 const remainingStudents = computed(() =>
-  props.students.filter((student) => !recentStudentIds.value.includes(student.id)),
+  navigationItems.value.filter((student) => !recentIds.value.has(student.studentId)),
 )
 
 watch(
-  () => props.currentStudent.id,
-  (studentId) => rememberStudent(studentId),
+  () => props.currentStudent.studentId,
+  () => studentStore.rememberStudent(props.currentStudent),
+  { immediate: true },
 )
+watch(keyword, (value) => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => void studentStore.searchNavigation(value), 300)
+})
 
-function studentInitial(name: string) {
+function studentInitial(name: string): string {
   return name.trim().charAt(0) || '?'
 }
 
-function rememberStudent(studentId: number) {
-  recentStudentIds.value = [
-    studentId,
-    ...recentStudentIds.value.filter((id) => id !== studentId),
-  ].slice(0, 5)
-}
-
-function toggle() {
+function toggle(): void {
   isOpen.value = !isOpen.value
-  query.value = ''
+  if (isOpen.value && studentStore.navigationStatus === 'idle') {
+    void studentStore.loadNavigation({ reset: true })
+  }
 }
 
-function close() {
+function close(): void {
   isOpen.value = false
-  query.value = ''
 }
 
-function selectStudent(student: Student) {
-  if (student.id === props.currentStudent.id) return
-  rememberStudent(student.id)
+function selectStudent(student: StudentNavigationItem): void {
+  if (student.studentId === props.currentStudent.studentId) return
+  studentStore.rememberStudent(student)
   close()
   emit('select', student)
 }
 
-function manageStudents() {
+function manageStudents(): void {
   close()
   emit('manage')
 }
 
-function closeOnOutsideClick(event: MouseEvent) {
+function closeOnOutsideClick(event: MouseEvent): void {
   if (!(event.target instanceof Node)) return
   if (root.value && !root.value.contains(event.target)) close()
 }
 
-function closeOnEscape(event: KeyboardEvent) {
-  if (event.key !== 'Escape' || !isOpen.value) return
-  close()
+function closeOnEscape(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && isOpen.value) close()
 }
 
 onMounted(() => {
@@ -92,6 +85,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
   document.removeEventListener('click', closeOnOutsideClick)
   document.removeEventListener('keydown', closeOnEscape)
 })
@@ -105,120 +99,99 @@ onBeforeUnmount(() => {
       type="button"
       :aria-expanded="isOpen"
       aria-haspopup="dialog"
-      aria-label="아동 변경"
+      aria-label="학습자 변경"
       @click="toggle"
     >
       <img
-        v-if="currentStudent.profileImage"
-        :src="currentStudent.profileImage"
+        v-if="currentStudent.imageUrl"
+        :src="currentStudent.imageUrl"
         :alt="currentStudent.name"
       />
-      <span v-else class="student-avatar" aria-hidden="true">{{
-        studentInitial(currentStudent.name)
-      }}</span>
+      <span v-else class="student-avatar" aria-hidden="true">
+        {{ studentInitial(currentStudent.name) }}
+      </span>
       <span class="student-switcher__identity">
         <strong>{{ currentStudent.name }}</strong>
-        <small>{{ currentStudent.age }}세 · {{ currentStudent.school }}</small>
+        <small>{{ currentStudent.school }}</small>
       </span>
-      <span class="student-switcher__chevron" aria-hidden="true">⌄</span>
+      <span aria-hidden="true">⌄</span>
     </Button>
 
-    <section v-if="isOpen" class="student-switcher__popover" role="dialog" aria-label="아동 변경">
+    <section v-if="isOpen" class="student-switcher__popover" role="dialog" aria-label="학습자 변경">
       <header>
-        <strong>아동 변경</strong>
-        <span>{{ students.length }}명</span>
+        <strong>학습자 변경</strong>
+        <span>{{ navigationItems.length }}명 표시 중</span>
       </header>
 
       <label class="student-switcher__search">
         <span aria-hidden="true">⌕</span>
-        <Input v-model="query" class="border-0 shadow-none" type="search" placeholder="이름 또는 학교 검색" autofocus />
+        <Input
+          v-model="keyword"
+          type="search"
+          aria-label="이름 또는 학교 검색"
+          placeholder="이름 또는 학교 검색"
+          autofocus
+        />
       </label>
 
       <div class="student-switcher__list">
-        <template v-if="normalizedQuery">
-          <p class="student-switcher__section-label">검색 결과</p>
-          <Button
-            v-for="student in searchResults"
-            :key="student.id"
-            class="student-option"
-            type="button"
-            :aria-current="student.id === currentStudent.id ? 'true' : undefined"
-            :disabled="student.id === currentStudent.id"
-            @click="selectStudent(student)"
-          >
-            <img v-if="student.profileImage" :src="student.profileImage" alt="" />
-            <span v-else class="student-avatar" aria-hidden="true">{{
-              studentInitial(student.name)
-            }}</span>
-            <span
-              ><strong>{{ student.name }}</strong
-              ><small>{{ student.school }} · {{ student.age }}세</small></span
-            >
-            <span
-              v-if="student.id === currentStudent.id"
-              class="student-option__check"
-              aria-label="현재 아동"
-              >✓</span
-            >
-          </Button>
-          <p v-if="searchResults.length === 0" class="student-switcher__empty">
-            검색 결과가 없습니다.
-          </p>
-        </template>
+        <p v-if="!keyword && recentStudents.length" class="section-label">최근 본 학습자</p>
+        <Button
+          v-for="student in !keyword ? recentStudents : []"
+          :key="`recent-${student.studentId}`"
+          class="student-option"
+          type="button"
+          :disabled="student.studentId === currentStudent.studentId"
+          @click="selectStudent(student)"
+        >
+          <span class="student-avatar" aria-hidden="true">{{ studentInitial(student.name) }}</span>
+          <span><strong>{{ student.name }}</strong><small>{{ student.school }}</small></span>
+          <span v-if="student.studentId === currentStudent.studentId" aria-label="현재 학습자">✓</span>
+        </Button>
 
-        <template v-else>
-          <p class="student-switcher__section-label">최근 본 아동</p>
-          <Button
-            v-for="student in recentStudents"
-            :key="`recent-${student.id}`"
-            class="student-option"
-            type="button"
-            :aria-current="student.id === currentStudent.id ? 'true' : undefined"
-            :disabled="student.id === currentStudent.id"
-            @click="selectStudent(student)"
-          >
-            <img v-if="student.profileImage" :src="student.profileImage" alt="" />
-            <span v-else class="student-avatar" aria-hidden="true">{{
-              studentInitial(student.name)
-            }}</span>
-            <span
-              ><strong>{{ student.name }}</strong
-              ><small>{{ student.school }} · {{ student.age }}세</small></span
-            >
-            <span
-              v-if="student.id === currentStudent.id"
-              class="student-option__check"
-              aria-label="현재 아동"
-              >✓</span
-            >
-          </Button>
+        <p class="section-label">{{ keyword ? '검색 결과' : '전체 학습자' }}</p>
+        <Button
+          v-for="student in keyword ? navigationItems : remainingStudents"
+          :key="student.studentId"
+          class="student-option"
+          type="button"
+          :disabled="student.studentId === currentStudent.studentId"
+          @click="selectStudent(student)"
+        >
+          <img v-if="student.imageUrl" :src="student.imageUrl" alt="" />
+          <span v-else class="student-avatar" aria-hidden="true">{{ studentInitial(student.name) }}</span>
+          <span><strong>{{ student.name }}</strong><small>{{ student.school }}</small></span>
+          <span v-if="student.studentId === currentStudent.studentId" aria-label="현재 학습자">✓</span>
+        </Button>
 
-          <template v-if="remainingStudents.length">
-            <p class="student-switcher__section-label student-switcher__section-label--all">
-              전체 아동
-            </p>
-            <Button
-              v-for="student in remainingStudents"
-              :key="student.id"
-              class="student-option"
-              type="button"
-              @click="selectStudent(student)"
-            >
-              <img v-if="student.profileImage" :src="student.profileImage" alt="" />
-              <span v-else class="student-avatar" aria-hidden="true">{{
-                studentInitial(student.name)
-              }}</span>
-              <span
-                ><strong>{{ student.name }}</strong
-                ><small>{{ student.school }} · {{ student.age }}세</small></span
-              >
-            </Button>
-          </template>
-        </template>
+        <p v-if="navigationStatus === 'loading'" class="state-copy">불러오는 중...</p>
+        <div v-else-if="navigationStatus === 'error'" class="state-copy" role="alert">
+          <p>{{ navigationError }}</p>
+          <Button type="button" size="sm" variant="outline" @click="studentStore.loadNavigation({ reset: true })">
+            다시 시도
+          </Button>
+        </div>
+        <p
+          v-else-if="navigationItems.length === 0"
+          class="state-copy"
+        >
+          검색 결과가 없습니다.
+        </p>
+        <Button
+          v-if="navigationHasNextPage"
+          class="load-more"
+          type="button"
+          variant="outline"
+          size="sm"
+          :disabled="navigationStatus === 'loading'"
+          @click="studentStore.loadMoreNavigation()"
+        >
+          더 불러오기
+        </Button>
       </div>
 
-      <Button variant="ghost" class="student-switcher__manage" type="button" @click="manageStudents">
-        전체 아동 목록에서 관리
+      <Button variant="ghost" class="manage" type="button" @click="manageStudents">
+        전체 학습자 목록에서 관리
       </Button>
     </section>
   </div>
@@ -236,71 +209,50 @@ onBeforeUnmount(() => {
   gap: 9px;
   padding: 8px 9px;
   border: 1px solid var(--slate-200);
-  border-radius: var(--radius-sm);
-  background: var(--sidebar);
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 5px 14px rgba(15, 23, 42, 0.055);
-  color: inherit;
-  text-align: left;
-  grid-template-columns: 40px minmax(0, 1fr) 16px;
-  transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease,
-    transform 150ms ease;
-}
-.student-switcher__trigger:hover,
-.student-switcher__trigger[aria-expanded='true'] {
-  border-color: color-mix(in oklch, var(--primary) 24%, var(--slate-200));
-  background: var(--sidebar-accent);
-  box-shadow:
-    0 2px 4px rgba(15, 23, 42, 0.05),
-    0 8px 20px rgba(15, 23, 42, 0.08);
-  transform: translateY(-1px);
+  grid-template-columns: 38px minmax(0, 1fr) 16px;
 }
 .student-switcher__trigger img,
 .student-avatar {
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--border);
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
+}
+.student-switcher__trigger img,
+.student-option img {
   object-fit: cover;
 }
 .student-avatar {
   display: grid;
   background: var(--primary-50);
   color: var(--primary-700);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   place-items: center;
 }
-.student-switcher__identity {
+.student-switcher__identity,
+.student-option > span:nth-child(2) {
   display: grid;
   min-width: 0;
   gap: 2px;
 }
-.student-switcher__identity strong {
+.student-switcher__identity strong,
+.student-option strong {
+  overflow: hidden;
   color: var(--slate-900);
-  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.student-switcher__identity small {
+.student-switcher__identity small,
+.student-option small {
   overflow: hidden;
   color: var(--slate-500);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.student-switcher__chevron {
-  color: var(--slate-400);
-  font-size: 16px;
-  transition: transform 140ms ease;
-}
-.student-switcher__trigger[aria-expanded='true'] .student-switcher__chevron {
-  transform: rotate(180deg);
-}
 .student-switcher__popover {
   position: absolute;
-  z-index: 30;
+  z-index: 50;
   top: 0;
   left: calc(100% + 14px);
   width: 300px;
@@ -318,117 +270,63 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border-bottom: 1px solid var(--slate-200);
 }
-.student-switcher__popover header strong {
-  font-size: 14px;
-}
-.student-switcher__popover header span {
+.student-switcher__popover header span,
+.section-label,
+.state-copy {
   color: var(--slate-500);
-  font-size: 11px;
+  font-size: 10px;
 }
 .student-switcher__search {
   display: flex;
-  height: 38px;
   align-items: center;
   gap: 7px;
   margin: 12px;
-  padding: 0 10px;
-  border: 1px solid var(--input);
-  border-radius: var(--radius-sm);
-  background: var(--background);
-}
-.student-switcher__search > span {
-  color: var(--slate-400);
-  font-size: 17px;
-}
-.student-switcher__search input {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  font-size: 11px;
 }
 .student-switcher__list {
-  max-height: 308px;
-  padding: 0 7px 8px;
+  max-height: 330px;
+  padding: 0 8px 10px;
   overflow-y: auto;
 }
-.student-switcher__section-label {
-  margin: 4px 7px 5px;
-  color: var(--slate-500);
-  font-size: 9px;
+.section-label {
+  margin: 8px;
   font-weight: 800;
-}
-.student-switcher__section-label--all {
-  margin-top: 12px;
 }
 .student-option {
   display: grid;
   width: 100%;
   min-height: 50px;
-  align-items: center;
   gap: 9px;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  text-align: left;
   grid-template-columns: 34px minmax(0, 1fr) 18px;
 }
-.student-option:hover:not(:disabled) {
-  background: var(--accent);
-}
 .student-option:disabled {
-  cursor: default;
   opacity: 1;
 }
-.student-option img,
-.student-option .student-avatar {
-  width: 32px;
-  height: 32px;
-  font-size: 11px;
+.student-option img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
 }
-.student-option > span:nth-child(2) {
+.state-copy {
   display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-.student-option strong {
-  color: var(--slate-800);
-  font-size: 11px;
-}
-.student-option small {
-  overflow: hidden;
-  color: var(--slate-500);
-  font-size: 9px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.student-option__check {
-  color: var(--primary-600);
-  font-size: 12px;
-  font-weight: 800;
+  justify-items: center;
+  gap: 8px;
+  margin: 20px 8px;
   text-align: center;
 }
-.student-switcher__empty {
-  margin: 24px 8px;
-  color: var(--slate-500);
-  font-size: 11px;
-  text-align: center;
+.state-copy p {
+  margin: 0;
 }
-.student-switcher__manage {
+.load-more {
+  width: 100%;
+  margin-top: 8px;
+}
+.manage {
   width: 100%;
   min-height: 42px;
-  border: 0;
   border-top: 1px solid var(--slate-200);
-  background: var(--popover);
+  border-radius: 0;
   color: var(--primary-700);
-  font-size: 10px;
-  font-weight: 800;
 }
-.student-switcher__manage:hover {
-  background: var(--sidebar-accent);
-}
-
 @media (max-width: 900px) {
   .student-switcher__popover {
     top: calc(100% + 8px);
@@ -437,6 +335,3 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-            variant="ghost"
-            variant="ghost"
-              variant="ghost"
