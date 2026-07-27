@@ -1,12 +1,18 @@
 import { studentFixtures, type StudentFixtureRecord } from '../fixtures'
+import { createLearningInsightsFixture } from '../learningInsightsFixtures'
 import { normalizeStudentListQuery } from '../query'
 import { ApiError } from '@/lib/api'
 import type {
+  StudentAccuracyPoint,
   StudentCreateInput,
   StudentDetail,
+  StudentLearningEvent,
+  StudentLearningEventDetail,
   StudentLearningSummary,
   StudentListItem,
   StudentMutationCommand,
+  StudentTrainingHistoryItem,
+  StudentTrainingHistoryPeriod,
   StudentUpdateInput,
 } from '../model'
 import type {
@@ -51,6 +57,13 @@ export class MockStudentRepository implements StudentRepository {
   private readonly students: StudentFixtureRecord[]
   private readonly details = new Map<number, StudentDetail>()
   private readonly learningSummaries = new Map<number, StudentLearningSummary>()
+  private readonly learningEvents = new Map<number, StudentLearningEvent[]>()
+  private readonly learningEventDetails = new Map<
+    number,
+    Map<number, StudentLearningEventDetail>
+  >()
+  private readonly accuracyTrends = new Map<number, StudentAccuracyPoint[]>()
+  private readonly trainingHistories = new Map<number, StudentTrainingHistoryItem[]>()
 
   constructor(
     students: readonly StudentFixtureRecord[] = studentFixtures,
@@ -74,6 +87,25 @@ export class MockStudentRepository implements StudentRepository {
         teacherMemo: null,
       })
       this.learningSummaries.set(student.studentId, this.createLearningSummary(student))
+      const insights = createLearningInsightsFixture(student)
+      this.learningEvents.set(student.studentId, insights.events.map(this.cloneEvent))
+      this.learningEventDetails.set(
+        student.studentId,
+        new Map(
+          insights.eventDetails.map((event) => [
+            event.eventId,
+            this.cloneEventDetail(event),
+          ]),
+        ),
+      )
+      this.accuracyTrends.set(
+        student.studentId,
+        insights.accuracy.map((point) => ({ ...point })),
+      )
+      this.trainingHistories.set(
+        student.studentId,
+        insights.trainingHistory.map((item) => ({ ...item })),
+      )
     }
   }
 
@@ -134,6 +166,10 @@ export class MockStudentRepository implements StudentRepository {
       attentionRequiredCount: 0,
       attentionReasons: ['NO_HISTORY'],
     })
+    this.learningEvents.set(studentId, [])
+    this.learningEventDetails.set(studentId, new Map())
+    this.accuracyTrends.set(studentId, [])
+    this.trainingHistories.set(studentId, [])
     this.students.push({
       studentId,
       name: detail.name,
@@ -188,6 +224,10 @@ export class MockStudentRepository implements StudentRepository {
     }
     this.details.delete(studentId)
     this.learningSummaries.delete(studentId)
+    this.learningEvents.delete(studentId)
+    this.learningEventDetails.delete(studentId)
+    this.accuracyTrends.delete(studentId)
+    this.trainingHistories.delete(studentId)
     const index = this.students.findIndex((student) => student.studentId === studentId)
     if (index >= 0) this.students.splice(index, 1)
   }
@@ -205,6 +245,71 @@ export class MockStudentRepository implements StudentRepository {
     return {
       ...summary,
       attentionReasons: [...summary.attentionReasons],
+    }
+  }
+
+  async listLearningEvents(
+    studentId: number,
+    query: { readonly limit?: number } = {},
+    options?: StudentRequestOptions,
+  ) {
+    throwIfAborted(options)
+    await this.getDetail(studentId, options)
+    const events = [...(this.learningEvents.get(studentId) ?? [])].sort(
+      (left, right) =>
+        new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime(),
+    )
+    const limit =
+      query.limit === undefined ? events.length : Math.max(0, Math.trunc(query.limit))
+    return events.slice(0, limit).map(this.cloneEvent)
+  }
+
+  async getLearningEvent(
+    studentId: number,
+    eventId: number,
+    options?: StudentRequestOptions,
+  ) {
+    throwIfAborted(options)
+    await this.getDetail(studentId, options)
+    const event = this.learningEventDetails.get(studentId)?.get(eventId)
+    if (!event) {
+      throw new ApiError({
+        status: 404,
+        code: 'LEARNING_EVENT_NOT_FOUND',
+        message: '학습 이벤트를 찾을 수 없습니다.',
+      })
+    }
+    return this.cloneEventDetail(event)
+  }
+
+  async getAccuracyTrend(studentId: number, options?: StudentRequestOptions) {
+    throwIfAborted(options)
+    await this.getDetail(studentId, options)
+    return {
+      dailyAccuracy: [...(this.accuracyTrends.get(studentId) ?? [])]
+        .sort((left, right) => left.date.localeCompare(right.date))
+        .map((point) => ({ ...point })),
+    }
+  }
+
+  async getTrainingHistory(
+    studentId: number,
+    period: StudentTrainingHistoryPeriod,
+    options?: StudentRequestOptions,
+  ) {
+    throwIfAborted(options)
+    await this.getDetail(studentId, options)
+    const cutoff = startOfDay(this.now())
+    if (period === '30d') {
+      cutoff.setDate(cutoff.getDate() - 29)
+    } else {
+      cutoff.setMonth(cutoff.getMonth() - 3)
+    }
+    return {
+      learningHistory: [...(this.trainingHistories.get(studentId) ?? [])]
+        .filter((item) => new Date(`${item.date}T00:00:00`).getTime() >= cutoff.getTime())
+        .sort((left, right) => right.date.localeCompare(left.date))
+        .map((item) => ({ ...item })),
     }
   }
 
@@ -264,6 +369,21 @@ export class MockStudentRepository implements StudentRepository {
       lastLearningAt: `${student.recentLearningDate}T16:00:00+09:00`,
       attentionRequiredCount: reasons.length,
       attentionReasons: reasons,
+    }
+  }
+
+  private cloneEvent(event: StudentLearningEvent): StudentLearningEvent {
+    return {
+      ...event,
+      attentionReasons: [...event.attentionReasons],
+    }
+  }
+
+  private cloneEventDetail(event: StudentLearningEventDetail): StudentLearningEventDetail {
+    return {
+      ...event,
+      attentionReasons: [...event.attentionReasons],
+      problemSegments: [...event.problemSegments],
     }
   }
 

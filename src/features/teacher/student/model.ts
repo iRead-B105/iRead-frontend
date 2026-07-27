@@ -71,6 +71,53 @@ export interface StudentLearningSummary {
   readonly attentionReasons: readonly StudentAttentionReason[]
 }
 
+export type StudentLearningEventType = 'TEST' | 'TRAINING' | 'STORY' | 'GAZE'
+
+export interface StudentLearningEvent {
+  readonly eventId: number
+  readonly eventType: StudentLearningEventType
+  readonly occurredAt: string
+  readonly sourceId: number
+  readonly accuracy: number | null
+  readonly attentionRequired: boolean
+  readonly attentionReasons: readonly StudentAttentionReason[]
+}
+
+export interface StudentLearningEventDetail extends StudentLearningEvent {
+  readonly retryCount: number
+  readonly problemSegments: readonly string[]
+  readonly recommendedTrainingTemplateId: number | null
+  readonly recommendedCurriculumUnitId: number | null
+  readonly recommendedCurriculumUnitName: string | null
+  readonly recommendationReason: string | null
+  readonly recommendedMinutes: number | null
+  readonly recommendedRepeatCount: number | null
+}
+
+export interface StudentAccuracyPoint {
+  readonly date: string
+  readonly accuracy: number
+}
+
+export interface StudentAccuracyTrend {
+  readonly dailyAccuracy: readonly StudentAccuracyPoint[]
+}
+
+export type StudentTrainingHistoryPeriod = '30d' | '3m'
+
+export interface StudentTrainingHistoryItem {
+  readonly trainingId: number
+  readonly date: string
+  readonly learningType: string
+  readonly startedAt: string | null
+  readonly finishedAt: string | null
+  readonly achievement: number | null
+}
+
+export interface StudentTrainingHistory {
+  readonly learningHistory: readonly StudentTrainingHistoryItem[]
+}
+
 export interface StudentCreateInput {
   readonly name: string
   readonly birthday: string

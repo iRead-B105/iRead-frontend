@@ -47,6 +47,10 @@ function createRepository(
     update: vi.fn(),
     remove: vi.fn(),
     getLearningSummary: vi.fn(),
+    listLearningEvents: vi.fn(),
+    getLearningEvent: vi.fn(),
+    getAccuracyTrend: vi.fn(),
+    getTrainingHistory: vi.fn(),
     updateTeacherMemo: vi.fn(),
   }
 }

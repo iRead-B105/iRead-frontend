@@ -76,6 +76,10 @@ const mutationRepositoryMethods = {
   update: vi.fn(),
   remove: vi.fn(),
   getLearningSummary: vi.fn(),
+  listLearningEvents: vi.fn(),
+  getLearningEvent: vi.fn(),
+  getAccuracyTrend: vi.fn(),
+  getTrainingHistory: vi.fn(),
   updateTeacherMemo: vi.fn(),
 }
 
@@ -243,5 +247,69 @@ describe('Student store', () => {
     expect(store.detailStatusById[99]).toBe('error')
     expect(store.detailErrorStatusById[99]).toBe(403)
     expect(store.detailsById[99]).toBeUndefined()
+  })
+
+  it('이벤트·정확도·기간별 훈련 이력을 독립된 studentId 상태로 저장한다', async () => {
+    const learningEvent = {
+      eventId: 701,
+      eventType: 'TRAINING' as const,
+      occurredAt: '2026-07-27T16:00:00+09:00',
+      sourceId: 91,
+      accuracy: 68,
+      attentionRequired: true,
+      attentionReasons: ['LOW_ACCURACY' as const],
+    }
+    const learningEventDetail = {
+      ...learningEvent,
+      retryCount: 2,
+      problemSegments: ['받침 ㄹ 발음'],
+      recommendedTrainingTemplateId: null,
+      recommendedCurriculumUnitId: null,
+      recommendedCurriculumUnitName: null,
+      recommendationReason: null,
+      recommendedMinutes: null,
+      recommendedRepeatCount: null,
+    }
+    const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
+      list: vi.fn().mockResolvedValue(result([])),
+      getSummary: vi.fn().mockResolvedValue({
+        totalStudents: 0,
+        scheduledTodayCount: 0,
+      }),
+      listLearningEvents: vi.fn().mockResolvedValue([learningEvent]),
+      getLearningEvent: vi.fn().mockResolvedValue(learningEventDetail),
+      getAccuracyTrend: vi.fn().mockResolvedValue({
+        dailyAccuracy: [{ date: '2026-07-27', accuracy: 68 }],
+      }),
+      getTrainingHistory: vi.fn().mockResolvedValue({
+        learningHistory: [
+          {
+            trainingId: 801,
+            date: '2026-07-27',
+            learningType: '문장 읽기',
+            startedAt: null,
+            finishedAt: null,
+            achievement: 68,
+          },
+        ],
+      }),
+    }
+    const store = useStudentStore()
+    store.setRepository(repository)
+
+    await Promise.all([
+      store.loadLearningEvents(1, 3),
+      store.loadAccuracyTrend(1),
+      store.loadTrainingHistory(1, '30d'),
+    ])
+    await store.loadLearningEvent(1, 701)
+
+    expect(repository.listLearningEvents).toHaveBeenCalledWith(1, { limit: 3 })
+    expect(repository.getLearningEvent).toHaveBeenCalledWith(1, 701)
+    expect(store.learningEventsById[1]).toEqual([learningEvent])
+    expect(store.learningEventDetailsByKey['1:701']).toEqual(learningEventDetail)
+    expect(store.accuracyTrendById[1]?.dailyAccuracy).toHaveLength(1)
+    expect(store.trainingHistoryByKey['1:30d']?.learningHistory).toHaveLength(1)
   })
 })

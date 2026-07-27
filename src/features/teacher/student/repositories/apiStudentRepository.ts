@@ -32,6 +32,30 @@ export class ApiStudentRepository implements StudentRepository {
     return this.api.getLearningSummary(studentId, options)
   }
 
+  listLearningEvents(
+    studentId: number,
+    query: Parameters<StudentRepository['listLearningEvents']>[1] = {},
+    options: Parameters<StudentRepository['listLearningEvents']>[2] = {},
+  ) {
+    return this.api.listLearningEvents(studentId, query, options)
+  }
+
+  getLearningEvent(studentId: number, eventId: number, options = {}) {
+    return this.api.getLearningEvent(studentId, eventId, options)
+  }
+
+  getAccuracyTrend(studentId: number, options = {}) {
+    return this.api.getAccuracyTrend(studentId, options)
+  }
+
+  getTrainingHistory(
+    studentId: number,
+    period: Parameters<StudentRepository['getTrainingHistory']>[1],
+    options = {},
+  ) {
+    return this.api.getTrainingHistory(studentId, period, options)
+  }
+
   updateTeacherMemo(studentId: number, teacherMemo: string | null) {
     return this.api.updateTeacherMemo(studentId, teacherMemo)
   }

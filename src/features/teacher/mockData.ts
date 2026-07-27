@@ -2,12 +2,9 @@
 import type {
   CurriculumItem,
   LessonMaterial,
-  LearningEvent,
-  LearningRecord,
   RecommendedCurriculumItem,
   ReportVersion,
   Student,
-  TeacherNote,
   TrainingSession,
 } from './types'
 
@@ -552,92 +549,6 @@ export const trainingSessions: TrainingSession[] = [
     curriculum: '이해력(핵심 내용 찾기)',
     summary: '핵심어를 찾는 과정에서 교수자의 추가 안내가 필요했습니다.',
     questions: [],
-  },
-]
-
-export const learningRecords: LearningRecord[] = [
-  {
-    id: 1,
-    studentId: 1,
-    occurredAt: '2026-07-18 15:44',
-    activity: '구름 마을의 비밀 · 받침 소리 구분',
-    result: 'completed',
-    score: 88,
-  },
-  {
-    id: 2,
-    studentId: 1,
-    occurredAt: '2026-07-18 15:31',
-    activity: '토끼의 우체국 · 짧은 문장 읽기',
-    result: 'completed',
-    score: 76,
-    eventId: 101,
-  },
-  {
-    id: 3,
-    studentId: 1,
-    occurredAt: '2026-07-16 16:05',
-    activity: '바닷속 도서관 · 핵심 내용 찾기',
-    result: 'completed',
-    score: 64,
-    eventId: 102,
-  },
-  {
-    id: 4,
-    studentId: 2,
-    occurredAt: '2026-07-17 18:20',
-    activity: '별빛 캠핑 · 문장 유창하게 읽기',
-    result: 'completed',
-    score: 91,
-  },
-]
-
-export const learningEvents: LearningEvent[] = [
-  {
-    id: 101,
-    studentId: 1,
-    recordId: 2,
-    occurredAt: '2026-07-18 15:34',
-    storyTitle: '토끼의 우체국',
-    sceneTitle: '편지를 읽어요',
-    type: 'speech-recognition-low-confidence',
-    retryCount: 2,
-    finalSucceeded: true,
-    usedSafeFallback: false,
-    learningOutcome: 'completed',
-    status: 'needs-review',
-    issueSegment: '받침이 포함된 짧은 구간',
-    recognitionConfidence: 62,
-    systemResponse: '속도를 낮춘 문장으로 다시 안내한 뒤 학습을 이어갔습니다.',
-  },
-  {
-    id: 102,
-    studentId: 1,
-    recordId: 3,
-    occurredAt: '2026-07-16 16:12',
-    storyTitle: '바닷속 도서관',
-    sceneTitle: '다음 장면을 골라요',
-    type: 'safety-restriction',
-    retryCount: 0,
-    finalSucceeded: true,
-    usedSafeFallback: true,
-    learningOutcome: 'completed',
-    status: 'follow-up-needed',
-    systemResponse: '중립적인 기본 이야기 분기로 이동해 학습을 마쳤습니다.',
-  },
-]
-
-export const teacherNotes: TeacherNote[] = [
-  {
-    id: 201,
-    studentId: 1,
-    source: 'teacher',
-    audience: 'teacher-only',
-    status: 'active',
-    author: '이OO 선생님',
-    text: '글자와 소리의 대응이 빠르게 향상되고 있습니다. 받침이 포함된 문장을 읽을 때 속도가 흔들리는 경향이 있어 반복 연습이 필요합니다.',
-    createdAt: '2026-07-18 17:10',
-    updatedAt: '2026-07-18 17:10',
   },
 ]
 

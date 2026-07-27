@@ -85,67 +85,7 @@ export interface RecommendedCurriculumItem {
   material?: LessonMaterial
 }
 
-export type Audience = 'teacher-only' | 'child' | 'guardian'
-
-export type MessageSource = 'teacher' | 'guardian'
-
-export type AsyncContentState = 'loading' | 'ready' | 'error'
-
-export type LearningEventType =
-  | 'pronunciation-correction'
-  | 'speech-recognition-low-confidence'
-  | 'device-or-network-error'
-  | 'safety-restriction'
-  | 'generation-failure'
-
-export type LearningEventStatus = 'needs-review' | 'reviewed' | 'follow-up-needed'
-
 export type ReportStatus = 'draft' | 'published'
-
-export interface LearningRecord {
-  id: number
-  studentId: number
-  occurredAt: string
-  activity: string
-  result: 'started' | 'completed'
-  score?: number
-  eventId?: number
-}
-
-export interface LearningEvent {
-  id: number
-  studentId: number
-  recordId: number
-  occurredAt: string
-  storyTitle: string
-  sceneTitle: string
-  type: LearningEventType
-  retryCount: number
-  finalSucceeded: boolean
-  usedSafeFallback: boolean
-  learningOutcome: 'completed' | 'left'
-  status: LearningEventStatus
-  issueSegment?: string
-  recognitionConfidence?: number
-  systemResponse: string
-  reviewedBy?: string
-  reviewedAt?: string
-}
-
-export interface MessageBase<TStatus extends string> {
-  id: number
-  studentId: number
-  source: MessageSource
-  audience: Audience
-  status: TStatus
-  createdAt: string
-  updatedAt: string
-}
-
-export interface TeacherNote extends MessageBase<'active' | 'archived'> {
-  author: string
-  text: string
-}
 
 export interface ReportVersion {
   id: number

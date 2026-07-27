@@ -1,19 +1,26 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { AlertCircle, BookOpen, Clock3, UserRound } from '@lucide/vue'
+import type { EChartsOption } from 'echarts'
 import { useRoute, useRouter } from 'vue-router'
+import ChartPanel from '@/components/common/ChartPanel.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import StudentCommunicationPanel from '@/components/teacher/StudentCommunicationPanel.vue'
+import StudentLearningEvents from '@/components/teacher/StudentLearningEvents.vue'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import {
+  appendSummaryToTeacherMemo,
+  formatLearningEventMemoSummary,
   formatStudentDateTime,
+  formatTrainingDuration,
   normalizeTeacherMemo,
   validateTeacherMemo,
   type StudentAttentionReason,
+  type StudentLearningEventDetail,
 } from '@/features/teacher/student'
 import { isApiError } from '@/lib/api'
 import { useStudentStore } from '@/stores/students'
@@ -48,6 +55,94 @@ const learningSummaryStatus = computed(
 const learningSummaryError = computed(
   () => studentStore.learningSummaryErrorById[studentId.value],
 )
+const learningEvents = computed(
+  () => studentStore.learningEventsById[studentId.value] ?? [],
+)
+const learningEventsStatus = computed(
+  () => studentStore.learningEventsStatusById[studentId.value] ?? 'idle',
+)
+const learningEventsError = computed(
+  () => studentStore.learningEventsErrorById[studentId.value] ?? null,
+)
+const selectedEventId = ref<number | null>(null)
+const selectedEventKey = computed(() =>
+  selectedEventId.value === null
+    ? null
+    : studentStore.insightKey(studentId.value, selectedEventId.value),
+)
+const selectedEventDetail = computed(() =>
+  selectedEventKey.value
+    ? studentStore.learningEventDetailsByKey[selectedEventKey.value] ?? null
+    : null,
+)
+const selectedEventDetailStatus = computed(() =>
+  selectedEventKey.value
+    ? studentStore.learningEventDetailStatusByKey[selectedEventKey.value] ?? 'idle'
+    : 'idle',
+)
+const selectedEventDetailError = computed(() =>
+  selectedEventKey.value
+    ? studentStore.learningEventDetailErrorByKey[selectedEventKey.value] ?? null
+    : null,
+)
+const accuracyTrend = computed(
+  () => studentStore.accuracyTrendById[studentId.value]?.dailyAccuracy ?? [],
+)
+const accuracyTrendStatus = computed(
+  () => studentStore.accuracyTrendStatusById[studentId.value] ?? 'idle',
+)
+const accuracyTrendError = computed(
+  () => studentStore.accuracyTrendErrorById[studentId.value] ?? null,
+)
+const trainingHistoryKey = computed(() =>
+  studentStore.insightKey(studentId.value, '30d'),
+)
+const trainingHistory = computed(
+  () => studentStore.trainingHistoryByKey[trainingHistoryKey.value]?.learningHistory ?? [],
+)
+const recentTrainingHistory = computed(() => trainingHistory.value.slice(0, 3))
+const trainingHistoryStatus = computed(
+  () => studentStore.trainingHistoryStatusByKey[trainingHistoryKey.value] ?? 'idle',
+)
+const trainingHistoryError = computed(
+  () => studentStore.trainingHistoryErrorByKey[trainingHistoryKey.value] ?? null,
+)
+const accuracyDelta = computed(() => {
+  if (accuracyTrend.value.length < 2) return null
+  return (
+    accuracyTrend.value[accuracyTrend.value.length - 1]!.accuracy -
+    accuracyTrend.value[0]!.accuracy
+  )
+})
+const accuracyChartOption = computed<EChartsOption>(() => ({
+  grid: { left: 42, right: 18, top: 24, bottom: 34 },
+  tooltip: {
+    trigger: 'axis',
+    valueFormatter: (value) => `${value}%`,
+  },
+  xAxis: {
+    type: 'category',
+    data: accuracyTrend.value.map((point) => point.date.slice(5).replace('-', '.')),
+    boundaryGap: false,
+  },
+  yAxis: {
+    type: 'value',
+    min: 0,
+    max: 100,
+    axisLabel: { formatter: '{value}%' },
+  },
+  series: [
+    {
+      type: 'line',
+      name: '읽기 정확도',
+      data: accuracyTrend.value.map((point) => point.accuracy),
+      smooth: true,
+      symbolSize: 8,
+      lineStyle: { width: 3 },
+      areaStyle: { opacity: 0.08 },
+    },
+  ],
+}))
 const hasNoHistory = computed(
   () => learningSummary.value?.attentionReasons.includes('NO_HISTORY') ?? false,
 )
@@ -104,14 +199,35 @@ function memoErrorMessage(error: unknown): string {
 async function loadOverview(nextStudentId: number): Promise<void> {
   noteDraft.value = ''
   memoError.value = ''
+  selectedEventId.value = null
   if (!Number.isInteger(nextStudentId) || nextStudentId <= 0) return
 
   await Promise.all([
     studentStore.loadDetail(nextStudentId),
     studentStore.loadLearningSummary(nextStudentId),
+    studentStore.loadLearningEvents(nextStudentId, 3),
+    studentStore.loadAccuracyTrend(nextStudentId),
+    studentStore.loadTrainingHistory(nextStudentId, '30d'),
   ])
   if (studentId.value !== nextStudentId) return
   noteDraft.value = studentStore.detailsById[nextStudentId]?.teacherMemo ?? ''
+}
+
+async function selectLearningEvent(eventId: number): Promise<void> {
+  selectedEventId.value = eventId
+  await studentStore.loadLearningEvent(studentId.value, eventId)
+}
+
+function addLearningEventToMemo(event: StudentLearningEventDetail): void {
+  const summary = formatLearningEventMemoSummary(event)
+  const nextDraft = appendSummaryToTeacherMemo(noteDraft.value, summary)
+  const validationError = validateTeacherMemo(nextDraft)
+  if (validationError) {
+    memoError.value = validationError
+    return
+  }
+  noteDraft.value = nextDraft
+  memoError.value = ''
 }
 
 async function retryDetail(): Promise<void> {
@@ -300,6 +416,124 @@ watch(studentId, loadOverview, { immediate: true })
             현재 확인이 필요한 공식 학습 신호가 없습니다.
           </p>
         </div>
+      </section>
+
+      <div class="learning-insights-grid">
+        <StudentLearningEvents
+          :events="learningEvents"
+          :selected-event-id="selectedEventId"
+          :detail="selectedEventDetail"
+          :list-status="learningEventsStatus"
+          :list-error="learningEventsError"
+          :detail-status="selectedEventDetailStatus"
+          :detail-error="selectedEventDetailError"
+          @select="selectLearningEvent"
+          @retry-list="studentStore.loadLearningEvents(detail.studentId, 3)"
+          @retry-detail="studentStore.loadLearningEvent(detail.studentId, $event)"
+          @add-to-memo="addLearningEventToMemo"
+        />
+
+        <section class="accuracy-panel" aria-labelledby="accuracy-title">
+          <header>
+            <div>
+              <h2 id="accuracy-title">최근 6주 읽기 정확도</h2>
+              <p>Backend에서 최근 6주로 제한한 날짜별 정확도입니다.</p>
+            </div>
+            <Button
+              v-if="accuracyTrendStatus === 'error'"
+              variant="outline"
+              size="sm"
+              type="button"
+              @click="studentStore.loadAccuracyTrend(detail.studentId)"
+            >
+              다시 시도
+            </Button>
+          </header>
+
+          <div
+            v-if="accuracyTrendStatus === 'loading'"
+            class="insight-state"
+            aria-live="polite"
+          >
+            정확도 추이를 불러오는 중입니다.
+          </div>
+          <div
+            v-else-if="accuracyTrendStatus === 'error'"
+            class="insight-state is-error"
+            role="alert"
+          >
+            <strong>정확도 추이를 불러오지 못했습니다.</strong>
+            <span>{{ accuracyTrendError ?? '잠시 후 다시 시도해 주세요.' }}</span>
+          </div>
+          <div v-else-if="accuracyTrend.length === 0" class="insight-state">
+            표시할 읽기 정확도 데이터가 없습니다.
+          </div>
+          <template v-else>
+            <div class="accuracy-summary">
+              <strong v-if="accuracyDelta === null">첫 정확도 기록</strong>
+              <strong v-else :class="{ 'is-negative': accuracyDelta < 0 }">
+                첫 기록 대비 {{ accuracyDelta >= 0 ? '+' : '' }}{{ accuracyDelta }}%p
+              </strong>
+              <span>
+                {{ accuracyTrend.length === 1 ? '변화폭은 다음 기록부터 계산합니다.' : `${accuracyTrend.length}개 날짜 기록` }}
+              </span>
+            </div>
+            <ChartPanel
+              :option="accuracyChartOption"
+              height="260px"
+              aria-label="최근 6주 날짜별 읽기 정확도 추이 차트"
+            />
+          </template>
+        </section>
+      </div>
+
+      <section class="training-history-panel" aria-labelledby="recent-training-title">
+        <header>
+          <div>
+            <h2 id="recent-training-title">최근 훈련 기록</h2>
+            <p>최근 30일 기록 중 최신 3건만 표시합니다.</p>
+          </div>
+          <Button
+            v-if="trainingHistoryStatus === 'error'"
+            variant="outline"
+            size="sm"
+            type="button"
+            @click="studentStore.loadTrainingHistory(detail.studentId, '30d')"
+          >
+            다시 시도
+          </Button>
+        </header>
+
+        <div
+          v-if="trainingHistoryStatus === 'loading'"
+          class="insight-state"
+          aria-live="polite"
+        >
+          최근 훈련 기록을 불러오는 중입니다.
+        </div>
+        <div
+          v-else-if="trainingHistoryStatus === 'error'"
+          class="insight-state is-error"
+          role="alert"
+        >
+          <strong>최근 훈련 기록을 불러오지 못했습니다.</strong>
+          <span>{{ trainingHistoryError ?? '잠시 후 다시 시도해 주세요.' }}</span>
+        </div>
+        <div v-else-if="recentTrainingHistory.length === 0" class="insight-state">
+          최근 30일 동안 완료한 훈련 기록이 없습니다.
+        </div>
+        <ol v-else class="training-history-list">
+          <li v-for="item in recentTrainingHistory" :key="item.trainingId">
+            <div>
+              <strong>{{ item.learningType }}</strong>
+              <span>{{ item.date }} · {{ formatTrainingDuration(item) }}</span>
+            </div>
+            <b>{{ item.achievement === null ? '달성도 없음' : `${item.achievement}%` }}</b>
+          </li>
+        </ol>
+        <p class="training-history-boundary">
+          전체 훈련 이력·문항 결과·통계는 훈련 이력 화면(FE-004)에서 제공합니다.
+        </p>
       </section>
 
       <StudentCommunicationPanel
@@ -529,6 +763,139 @@ watch(studentId, loadOverview, { immediate: true })
   color: var(--success-700, #15803d);
 }
 
+.learning-insights-grid {
+  display: grid;
+  align-items: start;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.learning-insights-grid > *,
+.training-history-panel {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+
+.accuracy-panel,
+.training-history-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.accuracy-panel > header,
+.training-history-panel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.accuracy-panel h2,
+.accuracy-panel p,
+.training-history-panel h2,
+.training-history-panel p {
+  margin: 0;
+}
+
+.accuracy-panel h2,
+.training-history-panel h2 {
+  font-size: 18px;
+}
+
+.accuracy-panel header p,
+.training-history-panel header p {
+  margin-top: 4px;
+  color: var(--slate-500);
+  font-size: 12px;
+}
+
+.insight-state {
+  display: grid;
+  min-height: 112px;
+  place-content: center;
+  justify-items: center;
+  gap: 7px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--slate-500);
+  font-size: 12px;
+  text-align: center;
+}
+
+.insight-state.is-error {
+  border-color: color-mix(in oklch, var(--danger-600) 30%, var(--border));
+  background: #fff1f2;
+  color: var(--danger-600);
+}
+
+.accuracy-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--slate-50);
+}
+
+.accuracy-summary strong {
+  color: var(--success-700, #15803d);
+  font-size: 14px;
+}
+
+.accuracy-summary strong.is-negative {
+  color: var(--danger-600);
+}
+
+.accuracy-summary span {
+  color: var(--slate-500);
+  font-size: 11px;
+}
+
+.training-history-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.training-history-list li {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.training-history-list li > div {
+  display: grid;
+  gap: 5px;
+}
+
+.training-history-list strong,
+.training-history-list b {
+  color: var(--slate-800);
+  font-size: 13px;
+}
+
+.training-history-list span,
+.training-history-boundary {
+  color: var(--slate-500);
+  font-size: 11px;
+}
+
+.training-history-boundary {
+  line-height: 1.5;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -545,6 +912,10 @@ watch(studentId, loadOverview, { immediate: true })
   }
 
   .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .learning-insights-grid {
     grid-template-columns: 1fr;
   }
 }
