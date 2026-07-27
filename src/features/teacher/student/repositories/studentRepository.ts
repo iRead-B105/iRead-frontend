@@ -1,11 +1,16 @@
 import type {
+  StudentAccuracyTrend,
   StudentCreateInput,
   StudentDetail,
+  StudentLearningEvent,
+  StudentLearningEventDetail,
   StudentLearningSummary,
   StudentListQuery,
   StudentListResult,
   StudentMutationCommand,
   StudentSummary,
+  StudentTrainingHistory,
+  StudentTrainingHistoryPeriod,
   StudentUpdateInput,
 } from '../model'
 
@@ -33,6 +38,25 @@ export interface StudentRepository {
     studentId: number,
     options?: StudentRequestOptions,
   ) => Promise<StudentLearningSummary>
+  readonly listLearningEvents: (
+    studentId: number,
+    query?: { readonly limit?: number },
+    options?: StudentRequestOptions,
+  ) => Promise<readonly StudentLearningEvent[]>
+  readonly getLearningEvent: (
+    studentId: number,
+    eventId: number,
+    options?: StudentRequestOptions,
+  ) => Promise<StudentLearningEventDetail>
+  readonly getAccuracyTrend: (
+    studentId: number,
+    options?: StudentRequestOptions,
+  ) => Promise<StudentAccuracyTrend>
+  readonly getTrainingHistory: (
+    studentId: number,
+    period: StudentTrainingHistoryPeriod,
+    options?: StudentRequestOptions,
+  ) => Promise<StudentTrainingHistory>
   readonly updateTeacherMemo: (
     studentId: number,
     teacherMemo: string | null,

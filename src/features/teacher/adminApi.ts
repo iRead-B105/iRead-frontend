@@ -215,11 +215,6 @@ export const studentApi = {
   },
   trainingHistory: (studentId: number) =>
     apiRequest<TrainingHistory[]>(`/api/admin/student/${studentId}/training-history`),
-  updateTeacherMemo: (studentId: number, teacherMemo: string) =>
-    apiRequest<void>(`/api/admin/student/${studentId}/teacher-memo`, {
-      method: 'PATCH',
-      body: jsonBody({ teacherMemo }),
-    }),
 }
 
 export const trainingApi = {

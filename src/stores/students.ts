@@ -4,8 +4,11 @@ import {
   DEFAULT_STUDENT_PAGE_SIZE,
   studentRepository,
   toStudentNavigationItem,
+  type StudentAccuracyTrend,
   type StudentCreateInput,
   type StudentDetail,
+  type StudentLearningEvent,
+  type StudentLearningEventDetail,
   type StudentLearningSummary,
   type StudentListItem,
   type StudentMutationCommand,
@@ -13,6 +16,8 @@ import {
   type StudentRepository,
   type StudentRequestStatus,
   type StudentSummary,
+  type StudentTrainingHistory,
+  type StudentTrainingHistoryPeriod,
   type StudentUpdateInput,
 } from '@/features/teacher/student'
 import { isApiError } from '@/lib/api'
@@ -32,6 +37,20 @@ function errorMessage(error: unknown): string {
 
 function errorStatus(error: unknown): number | null {
   return isApiError(error) ? error.status : null
+}
+
+function insightKey(studentId: number, qualifier: string | number): string {
+  return `${studentId}:${qualifier}`
+}
+
+function withoutStudentInsightKeys<T>(
+  record: Readonly<Record<string, T>>,
+  studentId: number,
+): Record<string, T> {
+  const prefix = `${studentId}:`
+  return Object.fromEntries(
+    Object.entries(record).filter(([key]) => !key.startsWith(prefix)),
+  )
 }
 
 export const useStudentStore = defineStore('students', () => {
@@ -70,6 +89,19 @@ export const useStudentStore = defineStore('students', () => {
   const learningSummaryStatusById = ref<Record<number, StudentRequestStatus>>({})
   const learningSummaryErrorById = ref<Record<number, string | null>>({})
   const learningSummaryErrorStatusById = ref<Record<number, number | null>>({})
+  const learningEventsById = ref<Record<number, readonly StudentLearningEvent[]>>({})
+  const learningEventsStatusById = ref<Record<number, StudentRequestStatus>>({})
+  const learningEventsErrorById = ref<Record<number, string | null>>({})
+  const learningEventDetailsByKey = ref<Record<string, StudentLearningEventDetail>>({})
+  const learningEventDetailStatusByKey = ref<Record<string, StudentRequestStatus>>({})
+  const learningEventDetailErrorByKey = ref<Record<string, string | null>>({})
+  const learningEventDetailErrorStatusByKey = ref<Record<string, number | null>>({})
+  const accuracyTrendById = ref<Record<number, StudentAccuracyTrend>>({})
+  const accuracyTrendStatusById = ref<Record<number, StudentRequestStatus>>({})
+  const accuracyTrendErrorById = ref<Record<number, string | null>>({})
+  const trainingHistoryByKey = ref<Record<string, StudentTrainingHistory>>({})
+  const trainingHistoryStatusByKey = ref<Record<string, StudentRequestStatus>>({})
+  const trainingHistoryErrorByKey = ref<Record<string, string | null>>({})
 
   const navigationQuery = reactive({
     keyword: '',
@@ -91,6 +123,10 @@ export const useStudentStore = defineStore('students', () => {
   let summaryController: AbortController | null = null
   const detailSequences = new Map<number, number>()
   const learningSummarySequences = new Map<number, number>()
+  const learningEventsSequences = new Map<number, number>()
+  const learningEventDetailSequences = new Map<string, number>()
+  const accuracyTrendSequences = new Map<number, number>()
+  const trainingHistorySequences = new Map<string, number>()
 
   const navigationItems = computed(() =>
     navigationOrder.value
@@ -374,6 +410,185 @@ export const useStudentStore = defineStore('students', () => {
     }
   }
 
+  async function loadLearningEvents(
+    studentId: number,
+    limit = 3,
+  ): Promise<readonly StudentLearningEvent[] | null> {
+    const requestSequence = (learningEventsSequences.get(studentId) ?? 0) + 1
+    learningEventsSequences.set(studentId, requestSequence)
+    learningEventsStatusById.value = {
+      ...learningEventsStatusById.value,
+      [studentId]: 'loading',
+    }
+    learningEventsErrorById.value = {
+      ...learningEventsErrorById.value,
+      [studentId]: null,
+    }
+
+    try {
+      const events = await repository.value.listLearningEvents(studentId, { limit })
+      if (learningEventsSequences.get(studentId) !== requestSequence) return null
+      learningEventsById.value = {
+        ...learningEventsById.value,
+        [studentId]: events,
+      }
+      learningEventsStatusById.value = {
+        ...learningEventsStatusById.value,
+        [studentId]: 'success',
+      }
+      return events
+    } catch (error) {
+      if (isAbortError(error) || learningEventsSequences.get(studentId) !== requestSequence) {
+        return null
+      }
+      learningEventsStatusById.value = {
+        ...learningEventsStatusById.value,
+        [studentId]: 'error',
+      }
+      learningEventsErrorById.value = {
+        ...learningEventsErrorById.value,
+        [studentId]: errorMessage(error),
+      }
+      return null
+    }
+  }
+
+  async function loadLearningEvent(
+    studentId: number,
+    eventId: number,
+  ): Promise<StudentLearningEventDetail | null> {
+    const key = insightKey(studentId, eventId)
+    const requestSequence = (learningEventDetailSequences.get(key) ?? 0) + 1
+    learningEventDetailSequences.set(key, requestSequence)
+    learningEventDetailStatusByKey.value = {
+      ...learningEventDetailStatusByKey.value,
+      [key]: 'loading',
+    }
+    learningEventDetailErrorByKey.value = {
+      ...learningEventDetailErrorByKey.value,
+      [key]: null,
+    }
+    learningEventDetailErrorStatusByKey.value = {
+      ...learningEventDetailErrorStatusByKey.value,
+      [key]: null,
+    }
+
+    try {
+      const event = await repository.value.getLearningEvent(studentId, eventId)
+      if (learningEventDetailSequences.get(key) !== requestSequence) return null
+      learningEventDetailsByKey.value = {
+        ...learningEventDetailsByKey.value,
+        [key]: event,
+      }
+      learningEventDetailStatusByKey.value = {
+        ...learningEventDetailStatusByKey.value,
+        [key]: 'success',
+      }
+      return event
+    } catch (error) {
+      if (isAbortError(error) || learningEventDetailSequences.get(key) !== requestSequence) {
+        return null
+      }
+      learningEventDetailStatusByKey.value = {
+        ...learningEventDetailStatusByKey.value,
+        [key]: 'error',
+      }
+      learningEventDetailErrorByKey.value = {
+        ...learningEventDetailErrorByKey.value,
+        [key]: errorMessage(error),
+      }
+      learningEventDetailErrorStatusByKey.value = {
+        ...learningEventDetailErrorStatusByKey.value,
+        [key]: errorStatus(error),
+      }
+      return null
+    }
+  }
+
+  async function loadAccuracyTrend(studentId: number): Promise<StudentAccuracyTrend | null> {
+    const requestSequence = (accuracyTrendSequences.get(studentId) ?? 0) + 1
+    accuracyTrendSequences.set(studentId, requestSequence)
+    accuracyTrendStatusById.value = {
+      ...accuracyTrendStatusById.value,
+      [studentId]: 'loading',
+    }
+    accuracyTrendErrorById.value = {
+      ...accuracyTrendErrorById.value,
+      [studentId]: null,
+    }
+
+    try {
+      const trend = await repository.value.getAccuracyTrend(studentId)
+      if (accuracyTrendSequences.get(studentId) !== requestSequence) return null
+      accuracyTrendById.value = {
+        ...accuracyTrendById.value,
+        [studentId]: trend,
+      }
+      accuracyTrendStatusById.value = {
+        ...accuracyTrendStatusById.value,
+        [studentId]: 'success',
+      }
+      return trend
+    } catch (error) {
+      if (isAbortError(error) || accuracyTrendSequences.get(studentId) !== requestSequence) {
+        return null
+      }
+      accuracyTrendStatusById.value = {
+        ...accuracyTrendStatusById.value,
+        [studentId]: 'error',
+      }
+      accuracyTrendErrorById.value = {
+        ...accuracyTrendErrorById.value,
+        [studentId]: errorMessage(error),
+      }
+      return null
+    }
+  }
+
+  async function loadTrainingHistory(
+    studentId: number,
+    period: StudentTrainingHistoryPeriod,
+  ): Promise<StudentTrainingHistory | null> {
+    const key = insightKey(studentId, period)
+    const requestSequence = (trainingHistorySequences.get(key) ?? 0) + 1
+    trainingHistorySequences.set(key, requestSequence)
+    trainingHistoryStatusByKey.value = {
+      ...trainingHistoryStatusByKey.value,
+      [key]: 'loading',
+    }
+    trainingHistoryErrorByKey.value = {
+      ...trainingHistoryErrorByKey.value,
+      [key]: null,
+    }
+
+    try {
+      const history = await repository.value.getTrainingHistory(studentId, period)
+      if (trainingHistorySequences.get(key) !== requestSequence) return null
+      trainingHistoryByKey.value = {
+        ...trainingHistoryByKey.value,
+        [key]: history,
+      }
+      trainingHistoryStatusByKey.value = {
+        ...trainingHistoryStatusByKey.value,
+        [key]: 'success',
+      }
+      return history
+    } catch (error) {
+      if (isAbortError(error) || trainingHistorySequences.get(key) !== requestSequence) {
+        return null
+      }
+      trainingHistoryStatusByKey.value = {
+        ...trainingHistoryStatusByKey.value,
+        [key]: 'error',
+      }
+      trainingHistoryErrorByKey.value = {
+        ...trainingHistoryErrorByKey.value,
+        [key]: errorMessage(error),
+      }
+      return null
+    }
+  }
+
   async function saveTeacherMemo(studentId: number, teacherMemo: string | null): Promise<void> {
     await repository.value.updateTeacherMemo(studentId, teacherMemo)
     const current = detailsById.value[studentId]
@@ -444,6 +659,12 @@ export const useStudentStore = defineStore('students', () => {
     const nextLearningSummaryStatuses = { ...learningSummaryStatusById.value }
     const nextLearningSummaryErrors = { ...learningSummaryErrorById.value }
     const nextLearningSummaryErrorStatuses = { ...learningSummaryErrorStatusById.value }
+    const nextLearningEvents = { ...learningEventsById.value }
+    const nextLearningEventsStatuses = { ...learningEventsStatusById.value }
+    const nextLearningEventsErrors = { ...learningEventsErrorById.value }
+    const nextAccuracyTrends = { ...accuracyTrendById.value }
+    const nextAccuracyTrendStatuses = { ...accuracyTrendStatusById.value }
+    const nextAccuracyTrendErrors = { ...accuracyTrendErrorById.value }
     delete nextDetails[studentId]
     delete nextDetailStale[studentId]
     delete nextNavigationItems[studentId]
@@ -454,6 +675,12 @@ export const useStudentStore = defineStore('students', () => {
     delete nextLearningSummaryStatuses[studentId]
     delete nextLearningSummaryErrors[studentId]
     delete nextLearningSummaryErrorStatuses[studentId]
+    delete nextLearningEvents[studentId]
+    delete nextLearningEventsStatuses[studentId]
+    delete nextLearningEventsErrors[studentId]
+    delete nextAccuracyTrends[studentId]
+    delete nextAccuracyTrendStatuses[studentId]
+    delete nextAccuracyTrendErrors[studentId]
     detailsById.value = nextDetails
     detailStaleById.value = nextDetailStale
     navigationItemsById.value = nextNavigationItems
@@ -464,6 +691,40 @@ export const useStudentStore = defineStore('students', () => {
     learningSummaryStatusById.value = nextLearningSummaryStatuses
     learningSummaryErrorById.value = nextLearningSummaryErrors
     learningSummaryErrorStatusById.value = nextLearningSummaryErrorStatuses
+    learningEventsById.value = nextLearningEvents
+    learningEventsStatusById.value = nextLearningEventsStatuses
+    learningEventsErrorById.value = nextLearningEventsErrors
+    learningEventDetailsByKey.value = withoutStudentInsightKeys(
+      learningEventDetailsByKey.value,
+      studentId,
+    )
+    learningEventDetailStatusByKey.value = withoutStudentInsightKeys(
+      learningEventDetailStatusByKey.value,
+      studentId,
+    )
+    learningEventDetailErrorByKey.value = withoutStudentInsightKeys(
+      learningEventDetailErrorByKey.value,
+      studentId,
+    )
+    learningEventDetailErrorStatusByKey.value = withoutStudentInsightKeys(
+      learningEventDetailErrorStatusByKey.value,
+      studentId,
+    )
+    accuracyTrendById.value = nextAccuracyTrends
+    accuracyTrendStatusById.value = nextAccuracyTrendStatuses
+    accuracyTrendErrorById.value = nextAccuracyTrendErrors
+    trainingHistoryByKey.value = withoutStudentInsightKeys(
+      trainingHistoryByKey.value,
+      studentId,
+    )
+    trainingHistoryStatusByKey.value = withoutStudentInsightKeys(
+      trainingHistoryStatusByKey.value,
+      studentId,
+    )
+    trainingHistoryErrorByKey.value = withoutStudentInsightKeys(
+      trainingHistoryErrorByKey.value,
+      studentId,
+    )
     navigationOrder.value = navigationOrder.value.filter((id) => id !== studentId)
     recentStudentIds.value = recentStudentIds.value.filter((id) => id !== studentId)
     if (selectedStudentId.value === studentId) selectedStudentId.value = null
@@ -503,8 +764,25 @@ export const useStudentStore = defineStore('students', () => {
     learningSummaryStatusById.value = {}
     learningSummaryErrorById.value = {}
     learningSummaryErrorStatusById.value = {}
+    learningEventsById.value = {}
+    learningEventsStatusById.value = {}
+    learningEventsErrorById.value = {}
+    learningEventDetailsByKey.value = {}
+    learningEventDetailStatusByKey.value = {}
+    learningEventDetailErrorByKey.value = {}
+    learningEventDetailErrorStatusByKey.value = {}
+    accuracyTrendById.value = {}
+    accuracyTrendStatusById.value = {}
+    accuracyTrendErrorById.value = {}
+    trainingHistoryByKey.value = {}
+    trainingHistoryStatusByKey.value = {}
+    trainingHistoryErrorByKey.value = {}
     detailSequences.clear()
     learningSummarySequences.clear()
+    learningEventsSequences.clear()
+    learningEventDetailSequences.clear()
+    accuracyTrendSequences.clear()
+    trainingHistorySequences.clear()
 
     navigationQuery.keyword = ''
     navigationQuery.page = 0
@@ -541,6 +819,19 @@ export const useStudentStore = defineStore('students', () => {
     learningSummaryStatusById,
     learningSummaryErrorById,
     learningSummaryErrorStatusById,
+    learningEventsById,
+    learningEventsStatusById,
+    learningEventsErrorById,
+    learningEventDetailsByKey,
+    learningEventDetailStatusByKey,
+    learningEventDetailErrorByKey,
+    learningEventDetailErrorStatusByKey,
+    accuracyTrendById,
+    accuracyTrendStatusById,
+    accuracyTrendErrorById,
+    trainingHistoryByKey,
+    trainingHistoryStatusByKey,
+    trainingHistoryErrorByKey,
     navigationQuery,
     navigationItemsById,
     navigationItems,
@@ -563,10 +854,15 @@ export const useStudentStore = defineStore('students', () => {
     rememberStudent,
     loadDetail,
     loadLearningSummary,
+    loadLearningEvents,
+    loadLearningEvent,
+    loadAccuracyTrend,
+    loadTrainingHistory,
     saveTeacherMemo,
     createStudent,
     updateStudent,
     deleteStudent,
+    insightKey,
     reset,
   }
 })

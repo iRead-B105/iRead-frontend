@@ -129,4 +129,55 @@ describe('Student API', () => {
       body: JSON.stringify({ teacherMemo: null }),
     })
   })
+
+  it('학습 이벤트·정확도·기간별 훈련 이력은 목표 계약 경로를 사용한다', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce({ events: [] })
+      .mockResolvedValueOnce({
+        eventId: 701,
+        eventType: 'TRAINING',
+        occurredAt: '2026-07-27T16:00:00+09:00',
+        sourceId: 91,
+        accuracy: 68,
+        retryCount: 2,
+        problemSegments: [],
+        attentionRequired: false,
+        attentionReasons: [],
+        recommendedTrainingTemplateId: null,
+        recommendedCurriculumUnitId: null,
+        recommendedCurriculumUnitName: null,
+        recommendationReason: null,
+        recommendedMinutes: null,
+        recommendedRepeatCount: null,
+      })
+      .mockResolvedValueOnce({ dailyAccuracy: [] })
+      .mockResolvedValueOnce({ learningHistory: [] })
+    const api = createStudentApi(request)
+
+    await api.listLearningEvents(7, { limit: 3 })
+    await api.getLearningEvent(7, 701)
+    await api.getAccuracyTrend(7)
+    await api.getTrainingHistory(7, '3m')
+
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/student/7/learning-events?limit=3',
+      { signal: undefined },
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/student/7/learning-events/701',
+      { signal: undefined },
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      3,
+      '/api/admin/student/7/accuracy-trend',
+      { signal: undefined },
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      4,
+      '/api/admin/student/7/training-history?period=3m',
+      { signal: undefined },
+    )
+  })
 })

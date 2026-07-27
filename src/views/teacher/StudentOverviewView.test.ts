@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 import StudentOverviewView from './StudentOverviewView.vue'
 import type {
   StudentDetail,
+  StudentLearningEvent,
+  StudentLearningEventDetail,
   StudentLearningSummary,
   StudentRepository,
 } from '@/features/teacher/student'
@@ -64,6 +66,10 @@ function repository(
     getLearningSummary: vi.fn().mockImplementation((studentId) =>
       Promise.resolve(learningSummary(studentId)),
     ),
+    listLearningEvents: vi.fn().mockResolvedValue([]),
+    getLearningEvent: vi.fn(),
+    getAccuracyTrend: vi.fn().mockResolvedValue({ dailyAccuracy: [] }),
+    getTrainingHistory: vi.fn().mockResolvedValue({ learningHistory: [] }),
     updateTeacherMemo: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   }
@@ -101,6 +107,11 @@ async function mountOverview(
   const wrapper = mount(StudentOverviewView, {
     global: {
       plugins: [pinia, router],
+      stubs: {
+        ChartPanel: {
+          template: '<div data-test="accuracy-chart">정확도 차트</div>',
+        },
+      },
     },
   })
   await flushPromises()
@@ -136,7 +147,24 @@ describe('StudentOverviewView', () => {
     expect(wrapper.text()).toContain('교수자 확인 신호')
     expect(wrapper.text()).toContain('0건')
     expect(wrapper.text()).toContain('아직 학습 기록이 없습니다.')
+    expect(wrapper.text()).toContain('표시할 읽기 정확도 데이터가 없습니다.')
+    expect(wrapper.text()).toContain('아직 표시할 학습 이벤트가 없습니다.')
+    expect(wrapper.text()).toContain('최근 30일 동안 완료한 훈련 기록이 없습니다.')
     expect(wrapper.text()).not.toContain('최근 읽기 정확도 확인 필요')
+  })
+
+  it('정확도 데이터가 1건이면 변화폭을 계산하지 않는다', async () => {
+    const { wrapper } = await mountOverview(
+      repository({
+        getAccuracyTrend: vi.fn().mockResolvedValue({
+          dailyAccuracy: [{ date: '2026-07-27', accuracy: 82 }],
+        }),
+      }),
+    )
+
+    expect(wrapper.text()).toContain('첫 정확도 기록')
+    expect(wrapper.text()).toContain('변화폭은 다음 기록부터 계산합니다.')
+    expect(wrapper.text()).not.toContain('%p')
   })
 
   it('route의 studentId가 바뀌면 새 상세를 조회하고 이전 아동을 표시하지 않는다', async () => {
@@ -242,5 +270,119 @@ describe('StudentOverviewView', () => {
 
     expect(textarea.element.value).toBe('저장 실패 메모')
     expect(wrapper.text()).toContain('저장 실패')
+  })
+
+  it('실제 eventId 상세과 Backend 추천을 표시하고 이벤트 요약을 저장 없이 메모에 추가한다', async () => {
+    const event: StudentLearningEvent = {
+      eventId: 701,
+      eventType: 'TRAINING',
+      occurredAt: '2026-07-27T16:00:00+09:00',
+      sourceId: 91,
+      accuracy: 68,
+      attentionRequired: true,
+      attentionReasons: ['LOW_ACCURACY'],
+    }
+    const eventDetail: StudentLearningEventDetail = {
+      ...event,
+      retryCount: 2,
+      problemSegments: ['받침 ㄹ 발음'],
+      recommendedTrainingTemplateId: 301,
+      recommendedCurriculumUnitId: 31,
+      recommendedCurriculumUnitName: '받침이 있는 문장 읽기',
+      recommendationReason: '최근 6주 정확도가 가장 낮은 영역입니다.',
+      recommendedMinutes: 10,
+      recommendedRepeatCount: 2,
+    }
+    const getLearningEvent = vi.fn().mockResolvedValue(eventDetail)
+    const updateTeacherMemo = vi.fn().mockResolvedValue(undefined)
+    const studentRepository = repository({
+      listLearningEvents: vi.fn().mockResolvedValue([event]),
+      getLearningEvent,
+      getAccuracyTrend: vi.fn().mockResolvedValue({
+        dailyAccuracy: [
+          { date: '2026-06-20', accuracy: 60 },
+          { date: '2026-07-27', accuracy: 72 },
+        ],
+      }),
+      getTrainingHistory: vi.fn().mockResolvedValue({
+        learningHistory: [
+          {
+            trainingId: 4,
+            date: '2026-07-27',
+            learningType: '첫 번째 훈련',
+            startedAt: null,
+            finishedAt: null,
+            achievement: 80,
+          },
+          {
+            trainingId: 3,
+            date: '2026-07-26',
+            learningType: '두 번째 훈련',
+            startedAt: null,
+            finishedAt: null,
+            achievement: 75,
+          },
+          {
+            trainingId: 2,
+            date: '2026-07-25',
+            learningType: '세 번째 훈련',
+            startedAt: null,
+            finishedAt: null,
+            achievement: null,
+          },
+          {
+            trainingId: 1,
+            date: '2026-07-24',
+            learningType: '표시하면 안 되는 네 번째 훈련',
+            startedAt: null,
+            finishedAt: null,
+            achievement: 70,
+          },
+        ],
+      }),
+      updateTeacherMemo,
+    })
+    const { wrapper } = await mountOverview(studentRepository)
+
+    expect(wrapper.text()).toContain('첫 기록 대비 +12%p')
+    expect(wrapper.find('[data-test="accuracy-chart"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('첫 번째 훈련')
+    expect(wrapper.text()).toContain('세 번째 훈련')
+    expect(wrapper.text()).not.toContain('표시하면 안 되는 네 번째 훈련')
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('읽기 훈련'))!
+      .trigger('click')
+    await flushPromises()
+
+    expect(getLearningEvent).toHaveBeenCalledWith(1, 701)
+    expect(wrapper.text()).toContain('받침이 있는 문장 읽기')
+    expect(wrapper.text()).toContain('최근 6주 정확도가 가장 낮은 영역입니다.')
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '내부 메모에 추가')!
+      .trigger('click')
+
+    expect(wrapper.get<HTMLTextAreaElement>('#internal-note').element.value).toContain(
+      '받침 ㄹ 발음',
+    )
+    expect(updateTeacherMemo).not.toHaveBeenCalled()
+  })
+
+  it('학습 분석 API 오류를 고정 mock 이벤트로 대체하지 않는다', async () => {
+    const { wrapper } = await mountOverview(
+      repository({
+        listLearningEvents: vi.fn().mockRejectedValue(new Error('이벤트 연결 실패')),
+        getAccuracyTrend: vi.fn().mockRejectedValue(new Error('정확도 연결 실패')),
+        getTrainingHistory: vi.fn().mockRejectedValue(new Error('훈련 연결 실패')),
+      }),
+    )
+
+    expect(wrapper.text()).toContain('최근 학습 이벤트를 불러오지 못했습니다.')
+    expect(wrapper.text()).toContain('정확도 추이를 불러오지 못했습니다.')
+    expect(wrapper.text()).toContain('최근 훈련 기록을 불러오지 못했습니다.')
+    expect(wrapper.text()).not.toContain('받침이 있는 문장 읽기')
   })
 })

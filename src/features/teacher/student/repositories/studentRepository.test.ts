@@ -110,6 +110,57 @@ describe('MockStudentRepository', () => {
     })
   })
 
+  it('최근 이벤트 3건을 최신순으로 반환하고 실제 eventId로 상세를 조회한다', async () => {
+    const events = await repository.listLearningEvents(1, { limit: 3 })
+
+    expect(events.map((event) => event.eventId)).toEqual([1104, 1103, 1102])
+    await expect(repository.getLearningEvent(1, 1104)).resolves.toMatchObject({
+      eventId: 1104,
+      recommendedTrainingTemplateId: 301,
+      recommendedMinutes: 10,
+      recommendedRepeatCount: 2,
+    })
+    await expect(repository.getLearningEvent(1, 1103)).resolves.toMatchObject({
+      eventId: 1103,
+      accuracy: null,
+      problemSegments: [],
+      recommendedTrainingTemplateId: null,
+    })
+    await expect(repository.getLearningEvent(1, 9999)).rejects.toMatchObject({
+      status: 404,
+    })
+  })
+
+  it('정확도 0건·1건·여러 건 fixture를 날짜 오름차순으로 반환한다', async () => {
+    const empty = await repository.getAccuracyTrend(3)
+    const single = await repository.getAccuracyTrend(2)
+    const multiple = await repository.getAccuracyTrend(1)
+
+    expect(empty.dailyAccuracy).toEqual([])
+    expect(single.dailyAccuracy).toHaveLength(1)
+    expect(multiple.dailyAccuracy).toHaveLength(6)
+    expect(multiple.dailyAccuracy.map((point) => point.date)).toEqual(
+      [...multiple.dailyAccuracy].map((point) => point.date).sort(),
+    )
+  })
+
+  it('훈련 이력의 30일·3개월 기간을 구분하고 최신순으로 반환한다', async () => {
+    const recent = await repository.getTrainingHistory(1, '30d')
+    const quarter = await repository.getTrainingHistory(1, '3m')
+
+    expect(recent.learningHistory.map((item) => item.trainingId)).toEqual([
+      9105,
+      9104,
+      9103,
+    ])
+    expect(quarter.learningHistory.map((item) => item.trainingId)).toEqual([
+      9105,
+      9104,
+      9103,
+      9102,
+    ])
+  })
+
   it('단일 교수자 메모를 저장하고 null로 삭제한다', async () => {
     const mutableRepository = new MockStudentRepository(studentFixtures)
 
