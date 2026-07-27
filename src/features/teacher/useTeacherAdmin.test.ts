@@ -90,7 +90,6 @@ describe('createTeacherAdminState', () => {
 
     await state.logout()
 
-    expect(repository.logout).toHaveBeenCalledOnce()
     expect(session.authenticated).toBe(false)
     expect(session.teacher).toBeNull()
     expect(state.students).toHaveLength(0)

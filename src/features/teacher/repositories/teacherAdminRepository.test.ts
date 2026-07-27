@@ -59,6 +59,9 @@ describe('teacher admin Repository 선택', () => {
     vi.mocked(mock.getTeacherInfo).mockResolvedValue({
       name: 'mock 교수자',
       email: 'mock@example.com',
+      organization: null,
+      gender: null,
+      profileImageUrl: null,
     })
     const repository = createTeacherAdminRepository('api', { api, mock })
 

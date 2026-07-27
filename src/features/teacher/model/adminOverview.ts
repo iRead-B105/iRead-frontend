@@ -14,9 +14,9 @@ export function toSessionTeacher(dto: TeacherInfoDto): SessionTeacher {
   return {
     name: dto.name,
     email: dto.email,
-    organization: dto.organization,
-    gender: dto.gender,
-    profileImageUrl: dto.profileImageUrl,
+    organization: dto.organization ?? null,
+    gender: dto.gender ?? null,
+    profileImageUrl: dto.profileImageUrl ?? null,
   }
 }
 
