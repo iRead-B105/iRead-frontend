@@ -24,6 +24,15 @@ export default defineConfigWithVueTs(
   ...pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,
 
+  {
+    // UI primitive 파일명은 공개 컴포넌트 이름과 일치하므로 단일 단어 이름을 허용합니다.
+    name: 'app/ui-primitive-component-names',
+    files: ['src/components/ui/**/*.vue'],
+    rules: {
+      'vue/multi-word-component-names': 'off',
+    },
+  },
+
   // 빠른 추가 검사기 Oxlint의 별도 설정도 함께 반영합니다.
   ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),
 
