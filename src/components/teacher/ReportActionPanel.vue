@@ -1,65 +1,83 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import SaveToast from '@/components/common/SaveToast.vue'
 import { Button } from '@/components/ui/button'
-import { reportStatusLabels } from '@/features/teacher/displayLabels'
-import type { ReportStatus } from '@/features/teacher/types'
+import type {
+  ReportGazeRefreshStatus,
+  ReportMemoStatus,
+} from '@/features/teacher/report'
 
-const props = defineProps<{
-  status: ReportStatus
-  versionLabel: string
-  busyAction: string | null
-  saved: boolean
+defineProps<{
+  memoDirty: boolean
+  memoStatus: ReportMemoStatus
+  gazeRefreshStatus: ReportGazeRefreshStatus
 }>()
 
 const emit = defineEmits<{
-  resetPeriod: []
-  saveDraft: []
-  publish: []
-  newDraft: []
+  back: []
+  saveMemo: []
+  cancelMemo: []
+  refreshGaze: []
 }>()
-
-const isBusy = computed(() => props.busyAction !== null)
 </script>
 
 <template>
-  <section class="report-actions screen-only" aria-labelledby="report-action-title">
-    <header>
-      <div>
-        <span>보고서 {{ versionLabel }}</span>
-        <h3 id="report-action-title">{{ reportStatusLabels[status] }}</h3>
-      </div>
-      <SaveToast :visible="saved" message="보고서 초안을 저장했습니다." inline />
-    </header>
-
-    <div v-if="status === 'draft'" class="action-row">
-      <div>
-        <Button variant="outline" type="button" :disabled="isBusy" @click="emit('resetPeriod')">
-          기간 다시 설정
-        </Button>
-        <Button variant="outline" type="button" :disabled="isBusy" @click="emit('saveDraft')">
-          {{ busyAction === 'save' ? '저장 중…' : '임시 저장' }}
-        </Button>
-      </div>
-      <Button type="button" :disabled="isBusy" @click="emit('publish')">
-        보고서 발행
+  <div class="report-actions">
+    <Button variant="outline" type="button" @click="emit('back')">
+      보고서 목록
+    </Button>
+    <div class="report-actions__group">
+      <Button
+        variant="outline"
+        type="button"
+        :disabled="gazeRefreshStatus === 'refreshing'"
+        @click="emit('refreshGaze')"
+      >
+        {{ gazeRefreshStatus === 'refreshing' ? '시선 결과 갱신 중…' : '시선 결과 갱신' }}
+      </Button>
+      <Button
+        variant="ghost"
+        type="button"
+        :disabled="!memoDirty || memoStatus === 'saving'"
+        @click="emit('cancelMemo')"
+      >
+        의견 취소
+      </Button>
+      <Button
+        type="button"
+        :disabled="!memoDirty || memoStatus === 'saving'"
+        @click="emit('saveMemo')"
+      >
+        {{ memoStatus === 'saving' ? '의견 저장 중…' : '의견 저장' }}
       </Button>
     </div>
-
-    <div v-else class="action-row">
-      <Button variant="outline" type="button" :disabled="isBusy" @click="emit('newDraft')">
-        새 초안 만들기
-      </Button>
-    </div>
-  </section>
+  </div>
 </template>
 
 <style scoped>
-.report-actions { margin-top: 18px; padding: 17px 0 2px; border-top: 1px solid var(--slate-300); }
-.report-actions > header { display: flex; min-height: 34px; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.report-actions > header div { display: grid; gap: 2px; }
-.report-actions > header span { color: var(--slate-500); font-size: 10px; }
-.report-actions h3 { margin: 0; font-size: 14px; }
-.action-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 14px; }
-.action-row > div { display: flex; flex-wrap: wrap; gap: 7px; }
+.report-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.report-actions__group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .report-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .report-actions__group {
+    justify-content: stretch;
+  }
+  .report-actions__group :deep(button) {
+    flex: 1;
+  }
+}
 </style>
