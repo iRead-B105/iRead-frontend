@@ -1,9 +1,15 @@
 import type {
+  CurriculumLog,
+  CurriculumTrainingLog,
   DailyCurriculum,
   ExpectedWord,
   SaveCurriculumRequest,
   TrainingCatalogItem,
   TrainingDetail,
+  TrainingDownload,
+  TrainingExportFormat,
+  TrainingPeriod,
+  TrainingStatistics,
 } from '../model'
 
 export interface TrainingRequestOptions {
@@ -53,4 +59,25 @@ export interface TrainingRepository {
     trainingId: number,
     options?: TrainingRequestOptions,
   ) => Promise<TrainingDetail>
+  readonly getCurriculumLogs: (
+    studentId: number,
+    period: TrainingPeriod,
+    options?: TrainingRequestOptions,
+  ) => Promise<readonly CurriculumLog[]>
+  readonly getTrainingLog: (
+    studentId: number,
+    curriculumId: number,
+    options?: TrainingRequestOptions,
+  ) => Promise<CurriculumTrainingLog>
+  readonly getStatistics: (
+    studentId: number,
+    curriculumId: number,
+    period: TrainingPeriod,
+    options?: TrainingRequestOptions,
+  ) => Promise<TrainingStatistics>
+  readonly exportTraining: (
+    studentId: number,
+    trainingId: number,
+    format: TrainingExportFormat,
+  ) => Promise<TrainingDownload>
 }

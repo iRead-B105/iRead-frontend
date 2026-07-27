@@ -5,6 +5,8 @@ export type CurriculumId = number
 export type CurriculumStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'
 export type TrainingStatus = 'NOT_READY' | 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'
 export type TrainingRequestStatus = 'idle' | 'loading' | 'success' | 'error'
+export type TrainingPeriod = '30d' | '3m'
+export type TrainingExportFormat = 'CSV' | 'JSON'
 
 export type TrainingForm = Readonly<Record<string, unknown>>
 export type GeneratedTrainingData = Readonly<Record<string, unknown>>
@@ -53,6 +55,81 @@ export interface TrainingDetail {
   readonly form: TrainingForm | null
   readonly generatedData: GeneratedTrainingData | null
   readonly status: TrainingStatus
+  readonly startedAt: string | null
+  readonly finishedAt: string | null
+  readonly result: TrainingResult | null
+  readonly accuracy: number | null
+}
+
+export interface TrainingQuestionResult {
+  readonly questionNumber: number
+  readonly question: string | null
+  readonly isCorrect: boolean | null
+  readonly selectedAnswer: string | null
+  readonly correctAnswer: string | null
+}
+
+export interface TrainingResult {
+  readonly questions?: readonly TrainingQuestionResult[]
+  readonly learningAssessment?: string | null
+  readonly [key: string]: unknown
+}
+
+export interface CurriculumLogTraining {
+  readonly trainingId: TrainingInstanceId
+  readonly unitName: string
+  readonly trainingName: string
+}
+
+export interface CurriculumLog {
+  readonly curriculumId: CurriculumId
+  readonly date: string
+  readonly achievement: number | null
+  readonly trainings: readonly CurriculumLogTraining[]
+}
+
+export interface CurriculumTrainingLogItem {
+  readonly trainingId: TrainingInstanceId
+  readonly trainingName: string
+  readonly startedAt: string | null
+  readonly finishedAt: string | null
+  readonly accuracy: number | null
+  readonly questions: readonly TrainingQuestionResult[]
+}
+
+export interface CurriculumTrainingLog {
+  readonly curriculumId: CurriculumId
+  readonly trainings: readonly CurriculumTrainingLogItem[]
+}
+
+export interface AccuracyComparison {
+  readonly trainingId: TrainingInstanceId
+  readonly trainingName: string
+  readonly date: string | null
+  readonly accuracy: number | null
+  readonly previousTrainingDate: string | null
+  readonly previousAccuracy: number | null
+}
+
+export interface ReadingSpeedPoint {
+  readonly trainingId: TrainingInstanceId
+  readonly date: string
+  readonly speed: number
+}
+
+export interface TrainingStatistics {
+  readonly accuracyComparisons: readonly AccuracyComparison[]
+  readonly readingSpeedTrend: {
+    readonly unit: 'CORRECT_WORDS_PER_MINUTE'
+    readonly changeRate: number | null
+    readonly points: readonly ReadingSpeedPoint[]
+  }
+}
+
+export interface TrainingDownload {
+  readonly blob: Blob
+  readonly fileName?: string
+  readonly contentType: string
 }
 
 export interface CurriculumDraftItem {

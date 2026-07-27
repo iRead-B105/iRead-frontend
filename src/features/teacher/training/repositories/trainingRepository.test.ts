@@ -16,6 +16,10 @@ function api(overrides: Partial<TrainingApi> = {}): TrainingApi {
     addExpectedWord: vi.fn().mockResolvedValue(undefined),
     deleteExpectedWord: vi.fn().mockResolvedValue(undefined),
     getTrainingDetail: vi.fn(),
+    getCurriculumLogs: vi.fn().mockResolvedValue([]),
+    getTrainingLog: vi.fn(),
+    getStatistics: vi.fn(),
+    exportTraining: vi.fn(),
     ...overrides,
   }
 }
@@ -91,6 +95,93 @@ describe('Training API target contract', () => {
       { wordId: 1, wordName: '사과' },
     ])
   })
+
+  it('기간 query로 curriculum log를 조회하고 최신순으로 정렬한다', async () => {
+    const request = vi.fn().mockResolvedValue([
+      {
+        curriculumId: 10,
+        date: '2026-07-01',
+        achievement: 0,
+        trainings: [],
+      },
+      {
+        curriculumId: 12,
+        date: '2026-07-20',
+        achievement: null,
+        trainings: [],
+      },
+    ])
+    const trainingApi = createTrainingApi(request)
+
+    await expect(trainingApi.getCurriculumLogs(7, '3m')).resolves.toEqual([
+      expect.objectContaining({ curriculumId: 12, achievement: null }),
+      expect.objectContaining({ curriculumId: 10, achievement: 0 }),
+    ])
+    expect(request).toHaveBeenCalledWith(
+      '/api/admin/training/7/curriculum-log?period=3m',
+      {},
+    )
+  })
+
+  it('training log와 statistics를 목표 endpoint에서 조회한다', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ curriculumId: 10, trainings: [] })
+      .mockResolvedValueOnce({
+        accuracyComparisons: [],
+        readingSpeedTrend: {
+          unit: 'CORRECT_WORDS_PER_MINUTE',
+          changeRate: null,
+          points: [
+            { trainingId: 2, date: '2026-07-20', speed: 60 },
+            { trainingId: 1, date: '2026-07-01', speed: 50 },
+          ],
+        },
+      })
+    const trainingApi = createTrainingApi(request)
+
+    await trainingApi.getTrainingLog(7, 10)
+    const statistics = await trainingApi.getStatistics(7, 10, '30d')
+
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/training/7/10/training-log',
+      {},
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/training/7/10/statistics?period=30d',
+      {},
+    )
+    expect(statistics.readingSpeedTrend.points.map((point) => point.trainingId)).toEqual([
+      1,
+      2,
+    ])
+  })
+
+  it('CSV와 JSON을 대문자 format의 공통 binary download로 요청한다', async () => {
+    const request = vi.fn()
+    const download = vi.fn().mockResolvedValue({
+      blob: new Blob(['fixture']),
+      fileName: 'fixture.csv',
+      contentType: 'text/csv',
+    })
+    const trainingApi = createTrainingApi(request, download)
+
+    await trainingApi.exportTraining(7, 901, 'CSV')
+    await trainingApi.exportTraining(7, 901, 'JSON')
+
+    expect(download).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/training/7/901/export?format=CSV',
+      { method: 'POST' },
+    )
+    expect(download).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/training/7/901/export?format=JSON',
+      { method: 'POST' },
+    )
+  })
 })
 
 describe('MockTrainingRepository', () => {
@@ -149,5 +240,36 @@ describe('MockTrainingRepository', () => {
       status: 409,
       code: 'NEXT_CURRICULUM_ALREADY_EXISTS',
     })
+  })
+
+  it('기간별 완료 커리큘럼과 실제 훈련 상세를 분리해 반환한다', async () => {
+    const repository = new MockTrainingRepository()
+
+    const thirtyDays = await repository.getCurriculumLogs(1, '30d')
+    const threeMonths = await repository.getCurriculumLogs(1, '3m')
+    const log = await repository.getTrainingLog(1, 190)
+    const detail = await repository.getTrainingDetail(1, 901)
+
+    expect(thirtyDays.map((item) => item.curriculumId)).toEqual([190, 189])
+    expect(threeMonths.map((item) => item.curriculumId)).toEqual([190, 189, 180])
+    expect(log.trainings[0]).toMatchObject({ trainingId: 901, accuracy: 80 })
+    expect(detail).toMatchObject({
+      trainingId: 901,
+      status: 'COMPLETED',
+      accuracy: 80,
+    })
+  })
+
+  it('mock CSV와 JSON 다운로드를 실제 Backend 파일과 구분한다', async () => {
+    const repository = new MockTrainingRepository()
+
+    const csv = await repository.exportTraining(1, 901, 'CSV')
+    const json = await repository.exportTraining(1, 901, 'JSON')
+
+    expect(csv.fileName).toBe('training-901-mock.csv')
+    expect(csv.contentType).toContain('text/csv')
+    expect(json.fileName).toBe('training-901-mock.json')
+    expect(json.contentType).toContain('application/json')
+    expect(await csv.blob.text()).toContain('trainingId')
   })
 })

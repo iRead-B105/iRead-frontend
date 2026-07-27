@@ -26,23 +26,6 @@ export interface Student {
   weeklyAttendance: string
 }
 
-// 한 번의 훈련 기록에 필요한 데이터 형태입니다.
-export interface TrainingSession {
-  id: number
-  title: string
-  date: string
-  achievement: number
-  curriculum: string
-  summary: string
-  questions: Array<{
-    questionNumber: number
-    question: string | null
-    correct: boolean
-    selectedAnswer: string | null
-    correctAnswer: string | null
-  }>
-}
-
 export type ReportStatus = 'draft' | 'published'
 
 export interface ReportVersion {

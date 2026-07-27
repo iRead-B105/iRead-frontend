@@ -1,4 +1,10 @@
-import type { TrainingDetail, TrainingPreview, TrainingPreviewItem } from './model'
+import type {
+  TrainingDetail,
+  TrainingPreview,
+  TrainingPreviewItem,
+  TrainingQuestionResult,
+  TrainingStatus,
+} from './model'
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -101,4 +107,39 @@ export function toTrainingPreview(detail: TrainingDetail | null): TrainingPrevie
     description: '생성된 훈련 자료가 없습니다.',
     items: [],
   }
+}
+
+export function trainingStatusLabel(status: TrainingStatus): string {
+  const labels: Record<TrainingStatus, string> = {
+    NOT_READY: '준비 전',
+    NOT_STARTED: '시작 전',
+    IN_PROGRESS: '진행 중',
+    COMPLETED: '완료',
+  }
+  return labels[status]
+}
+
+export function formatTrainingDuration(
+  startedAt: string | null,
+  finishedAt: string | null,
+): string {
+  if (!startedAt || !finishedAt) return '-'
+  const durationMilliseconds = Date.parse(finishedAt) - Date.parse(startedAt)
+  if (!Number.isFinite(durationMilliseconds) || durationMilliseconds < 0) return '-'
+  const totalSeconds = Math.floor(durationMilliseconds / 1_000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (minutes === 0) return `${seconds}초`
+  return seconds === 0 ? `${minutes}분` : `${minutes}분 ${seconds}초`
+}
+
+export function trainingDetailQuestions(
+  detail: TrainingDetail | null,
+): readonly TrainingQuestionResult[] {
+  return Array.isArray(detail?.result?.questions) ? detail.result.questions : []
+}
+
+export function trainingLearningAssessment(detail: TrainingDetail | null): string {
+  const value = detail?.result?.learningAssessment
+  return typeof value === 'string' && value.trim() ? value.trim() : '-'
 }
