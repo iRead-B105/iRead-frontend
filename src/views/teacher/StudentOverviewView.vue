@@ -90,11 +90,10 @@ const reviewCount = computed(
 )
 const totalActionCount = computed(() => reviewCount.value)
 const oldestActionLabel = computed(() => {
-  const dates = [
-    ...currentEvents.value
-      .filter((event) => event.status !== 'reviewed')
-      .map((event) => event.occurredAt),
-  ].sort()
+  const dates = currentEvents.value
+    .filter((event) => event.status !== 'reviewed')
+    .map((event) => event.occurredAt)
+    .sort()
   const oldest = dates[0]
   if (!oldest) return ''
   const [date = ''] = oldest.split(' ')
@@ -102,15 +101,18 @@ const oldestActionLabel = computed(() => {
   return `가장 오래 대기한 항목은 ${Number(month)}월 ${Number(day)}일에 등록되었습니다.`
 })
 
-const currentDraft = computed(() => {
-  const studentId = currentStudent.value.id
-  draftsByStudent[studentId] ??= { note: '' }
-  return draftsByStudent[studentId]
-})
 const noteDraft = computed({
-  get: () => currentDraft.value.note,
+  get: () => draftsByStudent[currentStudent.value.id]?.note ?? '',
   set: (value: string) => {
-    currentDraft.value.note = value
+    const studentId = currentStudent.value.id
+    const draft = draftsByStudent[studentId]
+
+    if (draft) {
+      draft.note = value
+      return
+    }
+
+    draftsByStudent[studentId] = { note: value }
   },
 })
 
