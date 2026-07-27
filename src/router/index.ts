@@ -1,5 +1,26 @@
 // createRouter는 URL과 화면의 연결표를 만들고, createWebHistory는 일반적인 주소 형식을 사용하게 합니다.
 import { createRouter, createWebHistory } from 'vue-router'
+import type { Router } from 'vue-router'
+import { useSessionStore } from '@/stores/session'
+
+const publicAuthenticationRoutes = new Set([
+  'teacher-login',
+  'teacher-signup',
+  'teacher-reset-password',
+])
+
+export function resolveTeacherRedirect(routerInstance: Router, redirect: unknown): string {
+  if (typeof redirect !== 'string' || !redirect.startsWith('/') || redirect.startsWith('//')) {
+    return '/teacher/dashboard'
+  }
+
+  const resolved = routerInstance.resolve(redirect)
+  const isProtectedTeacherRoute = resolved.matched.some(
+    (record) => record.meta.requiresAuth === true,
+  )
+
+  return isProtectedTeacherRoute ? resolved.fullPath : '/teacher/dashboard'
+}
 
 // 앱 전체의 '페이지 이동 규칙표'입니다.
 const router = createRouter({
@@ -19,11 +40,6 @@ const router = createRouter({
       component: () => import('@/views/teacher/TeacherSignupView.vue'),
     },
     {
-      path: '/find-id',
-      name: 'teacher-find-id',
-      component: () => import('@/views/teacher/TeacherFindIdView.vue'),
-    },
-    {
       path: '/reset-password',
       name: 'teacher-reset-password',
       component: () => import('@/views/teacher/TeacherResetPasswordView.vue'),
@@ -32,6 +48,7 @@ const router = createRouter({
       path: '/teacher',
       // import()는 해당 화면이 필요할 때 파일을 내려받는 '지연 로딩' 방식입니다.
       component: () => import('@/layouts/TeacherLayout.vue'),
+      meta: { requiresAuth: true },
       // children은 /teacher 뒤에 이어질 하위 주소이며 부모 레이아웃 안에 표시됩니다.
       children: [
         {
@@ -40,6 +57,12 @@ const router = createRouter({
           component: () => import('@/views/teacher/TeacherDashboardView.vue'),
           // meta는 화면 제목과 현재 활성 메뉴를 알려 주는 부가 정보입니다.
           meta: { title: '대시보드', section: 'dashboard' },
+        },
+        {
+          path: 'students',
+          name: 'teacher-students',
+          component: () => import('@/views/teacher/TeacherDashboardView.vue'),
+          meta: { title: '아동 목록', section: 'students' },
         },
         {
           path: 'students/new',
@@ -100,16 +123,27 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach(async (to) => {
-  if (!to.path.startsWith('/teacher')) return true
-  try {
-    const { teacherAdminRepository } = await import('@/features/teacher/repositories')
-    await teacherAdminRepository.getTeacherInfo()
+export function installAuthenticationGuard(routerInstance: Router): void {
+  routerInstance.beforeEach(async (to) => {
+    const sessionStore = useSessionStore()
+    const requiresAuth = to.matched.some((record) => record.meta.requiresAuth === true)
+
+    if (requiresAuth) {
+      const authenticated = await sessionStore.restoreSession()
+      if (!authenticated) {
+        return { name: 'teacher-login', query: { redirect: to.fullPath } }
+      }
+    }
+
+    if (publicAuthenticationRoutes.has(String(to.name)) && sessionStore.authenticated) {
+      return { name: 'teacher-dashboard' }
+    }
+
     return true
-  } catch {
-    return { name: 'teacher-login', query: { redirect: to.fullPath } }
-  }
-})
+  })
+}
+
+installAuthenticationGuard(router)
 
 // main.ts가 이 라우터를 앱 전체에 등록할 수 있도록 공개합니다.
 export default router

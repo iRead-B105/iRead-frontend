@@ -1,33 +1,66 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  authRepositories,
+  getResetPasswordErrorMessage,
+  validateEmail,
+  validateResetPasswordForm,
+} from '@/features/teacher/auth'
+import { useSessionStore } from '@/stores/session'
 
-const step = ref<1 | 2 | 3>(1)
+const router = useRouter()
+const sessionStore = useSessionStore()
+const step = ref<1 | 2>(1)
 const identity = reactive({ email: '' })
-const password = reactive({ newPassword: '', confirmation: '' })
+const password = reactive({ verificationCode: '', newPassword: '', confirmation: '' })
 const errorMessage = ref('')
 const showPassword = ref(false)
+const submitting = ref(false)
 
 function verifyIdentity() {
   errorMessage.value = ''
+  const validation = validateEmail(identity.email)
+  if (!validation.ok) {
+    errorMessage.value = validation.message
+    return
+  }
+
+  identity.email = validation.value
   step.value = 2
 }
 
-function resetPassword() {
-  if (password.newPassword.length < 8) {
-    errorMessage.value = '비밀번호는 8자 이상 입력해 주세요.'
+async function resetPassword() {
+  if (submitting.value) return
+
+  const validation = validateResetPasswordForm({
+    email: identity.email,
+    verificationCode: password.verificationCode,
+    newPassword: password.newPassword,
+    passwordConfirm: password.confirmation,
+  })
+  if (!validation.ok) {
+    errorMessage.value = validation.message
     return
   }
 
-  if (password.newPassword !== password.confirmation) {
-    errorMessage.value = '새 비밀번호가 서로 일치하지 않습니다.'
-    return
-  }
-
+  submitting.value = true
   errorMessage.value = ''
-  step.value = 3
+
+  try {
+    await authRepositories.auth.resetPassword(validation.value)
+    sessionStore.reset()
+    await router.push({
+      name: 'teacher-login',
+      query: { passwordReset: 'success' },
+    })
+  } catch (error) {
+    errorMessage.value = getResetPasswordErrorMessage(error)
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -35,11 +68,11 @@ function resetPassword() {
   <main class="recovery-page">
     <section class="recovery-shell" aria-labelledby="reset-password-title">
       <RouterLink class="recovery-logo" to="/login" aria-label="로그인으로 이동">
-        <img src="/images/iread-logo.png" alt="iRead" />
+        <img :src="'/images/iread-logo.png'" alt="iRead" />
       </RouterLink>
 
       <div class="recovery-card">
-        <ol v-if="step < 3" class="stepper" aria-label="비밀번호 재설정 단계">
+        <ol class="stepper" aria-label="비밀번호 재설정 단계">
           <li :class="{ active: step === 1, complete: step > 1 }"><span>1</span>본인 확인</li>
           <li :class="{ active: step === 2 }"><span>2</span>비밀번호 변경</li>
         </ol>
@@ -60,9 +93,12 @@ function resetPassword() {
                 class="input"
                 type="email"
                 required
+                maxlength="50"
+                autocomplete="email"
                 placeholder="example@iread.co.kr"
               />
             </div>
+            <p v-if="errorMessage" class="error-message" role="alert">{{ errorMessage }}</p>
             <Button class="recovery-submit" type="submit">본인 확인</Button>
           </form>
         </template>
@@ -71,10 +107,21 @@ function resetPassword() {
           <header class="recovery-heading">
             <p class="recovery-eyebrow">본인 확인 완료</p>
             <h1 id="reset-password-title">새 비밀번호 설정</h1>
-            <p>영문, 숫자를 포함해 8자 이상 입력해 주세요.</p>
+            <p>전달받은 검증 코드와 8~100자의 새 비밀번호를 입력해 주세요.</p>
           </header>
 
           <form class="recovery-form" @submit.prevent="resetPassword">
+            <div class="field">
+              <label for="verification-code">검증 코드</label>
+              <Input
+                id="verification-code"
+                v-model="password.verificationCode"
+                class="input"
+                required
+                autocomplete="one-time-code"
+                placeholder="검증 코드 입력"
+              />
+            </div>
             <div class="field">
               <label for="new-password">새 비밀번호</label>
               <div class="password-input">
@@ -84,10 +131,17 @@ function resetPassword() {
                   class="input"
                   required
                   minlength="8"
+                  maxlength="100"
                   :type="showPassword ? 'text' : 'password'"
+                  autocomplete="new-password"
                   placeholder="새 비밀번호 입력"
                 />
-                <Button variant="ghost" size="sm" type="button" @click="showPassword = !showPassword">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  @click="showPassword = !showPassword"
+                >
                   {{ showPassword ? '숨기기' : '보기' }}
                 </Button>
               </div>
@@ -99,27 +153,28 @@ function resetPassword() {
                 v-model="password.confirmation"
                 class="input"
                 required
+                minlength="8"
+                maxlength="100"
                 :type="showPassword ? 'text' : 'password'"
+                autocomplete="new-password"
                 placeholder="새 비밀번호 다시 입력"
               />
             </div>
             <p v-if="errorMessage" class="error-message" role="alert">{{ errorMessage }}</p>
-            <Button class="recovery-submit" type="submit">비밀번호 변경</Button>
-            <Button variant="link" class="text-button" type="button" @click="step = 1">
+            <Button class="recovery-submit" type="submit" :disabled="submitting">
+              {{ submitting ? '변경 중...' : '비밀번호 변경' }}
+            </Button>
+            <Button
+              variant="link"
+              class="text-button"
+              type="button"
+              :disabled="submitting"
+              @click="step = 1"
+            >
               이전 단계
             </Button>
           </form>
         </template>
-
-        <div v-else class="recovery-result" role="status">
-          <div class="result-icon" aria-hidden="true">✓</div>
-          <p class="recovery-eyebrow">변경 완료</p>
-          <h1 id="reset-password-title">비밀번호가 변경되었어요</h1>
-          <p>새 비밀번호로 로그인해 주세요.</p>
-          <Button as-child class="login-button">
-            <RouterLink to="/login">로그인하기</RouterLink>
-          </Button>
-        </div>
       </div>
 
       <p class="back-link"><RouterLink to="/login">← 로그인으로 돌아가기</RouterLink></p>
@@ -219,14 +274,12 @@ function resetPassword() {
   margin-bottom: 28px;
 }
 
-.recovery-heading h1,
-.recovery-result h1 {
+.recovery-heading h1 {
   margin: 6px 0 10px;
   font-size: 28px;
 }
 
-.recovery-heading > p:last-child,
-.recovery-result > p {
+.recovery-heading > p:last-child {
   margin: 0;
   color: var(--slate-500);
   line-height: 1.6;
@@ -287,31 +340,6 @@ function resetPassword() {
   color: var(--slate-500);
   font-size: 13px;
   text-decoration: underline;
-}
-
-.recovery-result {
-  text-align: center;
-}
-
-.result-icon {
-  display: grid;
-  width: 54px;
-  height: 54px;
-  margin: 0 auto 18px;
-  border-radius: 50%;
-  background: var(--primary-50);
-  color: var(--primary-600);
-  font-size: 26px;
-  font-weight: 900;
-  place-items: center;
-}
-
-.login-button {
-  display: grid;
-  min-height: 50px;
-  margin-top: 28px;
-  text-decoration: none;
-  place-items: center;
 }
 
 .back-link {

@@ -37,4 +37,21 @@ provideTeacherAdmin()
   padding: 28px 36px 48px;
   background: var(--content-background);
 }
+
+@media (max-width: 900px) {
+  .teacher-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-content {
+    min-height: auto;
+    padding: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .teacher-content {
+    padding: 20px 16px 36px;
+  }
+}
 </style>

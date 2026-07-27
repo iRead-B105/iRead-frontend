@@ -3,7 +3,11 @@ import { reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { authApi, type TeacherGender } from '@/features/teacher/adminApi'
+import {
+  authRepositories,
+  getSignUpErrorMessage,
+  validateSignUpForm,
+} from '@/features/teacher/auth'
 
 const router = useRouter()
 const errorMessage = ref('')
@@ -13,28 +17,26 @@ const form = reactive({
   passwordConfirm: '',
   name: '',
   organization: '',
-  gender: 'Female' as TeacherGender,
 })
 const submitting = ref(false)
 
 async function signup() {
-  if (form.password !== form.passwordConfirm) {
-    errorMessage.value = '비밀번호와 비밀번호 확인이 일치하지 않습니다.'
+  if (submitting.value) return
+
+  const validation = validateSignUpForm(form)
+  if (!validation.ok) {
+    errorMessage.value = validation.message
     return
   }
+
   submitting.value = true
   errorMessage.value = ''
+
   try {
-    await authApi.signup({
-      email: form.email,
-      password: form.password,
-      name: form.name,
-      organization: form.organization,
-      gender: form.gender,
-    })
+    await authRepositories.auth.signUp(validation.value)
     await router.push('/login')
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '회원가입에 실패했습니다.'
+    errorMessage.value = getSignUpErrorMessage(error)
   } finally {
     submitting.value = false
   }
@@ -44,7 +46,9 @@ async function signup() {
 <template>
   <main class="signup-page">
     <header class="signup-header">
-      <RouterLink to="/login" aria-label="로그인으로 이동"><img src="/images/iread-logo.png" alt="iRead" /></RouterLink>
+      <RouterLink to="/login" aria-label="로그인으로 이동">
+        <img :src="'/images/iread-logo.png'" alt="iRead" />
+      </RouterLink>
     </header>
 
     <form class="signup-form" @submit.prevent="signup">
@@ -56,18 +60,47 @@ async function signup() {
       <section class="signup-fields" aria-label="계정 정보">
         <div class="field">
           <label for="signup-email">이메일</label>
-          <Input id="signup-email" v-model="form.email" class="input" required type="email" placeholder="example@email.com" />
+          <Input
+            id="signup-email"
+            v-model="form.email"
+            class="input"
+            required
+            type="email"
+            maxlength="50"
+            autocomplete="email"
+            placeholder="example@email.com"
+          />
         </div>
 
         <div class="field">
           <label for="signup-password">비밀번호</label>
-          <Input id="signup-password" v-model="form.password" class="input" required minlength="8" type="password" placeholder="8자 이상 입력" />
-          <p class="field-help">8자 이상의 비밀번호를 입력해 주세요.</p>
+          <Input
+            id="signup-password"
+            v-model="form.password"
+            class="input"
+            required
+            minlength="8"
+            maxlength="100"
+            type="password"
+            autocomplete="new-password"
+            placeholder="8~100자 입력"
+          />
+          <p class="field-help">8~100자의 비밀번호를 입력해 주세요.</p>
         </div>
 
         <div class="field">
           <label for="signup-password-confirm">비밀번호 확인</label>
-          <Input id="signup-password-confirm" v-model="form.passwordConfirm" class="input" required type="password" placeholder="비밀번호 다시 입력" />
+          <Input
+            id="signup-password-confirm"
+            v-model="form.passwordConfirm"
+            class="input"
+            required
+            minlength="8"
+            maxlength="100"
+            type="password"
+            autocomplete="new-password"
+            placeholder="비밀번호 다시 입력"
+          />
         </div>
       </section>
 
@@ -76,31 +109,35 @@ async function signup() {
       <section class="signup-fields" aria-label="교수자 정보">
         <div class="field">
           <label for="signup-name">이름</label>
-          <Input id="signup-name" v-model="form.name" class="input" required placeholder="교수자 이름" />
+          <Input
+            id="signup-name"
+            v-model="form.name"
+            class="input"
+            required
+            maxlength="10"
+            autocomplete="name"
+            placeholder="교수자 이름"
+          />
         </div>
 
         <div class="field">
           <label for="signup-organization">소속기관</label>
-          <Input id="signup-organization" v-model="form.organization" class="input" required placeholder="소속 기관명" />
+          <Input
+            id="signup-organization"
+            v-model="form.organization"
+            class="input"
+            required
+            maxlength="100"
+            autocomplete="organization"
+            placeholder="소속 기관명"
+          />
         </div>
-
-        <fieldset class="field gender-field">
-          <legend>성별</legend>
-          <div class="gender-options">
-            <label :class="{ selected: form.gender === 'Female' }">
-              <input v-model="form.gender" type="radio" name="gender" value="Female" required />
-              <span>여성</span>
-            </label>
-            <label :class="{ selected: form.gender === 'Male' }">
-              <input v-model="form.gender" type="radio" name="gender" value="Male" required />
-              <span>남성</span>
-            </label>
-          </div>
-        </fieldset>
       </section>
 
       <p v-if="errorMessage" class="signup-error" role="alert">{{ errorMessage }}</p>
-      <Button class="signup-submit" type="submit">회원가입</Button>
+      <Button class="signup-submit" type="submit" :disabled="submitting">
+        {{ submitting ? '가입 중...' : '회원가입' }}
+      </Button>
       <p class="signup-login-link">
         이미 계정이 있으신가요? <RouterLink to="/login">로그인</RouterLink>
       </p>
@@ -132,31 +169,6 @@ async function signup() {
 .signup-fields { display: grid; gap: 19px; }
 .signup-fields .input { height: 46px; }
 .field-help { margin: -2px 0 0; color: var(--slate-500); font-size: 11px; }
-.gender-field { min-width: 0; margin: 0; padding: 0; border: 0; }
-.gender-field legend { margin-bottom: 8px; font-size: 13px; font-weight: 700; }
-.gender-options { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.gender-options label {
-  display: flex;
-  min-height: 46px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--card);
-  color: var(--slate-600);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 700;
-}
-.gender-options label:hover { border-color: var(--primary-300); background: var(--primary-50); }
-.gender-options label.selected {
-  border-color: var(--primary-500);
-  background: var(--primary-50);
-  color: var(--primary-700);
-  box-shadow: 0 0 0 1px var(--primary-500);
-}
-.gender-options input { width: 16px; height: 16px; accent-color: var(--primary-600); }
 .signup-divider { height: 1px; margin: 30px 0; background: var(--slate-200); }
 .signup-error { padding: 10px 13px; border-radius: 8px; background: #fff1f2; color: var(--danger-600); font-size: 12px; }
 .signup-submit { width: 100%; min-height: 50px; margin-top: 30px; }

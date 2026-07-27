@@ -2,35 +2,70 @@ import { describe, expect, it } from 'vitest'
 import { EnvironmentConfigurationError, resolveEnvironment, type EnvironmentInput } from './env'
 
 const apiEnvironment: EnvironmentInput = {
+  VITE_AUTH_SOURCE: 'api',
   VITE_DATA_SOURCE: 'api',
 }
 
 describe('resolveEnvironment', () => {
-  it('데이터 소스 누락을 거부한다', () => {
+  it('인증 또는 데이터 소스 누락을 거부한다', () => {
     expect(() => resolveEnvironment({})).toThrow(EnvironmentConfigurationError)
-  })
-
-  it('허용되지 않은 데이터 소스를 거부한다', () => {
-    expect(() => resolveEnvironment({ VITE_DATA_SOURCE: 'fallback' })).toThrow(
+    expect(() => resolveEnvironment({ VITE_DATA_SOURCE: 'mock' })).toThrow(
+      'VITE_AUTH_SOURCE는 mock 또는 api여야 합니다.',
+    )
+    expect(() => resolveEnvironment({ VITE_AUTH_SOURCE: 'mock' })).toThrow(
       'VITE_DATA_SOURCE는 mock 또는 api여야 합니다.',
     )
   })
 
-  it('개발 환경의 mock 데이터 소스를 허용한다', () => {
-    expect(resolveEnvironment({ VITE_DATA_SOURCE: 'mock' }).dataSource).toBe('mock')
+  it('허용되지 않은 인증 또는 데이터 소스를 거부한다', () => {
+    expect(() =>
+      resolveEnvironment({
+        VITE_AUTH_SOURCE: 'fallback',
+        VITE_DATA_SOURCE: 'mock',
+      }),
+    ).toThrow('VITE_AUTH_SOURCE는 mock 또는 api여야 합니다.')
+    expect(() =>
+      resolveEnvironment({
+        VITE_AUTH_SOURCE: 'mock',
+        VITE_DATA_SOURCE: 'fallback',
+      }),
+    ).toThrow('VITE_DATA_SOURCE는 mock 또는 api여야 합니다.')
+  })
+
+  it.each([
+    ['mock', 'mock'],
+    ['api', 'mock'],
+    ['api', 'api'],
+  ] as const)('개발 환경의 %s/%s 조합을 허용한다', (authSource, dataSource) => {
+    expect(
+      resolveEnvironment({
+        VITE_AUTH_SOURCE: authSource,
+        VITE_DATA_SOURCE: dataSource,
+      }),
+    ).toMatchObject({ authSource, dataSource })
+  })
+
+  it('mock/api 조합을 거부한다', () => {
+    expect(() =>
+      resolveEnvironment({
+        VITE_AUTH_SOURCE: 'mock',
+        VITE_DATA_SOURCE: 'api',
+      }),
+    ).toThrow('VITE_AUTH_SOURCE=mock, VITE_DATA_SOURCE=api 조합은 허용되지 않습니다.')
   })
 
   it('production 환경의 mock 데이터 소스를 거부한다', () => {
     expect(() =>
       resolveEnvironment(
         {
+          VITE_AUTH_SOURCE: 'mock',
           VITE_DATA_SOURCE: 'mock',
         },
         {
           isProduction: true,
         },
       ),
-    ).toThrow('production build에서는 VITE_DATA_SOURCE=api만 허용됩니다.')
+    ).toThrow('production build에서는 VITE_AUTH_SOURCE=api, VITE_DATA_SOURCE=api만 허용됩니다.')
   })
 
   it('production 환경의 api 데이터 소스를 허용한다', () => {

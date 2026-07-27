@@ -20,13 +20,16 @@ pnpm install --frozen-lockfile
 `.env.example`을 참고해 Git에 포함되지 않는 `.env.local` 계열 파일이나 실행 환경에 값을 설정합니다.
 
 ```env
+VITE_AUTH_SOURCE=mock
 VITE_DATA_SOURCE=mock
 VITE_API_BASE_URL=
 VITE_BACKEND_URL=http://localhost:8080
 ```
 
+- `VITE_AUTH_SOURCE`는 인증에 사용할 `mock` 또는 `api`를 명시해야 합니다.
 - `VITE_DATA_SOURCE`는 모든 실행에서 `mock` 또는 `api`를 명시해야 합니다.
-- production build에서는 `api`만 허용합니다.
+- `mock/mock`, `api/mock`, `api/api` 조합을 허용하고 `mock/api`는 거부합니다.
+- production build에서는 인증과 기능 데이터 모두 `api`만 허용합니다.
 - `VITE_API_BASE_URL`은 API origin만 담당합니다. 빈 값은 same-origin입니다.
 - endpoint가 `/api/...` 전체 경로를 포함하므로 `VITE_API_BASE_URL`에 `/api`를 넣지 않습니다.
 - 로컬 `api` 개발에서는 Vite proxy 대상인 `VITE_BACKEND_URL`이 필요합니다.
@@ -52,13 +55,14 @@ pnpm lint
 pnpm lint:fix
 ```
 
-production build는 실행 환경에 `VITE_DATA_SOURCE=api`를 주입한 상태에서 수행합니다.
+production build는 실행 환경에 `VITE_AUTH_SOURCE=api`, `VITE_DATA_SOURCE=api`를 주입한
+상태에서 수행합니다.
 
 ```bash
 pnpm build
 ```
 
-`VITE_DATA_SOURCE`가 없거나 `mock`이면 production build는 설정 오류로 실패해야 합니다.
+두 소스가 없거나 하나라도 `mock`이면 production build는 설정 오류로 실패해야 합니다.
 
 ## 후속 Repository 이전 대상
 

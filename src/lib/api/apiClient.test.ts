@@ -2,7 +2,6 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { ApiClient, jsonBody, type FetchImplementation } from './apiClient'
-import { ApiError } from './apiError'
 
 function jsonResponse(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
@@ -51,10 +50,10 @@ describe('ApiClient', () => {
       fetch: fetchMock,
     })
 
-    await client.request<void>('/api/auth/logout')
+    await client.request<void>('/api/auth/admin/logout')
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/auth/logout',
+      '/api/auth/admin/logout',
       expect.objectContaining({
         credentials: 'include',
       }),
@@ -225,20 +224,68 @@ describe('ApiClient', () => {
     expect(headers.get('Authorization')).toBe('Custom credential')
   })
 
-  it('401 hook을 호출하되 요청을 자동 재시도하지 않는다', async () => {
+  it('401 복구 성공 후 새 access token으로 원 요청을 한 번 재시도한다', async () => {
     const fetchMock = createFetchMock()
-    fetchMock.mockResolvedValue(
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            error: {
+              code: 'TOKEN_EXPIRED',
+              message: 'access token이 만료되었습니다.',
+            },
+          },
+          401,
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          success: true,
+          data: { teacherId: 7 },
+        }),
+      )
+    let accessToken = 'expired-token'
+    const onUnauthorized = vi.fn(async () => {
+      accessToken = 'refreshed-token'
+      return true
+    })
+    const client = new ApiClient({
+      fetch: fetchMock,
+      getAccessToken: () => accessToken,
+      onUnauthorized,
+    })
+
+    await expect(client.request('/api/test/unauthorized')).resolves.toEqual({
+      teacherId: 7,
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(onUnauthorized).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 401,
+        code: 'TOKEN_EXPIRED',
+      }),
+      { requestRetried: false },
+    )
+    const firstHeaders = new Headers(fetchMock.mock.calls[0]?.[1]?.headers)
+    const secondHeaders = new Headers(fetchMock.mock.calls[1]?.[1]?.headers)
+    expect(firstHeaders.get('Authorization')).toBe('Bearer expired-token')
+    expect(secondHeaders.get('Authorization')).toBe('Bearer refreshed-token')
+  })
+
+  it('재시도 요청도 401이면 복구 hook에 알리고 더 이상 재시도하지 않는다', async () => {
+    const fetchMock = createFetchMock()
+    fetchMock.mockImplementation(async () =>
       jsonResponse(
         {
           error: {
-            code: 'UNAUTHORIZED',
-            message: '인증이 필요합니다.',
+            code: 'INVALID_TOKEN',
+            message: '유효하지 않은 token입니다.',
           },
         },
         401,
       ),
     )
-    const onUnauthorized = vi.fn<(error: ApiError) => void>()
+    const onUnauthorized = vi.fn().mockResolvedValue(true)
     const client = new ApiClient({
       fetch: fetchMock,
       onUnauthorized,
@@ -246,15 +293,66 @@ describe('ApiClient', () => {
 
     await expect(client.request('/api/test/unauthorized')).rejects.toMatchObject({
       status: 401,
-      code: 'UNAUTHORIZED',
+      code: 'INVALID_TOKEN',
     })
-    expect(onUnauthorized).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 401,
-        code: 'UNAUTHORIZED',
-      }),
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(onUnauthorized).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ code: 'INVALID_TOKEN' }),
+      { requestRetried: false },
     )
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(onUnauthorized).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ code: 'INVALID_TOKEN' }),
+      { requestRetried: true },
+    )
+  })
+
+  it('자동 복구가 제외된 401 요청은 hook이나 재시도를 실행하지 않는다', async () => {
+    const fetchMock = createFetchMock()
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            code: 'INVALID_CREDENTIALS',
+            message: '로그인에 실패했습니다.',
+          },
+        },
+        401,
+      ),
+    )
+    const onUnauthorized = vi.fn().mockResolvedValue(true)
+    const client = new ApiClient({ fetch: fetchMock, onUnauthorized })
+
+    await expect(
+      client.request('/api/auth/admin/login', {}, { retryOnUnauthorized: false }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_CREDENTIALS',
+    })
+    expect(onUnauthorized).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('403에서는 인증 복구 hook을 실행하지 않는다', async () => {
+    const fetchMock = createFetchMock()
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            code: 'FORBIDDEN',
+            message: '권한이 없습니다.',
+          },
+        },
+        403,
+      ),
+    )
+    const onUnauthorized = vi.fn().mockResolvedValue(true)
+    const client = new ApiClient({ fetch: fetchMock, onUnauthorized })
+
+    await expect(client.request('/api/test/forbidden')).rejects.toMatchObject({
+      status: 403,
+    })
+    expect(onUnauthorized).not.toHaveBeenCalled()
   })
 
   it('AbortSignal을 fetch에 전달한다', async () => {

@@ -6,6 +6,9 @@ import './config/runtimeEnv'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
+import { createSessionApiAuthHooks } from '@/features/teacher/auth'
+import { configureApiAuth } from '@/lib/api'
+import { useSessionStore } from '@/stores/session'
 // router는 URL에 따라 어떤 Vue 화면을 보여 줄지 결정합니다.
 import router from './router'
 
@@ -13,7 +16,11 @@ import router from './router'
 const app = createApp(App)
 
 // 인증과 교수자 세션처럼 앱 전체에서 공유하는 상태만 Pinia에 보관합니다.
-app.use(createPinia())
+const pinia = createPinia()
+app.use(pinia)
+
+const sessionStore = useSessionStore(pinia)
+configureApiAuth(createSessionApiAuthHooks(sessionStore, router))
 
 // 앱 전체에서 RouterLink, RouterView 같은 페이지 이동 기능을 사용할 수 있게 합니다.
 app.use(router)

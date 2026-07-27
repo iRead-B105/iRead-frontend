@@ -35,6 +35,6 @@ export function createAdminOverviewApi(
   return {
     getTeacherInfo: () => request<TeacherInfoDto>('/api/admin/teacher/info'),
     listStudents: () => request<StudentListDto>('/api/admin/student/list'),
-    logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
+    logout: () => request<void>('/api/auth/admin/logout', { method: 'POST' }),
   }
 }
