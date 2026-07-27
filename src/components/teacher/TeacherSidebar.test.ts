@@ -42,6 +42,10 @@ function createRepository(
       totalStudents: students.length,
       scheduledTodayCount: 0,
     }),
+    getDetail: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
   }
 }
 

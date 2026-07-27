@@ -1,11 +1,27 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+} from 'vue'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import FormActions from '@/components/teacher/FormActions.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import ProfileImageEditor from '@/components/teacher/ProfileImageEditor.vue'
 import SettingsSection from '@/components/teacher/SettingsSection.vue'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,47 +33,40 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
-import type { Student } from '@/features/teacher/types'
-import { studentApi, type StudentGender, type StudentPayload } from '@/features/teacher/adminApi'
-import { useTeacherAdmin } from '@/features/teacher/useTeacherAdmin'
+import {
+  buildStudentUpdateInput,
+  createStudentFormDraft,
+  normalizeStudentCreateInput,
+  STUDENT_FIELD_MAX_LENGTH,
+  validateStudentForm,
+  type StudentDetail,
+  type StudentFormErrors,
+} from '@/features/teacher/student'
+import { ApiError } from '@/lib/api'
+import { useStudentStore } from '@/stores/students'
 
 const props = defineProps<{
   mode: 'create' | 'edit'
-  initialValue?: Student
+  initialValue?: StudentDetail
 }>()
 
 const router = useRouter()
-const { loadAdminData } = useTeacherAdmin()
+const studentStore = useStudentStore()
 const { visible: saved, show: showSaved } = useTemporaryNotice()
-const photoChanged = ref(false)
-const deleteDialogOpen = ref(false)
+const currentDetail = ref(props.initialValue)
+const form = reactive(createStudentFormDraft(props.initialValue))
+const selectedImage = ref<File | null>(null)
+const imagePreviewVersion = ref(0)
+const fieldErrors = ref<StudentFormErrors>({})
 const submitting = ref(false)
-const errorMessage = ref('')
-
-const emptyStudent: Student = {
-  id: 0,
-  name: '',
-  age: 0,
-  birthDate: '',
-  gender: '남자',
-  phone: '',
-  school: '',
-  guardianName: '',
-  guardianRelation: '어머니',
-  guardianPhone: '',
-  guardianEmail: '',
-  address: '',
-  lastLearningDate: '',
-  lastTestDate: '',
-  totalLearningTime: '0시간',
-  latestTraining: '-',
-  lastAccess: '-',
-  learningStartDate: '',
-  weeklyAttendance: '0%',
-}
-
-const form = reactive<Student>({ ...(props.initialValue ?? emptyStudent) })
+const submitError = ref('')
 const savedSnapshot = ref(JSON.stringify(form))
+
+const deleteDialogOpen = ref(false)
+const deleteConfirmation = ref('')
+const deleteError = ref('')
+const deleting = ref(false)
+
 const title = computed(() => (props.mode === 'create' ? '새 아동 등록' : '아동 정보 관리'))
 const description = computed(() =>
   props.mode === 'create'
@@ -66,167 +75,358 @@ const description = computed(() =>
 )
 const studentInitial = computed(() => form.name.trim().charAt(0) || '학')
 const formChanged = computed(
-  () => JSON.stringify(form) !== savedSnapshot.value || photoChanged.value,
+  () => JSON.stringify(form) !== savedSnapshot.value || selectedImage.value !== null,
 )
 const canSubmit = computed(() => formChanged.value && !submitting.value)
+const canDelete = computed(
+  () =>
+    deleteConfirmation.value.trim() === form.name.trim() &&
+    form.name.trim().length > 0 &&
+    !deleting.value,
+)
 
-function markPhotoChanged() {
-  photoChanged.value = true
+const fieldElementIds: Partial<Record<keyof StudentFormErrors, string>> = {
+  name: 'student-name',
+  birthday: 'student-birthday',
+  gender: 'student-gender',
+  school: 'student-school',
+  guardian: 'guardian-name',
+  guardianContact: 'guardian-contact',
+  guardianEmail: 'guardian-email',
+  address: 'student-address',
+  image: 'student-photo',
 }
 
-function toPayload(): StudentPayload {
-  return {
-    name: form.name,
-    birthday: form.birthDate,
-    gender: (form.gender === '남자' ? 'Boy' : 'Girl') as StudentGender,
-    school: form.school,
-    guardian: form.guardianName,
-    guardianContact: form.guardianPhone,
-    guardianEmail: form.guardianEmail,
-    address: form.address,
-    imageUrl: null,
+function selectImage(file: File): void {
+  selectedImage.value = file
+  fieldErrors.value = { ...fieldErrors.value, image: undefined }
+}
+
+function setImageError(message: string | null): void {
+  fieldErrors.value = { ...fieldErrors.value, image: message ?? undefined }
+}
+
+function markSaved(detail?: StudentDetail): void {
+  if (detail) {
+    currentDetail.value = detail
+    Object.assign(form, createStudentFormDraft(detail))
   }
+  selectedImage.value = null
+  imagePreviewVersion.value += 1
+  savedSnapshot.value = JSON.stringify(form)
 }
 
-async function submitForm() {
+async function focusFirstError(errors: StudentFormErrors): Promise<void> {
+  const firstField = Object.keys(errors).find(
+    (field) => Boolean(errors[field as keyof StudentFormErrors]),
+  ) as keyof StudentFormErrors | undefined
+  const elementId = firstField ? fieldElementIds[firstField] : undefined
+  if (!elementId) return
+  await nextTick()
+  document.getElementById(elementId)?.focus()
+}
+
+function mutationErrorMessage(error: unknown, action: '저장' | '삭제'): string {
+  if (error instanceof ApiError) {
+    if (error.status === 403) return `이 아동 정보를 ${action}할 권한이 없습니다.`
+    if (error.status === 404) return '아동을 찾을 수 없습니다. 목록에서 다시 선택해 주세요.'
+    if (error.status === 409) {
+      return action === '삭제'
+        ? '연결된 기록 때문에 아동을 삭제할 수 없습니다.'
+        : '다른 변경 사항과 충돌했습니다. 최신 정보를 확인해 주세요.'
+    }
+    if (error.status >= 500 || error.status === 0) {
+      return `서버 문제로 아동 정보를 ${action}하지 못했습니다. 잠시 후 다시 시도해 주세요.`
+    }
+    return error.message
+  }
+  return error instanceof Error
+    ? error.message
+    : `아동 정보를 ${action}하지 못했습니다.`
+}
+
+async function submitForm(): Promise<void> {
   if (!canSubmit.value) return
 
+  const validationErrors = validateStudentForm(form)
+  if (fieldErrors.value.image) validationErrors.image = fieldErrors.value.image
+  fieldErrors.value = validationErrors
+  if (Object.keys(validationErrors).length > 0) {
+    await focusFirstError(validationErrors)
+    return
+  }
+
   submitting.value = true
-  errorMessage.value = ''
+  submitError.value = ''
   try {
-    if (props.mode === 'create') await studentApi.create(toPayload())
-    else await studentApi.update(form.id, toPayload())
-    await loadAdminData(true)
-    savedSnapshot.value = JSON.stringify(form)
-    photoChanged.value = false
+    if (props.mode === 'create') {
+      await studentStore.createStudent({
+        input: normalizeStudentCreateInput(form),
+        image: selectedImage.value ?? undefined,
+      })
+      markSaved()
+      showSaved()
+      await router.push({ name: 'teacher-students' })
+      return
+    }
+
+    if (!currentDetail.value) throw new Error('수정할 아동 정보가 없습니다.')
+    const detail = await studentStore.updateStudent(currentDetail.value.studentId, {
+      input: buildStudentUpdateInput(currentDetail.value, form),
+      image: selectedImage.value ?? undefined,
+    })
+    markSaved(detail)
     showSaved()
-    if (props.mode === 'create') await router.push('/teacher/dashboard')
   } catch (error) {
-    errorMessage.value =
-      error instanceof Error ? error.message : '학생 정보를 저장하지 못했습니다.'
+    submitError.value = mutationErrorMessage(error, '저장')
   } finally {
     submitting.value = false
   }
 }
 
-async function confirmStudentDeletion() {
-  await studentApi.remove(form.id)
-  await loadAdminData(true)
-  deleteDialogOpen.value = false
-  await router.push('/teacher/dashboard')
+function openDeleteDialog(): void {
+  deleteConfirmation.value = ''
+  deleteError.value = ''
+  deleteDialogOpen.value = true
 }
+
+async function confirmStudentDeletion(): Promise<void> {
+  if (!canDelete.value || !currentDetail.value) return
+
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await studentStore.deleteStudent(currentDetail.value.studentId)
+    savedSnapshot.value = JSON.stringify(form)
+    selectedImage.value = null
+    deleteDialogOpen.value = false
+    await router.push({ name: 'teacher-students' })
+  } catch (error) {
+    deleteError.value = mutationErrorMessage(error, '삭제')
+  } finally {
+    deleting.value = false
+  }
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent): void {
+  if (!formChanged.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onBeforeRouteLeave(() => {
+  if (!formChanged.value) return true
+  return window.confirm('저장하지 않은 변경 사항이 있습니다. 페이지를 나가시겠습니까?')
+})
+
+onMounted(() => window.addEventListener('beforeunload', handleBeforeUnload))
+onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnload))
 </script>
 
 <template>
-  <form class="student-form page-stack" @submit.prevent="submitForm">
+  <form class="student-form page-stack" novalidate @submit.prevent="submitForm">
     <PageHeader :title="title" :description="description" />
 
     <SettingsSection title="아동 정보" description="학습 관리에 사용하는 정보입니다.">
       <ProfileImageEditor
         input-id="student-photo"
         label="프로필 사진"
-        :image-url="initialValue?.profileImage"
+        :image-url="currentDetail?.imageUrl"
+        :preview-version="imagePreviewVersion"
         :fallback="studentInitial"
         button-label="사진 선택"
-        @select="markPhotoChanged"
+        @select="selectImage"
+        @error="setImageError"
       />
+      <p v-if="fieldErrors.image" class="field-error" role="alert">{{ fieldErrors.image }}</p>
 
       <div class="form-grid section-fields">
-        <div class="field field--medium">
-          <Label for="student-name">아동명</Label>
-          <Input id="student-name" v-model="form.name" class="input" required placeholder="아동 이름" />
+        <div class="field">
+          <Label for="student-name">아동명 <span aria-hidden="true">*</span></Label>
+          <Input
+            id="student-name"
+            v-model="form.name"
+            :maxlength="STUDENT_FIELD_MAX_LENGTH.name"
+            :aria-invalid="Boolean(fieldErrors.name)"
+            aria-describedby="student-name-error"
+            placeholder="아동 이름"
+          />
+          <p v-if="fieldErrors.name" id="student-name-error" class="field-error">
+            {{ fieldErrors.name }}
+          </p>
         </div>
-        <div class="field field--date">
-          <Label for="student-birth">생년월일</Label>
-          <Input id="student-birth" v-model="form.birthDate" class="input" required type="date" />
+        <div class="field">
+          <Label for="student-birthday">생년월일 <span aria-hidden="true">*</span></Label>
+          <Input
+            id="student-birthday"
+            v-model="form.birthday"
+            :aria-invalid="Boolean(fieldErrors.birthday)"
+            aria-describedby="student-birthday-error"
+            type="date"
+          />
+          <p v-if="fieldErrors.birthday" id="student-birthday-error" class="field-error">
+            {{ fieldErrors.birthday }}
+          </p>
         </div>
-        <div class="field field--short">
-          <Label for="student-gender">성별</Label>
+        <div class="field">
+          <Label for="student-gender">성별 <span aria-hidden="true">*</span></Label>
           <Select v-model="form.gender">
-            <SelectTrigger id="student-gender" class="select !w-full">
-              <SelectValue />
+            <SelectTrigger
+              id="student-gender"
+              class="!w-full"
+              :aria-invalid="Boolean(fieldErrors.gender)"
+              aria-describedby="student-gender-error"
+            >
+              <SelectValue placeholder="성별 선택" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="남자">남자</SelectItem>
-              <SelectItem value="여자">여자</SelectItem>
+              <SelectItem value="Boy">남자</SelectItem>
+              <SelectItem value="Girl">여자</SelectItem>
             </SelectContent>
           </Select>
+          <p v-if="fieldErrors.gender" id="student-gender-error" class="field-error">
+            {{ fieldErrors.gender }}
+          </p>
         </div>
-        <div class="field field--phone">
-          <Label for="student-phone">아동 연락처</Label>
-          <Input id="student-phone" v-model="form.phone" class="input" placeholder="010-0000-0000" />
-        </div>
-        <div class="field form-grid__wide">
-          <Label for="student-school">학교명</Label>
-          <Input id="student-school" v-model="form.school" class="input" required placeholder="학교명" />
+        <div class="field">
+          <Label for="student-school">학교명 <span aria-hidden="true">*</span></Label>
+          <Input
+            id="student-school"
+            v-model="form.school"
+            :maxlength="STUDENT_FIELD_MAX_LENGTH.school"
+            :aria-invalid="Boolean(fieldErrors.school)"
+            aria-describedby="student-school-error"
+            placeholder="학교명"
+          />
+          <p v-if="fieldErrors.school" id="student-school-error" class="field-error">
+            {{ fieldErrors.school }}
+          </p>
         </div>
       </div>
     </SettingsSection>
 
     <SettingsSection title="보호자 정보" description="상담에 사용할 보호자 연락처입니다.">
       <div class="form-grid">
-        <div class="field field--medium">
-          <Label for="guardian-name">보호자명</Label>
-          <Input id="guardian-name" v-model="form.guardianName" class="input" required placeholder="보호자 이름" />
+        <div class="field">
+          <Label for="guardian-name">보호자명 <span aria-hidden="true">*</span></Label>
+          <Input
+            id="guardian-name"
+            v-model="form.guardian"
+            :maxlength="STUDENT_FIELD_MAX_LENGTH.guardian"
+            :aria-invalid="Boolean(fieldErrors.guardian)"
+            aria-describedby="guardian-name-error"
+            placeholder="보호자 이름"
+          />
+          <p v-if="fieldErrors.guardian" id="guardian-name-error" class="field-error">
+            {{ fieldErrors.guardian }}
+          </p>
         </div>
-        <div class="field field--short">
-          <Label for="guardian-relation">관계</Label>
-          <Select v-model="form.guardianRelation">
-            <SelectTrigger id="guardian-relation" class="select !w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="어머니">어머니</SelectItem>
-              <SelectItem value="아버지">아버지</SelectItem>
-              <SelectItem value="조부모">조부모</SelectItem>
-              <SelectItem value="기타">기타</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div class="field field--phone">
-          <Label for="guardian-phone">보호자 연락처</Label>
-          <Input id="guardian-phone" v-model="form.guardianPhone" class="input" required placeholder="010-0000-0000" />
+        <div class="field">
+          <Label for="guardian-contact">보호자 연락처 <span aria-hidden="true">*</span></Label>
+          <Input
+            id="guardian-contact"
+            v-model="form.guardianContact"
+            :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianContact"
+            :aria-invalid="Boolean(fieldErrors.guardianContact)"
+            aria-describedby="guardian-contact-error"
+            inputmode="tel"
+            placeholder="010-0000-0000"
+          />
+          <p v-if="fieldErrors.guardianContact" id="guardian-contact-error" class="field-error">
+            {{ fieldErrors.guardianContact }}
+          </p>
         </div>
         <div class="field">
           <Label for="guardian-email">보호자 이메일</Label>
-          <Input id="guardian-email" v-model="form.guardianEmail" class="input" type="email" placeholder="example@email.com" />
+          <Input
+            id="guardian-email"
+            v-model="form.guardianEmail"
+            :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianEmail"
+            :aria-invalid="Boolean(fieldErrors.guardianEmail)"
+            aria-describedby="guardian-email-error"
+            type="email"
+            placeholder="example@email.com"
+          />
+          <p v-if="fieldErrors.guardianEmail" id="guardian-email-error" class="field-error">
+            {{ fieldErrors.guardianEmail }}
+          </p>
         </div>
         <div class="field form-grid__wide">
-          <Label for="address">주소</Label>
-          <Input id="address" v-model="form.address" class="input" placeholder="주소를 입력하세요" />
+          <Label for="student-address">주소</Label>
+          <Input
+            id="student-address"
+            v-model="form.address"
+            :maxlength="STUDENT_FIELD_MAX_LENGTH.address"
+            :aria-invalid="Boolean(fieldErrors.address)"
+            aria-describedby="student-address-error"
+            placeholder="주소를 입력하세요"
+          />
+          <p v-if="fieldErrors.address" id="student-address-error" class="field-error">
+            {{ fieldErrors.address }}
+          </p>
         </div>
       </div>
     </SettingsSection>
 
     <div class="student-form__footer">
-      <p v-if="errorMessage" class="student-form__error" role="alert">{{ errorMessage }}</p>
+      <p v-if="submitError" class="student-form__error" role="alert">{{ submitError }}</p>
       <FormActions
         :saved="saved"
         :disabled="!canSubmit"
         :save-label="mode === 'create' ? '아동 등록' : '변경 사항 저장'"
-        :saved-message="mode === 'create' ? '아동 정보가 저장되었습니다.' : '변경 사항이 저장되었습니다.'"
-        @cancel="router.back()"
+        :saved-message="mode === 'create' ? '아동이 등록되었습니다.' : '변경 사항이 저장되었습니다.'"
+        @cancel="router.push({ name: 'teacher-students' })"
       />
 
       <section v-if="mode === 'edit'" class="danger-zone" aria-label="아동 삭제">
         <div>
           <h2>아동 삭제</h2>
-          <p>아동 목록에서 제외하고 연결된 학습 기록에 더 이상 접근할 수 없게 됩니다.</p>
+          <p>연결된 학습 기록을 포함한 모든 데이터가 삭제되며 되돌릴 수 없습니다.</p>
         </div>
-        <Button variant="destructive" size="sm" type="button" @click="deleteDialogOpen = true">
+        <Button variant="destructive" size="sm" type="button" @click="openDeleteDialog">
           아동 삭제
         </Button>
       </section>
     </div>
 
-    <ConfirmDialog
-      :open="deleteDialogOpen"
-      title="아동을 삭제할까요?"
-      :message="`${form.name} 아동을 목록에서 삭제합니다. 목업에서는 실제 데이터가 삭제되지 않습니다.`"
-      confirm-label="아동 삭제"
-      @cancel="deleteDialogOpen = false"
-      @confirm="confirmStudentDeletion"
-    />
+    <AlertDialog :open="deleteDialogOpen">
+      <AlertDialogContent class="delete-dialog">
+        <AlertDialogHeader>
+          <AlertDialogTitle>아동을 영구 삭제할까요?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{ form.name }} 아동과 연결된 학습 기록이 모두 삭제됩니다. 이 작업은 되돌릴 수
+            없습니다.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div class="delete-dialog__confirmation">
+          <Label for="delete-student-name">
+            확인하려면 <strong>{{ form.name }}</strong>을(를) 입력하세요.
+          </Label>
+          <Input
+            id="delete-student-name"
+            v-model="deleteConfirmation"
+            autocomplete="off"
+            :disabled="deleting"
+          />
+          <p v-if="deleteError" class="student-form__error" role="alert">{{ deleteError }}</p>
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel
+            :disabled="deleting"
+            @click="deleteDialogOpen = false"
+          >
+            취소
+          </AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            :disabled="!canDelete"
+            @click.prevent="confirmStudentDeletion"
+          >
+            {{ deleting ? '삭제 중...' : '영구 삭제' }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </form>
 </template>
 
@@ -244,7 +444,9 @@ async function confirmStudentDeletion() {
 }
 
 .form-grid .field {
+  display: grid;
   max-width: none;
+  gap: 7px;
 }
 
 .section-fields {
@@ -256,16 +458,17 @@ async function confirmStudentDeletion() {
   grid-column: 1 / -1;
 }
 
+.field-error,
+.student-form__error {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 13px;
+}
+
 .student-form__footer {
   display: grid;
   gap: 16px;
   padding-top: 2px;
-}
-
-.student-form__error {
-  margin: 0;
-  color: var(--destructive);
-  font-size: 14px;
 }
 
 .danger-zone {
@@ -281,16 +484,6 @@ async function confirmStudentDeletion() {
   background: var(--white);
 }
 
-@media (max-width: 760px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .form-grid__wide {
-    grid-column: auto;
-  }
-}
-
 .danger-zone h2 {
   margin: 0;
   color: var(--destructive);
@@ -303,11 +496,29 @@ async function confirmStudentDeletion() {
   font-size: 12px;
 }
 
-.student-form .button:disabled {
-  border-color: var(--slate-200);
-  background: var(--slate-100);
-  color: var(--slate-400);
-  cursor: default;
-  transform: none;
+.delete-dialog {
+  width: min(460px, calc(100% - 32px));
+  max-width: 460px;
+  padding: 24px;
+}
+
+.delete-dialog__confirmation {
+  display: grid;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid__wide {
+    grid-column: auto;
+  }
+
+  .danger-zone {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

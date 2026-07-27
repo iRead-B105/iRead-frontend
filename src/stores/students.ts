@@ -4,11 +4,15 @@ import {
   DEFAULT_STUDENT_PAGE_SIZE,
   studentRepository,
   toStudentNavigationItem,
+  type StudentCreateInput,
+  type StudentDetail,
   type StudentListItem,
+  type StudentMutationCommand,
   type StudentNavigationItem,
   type StudentRepository,
   type StudentRequestStatus,
   type StudentSummary,
+  type StudentUpdateInput,
 } from '@/features/teacher/student'
 
 function isAbortError(error: unknown): boolean {
@@ -44,9 +48,15 @@ export const useStudentStore = defineStore('students', () => {
   const totalPages = ref(0)
   const listStatus = ref<StudentRequestStatus>('idle')
   const listError = ref<string | null>(null)
+  const listStale = ref(true)
   const summary = ref<StudentSummary | null>(null)
   const summaryStatus = ref<StudentRequestStatus>('idle')
   const summaryError = ref<string | null>(null)
+  const summaryStale = ref(true)
+  const detailsById = ref<Record<number, StudentDetail>>({})
+  const detailStatus = ref<StudentRequestStatus>('idle')
+  const detailError = ref<string | null>(null)
+  const detailStaleById = ref<Record<number, boolean>>({})
 
   const navigationQuery = reactive({
     keyword: '',
@@ -135,6 +145,7 @@ export const useStudentStore = defineStore('students', () => {
       totalElements.value = result.totalElements
       totalPages.value = result.totalPages
       listStatus.value = 'success'
+      listStale.value = false
     } catch (error) {
       if (isAbortError(error) || requestSequence !== listSequence) return
       listStatus.value = 'error'
@@ -154,6 +165,7 @@ export const useStudentStore = defineStore('students', () => {
     try {
       summary.value = await repository.value.getSummary({ signal: controller.signal })
       summaryStatus.value = 'success'
+      summaryStale.value = false
     } catch (error) {
       if (isAbortError(error)) return
       summaryStatus.value = 'error'
@@ -247,6 +259,94 @@ export const useStudentStore = defineStore('students', () => {
     selectedStudentId.value = student.studentId
   }
 
+  async function loadDetail(studentId: number): Promise<StudentDetail | null> {
+    detailStatus.value = 'loading'
+    detailError.value = null
+
+    try {
+      const detail = await repository.value.getDetail(studentId)
+      detailsById.value = {
+        ...detailsById.value,
+        [studentId]: detail,
+      }
+      detailStaleById.value = {
+        ...detailStaleById.value,
+        [studentId]: false,
+      }
+      rememberStudent({
+        studentId: detail.studentId,
+        name: detail.name,
+        school: detail.school,
+        imageUrl: detail.imageUrl,
+      })
+      detailStatus.value = 'success'
+      return detail
+    } catch (error) {
+      detailStatus.value = 'error'
+      detailError.value = errorMessage(error)
+      return null
+    }
+  }
+
+  function markListAndSummaryStale(): void {
+    listStale.value = true
+    summaryStale.value = true
+  }
+
+  async function createStudent(
+    command: StudentMutationCommand<StudentCreateInput>,
+  ): Promise<number> {
+    const studentId = await repository.value.create(command)
+    markListAndSummaryStale()
+    return studentId
+  }
+
+  async function updateStudent(
+    studentId: number,
+    command: StudentMutationCommand<StudentUpdateInput>,
+  ): Promise<StudentDetail> {
+    await repository.value.update(studentId, command)
+    listStale.value = true
+    detailStaleById.value = {
+      ...detailStaleById.value,
+      [studentId]: true,
+    }
+
+    const detail = await repository.value.getDetail(studentId)
+    detailsById.value = {
+      ...detailsById.value,
+      [studentId]: detail,
+    }
+    detailStaleById.value = {
+      ...detailStaleById.value,
+      [studentId]: false,
+    }
+    rememberStudent({
+      studentId: detail.studentId,
+      name: detail.name,
+      school: detail.school,
+      imageUrl: detail.imageUrl,
+    })
+    return detail
+  }
+
+  async function deleteStudent(studentId: number): Promise<void> {
+    await repository.value.remove(studentId)
+    const nextDetails = { ...detailsById.value }
+    const nextDetailStale = { ...detailStaleById.value }
+    const nextNavigationItems = { ...navigationItemsById.value }
+    delete nextDetails[studentId]
+    delete nextDetailStale[studentId]
+    delete nextNavigationItems[studentId]
+    detailsById.value = nextDetails
+    detailStaleById.value = nextDetailStale
+    navigationItemsById.value = nextNavigationItems
+    navigationOrder.value = navigationOrder.value.filter((id) => id !== studentId)
+    recentStudentIds.value = recentStudentIds.value.filter((id) => id !== studentId)
+    if (selectedStudentId.value === studentId) selectedStudentId.value = null
+    markListAndSummaryStale()
+  }
+
   function reset(): void {
     listController?.abort()
     navigationController?.abort()
@@ -264,9 +364,15 @@ export const useStudentStore = defineStore('students', () => {
     totalPages.value = 0
     listStatus.value = 'idle'
     listError.value = null
+    listStale.value = true
     summary.value = null
     summaryStatus.value = 'idle'
     summaryError.value = null
+    summaryStale.value = true
+    detailsById.value = {}
+    detailStatus.value = 'idle'
+    detailError.value = null
+    detailStaleById.value = {}
 
     navigationQuery.keyword = ''
     navigationQuery.page = 0
@@ -287,9 +393,15 @@ export const useStudentStore = defineStore('students', () => {
     totalPages,
     listStatus,
     listError,
+    listStale,
     summary,
     summaryStatus,
     summaryError,
+    summaryStale,
+    detailsById,
+    detailStatus,
+    detailError,
+    detailStaleById,
     navigationQuery,
     navigationItemsById,
     navigationItems,
@@ -310,6 +422,10 @@ export const useStudentStore = defineStore('students', () => {
     searchNavigation,
     loadMoreNavigation,
     rememberStudent,
+    loadDetail,
+    createStudent,
+    updateStudent,
+    deleteStudent,
     reset,
   }
 })

@@ -68,4 +68,33 @@ describe('MockStudentRepository', () => {
       scheduledTodayCount: 6,
     })
   })
+
+  it('등록·부분 수정·삭제가 목록과 상세에 같은 상태로 반영된다', async () => {
+    const mutableRepository = new MockStudentRepository([], () => new Date('2026-07-27T12:00:00'))
+    const studentId = await mutableRepository.create({
+      input: {
+        name: '새아동',
+        birthday: '2019-01-02',
+        gender: 'Girl',
+        school: '새봄초등학교',
+        guardian: '보호자',
+        guardianContact: '010-1234-5678',
+        guardianEmail: 'guardian@example.com',
+        address: '서울시',
+      },
+    })
+
+    await expect(mutableRepository.getSummary()).resolves.toMatchObject({ totalStudents: 1 })
+    await mutableRepository.update(studentId, {
+      input: { school: '푸른초등학교', guardianEmail: null },
+    })
+    await expect(mutableRepository.getDetail(studentId)).resolves.toMatchObject({
+      school: '푸른초등학교',
+      guardianEmail: null,
+    })
+
+    await mutableRepository.remove(studentId)
+    await expect(mutableRepository.getSummary()).resolves.toMatchObject({ totalStudents: 0 })
+    await expect(mutableRepository.getDetail(studentId)).rejects.toMatchObject({ status: 404 })
+  })
 })

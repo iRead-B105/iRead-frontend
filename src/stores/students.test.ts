@@ -44,6 +44,13 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
+const mutationRepositoryMethods = {
+  getDetail: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  remove: vi.fn(),
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
 })
@@ -51,6 +58,7 @@ beforeEach(() => {
 describe('Student store', () => {
   it('목록과 summary 실패 상태를 서로 독립적으로 관리한다', async () => {
     const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
       list: vi.fn().mockResolvedValue(result([firstStudent])),
       getSummary: vi.fn().mockRejectedValue(new Error('summary failed')),
     }
@@ -70,6 +78,7 @@ describe('Student store', () => {
     const second = deferred<StudentListResult>()
     const newerStudent = { ...firstStudent, studentId: 2, name: '최신 학습자' }
     const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
       list: vi.fn()
         .mockReturnValueOnce(first.promise)
         .mockReturnValueOnce(second.promise),
@@ -92,6 +101,7 @@ describe('Student store', () => {
 
   it('관리 목록과 Sidebar query·page 상태를 분리한다', async () => {
     const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
       list: vi.fn().mockImplementation((query = {}) =>
         Promise.resolve(
           result(
@@ -122,6 +132,7 @@ describe('Student store', () => {
   it('Sidebar 검색 결과가 바뀌어도 선택한 학습자를 보존한다', async () => {
     const secondStudent = { ...firstStudent, studentId: 2, name: '둘째 학습자' }
     const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
       list: vi.fn()
         .mockResolvedValueOnce(result([firstStudent, secondStudent]))
         .mockResolvedValueOnce(result([secondStudent])),
@@ -141,6 +152,7 @@ describe('Student store', () => {
 
   it('logout용 reset은 Student 상태만 비운다', async () => {
     const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
       list: vi.fn().mockResolvedValue(result([firstStudent])),
       getSummary: vi.fn().mockResolvedValue({ totalStudents: 1, scheduledTodayCount: 1 }),
     }

@@ -40,6 +40,50 @@ export interface StudentNavigationItem {
   readonly imageUrl: string | null
 }
 
+export type StudentGender = 'Boy' | 'Girl'
+
+export interface StudentDetail {
+  readonly studentId: number
+  readonly name: string
+  readonly birthday: string
+  readonly gender: StudentGender
+  readonly school: string
+  readonly guardian: string
+  readonly guardianContact: string
+  readonly guardianEmail: string | null
+  readonly address: string | null
+  readonly createdAt: string
+  readonly imageUrl: string | null
+  readonly teacherMemo: string | null
+}
+
+export interface StudentCreateInput {
+  readonly name: string
+  readonly birthday: string
+  readonly gender: StudentGender
+  readonly school: string
+  readonly guardian: string
+  readonly guardianContact: string
+  readonly guardianEmail?: string | null
+  readonly address?: string | null
+}
+
+export interface StudentUpdateInput {
+  name?: string
+  birthday?: string
+  gender?: StudentGender
+  school?: string
+  guardian?: string
+  guardianContact?: string
+  guardianEmail?: string | null
+  address?: string | null
+}
+
+export interface StudentMutationCommand<TInput> {
+  readonly input: TInput
+  readonly image?: File
+}
+
 export type StudentRequestStatus = 'idle' | 'loading' | 'success' | 'error'
 
 export const DEFAULT_STUDENT_PAGE_SIZE = 10

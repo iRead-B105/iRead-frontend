@@ -1,46 +1,47 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import StudentForm from '@/components/teacher/StudentForm.vue'
-import { studentApi } from '@/features/teacher/adminApi'
-import type { Student } from '@/features/teacher/types'
+import { Button } from '@/components/ui/button'
+import { useStudentStore } from '@/stores/students'
 
 const route = useRoute()
-const student = ref<Student>()
-const errorMessage = ref('')
+const studentStore = useStudentStore()
+const studentId = computed(() => Number(route.params.id))
+const student = computed(() => studentStore.detailsById[studentId.value])
 
-onMounted(async () => {
-  try {
-    const data = await studentApi.get(Number(route.params.id))
-    student.value = {
-      id: data.id,
-      name: data.name,
-      age: Math.max(0, new Date().getFullYear() - Number(data.birthday.slice(0, 4))),
-      birthDate: data.birthday,
-      gender: data.gender === 'Boy' ? '남자' : '여자',
-      phone: '',
-      school: data.school,
-      guardianName: data.guardian,
-      guardianRelation: '',
-      guardianPhone: data.guardianContact,
-      guardianEmail: data.guardianEmail,
-      address: data.address,
-      lastLearningDate: '',
-      lastTestDate: '',
-      totalLearningTime: '0시간',
-      latestTraining: '-',
-      lastAccess: '-',
-      learningStartDate: '',
-      weeklyAttendance: '0%',
+watch(
+  studentId,
+  async (nextStudentId) => {
+    if (Number.isInteger(nextStudentId) && nextStudentId > 0) {
+      await studentStore.loadDetail(nextStudentId)
     }
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '학생 정보를 불러오지 못했습니다.'
-  }
-})
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <StudentForm v-if="student" mode="edit" :initial-value="student" />
-  <p v-else-if="errorMessage" role="alert">{{ errorMessage }}</p>
-  <p v-else>학생 정보를 불러오는 중입니다.</p>
+  <p v-else-if="!Number.isInteger(studentId) || studentId <= 0" class="load-state" role="alert">
+    올바르지 않은 아동 주소입니다.
+  </p>
+  <section v-else-if="studentStore.detailStatus === 'error'" class="load-state" role="alert">
+    <p>{{ studentStore.detailError }}</p>
+    <Button variant="outline" type="button" @click="studentStore.loadDetail(studentId)">
+      다시 시도
+    </Button>
+  </section>
+  <p v-else class="load-state" aria-live="polite">아동 정보를 불러오는 중입니다.</p>
 </template>
+
+<style scoped>
+.load-state {
+  display: grid;
+  min-height: 240px;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: var(--slate-600);
+}
+</style>
