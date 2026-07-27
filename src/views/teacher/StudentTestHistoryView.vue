@@ -1,196 +1,428 @@
 <script setup lang="ts">
-// 검사 날짜를 고르고 검사 결과를 비교하는 화면입니다.
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, watch } from 'vue'
+import { storeToRefs } from 'pinia'
+import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
 import ChartPanel from '@/components/common/ChartPanel.vue'
-import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
 import HistoryToolbar from '@/components/teacher/HistoryToolbar.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { chartColors } from '@/features/teacher/chartTheme'
-import { testApi, type TestComparison, type TestListItem } from '@/features/teacher/adminApi'
+import {
+  formatTestChange,
+  formatTestDate,
+  formatTestPercent,
+  formatTestScore,
+  formatTestSeconds,
+  type TestDetail,
+  type TestListItem,
+  type TestQuestionResult,
+} from '@/features/teacher/test'
+import { useTestStore } from '@/stores/test'
 
 const route = useRoute()
-const tests = ref<TestListItem[]>([])
-const comparisonResult = ref<TestComparison>()
-// 입력 요소와 연결할 값은 ref로 만들어 변경 사항이 화면에 즉시 반영되게 합니다.
-const testDate = ref('2026-07-14')
-const comparison = ref('2026-06-21')
-const secondaryComparison = ref('2026-05-30')
-const comparisonCount = ref(1)
+const router = useRouter()
+const testStore = useTestStore()
+const {
+  tests,
+  currentTestId,
+  comparisonTestIds,
+  comparisonResult,
+  availableComparisonTests,
+  canAddComparison,
+  listStatus,
+  comparisonStatus,
+  listError,
+  comparisonError,
+} = storeToRefs(testStore)
 
-async function loadComparison() {
-  const current = tests.value.find((item) => item.date === testDate.value)
-  const compareIds = [comparison.value, secondaryComparison.value]
-    .slice(0, comparisonCount.value)
-    .map((date) => tests.value.find((item) => item.date === date)?.testId)
-    .filter((id): id is number => id !== undefined)
-  if (!current || compareIds.length === 0) return
-  comparisonResult.value = await testApi.compare(Number(route.params.id), current.testId, compareIds)
+const chartPalette = [
+  chartColors.blue,
+  chartColors.green,
+  chartColors.amber,
+] as const
+
+function parseStudentId(value: unknown): number | null {
+  const normalized = Array.isArray(value) ? value[0] : value
+  const parsed = typeof normalized === 'string' ? Number(normalized) : Number.NaN
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
 }
 
-onMounted(async () => {
-  tests.value = await testApi.list(Number(route.params.id))
-  testDate.value = tests.value[0]?.date ?? ''
-  comparison.value = tests.value[1]?.date ?? ''
-  secondaryComparison.value = tests.value[2]?.date ?? ''
-  await loadComparison()
+const studentId = computed(() => parseStudentId(route.params.id))
+const invalidStudentId = computed(() => studentId.value === null)
+const displayedDetails = computed<TestDetail[]>(() => {
+  if (!comparisonResult.value) return []
+  return [
+    comparisonResult.value.currentTest,
+    ...comparisonResult.value.comparisonTests,
+  ]
 })
-
-watch([testDate, comparison, secondaryComparison, comparisonCount], () => void loadComparison())
-
-function detailMetrics(detail?: TestComparison['currentTest']) {
-  if (!detail) return [0, 0, 0, 0, 0, 0]
-  const readingScore = Math.max(0, 100 - Math.min(100, detail.readingTimeSeconds / 3))
-  const solvingScore = Math.max(0, 100 - Math.min(100, detail.solvingTimeSeconds / 3))
-  const gazeScore = Math.max(0, 100 - detail.gazeDepartureCount * 5)
-  return [readingScore, solvingScore, readingScore, detail.accuracy, gazeScore, detail.accuracy]
-}
-
-// computed를 사용해 관련 값이 바뀔 때 차트 설정도 다시 만들 수 있게 합니다.
-const testChart = computed<EChartsOption>(() => ({
-  tooltip: { trigger: 'axis', valueFormatter: (value) => `${value}점` },
+const areaNames = computed(() => {
+  const names = new Set<string>()
+  displayedDetails.value.forEach((detail) => {
+    detail.areaScores.forEach((areaScore) => names.add(areaScore.area))
+  })
+  return [...names]
+})
+const hasAreaScores = computed(() => areaNames.value.length > 0)
+const areaChart = computed<EChartsOption>(() => ({
+  tooltip: {
+    trigger: 'axis',
+    valueFormatter: (value) => (value == null ? '-' : `${value}점`),
+  },
   legend: {
-    data: [
-      '선택 검사',
-      '비교 검사',
-      ...(comparisonCount.value > 1 ? ['추가 비교'] : []),
-      '검사 평균',
-    ],
+    data: displayedDetails.value.map((detail, index) =>
+      seriesLabel(detail, index),
+    ),
     top: 4,
   },
-  grid: { left: 52, right: 24, top: 50, bottom: 52 },
+  grid: { left: 52, right: 24, top: 52, bottom: 58 },
   xAxis: {
     type: 'category',
-    data: ['시선 고정', '시선 도약', '읽기 속도', '정답률', '풀이 속도', '유창성'],
-    axisLabel: { interval: 0, rotate: 16 },
+    data: areaNames.value,
+    axisLabel: { interval: 0, rotate: areaNames.value.length > 4 ? 16 : 0 },
   },
-  yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}점' } },
-  series: [
-    {
-      name: '선택 검사',
-      type: 'bar',
-      data: detailMetrics(comparisonResult.value?.currentTest),
-      itemStyle: { color: chartColors.blue, borderRadius: [5, 5, 0, 0] },
+  yAxis: {
+    type: 'value',
+    min: 0,
+    max: 100,
+    axisLabel: { formatter: '{value}' },
+  },
+  series: displayedDetails.value.map((detail, index) => ({
+    name: seriesLabel(detail, index),
+    type: 'bar',
+    data: areaNames.value.map(
+      (area) =>
+        detail.areaScores.find((areaScore) => areaScore.area === area)?.score ??
+        null,
+    ),
+    itemStyle: {
+      color: chartPalette[index] ?? chartColors.muted,
+      borderRadius: [5, 5, 0, 0],
     },
-    {
-      name: '비교 검사',
-      type: 'bar',
-      data: detailMetrics(comparisonResult.value?.comparisonTests[0]),
-      itemStyle: { color: chartColors.green, borderRadius: [5, 5, 0, 0] },
-    },
-    ...(comparisonCount.value > 1
-      ? [{
-          name: '추가 비교',
-          type: 'bar' as const,
-          data: detailMetrics(comparisonResult.value?.comparisonTests[1]),
-          itemStyle: { color: chartColors.amber, borderRadius: [5, 5, 0, 0] },
-        }]
-      : []),
-    {
-      name: '검사 평균',
-      type: 'line',
-      smooth: false,
-      data: [28, 39, 56, 61, 42, 66],
-      symbol: 'circle',
-      symbolSize: 6,
-      lineStyle: { color: chartColors.secondary, width: 2 },
-      itemStyle: {
-        color: chartColors.white,
-        borderColor: chartColors.secondary,
-        borderWidth: 2,
-      },
-      z: 5,
-    },
-  ],
+  })),
 }))
+
+watch(
+  studentId,
+  async (id) => {
+    if (id === null) {
+      testStore.reset()
+      return
+    }
+    await testStore.loadForStudent(id)
+  },
+  { immediate: true },
+)
+
+async function changeCurrentTest(event: Event): Promise<void> {
+  if (studentId.value === null) return
+  const testId = Number((event.target as HTMLSelectElement).value)
+  if (!Number.isInteger(testId)) return
+  await testStore.selectCurrentTest(studentId.value, testId)
+}
+
+async function addComparison(event: Event): Promise<void> {
+  const select = event.target as HTMLSelectElement
+  if (studentId.value === null) return
+  const testId = Number(select.value)
+  select.value = ''
+  if (!Number.isInteger(testId)) return
+  await testStore.addComparisonTest(studentId.value, testId)
+}
+
+async function removeComparison(testId: number): Promise<void> {
+  if (studentId.value === null) return
+  await testStore.removeComparisonTest(studentId.value, testId)
+}
+
+function seriesLabel(detail: TestDetail, index: number): string {
+  return `${index === 0 ? '기준' : `비교 ${index}`} · ${formatTestDate(detail.date)}`
+}
+
+function questionStatus(question: TestQuestionResult): string {
+  if (question.isCorrect === null) return '미채점'
+  return question.isCorrect ? '정답' : '오답'
+}
+
+function questionStatusClass(question: TestQuestionResult): string {
+  if (question.isCorrect === null) return 'is-ungraded'
+  return question.isCorrect ? 'is-correct' : 'is-incorrect'
+}
+
+function listText(values: readonly string[]): string {
+  return values.length > 0 ? values.join(' · ') : '-'
+}
+
+function testOptionLabel(test: TestListItem): string {
+  return `${formatTestDate(test.date)} · 검사 #${test.testId}`
+}
 </script>
 
 <template>
   <div class="test-history page-stack">
     <PageHeader
-      title="테스트 이력"
-      description="검사 결과를 선택하고 이전 검사와 비교합니다."
+      title="검사 이력"
+      description="완료된 검사 한 건의 상세를 확인하고 이전 검사와 최대 두 건까지 비교합니다."
     />
 
-    <Card class="toolbar-card">
-      <HistoryToolbar>
-        <div class="field date-field">
-          <Label for="test-date">선택 검사</Label>
-          <Input id="test-date" v-model="testDate" class="input" type="date" />
-        </div>
-        <div class="field date-field">
-          <Label for="comparison-date">비교 검사 1</Label>
-          <Input id="comparison-date" v-model="comparison" class="input" type="date" />
-        </div>
-        <div v-if="comparisonCount > 1" class="field date-field">
-          <Label for="comparison-date-2">비교 검사 2</Label>
-          <Input id="comparison-date-2" v-model="secondaryComparison" class="input" type="date" />
-        </div>
-        <Button
-          variant="outline"
-          class="add-comparison"
-          type="button"
-          :disabled="comparisonCount >= 2"
-          @click="comparisonCount++"
-        >
-          비교 검사 추가
-        </Button>
-        <template #status>선택 검사 1건 · 비교 기준 {{ comparisonCount }}건</template>
-      </HistoryToolbar>
+    <Card v-if="invalidStudentId" class="state-card state-card--error">
+      <strong>올바른 학습자를 선택해 주세요.</strong>
+      <p>검사 이력을 조회하려면 학습자 목록에서 대상을 다시 선택해야 합니다.</p>
+      <Button type="button" @click="router.push({ name: 'teacher-students' })">
+        학습자 목록으로 이동
+      </Button>
     </Card>
 
-    <div class="test-results">
-      <Card class="result-chart">
-        <header class="section-heading">
-          <div>
-            <h2>영역별 환산 점수</h2>
-            <p>100점 기준으로 환산한 비교 결과입니다.</p>
-          </div>
-        </header>
-        <ChartPanel :option="testChart" height="320px" aria-label="영역별 검사 결과 비교 차트" />
+    <template v-else>
+      <Card v-if="listStatus === 'loading'" class="state-card" aria-live="polite">
+        <strong>완료된 검사 목록을 불러오는 중입니다.</strong>
+        <p>잠시만 기다려 주세요.</p>
       </Card>
 
-      <Card class="result-summary">
-        <header class="summary-heading">
-          <span>선택 검사 종합</span>
-          <div><strong>76점</strong><small>이전 검사 대비 +12점</small></div>
-        </header>
-        <dl>
-          <div>
-            <dt>강점 영역</dt>
-            <dd>유창성 · 정확도</dd>
-          </div>
-          <div>
-            <dt>보완 영역</dt>
-            <dd>시선 도약 · 풀이 속도</dd>
-          </div>
-          <div>
-            <dt>권장 과정</dt>
-            <dd>파닉스 심화 · 2단계</dd>
-          </div>
-          <div>
-            <dt>다음 검사</dt>
-            <dd>4주 후 권장</dd>
-          </div>
-        </dl>
+      <Card v-else-if="listStatus === 'error'" class="state-card state-card--error">
+        <strong>{{ listError }}</strong>
+        <p>목록을 다시 요청하거나 학습자 목록으로 이동할 수 있습니다.</p>
+        <div class="state-actions">
+          <Button type="button" @click="testStore.retryList()">다시 시도</Button>
+          <Button
+            variant="outline"
+            type="button"
+            @click="router.push({ name: 'teacher-students' })"
+          >
+            학습자 목록으로 이동
+          </Button>
+        </div>
       </Card>
-    </div>
 
-    <GazeAnalysisPanel
-      title="선택 검사 시선 분석"
-      description="시선 체류 시간, 되돌아보기 횟수와 읽기 이탈 구간을 선택 검사 기준으로 표시합니다."
-    />
+      <Card v-else-if="listStatus === 'success' && tests.length === 0" class="state-card">
+        <strong>완료된 검사가 없습니다.</strong>
+        <p>학습자가 검사를 완료하면 이 화면에서 상세 결과를 확인할 수 있습니다.</p>
+      </Card>
 
+      <template v-else-if="listStatus === 'success'">
+        <Card class="toolbar-card">
+          <HistoryToolbar>
+            <div class="selection-field">
+              <Label for="current-test">기준 검사</Label>
+              <select
+                id="current-test"
+                :value="currentTestId ?? ''"
+                :disabled="comparisonStatus === 'loading'"
+                @change="changeCurrentTest"
+              >
+                <option
+                  v-for="test in tests"
+                  :key="test.testId"
+                  :value="test.testId"
+                >
+                  {{ testOptionLabel(test) }}
+                </option>
+              </select>
+            </div>
+
+            <div class="selection-field">
+              <Label for="comparison-test">비교 검사 추가</Label>
+              <select
+                id="comparison-test"
+                value=""
+                :disabled="!canAddComparison"
+                @change="addComparison"
+              >
+                <option value="" disabled>
+                  {{
+                    comparisonTestIds.length >= 2
+                      ? '최대 두 건을 선택했습니다'
+                      : '검사를 선택해 주세요'
+                  }}
+                </option>
+                <option
+                  v-for="test in availableComparisonTests"
+                  :key="test.testId"
+                  :value="test.testId"
+                >
+                  {{ testOptionLabel(test) }}
+                </option>
+              </select>
+            </div>
+
+            <template #status>
+              완료 검사 {{ tests.length }}건 · 비교 {{ comparisonTestIds.length }}/2건
+            </template>
+          </HistoryToolbar>
+        </Card>
+
+        <div v-if="comparisonTestIds.length > 0" class="comparison-chips" aria-label="선택한 비교 검사">
+          <span
+            v-for="test in testStore.comparisonTests"
+            :key="test.testId"
+            class="comparison-chip"
+          >
+            {{ testOptionLabel(test) }}
+            <button
+              type="button"
+              :aria-label="`${testOptionLabel(test)} 비교 해제`"
+              :disabled="comparisonStatus === 'loading'"
+              @click="removeComparison(test.testId)"
+            >
+              ×
+            </button>
+          </span>
+        </div>
+
+        <Card v-if="comparisonStatus === 'loading'" class="state-card" aria-live="polite">
+          <strong>선택한 검사 결과를 불러오는 중입니다.</strong>
+          <p>최신 선택의 응답만 화면에 반영합니다.</p>
+        </Card>
+
+        <Card
+          v-else-if="comparisonStatus === 'error'"
+          class="state-card state-card--error"
+        >
+          <strong>{{ comparisonError }}</strong>
+          <Button type="button" @click="testStore.retryComparison()">다시 시도</Button>
+        </Card>
+
+        <template v-else-if="comparisonStatus === 'success' && comparisonResult">
+          <div class="result-grid">
+            <Card class="result-chart">
+              <header class="section-heading">
+                <div>
+                  <h2>영역별 검사 점수</h2>
+                  <p>서버가 제공한 영역명과 0~100점 점수만 표시합니다.</p>
+                </div>
+              </header>
+              <ChartPanel
+                v-if="hasAreaScores"
+                :option="areaChart"
+                height="330px"
+                aria-label="기준 검사와 선택한 비교 검사의 영역별 점수 차트"
+              />
+              <div v-else class="inline-empty">
+                표시할 영역별 점수가 없습니다.
+              </div>
+            </Card>
+
+            <Card class="result-summary">
+              <header class="summary-heading">
+                <span>기준 검사 종합</span>
+                <div>
+                  <strong>{{ formatTestScore(comparisonResult.currentTest.overallScore) }}</strong>
+                  <small>{{ formatTestChange(comparisonResult.currentTest.changeFromPrevious) }}</small>
+                </div>
+              </header>
+              <dl>
+                <div>
+                  <dt>강점 영역</dt>
+                  <dd>{{ listText(comparisonResult.currentTest.strengthAreas) }}</dd>
+                </div>
+                <div>
+                  <dt>보완 영역</dt>
+                  <dd>{{ listText(comparisonResult.currentTest.improvementAreas) }}</dd>
+                </div>
+                <div>
+                  <dt>권장 과정</dt>
+                  <dd>{{ comparisonResult.currentTest.recommendedCourse ?? '-' }}</dd>
+                </div>
+                <div>
+                  <dt>다음 검사 권장</dt>
+                  <dd>{{ comparisonResult.currentTest.nextTestRecommendation ?? '-' }}</dd>
+                </div>
+              </dl>
+            </Card>
+          </div>
+
+          <Card class="metric-section">
+            <header class="section-heading">
+              <div>
+                <h2>검사별 주요 기록</h2>
+                <p>응답에 없는 값은 추정하지 않고 ‘-’로 표시합니다.</p>
+              </div>
+            </header>
+            <div class="detail-cards">
+              <article
+                v-for="(detail, index) in displayedDetails"
+                :key="detail.testId"
+                class="detail-card"
+              >
+                <header>
+                  <span>{{ index === 0 ? '기준 검사' : `비교 검사 ${index}` }}</span>
+                  <strong>{{ formatTestDate(detail.date) }}</strong>
+                </header>
+                <dl>
+                  <div>
+                    <dt>종합 점수</dt>
+                    <dd>{{ formatTestScore(detail.overallScore) }}</dd>
+                  </div>
+                  <div>
+                    <dt>읽기 시간</dt>
+                    <dd>{{ formatTestSeconds(detail.readingTimeSeconds) }}</dd>
+                  </div>
+                  <div>
+                    <dt>문제 풀이 시간</dt>
+                    <dd>{{ formatTestSeconds(detail.solvingTimeSeconds) }}</dd>
+                  </div>
+                  <div>
+                    <dt>정확도</dt>
+                    <dd>{{ formatTestPercent(detail.accuracy) }}</dd>
+                  </div>
+                </dl>
+              </article>
+            </div>
+          </Card>
+
+          <Card class="question-section">
+            <header class="section-heading">
+              <div>
+                <h2>기준 검사 문항 결과</h2>
+                <p>{{ formatTestDate(comparisonResult.currentTest.date) }} 검사 응답입니다.</p>
+              </div>
+            </header>
+            <div
+              v-if="comparisonResult.currentTest.questions.length === 0"
+              class="inline-empty"
+            >
+              제공된 문항 결과가 없습니다.
+            </div>
+            <ol v-else class="question-list">
+              <li
+                v-for="question in comparisonResult.currentTest.questions"
+                :key="question.questionNumber"
+              >
+                <header>
+                  <strong>문항 {{ question.questionNumber }}</strong>
+                  <span :class="questionStatusClass(question)">
+                    {{ questionStatus(question) }}
+                  </span>
+                </header>
+                <p>{{ question.question ?? '문항 내용 없음' }}</p>
+                <dl>
+                  <div>
+                    <dt>선택 답안</dt>
+                    <dd>{{ question.selectedAnswer ?? '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>정답</dt>
+                    <dd>{{ question.correctAnswer ?? '-' }}</dd>
+                  </div>
+                </dl>
+              </li>
+            </ol>
+          </Card>
+        </template>
+      </template>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.test-history { gap: 20px; container-type: inline-size; }
+.test-history {
+  gap: 20px;
+  container-type: inline-size;
+}
+
 .toolbar-card {
   gap: 0;
   padding: 0;
@@ -199,50 +431,370 @@ const testChart = computed<EChartsOption>(() => ({
   background: transparent;
   box-shadow: none;
 }
-.toolbar-card :deep(.history-toolbar) { min-height: 76px; padding: 14px 0; border-bottom: 0; }
-.toolbar-card :deep(.history-toolbar__status) { align-self: flex-end; padding-bottom: 3px; }
-.date-field { width: 166px; }
-.add-comparison { min-height: 40px; }
-.add-comparison:disabled { border-color: var(--slate-200); background: var(--slate-100); color: var(--slate-400); cursor: default; opacity: 1; transform: none; }
-.test-results { display: grid; align-items: stretch; gap: 20px; grid-template-columns: minmax(0, 1fr) 320px; }
+
+.toolbar-card :deep(.history-toolbar) {
+  min-height: 76px;
+  padding: 14px 0;
+  border-bottom: 0;
+}
+
+.selection-field {
+  display: grid;
+  min-width: 240px;
+  gap: 6px;
+}
+
+.selection-field label {
+  color: var(--slate-600);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.selection-field select {
+  min-height: 40px;
+  padding: 0 34px 0 12px;
+  border: 1px solid var(--slate-300);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--slate-800);
+  font: inherit;
+  font-size: 13px;
+}
+
+.selection-field select:disabled {
+  background: var(--slate-100);
+  color: var(--slate-500);
+  cursor: not-allowed;
+}
+
+.comparison-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -8px;
+}
+
+.comparison-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 12px;
+  border: 1px solid var(--primary-100);
+  border-radius: 999px;
+  background: var(--primary-50);
+  color: var(--primary-700);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.comparison-chip button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
+  place-items: center;
+}
+
+.comparison-chip button:hover {
+  background: color-mix(in oklch, var(--primary-100) 70%, transparent);
+}
+
+.comparison-chip button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.state-card {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 24px;
+  border-radius: var(--radius-lg);
+}
+
+.state-card strong {
+  color: var(--slate-900);
+  font-size: 15px;
+}
+
+.state-card p {
+  margin: 0;
+  color: var(--slate-600);
+  font-size: 13px;
+}
+
+.state-card--error {
+  border-color: color-mix(in oklch, var(--danger-600) 25%, var(--border));
+}
+
+.state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.result-grid {
+  display: grid;
+  align-items: stretch;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
 .result-chart,
-.result-summary { border-radius: var(--radius-lg); }
-.result-chart { min-width: 0; gap: 10px; padding: 20px; }
-.result-summary { min-width: 0; gap: 0; padding: 20px; }
-.section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
-.section-heading h2 { margin: 0; font-size: 17px; }
-.section-heading p { margin: 5px 0 0; color: var(--slate-500); font-size: 12px; }
-.result-chart :deep(.chart-panel) { padding-top: 2px; }
-.summary-heading { padding-bottom: 8px; }
-.summary-heading > span { color: var(--slate-500); font-size: 12px; font-weight: 600; }
-.summary-heading > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 6px; }
-.summary-heading strong { color: var(--slate-900); font-size: 28px; }
-.summary-heading small { color: var(--slate-600); font-size: 12px; font-weight: 600; }
-.result-summary dl { display: grid; gap: 8px; margin: 16px 0 0; }
+.result-summary,
+.metric-section,
+.question-section {
+  min-width: 0;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+}
+
+.result-chart {
+  gap: 10px;
+}
+
+.result-summary {
+  gap: 0;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  color: var(--slate-900);
+  font-size: 17px;
+}
+
+.section-heading p {
+  margin: 5px 0 0;
+  color: var(--slate-500);
+  font-size: 12px;
+}
+
+.summary-heading {
+  padding-bottom: 8px;
+}
+
+.summary-heading > span {
+  color: var(--slate-500);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary-heading > div {
+  display: grid;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.summary-heading strong {
+  color: var(--slate-900);
+  font-size: 28px;
+}
+
+.summary-heading small {
+  color: var(--slate-600);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.result-summary dl {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
 .result-summary dl > div {
   padding: 11px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: color-mix(in oklch, var(--muted) 32%, transparent);
 }
-.result-summary dt { color: var(--slate-500); font-size: 12px; }
-.result-summary dd { margin: 5px 0 0; color: var(--slate-800); font-size: 13px; font-weight: 700; }
-.test-history :deep(.gaze-analysis) {
-  padding: 20px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--card);
-  box-shadow: var(--shadow-sm);
-}
-@container (max-width: 850px) {
-  .test-results { grid-template-columns: 1fr; }
-  .result-summary { display: grid; align-items: start; gap: 28px; grid-template-columns: 220px minmax(0, 1fr); }
-  .summary-heading > div { display: grid; justify-items: start; }
-  .result-summary dl { margin: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.result-summary dt,
+.detail-card dt,
+.question-list dt {
+  color: var(--slate-500);
+  font-size: 12px;
 }
 
-@container (max-width: 720px) {
-  .result-summary { gap: 24px; grid-template-columns: 1fr; }
-  .result-summary dl { grid-template-columns: 1fr; }
+.result-summary dd,
+.detail-card dd,
+.question-list dd {
+  margin: 5px 0 0;
+  color: var(--slate-800);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.metric-section,
+.question-section {
+  gap: 18px;
+}
+
+.detail-cards {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.detail-card {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--white);
+}
+
+.detail-card header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-card header span {
+  color: var(--slate-500);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.detail-card header strong {
+  color: var(--slate-800);
+  font-size: 13px;
+}
+
+.detail-card dl {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.question-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.question-list li {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--white);
+}
+
+.question-list li > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.question-list li > header span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.question-list .is-correct {
+  background: color-mix(in oklch, var(--success-600) 12%, transparent);
+  color: var(--success-600);
+}
+
+.question-list .is-incorrect {
+  background: color-mix(in oklch, var(--danger-600) 12%, transparent);
+  color: var(--danger-600);
+}
+
+.question-list .is-ungraded {
+  background: var(--slate-100);
+  color: var(--slate-600);
+}
+
+.question-list p {
+  margin: 12px 0;
+  color: var(--slate-800);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.question-list dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.question-list dl > div {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--slate-50);
+}
+
+.inline-empty {
+  display: grid;
+  min-height: 160px;
+  color: var(--slate-500);
+  font-size: 13px;
+  place-items: center;
+}
+
+@container (max-width: 900px) {
+  .result-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .result-summary {
+    display: grid;
+    align-items: start;
+    gap: 28px;
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .result-summary dl {
+    margin: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@container (max-width: 640px) {
+  .selection-field {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .result-summary {
+    gap: 20px;
+    grid-template-columns: 1fr;
+  }
+
+  .result-summary dl {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-card dl,
+  .question-list dl {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
