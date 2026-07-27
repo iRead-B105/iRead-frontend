@@ -10,7 +10,7 @@ const tabs = [
   { label: '학습 현황', name: 'student-overview' },
   { label: '커리큘럼 관리', name: 'student-curriculum' },
   { label: '훈련 이력', name: 'student-training-history' },
-  { label: '테스트 이력', name: 'student-test-history' },
+  { label: '검사 이력', name: 'student-test-history' },
   { label: '보고서', name: 'student-report' },
 ]
 

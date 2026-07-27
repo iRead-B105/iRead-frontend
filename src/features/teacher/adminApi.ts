@@ -57,32 +57,6 @@ export interface AccuracyTrend {
   accuracy: number
 }
 
-export interface TestListItem {
-  testId: number
-  date: string
-}
-
-export interface TestDetail {
-  testId: number
-  date: string
-  readingTimeSeconds: number
-  solvingTimeSeconds: number
-  accuracy: number
-  gazeDepartureCount: number
-  questions: Array<{
-    questionNumber: number
-    question: string
-    isCorrect: boolean
-    correctAnswer: string
-    selectedAnswer: string
-  }>
-}
-
-export interface TestComparison {
-  currentTest: TestDetail
-  comparisonTests: TestDetail[]
-}
-
 export interface ReportSnapshot {
   learningDays: number
   totalTrainingTimeMinutes: number
@@ -133,16 +107,6 @@ export const studentApi = {
     apiRequest<void>(`/api/admin/student/${studentId}`, { method: 'DELETE' }),
   accuracyTrend: (studentId: number) =>
     apiRequest<AccuracyTrend[]>(`/api/admin/student/${studentId}/accuracy-trend`),
-}
-
-export const testApi = {
-  list: (studentId: number) =>
-    apiRequest<TestListItem[]>(`/api/admin/test/${studentId}/list`),
-  compare: (studentId: number, currentTestId: number, comparisonTestIds: number[]) => {
-    const query = new URLSearchParams({ currentTestId: String(currentTestId) })
-    comparisonTestIds.forEach((id) => query.append('comparisonTestIds', String(id)))
-    return apiRequest<TestComparison>(`/api/admin/test/${studentId}/compare?${query}`)
-  },
 }
 
 export const reportApi = {
