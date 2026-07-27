@@ -1,6 +1,7 @@
 import type {
   StudentCreateInput,
   StudentDetail,
+  StudentLearningSummary,
   StudentListQuery,
   StudentListResult,
   StudentMutationCommand,
@@ -28,4 +29,12 @@ export interface StudentRepository {
     command: StudentMutationCommand<StudentUpdateInput>,
   ) => Promise<void>
   readonly remove: (studentId: number) => Promise<void>
+  readonly getLearningSummary: (
+    studentId: number,
+    options?: StudentRequestOptions,
+  ) => Promise<StudentLearningSummary>
+  readonly updateTeacherMemo: (
+    studentId: number,
+    teacherMemo: string | null,
+  ) => Promise<void>
 }

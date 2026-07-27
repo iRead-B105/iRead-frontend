@@ -3,8 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   StudentListItem,
   StudentListResult,
+  StudentLearningSummary,
+  StudentDetail,
   StudentRepository,
 } from '@/features/teacher/student'
+import { ApiError } from '@/lib/api'
 import { useStudentStore } from './students'
 
 const firstStudent: StudentListItem = {
@@ -19,6 +22,29 @@ const firstStudent: StudentListItem = {
   weeklyCompletedCount: 0,
   weeklyParticipationRate: null,
   totalLearningMinutes: 0,
+}
+
+const firstStudentDetail: StudentDetail = {
+  studentId: 1,
+  name: '첫 학습자',
+  birthday: '2018-03-15',
+  gender: 'Boy',
+  school: '새봄초등학교',
+  guardian: '김보호',
+  guardianContact: '010-0000-0001',
+  guardianEmail: null,
+  address: null,
+  createdAt: '2026-03-01T09:00:00+09:00',
+  imageUrl: null,
+  teacherMemo: null,
+}
+
+const firstLearningSummary: StudentLearningSummary = {
+  studentId: 1,
+  currentStage: '문장 이해력 향상',
+  lastLearningAt: '2026-07-27T16:00:00+09:00',
+  attentionRequiredCount: 1,
+  attentionReasons: ['LOW_ACCURACY'],
 }
 
 function result(
@@ -49,6 +75,8 @@ const mutationRepositoryMethods = {
   create: vi.fn(),
   update: vi.fn(),
   remove: vi.fn(),
+  getLearningSummary: vi.fn(),
+  updateTeacherMemo: vi.fn(),
 }
 
 beforeEach(() => {
@@ -165,5 +193,55 @@ describe('Student store', () => {
     expect(store.students).toEqual([])
     expect(store.navigationItems).toEqual([])
     expect(store.listStatus).toBe('idle')
+  })
+
+  it('상세·학습 summary를 studentId별로 저장하고 메모 상태를 갱신한다', async () => {
+    const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
+      list: vi.fn().mockResolvedValue(result([firstStudent])),
+      getSummary: vi.fn().mockResolvedValue({
+        totalStudents: 1,
+        scheduledTodayCount: 0,
+      }),
+      getDetail: vi.fn().mockResolvedValue(firstStudentDetail),
+      getLearningSummary: vi.fn().mockResolvedValue(firstLearningSummary),
+      updateTeacherMemo: vi.fn().mockResolvedValue(undefined),
+    }
+    const store = useStudentStore()
+    store.setRepository(repository)
+
+    await Promise.all([store.loadDetail(1), store.loadLearningSummary(1)])
+    await store.saveTeacherMemo(1, '받침 읽기 연습 필요')
+
+    expect(store.detailsById[1]?.teacherMemo).toBe('받침 읽기 연습 필요')
+    expect(store.learningSummaryById[1]).toEqual(firstLearningSummary)
+    expect(store.detailStatusById[1]).toBe('success')
+    expect(store.learningSummaryStatusById[1]).toBe('success')
+  })
+
+  it('상세 접근 오류의 HTTP status를 studentId별로 보존한다', async () => {
+    const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
+      list: vi.fn().mockResolvedValue(result([])),
+      getSummary: vi.fn().mockResolvedValue({
+        totalStudents: 0,
+        scheduledTodayCount: 0,
+      }),
+      getDetail: vi.fn().mockRejectedValue(
+        new ApiError({
+          status: 403,
+          code: 'FORBIDDEN',
+          message: '접근 권한이 없습니다.',
+        }),
+      ),
+    }
+    const store = useStudentStore()
+    store.setRepository(repository)
+
+    await store.loadDetail(99)
+
+    expect(store.detailStatusById[99]).toBe('error')
+    expect(store.detailErrorStatusById[99]).toBe(403)
+    expect(store.detailsById[99]).toBeUndefined()
   })
 })

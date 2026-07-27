@@ -6,6 +6,7 @@ import {
   toStudentNavigationItem,
   type StudentCreateInput,
   type StudentDetail,
+  type StudentLearningSummary,
   type StudentListItem,
   type StudentMutationCommand,
   type StudentNavigationItem,
@@ -14,6 +15,7 @@ import {
   type StudentSummary,
   type StudentUpdateInput,
 } from '@/features/teacher/student'
+import { isApiError } from '@/lib/api'
 
 function isAbortError(error: unknown): boolean {
   return (
@@ -26,6 +28,10 @@ function isAbortError(error: unknown): boolean {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '학습자 정보를 불러오지 못했습니다.'
+}
+
+function errorStatus(error: unknown): number | null {
+  return isApiError(error) ? error.status : null
 }
 
 export const useStudentStore = defineStore('students', () => {
@@ -56,7 +62,14 @@ export const useStudentStore = defineStore('students', () => {
   const detailsById = ref<Record<number, StudentDetail>>({})
   const detailStatus = ref<StudentRequestStatus>('idle')
   const detailError = ref<string | null>(null)
+  const detailStatusById = ref<Record<number, StudentRequestStatus>>({})
+  const detailErrorById = ref<Record<number, string | null>>({})
+  const detailErrorStatusById = ref<Record<number, number | null>>({})
   const detailStaleById = ref<Record<number, boolean>>({})
+  const learningSummaryById = ref<Record<number, StudentLearningSummary>>({})
+  const learningSummaryStatusById = ref<Record<number, StudentRequestStatus>>({})
+  const learningSummaryErrorById = ref<Record<number, string | null>>({})
+  const learningSummaryErrorStatusById = ref<Record<number, number | null>>({})
 
   const navigationQuery = reactive({
     keyword: '',
@@ -76,6 +89,8 @@ export const useStudentStore = defineStore('students', () => {
   let listController: AbortController | null = null
   let navigationController: AbortController | null = null
   let summaryController: AbortController | null = null
+  const detailSequences = new Map<number, number>()
+  const learningSummarySequences = new Map<number, number>()
 
   const navigationItems = computed(() =>
     navigationOrder.value
@@ -260,11 +275,20 @@ export const useStudentStore = defineStore('students', () => {
   }
 
   async function loadDetail(studentId: number): Promise<StudentDetail | null> {
+    const requestSequence = (detailSequences.get(studentId) ?? 0) + 1
+    detailSequences.set(studentId, requestSequence)
     detailStatus.value = 'loading'
     detailError.value = null
+    detailStatusById.value = { ...detailStatusById.value, [studentId]: 'loading' }
+    detailErrorById.value = { ...detailErrorById.value, [studentId]: null }
+    detailErrorStatusById.value = {
+      ...detailErrorStatusById.value,
+      [studentId]: null,
+    }
 
     try {
       const detail = await repository.value.getDetail(studentId)
+      if (detailSequences.get(studentId) !== requestSequence) return null
       detailsById.value = {
         ...detailsById.value,
         [studentId]: detail,
@@ -280,12 +304,90 @@ export const useStudentStore = defineStore('students', () => {
         imageUrl: detail.imageUrl,
       })
       detailStatus.value = 'success'
+      detailStatusById.value = { ...detailStatusById.value, [studentId]: 'success' }
       return detail
     } catch (error) {
+      if (isAbortError(error) || detailSequences.get(studentId) !== requestSequence) return null
       detailStatus.value = 'error'
       detailError.value = errorMessage(error)
+      detailStatusById.value = { ...detailStatusById.value, [studentId]: 'error' }
+      detailErrorById.value = {
+        ...detailErrorById.value,
+        [studentId]: errorMessage(error),
+      }
+      detailErrorStatusById.value = {
+        ...detailErrorStatusById.value,
+        [studentId]: errorStatus(error),
+      }
       return null
     }
+  }
+
+  async function loadLearningSummary(studentId: number): Promise<StudentLearningSummary | null> {
+    const requestSequence = (learningSummarySequences.get(studentId) ?? 0) + 1
+    learningSummarySequences.set(studentId, requestSequence)
+    learningSummaryStatusById.value = {
+      ...learningSummaryStatusById.value,
+      [studentId]: 'loading',
+    }
+    learningSummaryErrorById.value = {
+      ...learningSummaryErrorById.value,
+      [studentId]: null,
+    }
+    learningSummaryErrorStatusById.value = {
+      ...learningSummaryErrorStatusById.value,
+      [studentId]: null,
+    }
+
+    try {
+      const summary = await repository.value.getLearningSummary(studentId)
+      if (learningSummarySequences.get(studentId) !== requestSequence) return null
+      learningSummaryById.value = {
+        ...learningSummaryById.value,
+        [studentId]: summary,
+      }
+      learningSummaryStatusById.value = {
+        ...learningSummaryStatusById.value,
+        [studentId]: 'success',
+      }
+      return summary
+    } catch (error) {
+      if (
+        isAbortError(error) ||
+        learningSummarySequences.get(studentId) !== requestSequence
+      ) {
+        return null
+      }
+      learningSummaryStatusById.value = {
+        ...learningSummaryStatusById.value,
+        [studentId]: 'error',
+      }
+      learningSummaryErrorById.value = {
+        ...learningSummaryErrorById.value,
+        [studentId]: errorMessage(error),
+      }
+      learningSummaryErrorStatusById.value = {
+        ...learningSummaryErrorStatusById.value,
+        [studentId]: errorStatus(error),
+      }
+      return null
+    }
+  }
+
+  async function saveTeacherMemo(studentId: number, teacherMemo: string | null): Promise<void> {
+    await repository.value.updateTeacherMemo(studentId, teacherMemo)
+    const current = detailsById.value[studentId]
+    if (current) {
+      detailsById.value = {
+        ...detailsById.value,
+        [studentId]: {
+          ...current,
+          teacherMemo,
+        },
+      }
+      return
+    }
+    await loadDetail(studentId)
   }
 
   function markListAndSummaryStale(): void {
@@ -335,12 +437,33 @@ export const useStudentStore = defineStore('students', () => {
     const nextDetails = { ...detailsById.value }
     const nextDetailStale = { ...detailStaleById.value }
     const nextNavigationItems = { ...navigationItemsById.value }
+    const nextDetailStatuses = { ...detailStatusById.value }
+    const nextDetailErrors = { ...detailErrorById.value }
+    const nextDetailErrorStatuses = { ...detailErrorStatusById.value }
+    const nextLearningSummaries = { ...learningSummaryById.value }
+    const nextLearningSummaryStatuses = { ...learningSummaryStatusById.value }
+    const nextLearningSummaryErrors = { ...learningSummaryErrorById.value }
+    const nextLearningSummaryErrorStatuses = { ...learningSummaryErrorStatusById.value }
     delete nextDetails[studentId]
     delete nextDetailStale[studentId]
     delete nextNavigationItems[studentId]
+    delete nextDetailStatuses[studentId]
+    delete nextDetailErrors[studentId]
+    delete nextDetailErrorStatuses[studentId]
+    delete nextLearningSummaries[studentId]
+    delete nextLearningSummaryStatuses[studentId]
+    delete nextLearningSummaryErrors[studentId]
+    delete nextLearningSummaryErrorStatuses[studentId]
     detailsById.value = nextDetails
     detailStaleById.value = nextDetailStale
     navigationItemsById.value = nextNavigationItems
+    detailStatusById.value = nextDetailStatuses
+    detailErrorById.value = nextDetailErrors
+    detailErrorStatusById.value = nextDetailErrorStatuses
+    learningSummaryById.value = nextLearningSummaries
+    learningSummaryStatusById.value = nextLearningSummaryStatuses
+    learningSummaryErrorById.value = nextLearningSummaryErrors
+    learningSummaryErrorStatusById.value = nextLearningSummaryErrorStatuses
     navigationOrder.value = navigationOrder.value.filter((id) => id !== studentId)
     recentStudentIds.value = recentStudentIds.value.filter((id) => id !== studentId)
     if (selectedStudentId.value === studentId) selectedStudentId.value = null
@@ -372,7 +495,16 @@ export const useStudentStore = defineStore('students', () => {
     detailsById.value = {}
     detailStatus.value = 'idle'
     detailError.value = null
+    detailStatusById.value = {}
+    detailErrorById.value = {}
+    detailErrorStatusById.value = {}
     detailStaleById.value = {}
+    learningSummaryById.value = {}
+    learningSummaryStatusById.value = {}
+    learningSummaryErrorById.value = {}
+    learningSummaryErrorStatusById.value = {}
+    detailSequences.clear()
+    learningSummarySequences.clear()
 
     navigationQuery.keyword = ''
     navigationQuery.page = 0
@@ -401,7 +533,14 @@ export const useStudentStore = defineStore('students', () => {
     detailsById,
     detailStatus,
     detailError,
+    detailStatusById,
+    detailErrorById,
+    detailErrorStatusById,
     detailStaleById,
+    learningSummaryById,
+    learningSummaryStatusById,
+    learningSummaryErrorById,
+    learningSummaryErrorStatusById,
     navigationQuery,
     navigationItemsById,
     navigationItems,
@@ -423,6 +562,8 @@ export const useStudentStore = defineStore('students', () => {
     loadMoreNavigation,
     rememberStudent,
     loadDetail,
+    loadLearningSummary,
+    saveTeacherMemo,
     createStudent,
     updateStudent,
     deleteStudent,

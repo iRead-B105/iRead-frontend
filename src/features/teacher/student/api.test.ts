@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { createStudentApi } from './api'
 
 describe('Student API', () => {
-  it('상세 조회 응답의 id를 studentId 계약으로 정규화한다', async () => {
+  it('상세 조회는 목표 studentId·createdAt 계약을 그대로 사용한다', async () => {
     const request = vi.fn().mockResolvedValue({
-      id: 7,
+      studentId: 7,
       name: '김하늘',
       birthday: '2018-03-15',
       gender: 'Boy',
@@ -13,6 +13,7 @@ describe('Student API', () => {
       guardianContact: '010-0000-0000',
       guardianEmail: null,
       address: null,
+      createdAt: '2026-03-01T09:00:00+09:00',
       imageUrl: null,
       teacherMemo: null,
     })
@@ -20,7 +21,7 @@ describe('Student API', () => {
 
     await expect(api.getDetail(7)).resolves.toMatchObject({
       studentId: 7,
-      createdAt: '',
+      createdAt: '2026-03-01T09:00:00+09:00',
     })
     expect(request).toHaveBeenCalledWith('/api/admin/student/7', {
       signal: undefined,
@@ -100,6 +101,32 @@ describe('Student API', () => {
 
     expect(request).toHaveBeenCalledWith('/api/admin/student/7', {
       method: 'DELETE',
+    })
+  })
+
+  it('학습 summary와 단일 메모 저장은 목표 endpoint를 사용한다', async () => {
+    const request = vi.fn()
+      .mockResolvedValueOnce({
+        studentId: 7,
+        currentStage: '문장 이해력 향상',
+        lastLearningAt: '2026-07-27T16:00:00+09:00',
+        attentionRequiredCount: 0,
+        attentionReasons: [],
+      })
+      .mockResolvedValueOnce(undefined)
+    const api = createStudentApi(request)
+
+    await api.getLearningSummary(7)
+    await api.updateTeacherMemo(7, null)
+
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/student/7/learning-summary',
+      { signal: undefined },
+    )
+    expect(request).toHaveBeenNthCalledWith(2, '/api/admin/student/7', {
+      method: 'PATCH',
+      body: JSON.stringify({ teacherMemo: null }),
     })
   })
 })

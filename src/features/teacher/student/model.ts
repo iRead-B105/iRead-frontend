@@ -57,6 +57,20 @@ export interface StudentDetail {
   readonly teacherMemo: string | null
 }
 
+export type StudentAttentionReason =
+  | 'LOW_ACCURACY'
+  | 'GAZE_ANALYSIS_FAILED'
+  | 'INACTIVE'
+  | 'NO_HISTORY'
+
+export interface StudentLearningSummary {
+  readonly studentId: number
+  readonly currentStage: string | null
+  readonly lastLearningAt: string | null
+  readonly attentionRequiredCount: number
+  readonly attentionReasons: readonly StudentAttentionReason[]
+}
+
 export interface StudentCreateInput {
   readonly name: string
   readonly birthday: string

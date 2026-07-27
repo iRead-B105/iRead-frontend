@@ -3,6 +3,7 @@ import { serializeStudentListQuery } from './query'
 import type {
   StudentCreateInput,
   StudentDetail,
+  StudentLearningSummary,
   StudentListQuery,
   StudentListResult,
   StudentMutationCommand,
@@ -29,12 +30,14 @@ export interface StudentApi {
     command: StudentMutationCommand<StudentUpdateInput>,
   ) => Promise<void>
   readonly remove: (studentId: number) => Promise<void>
-}
-
-interface StudentDetailResponse extends Omit<StudentDetail, 'studentId' | 'createdAt'> {
-  readonly studentId?: number
-  readonly id?: number
-  readonly createdAt?: string
+  readonly getLearningSummary: (
+    studentId: number,
+    options?: StudentRequestOptions,
+  ) => Promise<StudentLearningSummary>
+  readonly updateTeacherMemo: (
+    studentId: number,
+    teacherMemo: string | null,
+  ) => Promise<void>
 }
 
 function mutationBody<TInput>(command: StudentMutationCommand<TInput>): BodyInit {
@@ -62,15 +65,10 @@ export function createStudentApi(request: StudentApiRequest = apiRequest): Stude
         signal: options?.signal,
       })
     },
-    async getDetail(studentId, options) {
-      const detail = await request<StudentDetailResponse>(`/api/admin/student/${studentId}`, {
+    getDetail(studentId, options) {
+      return request<StudentDetail>(`/api/admin/student/${studentId}`, {
         signal: options?.signal,
       })
-      return {
-        ...detail,
-        studentId: detail.studentId ?? detail.id ?? studentId,
-        createdAt: detail.createdAt ?? '',
-      }
     },
     async create(command) {
       const result = await request<{ studentId: number }>('/api/admin/student', {
@@ -88,6 +86,18 @@ export function createStudentApi(request: StudentApiRequest = apiRequest): Stude
     remove(studentId) {
       return request<void>(`/api/admin/student/${studentId}`, {
         method: 'DELETE',
+      })
+    },
+    getLearningSummary(studentId, options) {
+      return request<StudentLearningSummary>(
+        `/api/admin/student/${studentId}/learning-summary`,
+        { signal: options?.signal },
+      )
+    },
+    updateTeacherMemo(studentId, teacherMemo) {
+      return request<void>(`/api/admin/student/${studentId}`, {
+        method: 'PATCH',
+        body: jsonBody({ teacherMemo }),
       })
     },
   }

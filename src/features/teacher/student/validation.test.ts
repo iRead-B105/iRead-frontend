@@ -4,8 +4,11 @@ import {
   buildStudentUpdateInput,
   normalizeStudentCreateInput,
   STUDENT_IMAGE_MAX_BYTES,
+  STUDENT_MEMO_MAX_LENGTH,
+  normalizeTeacherMemo,
   validateStudentForm,
   validateStudentImage,
+  validateTeacherMemo,
   type StudentFormDraft,
 } from './validation'
 
@@ -125,5 +128,20 @@ describe('Student image validation', () => {
       { type: 'image/png' },
     )
     expect(validateStudentImage(image)).toContain('5MB')
+  })
+})
+
+describe('Teacher memo validation', () => {
+  it('앞뒤 공백을 제거하고 빈 값은 null로 만든다', () => {
+    expect(normalizeTeacherMemo('  학습 메모  ')).toBe('학습 메모')
+    expect(normalizeTeacherMemo('   ')).toBeNull()
+  })
+
+  it('trim된 값 1,000자는 허용하고 1,001자는 거부한다', () => {
+    expect(validateTeacherMemo('가'.repeat(STUDENT_MEMO_MAX_LENGTH))).toBeNull()
+    expect(validateTeacherMemo(`  ${'가'.repeat(STUDENT_MEMO_MAX_LENGTH)}  `)).toBeNull()
+    expect(
+      validateTeacherMemo('가'.repeat(STUDENT_MEMO_MAX_LENGTH + 1)),
+    ).toContain('1,000')
   })
 })

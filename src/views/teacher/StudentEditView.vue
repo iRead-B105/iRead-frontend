@@ -9,6 +9,12 @@ const route = useRoute()
 const studentStore = useStudentStore()
 const studentId = computed(() => Number(route.params.id))
 const student = computed(() => studentStore.detailsById[studentId.value])
+const detailStatus = computed(
+  () => studentStore.detailStatusById[studentId.value] ?? 'idle',
+)
+const detailError = computed(
+  () => studentStore.detailErrorById[studentId.value] ?? '아동 정보를 불러오지 못했습니다.',
+)
 
 watch(
   studentId,
@@ -26,8 +32,8 @@ watch(
   <p v-else-if="!Number.isInteger(studentId) || studentId <= 0" class="load-state" role="alert">
     올바르지 않은 아동 주소입니다.
   </p>
-  <section v-else-if="studentStore.detailStatus === 'error'" class="load-state" role="alert">
-    <p>{{ studentStore.detailError }}</p>
+  <section v-else-if="detailStatus === 'error'" class="load-state" role="alert">
+    <p>{{ detailError }}</p>
     <Button variant="outline" type="button" @click="studentStore.loadDetail(studentId)">
       다시 시도
     </Button>

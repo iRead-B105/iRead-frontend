@@ -97,4 +97,30 @@ describe('MockStudentRepository', () => {
     await expect(mutableRepository.getSummary()).resolves.toMatchObject({ totalStudents: 0 })
     await expect(mutableRepository.getDetail(studentId)).rejects.toMatchObject({ status: 404 })
   })
+
+  it('학습 이력이 없는 아동은 NO_HISTORY를 주의 건수에 포함하지 않는다', async () => {
+    const summary = await repository.getLearningSummary(3)
+
+    expect(summary).toEqual({
+      studentId: 3,
+      currentStage: null,
+      lastLearningAt: null,
+      attentionRequiredCount: 0,
+      attentionReasons: ['NO_HISTORY'],
+    })
+  })
+
+  it('단일 교수자 메모를 저장하고 null로 삭제한다', async () => {
+    const mutableRepository = new MockStudentRepository(studentFixtures)
+
+    await mutableRepository.updateTeacherMemo(1, '받침 읽기 연습 필요')
+    await expect(mutableRepository.getDetail(1)).resolves.toMatchObject({
+      teacherMemo: '받침 읽기 연습 필요',
+    })
+
+    await mutableRepository.updateTeacherMemo(1, null)
+    await expect(mutableRepository.getDetail(1)).resolves.toMatchObject({
+      teacherMemo: null,
+    })
+  })
 })
