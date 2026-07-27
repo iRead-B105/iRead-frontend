@@ -4,6 +4,7 @@ import { ApiError } from '@/lib/api'
 import type {
   StudentCreateInput,
   StudentDetail,
+  StudentLearningSummary,
   StudentListItem,
   StudentMutationCommand,
   StudentUpdateInput,
@@ -49,6 +50,7 @@ function throwIfAborted(options?: StudentRequestOptions): void {
 export class MockStudentRepository implements StudentRepository {
   private readonly students: StudentFixtureRecord[]
   private readonly details = new Map<number, StudentDetail>()
+  private readonly learningSummaries = new Map<number, StudentLearningSummary>()
 
   constructor(
     students: readonly StudentFixtureRecord[] = studentFixtures,
@@ -71,6 +73,7 @@ export class MockStudentRepository implements StudentRepository {
         imageUrl: student.imageUrl,
         teacherMemo: null,
       })
+      this.learningSummaries.set(student.studentId, this.createLearningSummary(student))
     }
   }
 
@@ -124,6 +127,13 @@ export class MockStudentRepository implements StudentRepository {
       this.students.reduce((maximum, student) => Math.max(maximum, student.studentId), 0) + 1
     const detail = this.createDetail(studentId, command.input, command.image)
     this.details.set(studentId, detail)
+    this.learningSummaries.set(studentId, {
+      studentId,
+      currentStage: null,
+      lastLearningAt: null,
+      attentionRequiredCount: 0,
+      attentionReasons: ['NO_HISTORY'],
+    })
     this.students.push({
       studentId,
       name: detail.name,
@@ -177,8 +187,33 @@ export class MockStudentRepository implements StudentRepository {
       })
     }
     this.details.delete(studentId)
+    this.learningSummaries.delete(studentId)
     const index = this.students.findIndex((student) => student.studentId === studentId)
     if (index >= 0) this.students.splice(index, 1)
+  }
+
+  async getLearningSummary(studentId: number, options?: StudentRequestOptions) {
+    throwIfAborted(options)
+    const summary = this.learningSummaries.get(studentId)
+    if (!summary) {
+      throw new ApiError({
+        status: 404,
+        code: 'STUDENT_NOT_FOUND',
+        message: '아동을 찾을 수 없습니다.',
+      })
+    }
+    return {
+      ...summary,
+      attentionReasons: [...summary.attentionReasons],
+    }
+  }
+
+  async updateTeacherMemo(studentId: number, teacherMemo: string | null): Promise<void> {
+    const current = await this.getDetail(studentId)
+    this.details.set(studentId, {
+      ...current,
+      teacherMemo,
+    })
   }
 
   private createDetail(
@@ -199,6 +234,37 @@ export class MockStudentRepository implements StudentRepository {
 
   private mockImageUrl(studentId: number, image: File): string {
     return `/mock/student-images/${studentId}/${encodeURIComponent(image.name)}`
+  }
+
+  private createLearningSummary(student: StudentFixtureRecord): StudentLearningSummary {
+    if (!student.recentLearningDate) {
+      return {
+        studentId: student.studentId,
+        currentStage: null,
+        lastLearningAt: null,
+        attentionRequiredCount: 0,
+        attentionReasons: ['NO_HISTORY'],
+      }
+    }
+
+    const reasons =
+      student.studentId === 5
+        ? (['LOW_ACCURACY'] as const)
+        : student.studentId === 6
+          ? (['INACTIVE'] as const)
+          : student.studentId === 9
+            ? (['GAZE_ANALYSIS_FAILED'] as const)
+            : student.studentId === 12
+              ? (['LOW_ACCURACY', 'INACTIVE'] as const)
+              : []
+
+    return {
+      studentId: student.studentId,
+      currentStage: student.recentTraining,
+      lastLearningAt: `${student.recentLearningDate}T16:00:00+09:00`,
+      attentionRequiredCount: reasons.length,
+      attentionReasons: reasons,
+    }
   }
 
   private ageFromBirthday(birthday: string): number {

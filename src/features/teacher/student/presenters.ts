@@ -23,3 +23,23 @@ export function formatWeeklyParticipation(
   if (scheduled === 0 || rate === null) return '일정 없음'
   return `${rate}% · ${completed}/${scheduled}`
 }
+
+export function formatStudentDateTime(value: string | null): string {
+  if (!value) return '학습 기록 없음'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+export function appendSummaryToTeacherMemo(currentValue: string, summary: string): string {
+  const current = currentValue.trimEnd()
+  const addition = summary.trim()
+  if (!addition) return currentValue
+  return current ? `${current}\n${addition}` : addition
+}

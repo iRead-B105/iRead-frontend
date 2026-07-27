@@ -27,4 +27,12 @@ export class ApiStudentRepository implements StudentRepository {
   remove(studentId: number) {
     return this.api.remove(studentId)
   }
+
+  getLearningSummary(studentId: number, options = {}) {
+    return this.api.getLearningSummary(studentId, options)
+  }
+
+  updateTeacherMemo(studentId: number, teacherMemo: string | null) {
+    return this.api.updateTeacherMemo(studentId, teacherMemo)
+  }
 }

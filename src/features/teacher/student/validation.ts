@@ -15,6 +15,7 @@ export const STUDENT_FIELD_MAX_LENGTH = {
 } as const
 
 export const STUDENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+export const STUDENT_MEMO_MAX_LENGTH = 1000
 
 export interface StudentFormDraft {
   name: string
@@ -116,6 +117,17 @@ export function validateStudentImage(file: File): string | null {
   }
   if (file.size > STUDENT_IMAGE_MAX_BYTES) {
     return '이미지는 5MB 이하만 선택할 수 있습니다.'
+  }
+  return null
+}
+
+export function normalizeTeacherMemo(value: string): string | null {
+  return value.trim() || null
+}
+
+export function validateTeacherMemo(value: string): string | null {
+  if (value.trim().length > STUDENT_MEMO_MAX_LENGTH) {
+    return `교수자 내부 메모는 ${STUDENT_MEMO_MAX_LENGTH.toLocaleString('ko-KR')}자 이내로 입력해 주세요.`
   }
   return null
 }

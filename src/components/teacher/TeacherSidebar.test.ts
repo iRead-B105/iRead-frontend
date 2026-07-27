@@ -46,6 +46,8 @@ function createRepository(
     create: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
+    getLearningSummary: vi.fn(),
+    updateTeacherMemo: vi.fn(),
   }
 }
 
