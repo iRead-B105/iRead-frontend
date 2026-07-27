@@ -8,19 +8,27 @@ import TeacherSidebar from '@/components/teacher/TeacherSidebar.vue'
 import { dataSource } from '@/config/dataSource'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
+import { useTrainingStore } from '@/stores/training'
 
 const sessionStore = useSessionStore()
 const studentStore = useStudentStore()
+const trainingStore = useTrainingStore()
 const { status, teacher } = storeToRefs(sessionStore)
 
 watch(
   () => teacher.value?.email ?? null,
   (nextEmail, previousEmail) => {
-    if (previousEmail && nextEmail !== previousEmail) studentStore.reset()
+    if (previousEmail && nextEmail !== previousEmail) {
+      studentStore.reset()
+      trainingStore.reset()
+    }
   },
 )
 watch(status, (nextStatus) => {
-  if (nextStatus === 'anonymous') studentStore.reset()
+  if (nextStatus === 'anonymous') {
+    studentStore.reset()
+    trainingStore.reset()
+  }
 })
 </script>
 
