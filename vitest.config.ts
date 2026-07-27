@@ -13,6 +13,7 @@ export default defineConfig({
     clearMocks: true,
     environment: 'jsdom',
     env: {
+      VITE_AUTH_SOURCE: 'mock',
       VITE_DATA_SOURCE: 'mock',
     },
     setupFiles: ['./src/test/setup.ts'],

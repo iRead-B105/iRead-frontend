@@ -68,8 +68,7 @@ export function createTeacherAdminState(
   }
 
   async function logout() {
-    await repository.logout()
-    sessionStore.reset()
+    await sessionStore.logout()
     students.splice(0)
     loaded.value = false
   }

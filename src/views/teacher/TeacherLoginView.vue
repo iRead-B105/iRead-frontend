@@ -1,62 +1,36 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { defineAsyncComponent, reactive, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { authApi } from '@/features/teacher/adminApi'
+import { isMockAuthSource } from '@/config/authSource'
+import { getLoginErrorMessage } from '@/features/teacher/auth'
+import { resolveTeacherRedirect } from '@/router'
+import { useSessionStore } from '@/stores/session'
 
 const router = useRouter()
+const route = useRoute()
+const sessionStore = useSessionStore()
 const form = reactive({ email: '', password: '' })
 const showPassword = ref(false)
 const submitting = ref(false)
-const insertingTeacher = ref(false)
 const errorMessage = ref('')
-const exampleMessage = ref('')
-
-const exampleTeacher = {
-  email: 'professor@example.com',
-  password: 'professor123',
-  name: '예시교수',
-  organization: '아이리드 학습센터',
-  gender: 'Female' as const,
-}
-
-function fillExampleLogin() {
-  form.email = exampleTeacher.email
-  form.password = exampleTeacher.password
-}
-
-async function insertTeacherData() {
-  if (insertingTeacher.value) return
-  insertingTeacher.value = true
-  errorMessage.value = ''
-  exampleMessage.value = ''
-
-  try {
-    await authApi.signup(exampleTeacher)
-    fillExampleLogin()
-    exampleMessage.value = '교수 데이터를 생성하고 로그인 정보를 입력했습니다.'
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('이미 사용 중인 이메일')) {
-      fillExampleLogin()
-      exampleMessage.value = '기존 교수 데이터의 로그인 정보를 입력했습니다.'
-    } else {
-      errorMessage.value = error instanceof Error ? error.message : '교수 데이터 삽입에 실패했습니다.'
-    }
-  } finally {
-    insertingTeacher.value = false
-  }
-}
+const MockAuthEntry = !import.meta.env.PROD
+  ? defineAsyncComponent(() => import('@/features/teacher/auth/components/MockAuthEntry.vue'))
+  : null
 
 async function login() {
   if (submitting.value) return
   submitting.value = true
   errorMessage.value = ''
   try {
-    await authApi.login(form.email, form.password)
-    await router.push('/teacher/dashboard')
+    await sessionStore.login({
+      email: form.email.trim(),
+      password: form.password,
+    })
+    await router.push(resolveTeacherRedirect(router, route.query.redirect))
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '로그인에 실패했습니다.'
+    errorMessage.value = getLoginErrorMessage(error)
   } finally {
     submitting.value = false
   }
@@ -68,7 +42,7 @@ async function login() {
   <main class="login-page">
     <section class="login-shell" aria-labelledby="login-title">
       <RouterLink class="login-logo" to="/login" aria-label="로그인으로 이동">
-        <img src="/images/iread-logo.png" alt="iRead" />
+        <img :src="'/images/iread-logo.png'" alt="iRead" />
       </RouterLink>
 
       <form class="login-form" @submit.prevent="login">
@@ -76,6 +50,8 @@ async function login() {
           <h1 id="login-title">로그인</h1>
           <p>교수자 계정으로 로그인해 주세요.</p>
         </header>
+
+        <MockAuthEntry v-if="isMockAuthSource" />
 
         <div class="login-fields">
           <div class="field">
@@ -86,6 +62,8 @@ async function login() {
               class="input"
               type="email"
               required
+              maxlength="50"
+              :disabled="isMockAuthSource"
               placeholder="example@iread.co.kr"
             />
           </div>
@@ -97,7 +75,10 @@ async function login() {
                 v-model="form.password"
                 class="input"
                 required
+                minlength="8"
+                maxlength="100"
                 :type="showPassword ? 'text' : 'password'"
+                :disabled="isMockAuthSource"
                 placeholder="비밀번호 입력"
               />
               <Button
@@ -121,23 +102,12 @@ async function login() {
         </div>
 
         <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
-        <Button class="login-submit" type="submit" :disabled="submitting">
+        <Button class="login-submit" type="submit" :disabled="submitting || isMockAuthSource">
           {{ submitting ? '로그인 중...' : '로그인' }}
         </Button>
         <p class="login-signup-link">
           <span>아직 계정이 없으신가요? <RouterLink to="/signup">회원가입</RouterLink></span>
-          <Button
-            class="teacher-data-button"
-            type="button"
-            variant="outline"
-            size="sm"
-            :disabled="insertingTeacher"
-            @click="insertTeacherData"
-          >
-            {{ insertingTeacher ? '삽입 중...' : '교수 데이터 삽입' }}
-          </Button>
         </p>
-        <p v-if="exampleMessage" class="example-message" role="status">{{ exampleMessage }}</p>
       </form>
     </section>
   </main>
@@ -283,19 +253,6 @@ async function login() {
 .login-signup-link a {
   color: var(--primary-600);
   font-weight: 800;
-}
-
-.teacher-data-button {
-  min-height: 30px;
-  padding: 0 9px;
-  font-size: 11px;
-}
-
-.example-message {
-  margin: 10px 0 0;
-  color: var(--primary-700);
-  font-size: 12px;
-  text-align: center;
 }
 
 @media (max-height: 700px) {

@@ -19,11 +19,18 @@ export type AccessTokenProvider = () =>
   | undefined
   | Promise<string | null | undefined>
 
-export type UnauthorizedHandler = (error: ApiError) => void | Promise<void>
+export interface UnauthorizedContext {
+  readonly requestRetried: boolean
+}
+
+export type AuthenticationRecoveryHandler = (
+  error: ApiError,
+  context: UnauthorizedContext,
+) => boolean | Promise<boolean>
 
 export interface ApiAuthHooks {
   readonly getAccessToken?: AccessTokenProvider
-  readonly onUnauthorized?: UnauthorizedHandler
+  readonly onUnauthorized?: AuthenticationRecoveryHandler
 }
 
 export interface ApiClientOptions extends ApiAuthHooks {
@@ -34,6 +41,10 @@ export interface ApiClientOptions extends ApiAuthHooks {
 interface ParsedBody {
   readonly rawText: string
   readonly value: unknown
+}
+
+export interface ApiRequestOptions {
+  readonly retryOnUnauthorized?: boolean
 }
 
 function isAbortError(error: unknown): boolean {
@@ -91,6 +102,7 @@ export class ApiClient {
 
   constructor(options: ApiClientOptions = {}) {
     this.baseUrl = resolveEnvironment({
+      VITE_AUTH_SOURCE: 'api',
       VITE_DATA_SOURCE: 'api',
       VITE_API_BASE_URL: options.baseUrl ?? '',
     }).apiBaseUrl
@@ -108,8 +120,12 @@ export class ApiClient {
     }
   }
 
-  async request<T>(endpoint: string, init: RequestInit = {}): Promise<T> {
-    const response = await this.fetchSuccessfulResponse(endpoint, init)
+  async request<T>(
+    endpoint: string,
+    init: RequestInit = {},
+    options: ApiRequestOptions = {},
+  ): Promise<T> {
+    const response = await this.fetchSuccessfulResponse(endpoint, init, options, false)
 
     if (response.status === 204) {
       return undefined as T
@@ -129,11 +145,16 @@ export class ApiClient {
   }
 
   async download(endpoint: string, init: RequestInit = {}): Promise<DownloadResult> {
-    const response = await this.fetchSuccessfulResponse(endpoint, init)
+    const response = await this.fetchSuccessfulResponse(endpoint, init, {}, false)
     return createDownloadResult(response)
   }
 
-  private async fetchSuccessfulResponse(endpoint: string, init: RequestInit): Promise<Response> {
+  private async fetchSuccessfulResponse(
+    endpoint: string,
+    init: RequestInit,
+    options: ApiRequestOptions,
+    requestRetried: boolean,
+  ): Promise<Response> {
     assertApiEndpoint(endpoint)
 
     const headers = new Headers(init.headers)
@@ -188,8 +209,16 @@ export class ApiClient {
           responseBody: parsedBody.value,
         })
 
-    if (response.status === 401) {
-      await this.authHooks.onUnauthorized?.(error)
+    if (
+      response.status === 401 &&
+      options.retryOnUnauthorized !== false &&
+      this.authHooks.onUnauthorized
+    ) {
+      const shouldRetry = await this.authHooks.onUnauthorized(error, { requestRetried })
+
+      if (shouldRetry && !requestRetried) {
+        return this.fetchSuccessfulResponse(endpoint, init, options, true)
+      }
     }
 
     throw error
