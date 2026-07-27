@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { StudentNavigationItem } from '@/features/teacher/student'
+import { useReportStore } from '@/stores/report'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
 import { useTestStore } from '@/stores/test'
@@ -22,6 +23,7 @@ import StudentSwitcher from '@/components/teacher/StudentSwitcher.vue'
 const route = useRoute()
 const router = useRouter()
 const sessionStore = useSessionStore()
+const reportStore = useReportStore()
 const studentStore = useStudentStore()
 const testStore = useTestStore()
 const trainingStore = useTrainingStore()
@@ -67,6 +69,7 @@ async function logout() {
   try {
     await sessionStore.logout()
     studentStore.reset()
+    reportStore.reset()
     testStore.reset()
     trainingStore.reset()
     await router.push('/login')
