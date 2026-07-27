@@ -91,43 +91,6 @@ export interface TrainingHistory {
   }>
 }
 
-export interface TrainingCatalog {
-  trainingId: number
-  category: string
-  sequence: number
-  trainingName: string
-  studentAchievement: number | null
-}
-
-export interface CurriculumLog {
-  curriculumId: number
-  date: string
-  achievement: number
-  trainings: Array<{ trainingId: number; unitName: string; trainingName: string }>
-}
-
-export interface DailyCurriculum {
-  curriculumId: number
-  trainings: Array<{
-    trainingId: number
-    trainingTemplateId: number
-    unitName: string
-    trainingName: string
-  }>
-}
-
-export interface GeneratedTrainingQuestion {
-  questionId: string
-  sequence: number
-  problem: Record<string, unknown>
-  answer: Record<string, unknown>
-}
-
-export interface GeneratedTraining {
-  questions: GeneratedTrainingQuestion[]
-  [key: string]: unknown
-}
-
 export interface TestListItem {
   testId: number
   date: string
@@ -215,61 +178,6 @@ export const studentApi = {
   },
   trainingHistory: (studentId: number) =>
     apiRequest<TrainingHistory[]>(`/api/admin/student/${studentId}/training-history`),
-}
-
-export const trainingApi = {
-  catalog: (studentId: number) =>
-    apiRequest<TrainingCatalog[]>(`/api/admin/training/${studentId}`),
-  curriculumLogs: (studentId: number) =>
-    apiRequest<CurriculumLog[]>(`/api/admin/training/${studentId}/curriculum-log`),
-  currentCurriculum: (studentId: number) =>
-    apiRequest<DailyCurriculum>(`/api/admin/training/${studentId}/current`),
-  dailyCurriculum: (studentId: number, curriculumId: number) =>
-    apiRequest<DailyCurriculum>(
-      `/api/admin/training/${studentId}/${curriculumId}`,
-    ),
-  createCurriculum: (studentId: number, trainingTemplateIds: number[]) =>
-    apiRequest<DailyCurriculum>(`/api/admin/training/${studentId}/curriculum`, {
-      method: 'POST',
-      body: jsonBody({ trainingTemplateIds }),
-    }),
-  updateCurriculum: (studentId: number, curriculumId: number, trainingTemplateIds: number[]) =>
-    apiRequest<void>(`/api/admin/training/${studentId}/${curriculumId}`, {
-      method: 'PATCH',
-      body: jsonBody({ trainingTemplateIds }),
-    }),
-  expectedWords: (studentId: number, trainingId: number) =>
-    apiRequest<Array<{ wordId: number; wordName: string }>>(
-      `/api/admin/training/${studentId}/${trainingId}/expected-word`,
-    ),
-  addExpectedWord: (studentId: number, trainingId: number, wordName: string) =>
-    apiRequest<void>(`/api/admin/training/${studentId}/${trainingId}/expected-word`, {
-      method: 'POST',
-      body: jsonBody({ wordName }),
-    }),
-  deleteExpectedWord: (studentId: number, trainingId: number, wordId: number) =>
-    apiRequest<void>(
-      `/api/admin/training/${studentId}/${trainingId}/expected-word/${wordId}`,
-      { method: 'DELETE' },
-    ),
-  generate: (studentId: number, trainingId: number) =>
-    apiRequest<GeneratedTraining>(
-      `/api/admin/training/${studentId}/${trainingId}/generate`,
-      { method: 'POST' },
-    ),
-  complete: (
-    studentId: number,
-    trainingId: number,
-    result: Record<string, unknown>,
-    completedAt?: string,
-  ) =>
-    apiRequest<{ accuracy: number }>(
-      `/api/admin/training/${studentId}/${trainingId}/complete`,
-      {
-        method: 'POST',
-        body: jsonBody({ result, completedAt }),
-      },
-    ),
 }
 
 export const testApi = {

@@ -16,7 +16,16 @@ const tabs = [
 
 function selectTab(value: string | number) {
   const tab = tabs.find((item) => item.name === String(value))
-  if (tab) router.push({ name: tab.name, params: { id: route.params.id ?? 1 } })
+  if (!tab) return
+
+  const rawId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
+  const studentId = typeof rawId === 'string' ? Number(rawId) : Number.NaN
+  if (!Number.isInteger(studentId) || studentId <= 0) {
+    void router.push({ name: 'teacher-students' })
+    return
+  }
+
+  void router.push({ name: tab.name, params: { id: studentId } })
 }
 </script>
 
