@@ -11,4 +11,20 @@ export class ApiStudentRepository implements StudentRepository {
   getSummary(options = {}) {
     return this.api.getSummary(options)
   }
+
+  getDetail(studentId: number, options = {}) {
+    return this.api.getDetail(studentId, options)
+  }
+
+  create(command: Parameters<StudentRepository['create']>[0]) {
+    return this.api.create(command)
+  }
+
+  update(studentId: number, command: Parameters<StudentRepository['update']>[1]) {
+    return this.api.update(studentId, command)
+  }
+
+  remove(studentId: number) {
+    return this.api.remove(studentId)
+  }
 }
