@@ -1,0 +1,315 @@
+import { computed, reactive, ref } from 'vue'
+import { defineStore } from 'pinia'
+import {
+  DEFAULT_STUDENT_PAGE_SIZE,
+  studentRepository,
+  toStudentNavigationItem,
+  type StudentListItem,
+  type StudentNavigationItem,
+  type StudentRepository,
+  type StudentRequestStatus,
+  type StudentSummary,
+} from '@/features/teacher/student'
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    error.name === 'AbortError'
+  )
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : '학습자 정보를 불러오지 못했습니다.'
+}
+
+export const useStudentStore = defineStore('students', () => {
+  const repository = ref<StudentRepository>(studentRepository)
+  const query = reactive<{
+    keyword?: string
+    age?: number
+    recentDays?: 7 | 30
+    page: number
+    size: number
+  }>({
+    keyword: undefined,
+    age: undefined,
+    recentDays: undefined,
+    page: 0,
+    size: DEFAULT_STUDENT_PAGE_SIZE,
+  })
+  const students = ref<readonly StudentListItem[]>([])
+  const totalElements = ref(0)
+  const totalPages = ref(0)
+  const listStatus = ref<StudentRequestStatus>('idle')
+  const listError = ref<string | null>(null)
+  const summary = ref<StudentSummary | null>(null)
+  const summaryStatus = ref<StudentRequestStatus>('idle')
+  const summaryError = ref<string | null>(null)
+
+  const navigationQuery = reactive({
+    keyword: '',
+    page: 0,
+    size: DEFAULT_STUDENT_PAGE_SIZE,
+  })
+  const navigationItemsById = ref<Record<number, StudentNavigationItem>>({})
+  const navigationOrder = ref<number[]>([])
+  const navigationHasNextPage = ref(false)
+  const navigationStatus = ref<StudentRequestStatus>('idle')
+  const navigationError = ref<string | null>(null)
+  const recentStudentIds = ref<number[]>([])
+  const selectedStudentId = ref<number | null>(null)
+
+  let listSequence = 0
+  let navigationSequence = 0
+  let listController: AbortController | null = null
+  let navigationController: AbortController | null = null
+  let summaryController: AbortController | null = null
+
+  const navigationItems = computed(() =>
+    navigationOrder.value
+      .map((studentId) => navigationItemsById.value[studentId])
+      .filter((student): student is StudentNavigationItem => Boolean(student)),
+  )
+  const recentStudents = computed(() =>
+    recentStudentIds.value
+      .map((studentId) => navigationItemsById.value[studentId])
+      .filter((student): student is StudentNavigationItem => Boolean(student)),
+  )
+  const hasActiveFilters = computed(
+    () =>
+      Boolean(query.keyword?.trim()) ||
+      query.age !== undefined ||
+      query.recentDays !== undefined,
+  )
+
+  function setRepository(nextRepository: StudentRepository): void {
+    repository.value = nextRepository
+    reset()
+  }
+
+  function setListFilters(filters: {
+    keyword?: string
+    age?: number
+    recentDays?: 7 | 30
+  }): void {
+    query.keyword = filters.keyword?.trim() || undefined
+    query.age = filters.age
+    query.recentDays = filters.recentDays
+    query.page = 0
+  }
+
+  function setListPage(page: number): void {
+    query.page = page
+  }
+
+  function clearListFilters(): void {
+    query.keyword = undefined
+    query.age = undefined
+    query.recentDays = undefined
+    query.page = 0
+  }
+
+  async function loadList(): Promise<void> {
+    const requestSequence = ++listSequence
+    listController?.abort()
+    const controller = new AbortController()
+    listController = controller
+    listStatus.value = 'loading'
+    listError.value = null
+
+    try {
+      const result = await repository.value.list({ ...query }, { signal: controller.signal })
+      if (requestSequence !== listSequence) return
+
+      if (result.totalPages > 0 && query.page >= result.totalPages) {
+        query.page = result.totalPages - 1
+        await loadList()
+        return
+      }
+
+      students.value = result.students
+      query.page = result.page
+      query.size = result.size
+      totalElements.value = result.totalElements
+      totalPages.value = result.totalPages
+      listStatus.value = 'success'
+    } catch (error) {
+      if (isAbortError(error) || requestSequence !== listSequence) return
+      listStatus.value = 'error'
+      listError.value = errorMessage(error)
+    } finally {
+      if (requestSequence === listSequence) listController = null
+    }
+  }
+
+  async function loadSummary(): Promise<void> {
+    summaryController?.abort()
+    const controller = new AbortController()
+    summaryController = controller
+    summaryStatus.value = 'loading'
+    summaryError.value = null
+
+    try {
+      summary.value = await repository.value.getSummary({ signal: controller.signal })
+      summaryStatus.value = 'success'
+    } catch (error) {
+      if (isAbortError(error)) return
+      summaryStatus.value = 'error'
+      summaryError.value = errorMessage(error)
+    } finally {
+      if (summaryController === controller) summaryController = null
+    }
+  }
+
+  function mergeNavigationItems(items: readonly StudentListItem[], resetItems: boolean): void {
+    const preservedIds = new Set([
+      ...recentStudentIds.value,
+      ...(selectedStudentId.value === null ? [] : [selectedStudentId.value]),
+    ])
+    const nextById = resetItems
+      ? Object.fromEntries(
+          Object.entries(navigationItemsById.value).filter(([studentId]) =>
+            preservedIds.has(Number(studentId)),
+          ),
+        )
+      : { ...navigationItemsById.value }
+    const nextOrder = resetItems ? [] : [...navigationOrder.value]
+
+    for (const student of items) {
+      nextById[student.studentId] = toStudentNavigationItem(student)
+      if (!nextOrder.includes(student.studentId)) nextOrder.push(student.studentId)
+    }
+
+    navigationItemsById.value = nextById
+    navigationOrder.value = nextOrder
+    if (selectedStudentId.value === null && items[0]) {
+      selectedStudentId.value = items[0].studentId
+    }
+  }
+
+  async function loadNavigation(options: { reset?: boolean } = {}): Promise<void> {
+    const resetItems = options.reset ?? false
+    if (resetItems) navigationQuery.page = 0
+
+    const requestSequence = ++navigationSequence
+    navigationController?.abort()
+    const controller = new AbortController()
+    navigationController = controller
+    navigationStatus.value = 'loading'
+    navigationError.value = null
+
+    try {
+      const result = await repository.value.list(
+        {
+          keyword: navigationQuery.keyword,
+          page: navigationQuery.page,
+          size: navigationQuery.size,
+        },
+        { signal: controller.signal },
+      )
+      if (requestSequence !== navigationSequence) return
+
+      mergeNavigationItems(result.students, resetItems)
+      navigationQuery.page = result.page
+      navigationHasNextPage.value = result.page + 1 < result.totalPages
+      navigationStatus.value = 'success'
+    } catch (error) {
+      if (isAbortError(error) || requestSequence !== navigationSequence) return
+      navigationStatus.value = 'error'
+      navigationError.value = errorMessage(error)
+    } finally {
+      if (requestSequence === navigationSequence) navigationController = null
+    }
+  }
+
+  async function searchNavigation(keyword: string): Promise<void> {
+    navigationQuery.keyword = keyword.trim()
+    await loadNavigation({ reset: true })
+  }
+
+  async function loadMoreNavigation(): Promise<void> {
+    if (!navigationHasNextPage.value || navigationStatus.value === 'loading') return
+    navigationQuery.page += 1
+    await loadNavigation()
+  }
+
+  function rememberStudent(student: StudentNavigationItem): void {
+    navigationItemsById.value = {
+      ...navigationItemsById.value,
+      [student.studentId]: student,
+    }
+    recentStudentIds.value = [
+      student.studentId,
+      ...recentStudentIds.value.filter((studentId) => studentId !== student.studentId),
+    ].slice(0, 5)
+    selectedStudentId.value = student.studentId
+  }
+
+  function reset(): void {
+    listController?.abort()
+    navigationController?.abort()
+    summaryController?.abort()
+    listSequence += 1
+    navigationSequence += 1
+
+    query.keyword = undefined
+    query.age = undefined
+    query.recentDays = undefined
+    query.page = 0
+    query.size = DEFAULT_STUDENT_PAGE_SIZE
+    students.value = []
+    totalElements.value = 0
+    totalPages.value = 0
+    listStatus.value = 'idle'
+    listError.value = null
+    summary.value = null
+    summaryStatus.value = 'idle'
+    summaryError.value = null
+
+    navigationQuery.keyword = ''
+    navigationQuery.page = 0
+    navigationQuery.size = DEFAULT_STUDENT_PAGE_SIZE
+    navigationItemsById.value = {}
+    navigationOrder.value = []
+    navigationHasNextPage.value = false
+    navigationStatus.value = 'idle'
+    navigationError.value = null
+    recentStudentIds.value = []
+    selectedStudentId.value = null
+  }
+
+  return {
+    query,
+    students,
+    totalElements,
+    totalPages,
+    listStatus,
+    listError,
+    summary,
+    summaryStatus,
+    summaryError,
+    navigationQuery,
+    navigationItemsById,
+    navigationItems,
+    navigationHasNextPage,
+    navigationStatus,
+    navigationError,
+    recentStudentIds,
+    selectedStudentId,
+    recentStudents,
+    hasActiveFilters,
+    setRepository,
+    setListFilters,
+    setListPage,
+    clearListFilters,
+    loadList,
+    loadSummary,
+    loadNavigation,
+    searchNavigation,
+    loadMoreNavigation,
+    rememberStudent,
+    reset,
+  }
+})
