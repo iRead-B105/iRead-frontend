@@ -1,16 +1,12 @@
 // 모든 화면에 공통 적용할 색상, 글꼴, 버튼 등의 CSS를 가장 먼저 불러옵니다.
 import './assets/main.css'
+import './config/runtimeEnv'
 
 // createApp은 Vue 앱을 만들고, App은 화면 전체의 시작 컴포넌트입니다.
 import { createApp } from 'vue'
 import App from './App.vue'
-import { resolveEnvironment } from './config/env'
 // router는 URL에 따라 어떤 Vue 화면을 보여 줄지 결정합니다.
 import router from './router'
-
-resolveEnvironment(import.meta.env, {
-  isProduction: import.meta.env.PROD,
-})
 
 // App.vue를 뿌리로 하는 Vue 애플리케이션 인스턴스를 생성합니다.
 const app = createApp(App)
