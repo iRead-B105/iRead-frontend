@@ -103,8 +103,8 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   if (!to.path.startsWith('/teacher')) return true
   try {
-    const { authApi } = await import('@/features/teacher/adminApi')
-    await authApi.me()
+    const { teacherAdminRepository } = await import('@/features/teacher/repositories')
+    await teacherAdminRepository.getTeacherInfo()
     return true
   } catch {
     return { name: 'teacher-login', query: { redirect: to.fullPath } }

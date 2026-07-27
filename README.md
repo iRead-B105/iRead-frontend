@@ -59,3 +59,12 @@ pnpm build
 ```
 
 `VITE_DATA_SOURCE`가 없거나 `mock`이면 production build는 설정 오류로 실패해야 합니다.
+
+## 후속 Repository 이전 대상
+
+FE-001에서는 교수자 정보와 아동 목록 조회를 대표 경로로 이전했습니다. 다음 직접
+`mockData.ts` 사용 위치는 각 화면 작업인 FE-003~FE-005에서 Repository로 이전합니다.
+
+- `src/components/teacher/StudentSummaryHeader.vue`
+- `src/views/teacher/StudentOverviewView.vue`
+- `src/views/teacher/StudentReportView.vue`

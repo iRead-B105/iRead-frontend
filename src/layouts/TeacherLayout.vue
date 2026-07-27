@@ -1,14 +1,23 @@
 <script setup lang="ts">
 // 교수자 화면을 좌측 사이드바와 우측 메인 영역으로 나누는 공통 레이아웃입니다.
 import { RouterView } from 'vue-router'
+import DataSourceNotice from '@/components/common/DataSourceNotice.vue'
 import TeacherSidebar from '@/components/teacher/TeacherSidebar.vue'
+import { dataSource } from '@/config/dataSource'
+import { provideTeacherAdmin } from '@/features/teacher/useTeacherAdmin'
+
+// 교수자 레이아웃 아래의 사이드바와 화면들이 같은 조회 상태를 사용합니다.
+provideTeacherAdmin()
 </script>
 
 <template>
   <!-- shell은 교수자 페이지 전체를 감싸는 가장 바깥 컨테이너입니다. -->
   <div class="teacher-shell">
     <TeacherSidebar />
-    <main class="teacher-content"><RouterView /></main>
+    <main class="teacher-content">
+      <DataSourceNotice :data-source="dataSource" />
+      <RouterView />
+    </main>
   </div>
 </template>
 

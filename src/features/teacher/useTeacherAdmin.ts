@@ -1,13 +1,23 @@
-import { computed, reactive, readonly, ref } from 'vue'
-import { authApi, studentApi, teacherApi, type StudentListItem, type TeacherInfo } from './adminApi'
+import { computed, inject, provide, reactive, readonly, ref, type InjectionKey } from 'vue'
+import { storeToRefs } from 'pinia'
+import {
+  AdminContractBlockedError,
+  teacherAdminRepository,
+  type TeacherAdminRepository,
+} from './repositories'
 import type { Student } from './types'
+import { useSessionStore } from '@/stores/session'
 
-const students = reactive<Student[]>([])
-const teacher = ref<TeacherInfo | null>(null)
-const loading = ref(false)
-const loaded = ref(false)
+function mapStudent(
+  item: Awaited<ReturnType<TeacherAdminRepository['listStudents']>>[number],
+): Student {
+  if (item.id === null) {
+    throw new AdminContractBlockedError(
+      'ADMIN-STUDENT-LIST',
+      '확정된 아동 목록 계약에 식별자가 없어 화면 모델로 변환할 수 없습니다.',
+    )
+  }
 
-function mapStudent(item: StudentListItem): Student {
   return {
     id: item.id,
     name: item.name,
@@ -31,27 +41,39 @@ function mapStudent(item: StudentListItem): Student {
   }
 }
 
-async function loadAdminData(force = false) {
-  if (loading.value || (loaded.value && !force)) return
-  loading.value = true
-  try {
-    const [teacherInfo, studentItems] = await Promise.all([teacherApi.getInfo(), studentApi.list()])
-    teacher.value = teacherInfo
-    students.splice(0, students.length, ...studentItems.map(mapStudent))
-    loaded.value = true
-  } finally {
-    loading.value = false
+export function createTeacherAdminState(
+  repository: TeacherAdminRepository = teacherAdminRepository,
+) {
+  const students = reactive<Student[]>([])
+  const loading = ref(false)
+  const loaded = ref(false)
+  const sessionStore = useSessionStore()
+  const { teacher } = storeToRefs(sessionStore)
+
+  async function loadAdminData(force = false) {
+    if (loading.value || (loaded.value && !force)) return
+    loading.value = true
+    try {
+      const [teacherInfo, studentItems] = await Promise.all([
+        repository.getTeacherInfo(),
+        repository.listStudents(),
+      ])
+      const mappedStudents = studentItems.map(mapStudent)
+      sessionStore.initialize(teacherInfo)
+      students.splice(0, students.length, ...mappedStudents)
+      loaded.value = true
+    } finally {
+      loading.value = false
+    }
   }
-}
 
-async function logout() {
-  await authApi.logout()
-  teacher.value = null
-  students.splice(0)
-  loaded.value = false
-}
+  async function logout() {
+    await repository.logout()
+    sessionStore.reset()
+    students.splice(0)
+    loaded.value = false
+  }
 
-export function useTeacherAdmin() {
   return {
     students,
     teacher: readonly(teacher),
@@ -60,4 +82,20 @@ export function useTeacherAdmin() {
     loadAdminData,
     logout,
   }
+}
+
+export type TeacherAdminState = ReturnType<typeof createTeacherAdminState>
+
+const teacherAdminKey: InjectionKey<TeacherAdminState> = Symbol('teacher-admin')
+
+export function provideTeacherAdmin(
+  repository: TeacherAdminRepository = teacherAdminRepository,
+): TeacherAdminState {
+  const state = createTeacherAdminState(repository)
+  provide(teacherAdminKey, state)
+  return state
+}
+
+export function useTeacherAdmin(): TeacherAdminState {
+  return inject(teacherAdminKey, () => createTeacherAdminState(), true)
 }
