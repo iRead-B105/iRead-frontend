@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/lib/api'
-import { getLoginErrorMessage } from './errorMessage'
+import {
+  getLoginErrorMessage,
+  getResetPasswordErrorMessage,
+  getSignUpErrorMessage,
+} from './errorMessage'
 
 describe('getLoginErrorMessage', () => {
   it.each([
@@ -22,5 +26,39 @@ describe('getLoginErrorMessage', () => {
 
   it('알 수 없는 일반 오류는 원본 메시지를 사용한다', () => {
     expect(getLoginErrorMessage(new Error('알 수 없는 오류'))).toBe('알 수 없는 오류')
+  })
+})
+
+describe('account recovery error messages', () => {
+  it.each([
+    [409, 'EMAIL_ALREADY_EXISTS', getSignUpErrorMessage, '이미 가입된 이메일입니다.'],
+    [
+      400,
+      'INVALID_VERIFICATION_CODE',
+      getResetPasswordErrorMessage,
+      '검증 코드가 올바르지 않습니다.',
+    ],
+    [
+      400,
+      'DEMO_VERIFICATION_NOT_CONFIGURED',
+      getResetPasswordErrorMessage,
+      '비밀번호 재설정 검증 코드가 준비되지 않았습니다.',
+    ],
+    [
+      404,
+      'TEACHER_NOT_FOUND',
+      getResetPasswordErrorMessage,
+      '입력한 이메일과 일치하는 계정을 찾을 수 없습니다.',
+    ],
+  ])('%i %s 오류를 화면 안내로 변환한다', (status, code, mapper, expected) => {
+    expect(
+      mapper(
+        new ApiError({
+          status,
+          code,
+          message: '내부 오류 메시지',
+        }),
+      ),
+    ).toBe(expected)
   })
 })

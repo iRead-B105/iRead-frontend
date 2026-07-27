@@ -10,6 +10,11 @@ const routes: RouteRecordRaw[] = [
   { path: '/login', name: 'teacher-login', component: { template: '<div />' } },
   { path: '/signup', name: 'teacher-signup', component: { template: '<div />' } },
   {
+    path: '/reset-password',
+    name: 'teacher-reset-password',
+    component: { template: '<div />' },
+  },
+  {
     path: '/teacher',
     component: { template: '<router-view />' },
     meta: { requiresAuth: true },
@@ -93,6 +98,12 @@ describe('authentication route guard', () => {
 
     expect(router.currentRoute.value.name).toBe('teacher-dashboard')
   })
+
+  it('/find-id route를 제공하지 않는다', () => {
+    const router = createTestRouter()
+
+    expect(router.resolve('/find-id').name).toBe('not-found')
+  })
 })
 
 describe('resolveTeacherRedirect', () => {
@@ -104,12 +115,17 @@ describe('resolveTeacherRedirect', () => {
     )
   })
 
-  it.each(['https://example.com', '//example.com', '/login', '/signup', '/unknown', undefined])(
-    '외부·공개·존재하지 않는 redirect를 대시보드로 대체한다: %s',
-    (redirect) => {
-      const router = createTestRouter()
+  it.each([
+    'https://example.com',
+    '//example.com',
+    '/login',
+    '/signup',
+    '/reset-password',
+    '/unknown',
+    undefined,
+  ])('외부·공개·존재하지 않는 redirect를 대시보드로 대체한다: %s', (redirect) => {
+    const router = createTestRouter()
 
-      expect(resolveTeacherRedirect(router, redirect)).toBe('/teacher/dashboard')
-    },
-  )
+    expect(resolveTeacherRedirect(router, redirect)).toBe('/teacher/dashboard')
+  })
 })
