@@ -72,4 +72,37 @@ export class ApiTrainingRepository implements TrainingRepository {
   ) {
     return this.api.getTrainingDetail(studentId, trainingId, options)
   }
+
+  getCurriculumLogs(
+    studentId: number,
+    period: Parameters<TrainingRepository['getCurriculumLogs']>[1],
+    options: Parameters<TrainingRepository['getCurriculumLogs']>[2] = {},
+  ) {
+    return this.api.getCurriculumLogs(studentId, period, options)
+  }
+
+  getTrainingLog(
+    studentId: number,
+    curriculumId: number,
+    options: Parameters<TrainingRepository['getTrainingLog']>[2] = {},
+  ) {
+    return this.api.getTrainingLog(studentId, curriculumId, options)
+  }
+
+  getStatistics(
+    studentId: number,
+    curriculumId: number,
+    period: Parameters<TrainingRepository['getStatistics']>[2],
+    options: Parameters<TrainingRepository['getStatistics']>[3] = {},
+  ) {
+    return this.api.getStatistics(studentId, curriculumId, period, options)
+  }
+
+  exportTraining(
+    studentId: number,
+    trainingId: number,
+    format: Parameters<TrainingRepository['exportTraining']>[2],
+  ) {
+    return this.api.exportTraining(studentId, trainingId, format)
+  }
 }

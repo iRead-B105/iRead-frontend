@@ -1,0 +1,153 @@
+import { createPinia } from 'pinia'
+import { flushPromises, mount } from '@vue/test-utils'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { describe, expect, it, vi } from 'vitest'
+import { MockTrainingRepository } from '@/features/teacher/training'
+import { useTrainingStore } from '@/stores/training'
+import StudentTrainingHistoryView from './StudentTrainingHistoryView.vue'
+
+const { saveDownloadMock } = vi.hoisted(() => ({
+  saveDownloadMock: vi.fn(),
+}))
+
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api')>()),
+  saveDownload: saveDownloadMock,
+}))
+
+async function mountHistory(
+  repository: MockTrainingRepository,
+  initialPath = '/teacher/students/1/training-history',
+) {
+  const pinia = createPinia()
+  const store = useTrainingStore(pinia)
+  store.setRepository(repository)
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      {
+        path: '/teacher/students',
+        name: 'teacher-students',
+        component: { template: '<div>학습자 목록</div>' },
+      },
+      {
+        path: '/teacher/students/:id/training-history',
+        name: 'student-training-history',
+        component: StudentTrainingHistoryView,
+      },
+    ],
+  })
+  await router.push(initialPath)
+  await router.isReady()
+  const wrapper = mount(
+    { template: '<RouterView />' },
+    {
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          ChartPanel: {
+            props: ['ariaLabel'],
+            template: '<div data-test="chart">{{ ariaLabel }}</div>',
+          },
+        },
+      },
+    },
+  )
+  await flushPromises()
+  return { wrapper, router, store }
+}
+
+function buttonWithText(wrapper: ReturnType<typeof mount>, text: string) {
+  return wrapper.findAll('button').find((button) => button.text().includes(text))
+}
+
+describe('StudentTrainingHistoryView', () => {
+  it('잘못된 studentId에서는 Repository를 호출하지 않고 목록 이동 action을 표시한다', async () => {
+    const repository = new MockTrainingRepository()
+    const getCurriculumLogs = vi.spyOn(repository, 'getCurriculumLogs')
+    const { wrapper } = await mountHistory(
+      repository,
+      '/teacher/students/not-a-number/training-history',
+    )
+
+    expect(getCurriculumLogs).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('올바른 학습자를 선택해 주세요.')
+    expect(wrapper.text()).toContain('학습자 목록으로 이동')
+  })
+
+  it('최신 커리큘럼의 첫 실제 훈련 상세와 음성 통계만 표시한다', async () => {
+    const { wrapper } = await mountHistory(new MockTrainingRepository())
+
+    expect(wrapper.text()).toContain('2026.07.20')
+    expect(wrapper.text()).toContain('받침 소리 구분')
+    expect(wrapper.text()).toContain('8분 30초')
+    expect(wrapper.text()).toContain('받침 소리를 안정적으로 구분했습니다.')
+    expect(wrapper.text()).toContain('음성 기준 읽기 속도')
+    expect(wrapper.text()).not.toContain('아이 트래킹 기준')
+    expect(wrapper.text()).not.toContain('시선 분석')
+    expect(wrapper.text()).not.toContain('generatedData')
+  })
+
+  it('기간 변경을 서버 query용 값으로 Repository에 전달한다', async () => {
+    const repository = new MockTrainingRepository()
+    const getCurriculumLogs = vi.spyOn(repository, 'getCurriculumLogs')
+    const { wrapper } = await mountHistory(repository)
+
+    await wrapper.get('#training-period').setValue('3m')
+    await flushPromises()
+
+    expect(getCurriculumLogs).toHaveBeenLastCalledWith(
+      1,
+      '3m',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(wrapper.text()).toContain('2026.05.18')
+  })
+
+  it('정확도 0을 기록 없음과 구분하고 실제 훈련 선택을 보정한다', async () => {
+    const { wrapper, store } = await mountHistory(new MockTrainingRepository())
+    const zeroCurriculum = wrapper
+      .findAll('.curriculum-row')
+      .find((row) => row.text().includes('2026.07.05'))
+
+    await zeroCurriculum?.trigger('click')
+    await flushPromises()
+
+    expect(store.selectedCurriculumId).toBe(189)
+    expect(store.selectedHistoryTrainingId).toBe(891)
+    expect(zeroCurriculum?.text()).toContain('0%')
+    expect(wrapper.text()).toContain('오답')
+  })
+
+  it('공통 saveDownload으로 선택 훈련 CSV를 저장한다', async () => {
+    saveDownloadMock.mockClear()
+    const { wrapper } = await mountHistory(new MockTrainingRepository())
+
+    await buttonWithText(wrapper, 'CSV 저장')?.trigger('click')
+    await flushPromises()
+
+    expect(saveDownloadMock).toHaveBeenCalledWith(
+      expect.objectContaining({ fileName: 'training-901-mock.csv' }),
+      'training-901.csv',
+    )
+  })
+
+  it('학습자 route 변경 시 이전 선택을 비우고 새 학습자의 빈 상태를 표시한다', async () => {
+    const repository = new MockTrainingRepository()
+    const getCurriculumLogs = vi.spyOn(repository, 'getCurriculumLogs')
+    const { wrapper, router, store } = await mountHistory(repository)
+
+    await router.push('/teacher/students/2/training-history')
+    await flushPromises()
+
+    expect(getCurriculumLogs).toHaveBeenLastCalledWith(
+      2,
+      '30d',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(store.historyStudentId).toBe(2)
+    expect(store.selectedCurriculumId).toBeNull()
+    expect(store.selectedHistoryTrainingId).toBeNull()
+    expect(wrapper.text()).toContain('선택한 기간에 완료된 커리큘럼이 없습니다.')
+  })
+})

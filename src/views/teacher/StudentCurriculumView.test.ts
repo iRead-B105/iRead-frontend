@@ -25,6 +25,10 @@ function repository(
     addExpectedWord: vi.fn().mockResolvedValue(undefined),
     deleteExpectedWord: vi.fn().mockResolvedValue(undefined),
     getTrainingDetail: vi.fn().mockResolvedValue(trainingDetailFixtures[0]),
+    getCurriculumLogs: vi.fn().mockResolvedValue([]),
+    getTrainingLog: vi.fn(),
+    getStatistics: vi.fn(),
+    exportTraining: vi.fn(),
     ...overrides,
   }
 }

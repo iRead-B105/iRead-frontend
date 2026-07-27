@@ -1,17 +1,29 @@
-import { apiRequest, jsonBody } from '@/lib/api'
+import { apiRequest, downloadFile, jsonBody } from '@/lib/api'
 import type {
+  CurriculumLog,
+  CurriculumTrainingLog,
   CurriculumStatus,
   DailyCurriculum,
   ExpectedWord,
   SaveCurriculumRequest,
   TrainingCatalogItem,
   TrainingDetail,
+  TrainingDownload,
+  TrainingExportFormat,
   TrainingForm,
+  TrainingPeriod,
+  TrainingQuestionResult,
+  TrainingResult,
   TrainingStatus,
+  TrainingStatistics,
 } from './model'
 import type { TrainingRequestOptions } from './repositories/trainingRepository'
 
 export type TrainingApiRequest = <T>(endpoint: string, init?: RequestInit) => Promise<T>
+export type TrainingApiDownloadRequest = (
+  endpoint: string,
+  init?: RequestInit,
+) => Promise<TrainingDownload>
 
 interface TrainingCatalogItemDto {
   readonly trainingId: number
@@ -54,9 +66,56 @@ interface TrainingDetailDto {
   readonly trainingId: number
   readonly trainingTemplateId: number
   readonly name: string
-  readonly form: TrainingForm
+  readonly form: TrainingForm | null
   readonly generatedData?: Readonly<Record<string, unknown>> | null
   readonly status: TrainingStatus
+  readonly startedAt?: string | null
+  readonly finishedAt?: string | null
+  readonly result?: TrainingResult | null
+  readonly accuracy?: number | null
+}
+
+interface CurriculumLogDto {
+  readonly curriculumId: number
+  readonly date: string
+  readonly achievement: number | null
+  readonly trainings: readonly {
+    readonly trainingId: number
+    readonly unitName: string
+    readonly trainingName: string
+  }[]
+}
+
+interface CurriculumTrainingLogDto {
+  readonly curriculumId: number
+  readonly trainings: readonly {
+    readonly trainingId: number
+    readonly trainingName: string
+    readonly startedAt: string | null
+    readonly finishedAt: string | null
+    readonly accuracy: number | null
+    readonly questions: readonly TrainingQuestionResult[]
+  }[]
+}
+
+interface TrainingStatisticsDto {
+  readonly accuracyComparisons: readonly {
+    readonly trainingId: number
+    readonly trainingName: string
+    readonly date: string | null
+    readonly accuracy: number | null
+    readonly previousTrainingDate: string | null
+    readonly previousAccuracy: number | null
+  }[]
+  readonly readingSpeedTrend: {
+    readonly unit: 'CORRECT_WORDS_PER_MINUTE'
+    readonly changeRate: number | null
+    readonly points: readonly {
+      readonly trainingId: number
+      readonly date: string
+      readonly speed: number
+    }[]
+  }
 }
 
 function requestInit(options?: TrainingRequestOptions): RequestInit {
@@ -99,6 +158,44 @@ function mapTrainingDetail(dto: TrainingDetailDto): TrainingDetail {
     form: dto.form,
     generatedData: dto.generatedData ?? null,
     status: dto.status,
+    startedAt: dto.startedAt ?? null,
+    finishedAt: dto.finishedAt ?? null,
+    result: dto.result ?? null,
+    accuracy: dto.accuracy ?? null,
+  }
+}
+
+function mapCurriculumLog(dto: CurriculumLogDto): CurriculumLog {
+  return {
+    curriculumId: dto.curriculumId,
+    date: dto.date,
+    achievement: dto.achievement,
+    trainings: dto.trainings.map((training) => ({ ...training })),
+  }
+}
+
+function mapTrainingLog(dto: CurriculumTrainingLogDto): CurriculumTrainingLog {
+  return {
+    curriculumId: dto.curriculumId,
+    trainings: dto.trainings.map((training) => ({
+      ...training,
+      questions: training.questions.map((question) => ({ ...question })),
+    })),
+  }
+}
+
+function mapStatistics(dto: TrainingStatisticsDto): TrainingStatistics {
+  return {
+    accuracyComparisons: dto.accuracyComparisons.map((comparison) => ({
+      ...comparison,
+    })),
+    readingSpeedTrend: {
+      unit: dto.readingSpeedTrend.unit,
+      changeRate: dto.readingSpeedTrend.changeRate,
+      points: [...dto.readingSpeedTrend.points]
+        .sort((left, right) => left.date.localeCompare(right.date))
+        .map((point) => ({ ...point })),
+    },
   }
 }
 
@@ -145,9 +242,33 @@ export interface TrainingApi {
     trainingId: number,
     options?: TrainingRequestOptions,
   ) => Promise<TrainingDetail>
+  readonly getCurriculumLogs: (
+    studentId: number,
+    period: TrainingPeriod,
+    options?: TrainingRequestOptions,
+  ) => Promise<readonly CurriculumLog[]>
+  readonly getTrainingLog: (
+    studentId: number,
+    curriculumId: number,
+    options?: TrainingRequestOptions,
+  ) => Promise<CurriculumTrainingLog>
+  readonly getStatistics: (
+    studentId: number,
+    curriculumId: number,
+    period: TrainingPeriod,
+    options?: TrainingRequestOptions,
+  ) => Promise<TrainingStatistics>
+  readonly exportTraining: (
+    studentId: number,
+    trainingId: number,
+    format: TrainingExportFormat,
+  ) => Promise<TrainingDownload>
 }
 
-export function createTrainingApi(request: TrainingApiRequest = apiRequest): TrainingApi {
+export function createTrainingApi(
+  request: TrainingApiRequest = apiRequest,
+  download: TrainingApiDownloadRequest = downloadFile,
+): TrainingApi {
   return {
     async getCatalog(studentId, options) {
       const dto = await request<TrainingCatalogDto>(
@@ -218,6 +339,39 @@ export function createTrainingApi(request: TrainingApiRequest = apiRequest): Tra
         requestInit(options),
       )
       return mapTrainingDetail(dto)
+    },
+    async getCurriculumLogs(studentId, period, options) {
+      const dto = await request<readonly CurriculumLogDto[]>(
+        `/api/admin/training/${studentId}/curriculum-log?period=${period}`,
+        requestInit(options),
+      )
+      return [...dto]
+        .sort(
+          (left, right) =>
+            right.date.localeCompare(left.date) ||
+            right.curriculumId - left.curriculumId,
+        )
+        .map(mapCurriculumLog)
+    },
+    async getTrainingLog(studentId, curriculumId, options) {
+      const dto = await request<CurriculumTrainingLogDto>(
+        `/api/admin/training/${studentId}/${curriculumId}/training-log`,
+        requestInit(options),
+      )
+      return mapTrainingLog(dto)
+    },
+    async getStatistics(studentId, curriculumId, period, options) {
+      const dto = await request<TrainingStatisticsDto>(
+        `/api/admin/training/${studentId}/${curriculumId}/statistics?period=${period}`,
+        requestInit(options),
+      )
+      return mapStatistics(dto)
+    },
+    exportTraining(studentId, trainingId, format) {
+      return download(
+        `/api/admin/training/${studentId}/${trainingId}/export?format=${format}`,
+        { method: 'POST' },
+      )
     },
   }
 }

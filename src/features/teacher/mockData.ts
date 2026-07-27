@@ -1,5 +1,5 @@
 // import type은 실행 코드가 아니라 TypeScript의 자료형 검사에만 사용하는 가져오기입니다.
-import type { ReportVersion, Student, TrainingSession } from './types'
+import type { ReportVersion, Student } from './types'
 
 // 서버가 연결되지 않은 UI 목업에서 화면을 채우기 위한 가짜 아동 목록입니다.
 // Student[]는 배열의 모든 항목이 Student 설계도를 따라야 한다는 의미입니다.
@@ -108,37 +108,6 @@ export const students: Student[] = [
     lastAccess: '오늘 10:05',
     learningStartDate: '2026-06-15',
     weeklyAttendance: '67% (2일/3일)',
-  },
-]
-
-// 훈련 이력 카드에 반복 출력할 세션 목록입니다.
-export const trainingSessions: TrainingSession[] = [
-  {
-    id: 1,
-    title: '훈련 1. 받침 소리 구분',
-    date: '2026-07-14 15:44',
-    achievement: 88,
-    curriculum: '파닉스(ㄱㄴㄷㄹㅁㅂ 받침 훈련)',
-    summary: '받침이 포함된 낱말 12개 중 10개를 정확하게 읽었습니다.',
-    questions: [],
-  },
-  {
-    id: 2,
-    title: '훈련 2. 짧은 문장 읽기',
-    date: '2026-07-14 15:41',
-    achievement: 100,
-    curriculum: '유창성(짧은 문장 읽기)',
-    summary: '문장 속도와 억양이 안정적으로 유지되었습니다.',
-    questions: [],
-  },
-  {
-    id: 3,
-    title: '훈련 3. 핵심 내용 찾기',
-    date: '2026-07-14 15:38',
-    achievement: 50,
-    curriculum: '이해력(핵심 내용 찾기)',
-    summary: '핵심어를 찾는 과정에서 교수자의 추가 안내가 필요했습니다.',
-    questions: [],
   },
 ]
 

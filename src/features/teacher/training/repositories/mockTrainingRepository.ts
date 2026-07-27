@@ -1,17 +1,25 @@
 import { ApiError } from '@/lib/api'
 import {
+  curriculumLogFixtures,
   currentCurriculumFixture,
   expectedWordFixtures,
   trainingCatalogFixture,
   trainingDetailFixtures,
+  trainingLogFixtures,
+  trainingStatisticsFixtures,
 } from '../fixtures'
 import type {
+  CurriculumLog,
   CurriculumTraining,
+  CurriculumTrainingLog,
   DailyCurriculum,
   ExpectedWord,
   SaveCurriculumRequest,
   TrainingCatalogItem,
   TrainingDetail,
+  TrainingExportFormat,
+  TrainingPeriod,
+  TrainingStatistics,
 } from '../model'
 import type {
   TrainingRepository,
@@ -23,6 +31,11 @@ export interface MockTrainingRepositoryFixtures {
   readonly curricula?: Readonly<Record<number, DailyCurriculum | null>>
   readonly details?: readonly TrainingDetail[]
   readonly expectedWords?: Readonly<Record<number, readonly ExpectedWord[]>>
+  readonly curriculumLogs?: Readonly<
+    Record<number, Readonly<Record<TrainingPeriod, readonly CurriculumLog[]>>>
+  >
+  readonly trainingLogs?: Readonly<Record<number, CurriculumTrainingLog>>
+  readonly statistics?: Readonly<Record<string, TrainingStatistics>>
 }
 
 function clone<T>(value: T): T {
@@ -48,6 +61,12 @@ export class MockTrainingRepository implements TrainingRepository {
   private readonly curricula = new Map<number, DailyCurriculum | null>()
   private readonly details = new Map<number, TrainingDetail>()
   private readonly expectedWords = new Map<number, ExpectedWord[]>()
+  private readonly curriculumLogs = new Map<
+    number,
+    Readonly<Record<TrainingPeriod, readonly CurriculumLog[]>>
+  >()
+  private readonly trainingLogs = new Map<number, CurriculumTrainingLog>()
+  private readonly statistics = new Map<string, TrainingStatistics>()
   private nextCurriculumId = 300
   private nextTrainingId = 1_000
   private nextWordId = 10_000
@@ -66,6 +85,21 @@ export class MockTrainingRepository implements TrainingRepository {
       const clonedWords = clone(words) as ExpectedWord[]
       this.expectedWords.set(Number(trainingId), clonedWords)
       for (const word of clonedWords) this.nextWordId = Math.max(this.nextWordId, word.wordId + 1)
+    }
+    for (const [studentId, logs] of Object.entries(
+      fixtures.curriculumLogs ?? curriculumLogFixtures,
+    )) {
+      this.curriculumLogs.set(Number(studentId), clone(logs))
+    }
+    for (const [curriculumId, log] of Object.entries(
+      fixtures.trainingLogs ?? trainingLogFixtures,
+    )) {
+      this.trainingLogs.set(Number(curriculumId), clone(log))
+    }
+    for (const [key, statistics] of Object.entries(
+      fixtures.statistics ?? trainingStatisticsFixtures,
+    )) {
+      this.statistics.set(key, clone(statistics))
     }
   }
 
@@ -218,6 +252,95 @@ export class MockTrainingRepository implements TrainingRepository {
     return clone(detail)
   }
 
+  async getCurriculumLogs(
+    studentId: number,
+    period: TrainingPeriod,
+    options?: TrainingRequestOptions,
+  ) {
+    assertPositiveId(studentId, 'studentId')
+    assertNotAborted(options)
+    const logs = this.curriculumLogs.get(studentId)?.[period] ?? []
+    return clone(
+      [...logs].sort(
+        (left, right) =>
+          right.date.localeCompare(left.date) ||
+          right.curriculumId - left.curriculumId,
+      ),
+    )
+  }
+
+  async getTrainingLog(
+    studentId: number,
+    curriculumId: number,
+    options?: TrainingRequestOptions,
+  ) {
+    this.assertCurriculumBelongsToStudent(studentId, curriculumId)
+    assertNotAborted(options)
+    const log = this.trainingLogs.get(curriculumId)
+    if (!log) {
+      throw new ApiError({
+        status: 404,
+        code: 'TRAINING_LOG_NOT_FOUND',
+        message: '훈련 이력을 찾을 수 없습니다.',
+      })
+    }
+    return clone(log)
+  }
+
+  async getStatistics(
+    studentId: number,
+    curriculumId: number,
+    period: TrainingPeriod,
+    options?: TrainingRequestOptions,
+  ) {
+    this.assertCurriculumBelongsToStudent(studentId, curriculumId)
+    assertNotAborted(options)
+    const statistics = this.statistics.get(`${curriculumId}:${period}`)
+    const emptyStatistics: TrainingStatistics = {
+        accuracyComparisons: [],
+        readingSpeedTrend: {
+          unit: 'CORRECT_WORDS_PER_MINUTE',
+          changeRate: null,
+          points: [],
+        },
+      }
+    return clone(statistics ?? emptyStatistics)
+  }
+
+  async exportTraining(
+    studentId: number,
+    trainingId: number,
+    format: TrainingExportFormat,
+  ) {
+    this.assertTrainingBelongsToStudent(studentId, trainingId)
+    const detail = this.details.get(trainingId)
+    if (!detail) {
+      throw new ApiError({
+        status: 404,
+        code: 'TRAINING_DETAIL_NOT_FOUND',
+        message: '훈련 상세 정보를 찾을 수 없습니다.',
+      })
+    }
+    if (format === 'CSV') {
+      const csv = [
+        'trainingId,trainingName,status,accuracy',
+        `${detail.trainingId},"${detail.name.replaceAll('"', '""')}",${detail.status},${detail.accuracy ?? ''}`,
+      ].join('\n')
+      return {
+        blob: new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }),
+        fileName: `training-${trainingId}-mock.csv`,
+        contentType: 'text/csv;charset=utf-8',
+      }
+    }
+    return {
+      blob: new Blob([JSON.stringify(detail, null, 2)], {
+        type: 'application/json;charset=utf-8',
+      }),
+      fileName: `training-${trainingId}-mock.json`,
+      contentType: 'application/json;charset=utf-8',
+    }
+  }
+
   private assertSaveRequest(request: SaveCurriculumRequest): void {
     if (request.trainingId.length === 0) {
       throw new ApiError({
@@ -240,12 +363,37 @@ export class MockTrainingRepository implements TrainingRepository {
   private assertTrainingBelongsToStudent(studentId: number, trainingId: number): void {
     assertPositiveId(studentId, 'studentId')
     assertPositiveId(trainingId, 'trainingId')
-    const curriculum = this.curricula.get(studentId)
-    if (!curriculum?.trainings.some((training) => training.trainingId === trainingId)) {
+    const currentCurriculum = this.curricula.get(studentId)
+    const belongsToCurrent = currentCurriculum?.trainings.some(
+      (training) => training.trainingId === trainingId,
+    )
+    const belongsToHistory = (this.curriculumLogs.get(studentId)?.['3m'] ?? []).some(
+      (curriculum) =>
+        curriculum.trainings.some((training) => training.trainingId === trainingId),
+    )
+    if (!belongsToCurrent && !belongsToHistory) {
       throw new ApiError({
         status: 404,
         code: 'TRAINING_NOT_FOUND',
         message: '해당 학습자의 훈련을 찾을 수 없습니다.',
+      })
+    }
+  }
+
+  private assertCurriculumBelongsToStudent(
+    studentId: number,
+    curriculumId: number,
+  ): void {
+    assertPositiveId(studentId, 'studentId')
+    assertPositiveId(curriculumId, 'curriculumId')
+    const belongs = (this.curriculumLogs.get(studentId)?.['3m'] ?? []).some(
+      (curriculum) => curriculum.curriculumId === curriculumId,
+    )
+    if (!belongs) {
+      throw new ApiError({
+        status: 404,
+        code: 'CURRICULUM_NOT_FOUND',
+        message: '완료된 커리큘럼을 찾을 수 없습니다.',
       })
     }
   }
@@ -296,6 +444,10 @@ export class MockTrainingRepository implements TrainingRepository {
       form: template.form,
       generatedData: current?.generatedData ?? null,
       status: current?.status ?? training.status,
+      startedAt: current?.startedAt ?? null,
+      finishedAt: current?.finishedAt ?? null,
+      result: current?.result ?? null,
+      accuracy: current?.accuracy ?? null,
     })
   }
 

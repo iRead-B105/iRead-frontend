@@ -57,40 +57,6 @@ export interface AccuracyTrend {
   accuracy: number
 }
 
-export interface ReadingSpeedTrend {
-  from: string
-  to: string
-  unit: 'WORDS_PER_MINUTE'
-  voiceChangeRate: number | null
-  gazeChangeRate: number | null
-  points: Array<{
-    date: string
-    voiceSpeed: number | null
-    gazeSpeed: number | null
-    voiceWordCount: number | null
-    gazeWordCount: number | null
-    voiceDurationMs: number | null
-    gazeDurationMs: number | null
-    trainingCount: number
-  }>
-}
-
-export interface TrainingHistory {
-  trainingId: number
-  date: string
-  learningType: string
-  startedAt: string | null
-  finishedAt: string | null
-  achievement: number | null
-  questions: Array<{
-    questionNumber: number
-    question: string | null
-    correct: boolean
-    selectedAnswer: string | null
-    correctAnswer: string | null
-  }>
-}
-
 export interface TestListItem {
   testId: number
   date: string
@@ -167,17 +133,6 @@ export const studentApi = {
     apiRequest<void>(`/api/admin/student/${studentId}`, { method: 'DELETE' }),
   accuracyTrend: (studentId: number) =>
     apiRequest<AccuracyTrend[]>(`/api/admin/student/${studentId}/accuracy-trend`),
-  readingSpeedTrend: (studentId: number, from?: string, to?: string) => {
-    const query = new URLSearchParams()
-    if (from) query.set('from', from)
-    if (to) query.set('to', to)
-    const suffix = query.size ? `?${query}` : ''
-    return apiRequest<ReadingSpeedTrend>(
-      `/api/admin/student/${studentId}/reading-speed-trend${suffix}`,
-    )
-  },
-  trainingHistory: (studentId: number) =>
-    apiRequest<TrainingHistory[]>(`/api/admin/student/${studentId}/training-history`),
 }
 
 export const testApi = {

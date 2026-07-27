@@ -1,14 +1,21 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
+import { isApiError } from '@/lib/api'
 import {
   trainingRepository,
+  type CurriculumLog,
   type CurriculumDraftItem,
+  type CurriculumTrainingLog,
   type DailyCurriculum,
   type ExpectedWord,
   type TrainingCatalogItem,
   type TrainingDetail,
+  type TrainingDownload,
+  type TrainingExportFormat,
+  type TrainingPeriod,
   type TrainingRepository,
   type TrainingRequestStatus,
+  type TrainingStatistics,
 } from '@/features/teacher/training'
 
 function isAbortError(error: unknown): boolean {
@@ -22,6 +29,16 @@ function isAbortError(error: unknown): boolean {
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
+}
+
+function historyErrorMessage(error: unknown, fallback: string): string {
+  if (!isApiError(error)) return fallback
+  if (error.status === 0) return '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
+  if (error.status === 400) return '조회 조건이 올바르지 않습니다.'
+  if (error.status === 403) return '이 학습자의 훈련 기록을 볼 권한이 없습니다.'
+  if (error.status === 404) return '요청한 훈련 기록을 찾을 수 없습니다.'
+  if (error.status >= 500) return '서버에서 훈련 기록을 불러오지 못했습니다.'
+  return fallback
 }
 
 function draftFromCurriculum(curriculum: DailyCurriculum | null): CurriculumDraftItem[] {
@@ -57,11 +74,36 @@ export const useTrainingStore = defineStore('training', () => {
   const expectedWordError = ref<string | null>(null)
   const detailError = ref<string | null>(null)
 
+  const historyStudentId = ref<number | null>(null)
+  const period = ref<TrainingPeriod>('30d')
+  const curriculumLogs = ref<readonly CurriculumLog[]>([])
+  const selectedCurriculumId = ref<number | null>(null)
+  const trainingLog = ref<CurriculumTrainingLog | null>(null)
+  const statistics = ref<TrainingStatistics | null>(null)
+  const selectedHistoryTrainingId = ref<number | null>(null)
+  const historyTrainingDetail = ref<TrainingDetail | null>(null)
+  const curriculumLogsStatus = ref<TrainingRequestStatus>('idle')
+  const trainingLogStatus = ref<TrainingRequestStatus>('idle')
+  const statisticsStatus = ref<TrainingRequestStatus>('idle')
+  const historyDetailStatus = ref<TrainingRequestStatus>('idle')
+  const exportingFormat = ref<TrainingExportFormat | null>(null)
+  const curriculumLogsError = ref<string | null>(null)
+  const trainingLogError = ref<string | null>(null)
+  const statisticsError = ref<string | null>(null)
+  const historyDetailError = ref<string | null>(null)
+  const exportError = ref<string | null>(null)
+
   let draftKeySequence = 0
   let loadGeneration = 0
   let resourceGeneration = 0
   let loadController: AbortController | null = null
   let resourceController: AbortController | null = null
+  let historyGeneration = 0
+  let historyCurriculumGeneration = 0
+  let historyDetailGeneration = 0
+  let historyController: AbortController | null = null
+  let historyCurriculumController: AbortController | null = null
+  let historyDetailController: AbortController | null = null
 
   const draftTrainingIds = computed(() =>
     draftItems.value.map((item) => item.trainingTemplateId),
@@ -102,6 +144,18 @@ export const useTrainingStore = defineStore('training', () => {
   )
   const canEditCurriculum = computed(
     () => savedCurriculum.value === null || savedCurriculum.value.status === 'NOT_STARTED',
+  )
+  const selectedCurriculumLog = computed(
+    () =>
+      curriculumLogs.value.find(
+        (curriculum) => curriculum.curriculumId === selectedCurriculumId.value,
+      ) ?? null,
+  )
+  const selectedHistoryTraining = computed(
+    () =>
+      trainingLog.value?.trainings.find(
+        (training) => training.trainingId === selectedHistoryTrainingId.value,
+      ) ?? null,
   )
 
   function setRepository(nextRepository: TrainingRepository): void {
@@ -400,11 +454,295 @@ export const useTrainingStore = defineStore('training', () => {
     }
   }
 
+  function abortHistoryRequests(): void {
+    historyController?.abort()
+    historyCurriculumController?.abort()
+    historyDetailController?.abort()
+    historyController = null
+    historyCurriculumController = null
+    historyDetailController = null
+  }
+
+  function clearHistoryState(studentId: number, resetPeriod: boolean): void {
+    historyStudentId.value = studentId
+    if (resetPeriod) period.value = '30d'
+    curriculumLogs.value = []
+    selectedCurriculumId.value = null
+    trainingLog.value = null
+    statistics.value = null
+    selectedHistoryTrainingId.value = null
+    historyTrainingDetail.value = null
+    curriculumLogsStatus.value = 'loading'
+    trainingLogStatus.value = 'idle'
+    statisticsStatus.value = 'idle'
+    historyDetailStatus.value = 'idle'
+    exportingFormat.value = null
+    curriculumLogsError.value = null
+    trainingLogError.value = null
+    statisticsError.value = null
+    historyDetailError.value = null
+    exportError.value = null
+  }
+
+  async function loadHistoryForStudent(studentId: number): Promise<void> {
+    abortHistoryRequests()
+    historyGeneration += 1
+    historyCurriculumGeneration += 1
+    historyDetailGeneration += 1
+    clearHistoryState(studentId, true)
+    await loadCurriculumLogs(studentId)
+  }
+
+  async function setHistoryPeriod(
+    studentId: number,
+    nextPeriod: TrainingPeriod,
+  ): Promise<void> {
+    if (studentId !== historyStudentId.value) return
+    if (nextPeriod !== '30d' && nextPeriod !== '3m') return
+    if (period.value === nextPeriod && curriculumLogsStatus.value !== 'error') return
+    period.value = nextPeriod
+    abortHistoryRequests()
+    historyGeneration += 1
+    historyCurriculumGeneration += 1
+    historyDetailGeneration += 1
+    clearHistoryState(studentId, false)
+    await loadCurriculumLogs(studentId)
+  }
+
+  async function retryHistory(): Promise<void> {
+    const studentId = historyStudentId.value
+    if (studentId === null) return
+    abortHistoryRequests()
+    historyGeneration += 1
+    historyCurriculumGeneration += 1
+    historyDetailGeneration += 1
+    clearHistoryState(studentId, false)
+    await loadCurriculumLogs(studentId)
+  }
+
+  async function loadCurriculumLogs(studentId: number): Promise<void> {
+    const controller = new AbortController()
+    historyController = controller
+    const generation = historyGeneration
+    const requestedPeriod = period.value
+    curriculumLogsStatus.value = 'loading'
+    curriculumLogsError.value = null
+    try {
+      const logs = await repository.value.getCurriculumLogs(
+        studentId,
+        requestedPeriod,
+        { signal: controller.signal },
+      )
+      if (
+        generation !== historyGeneration ||
+        historyStudentId.value !== studentId ||
+        period.value !== requestedPeriod
+      ) {
+        return
+      }
+      curriculumLogs.value = [...logs].sort(
+        (left, right) =>
+          right.date.localeCompare(left.date) ||
+          right.curriculumId - left.curriculumId,
+      )
+      selectedCurriculumId.value = curriculumLogs.value[0]?.curriculumId ?? null
+      curriculumLogsStatus.value = 'success'
+      if (selectedCurriculumId.value !== null) {
+        await loadHistoryCurriculum(studentId, selectedCurriculumId.value)
+      }
+    } catch (error) {
+      if (isAbortError(error) || generation !== historyGeneration) return
+      curriculumLogsStatus.value = 'error'
+      curriculumLogsError.value = historyErrorMessage(
+        error,
+        '완료된 커리큘럼 기록을 불러오지 못했습니다.',
+      )
+    } finally {
+      if (generation === historyGeneration) historyController = null
+    }
+  }
+
+  async function selectHistoryCurriculum(
+    studentId: number,
+    curriculumId: number,
+  ): Promise<void> {
+    if (studentId !== historyStudentId.value) return
+    if (!curriculumLogs.value.some((item) => item.curriculumId === curriculumId)) return
+    if (
+      selectedCurriculumId.value === curriculumId &&
+      trainingLogStatus.value === 'success' &&
+      statisticsStatus.value === 'success'
+    ) {
+      return
+    }
+    await loadHistoryCurriculum(studentId, curriculumId)
+  }
+
+  async function loadHistoryCurriculum(
+    studentId: number,
+    curriculumId: number,
+  ): Promise<void> {
+    historyCurriculumController?.abort()
+    historyDetailController?.abort()
+    const controller = new AbortController()
+    historyCurriculumController = controller
+    const generation = ++historyCurriculumGeneration
+    historyDetailGeneration += 1
+    selectedCurriculumId.value = curriculumId
+    trainingLog.value = null
+    statistics.value = null
+    selectedHistoryTrainingId.value = null
+    historyTrainingDetail.value = null
+    trainingLogStatus.value = 'loading'
+    statisticsStatus.value = 'loading'
+    historyDetailStatus.value = 'idle'
+    trainingLogError.value = null
+    statisticsError.value = null
+    historyDetailError.value = null
+    exportError.value = null
+
+    const logRequest = repository.value
+      .getTrainingLog(studentId, curriculumId, { signal: controller.signal })
+      .then((log) => {
+        if (
+          generation !== historyCurriculumGeneration ||
+          selectedCurriculumId.value !== curriculumId
+        ) {
+          return
+        }
+        trainingLog.value = log
+        const currentStillExists = log.trainings.some(
+          (training) => training.trainingId === selectedHistoryTrainingId.value,
+        )
+        if (!currentStillExists) {
+          selectedHistoryTrainingId.value = log.trainings[0]?.trainingId ?? null
+        }
+        trainingLogStatus.value = 'success'
+      })
+      .catch((error: unknown) => {
+        if (isAbortError(error) || generation !== historyCurriculumGeneration) return
+        trainingLogStatus.value = 'error'
+        trainingLogError.value = historyErrorMessage(
+          error,
+          '선택한 커리큘럼의 훈련 이력을 불러오지 못했습니다.',
+        )
+      })
+
+    const statisticsRequest = repository.value
+      .getStatistics(studentId, curriculumId, period.value, {
+        signal: controller.signal,
+      })
+      .then((nextStatistics) => {
+        if (
+          generation !== historyCurriculumGeneration ||
+          selectedCurriculumId.value !== curriculumId
+        ) {
+          return
+        }
+        statistics.value = nextStatistics
+        statisticsStatus.value = 'success'
+      })
+      .catch((error: unknown) => {
+        if (isAbortError(error) || generation !== historyCurriculumGeneration) return
+        statisticsStatus.value = 'error'
+        statisticsError.value = historyErrorMessage(
+          error,
+          '훈련 통계를 불러오지 못했습니다.',
+        )
+      })
+
+    await Promise.all([logRequest, statisticsRequest])
+    if (generation !== historyCurriculumGeneration) return
+    historyCurriculumController = null
+    if (selectedHistoryTrainingId.value !== null) {
+      await loadHistoryTrainingDetail(studentId, selectedHistoryTrainingId.value)
+    }
+  }
+
+  async function selectHistoryTraining(
+    studentId: number,
+    trainingId: number,
+  ): Promise<void> {
+    if (studentId !== historyStudentId.value) return
+    if (!trainingLog.value?.trainings.some((item) => item.trainingId === trainingId)) return
+    selectedHistoryTrainingId.value = trainingId
+    await loadHistoryTrainingDetail(studentId, trainingId)
+  }
+
+  async function loadHistoryTrainingDetail(
+    studentId: number,
+    trainingId: number,
+  ): Promise<void> {
+    historyDetailController?.abort()
+    const controller = new AbortController()
+    historyDetailController = controller
+    const generation = ++historyDetailGeneration
+    historyTrainingDetail.value = null
+    historyDetailStatus.value = 'loading'
+    historyDetailError.value = null
+    exportError.value = null
+    try {
+      const detail = await repository.value.getTrainingDetail(
+        studentId,
+        trainingId,
+        { signal: controller.signal },
+      )
+      if (
+        generation !== historyDetailGeneration ||
+        selectedHistoryTrainingId.value !== trainingId
+      ) {
+        return
+      }
+      historyTrainingDetail.value = detail
+      historyDetailStatus.value = 'success'
+    } catch (error) {
+      if (isAbortError(error) || generation !== historyDetailGeneration) return
+      historyDetailStatus.value = 'error'
+      historyDetailError.value = historyErrorMessage(
+        error,
+        '선택한 훈련 상세를 불러오지 못했습니다.',
+      )
+    } finally {
+      if (generation === historyDetailGeneration) historyDetailController = null
+    }
+  }
+
+  async function exportSelectedTraining(
+    studentId: number,
+    format: TrainingExportFormat,
+  ): Promise<TrainingDownload | null> {
+    const trainingId = selectedHistoryTrainingId.value
+    if (
+      studentId !== historyStudentId.value ||
+      trainingId === null ||
+      exportingFormat.value !== null
+    ) {
+      return null
+    }
+    exportingFormat.value = format
+    exportError.value = null
+    try {
+      return await repository.value.exportTraining(studentId, trainingId, format)
+    } catch (error) {
+      exportError.value = historyErrorMessage(
+        error,
+        `${format} 파일을 내려받지 못했습니다.`,
+      )
+      return null
+    } finally {
+      exportingFormat.value = null
+    }
+  }
+
   function reset(): void {
     loadController?.abort()
     resourceController?.abort()
+    abortHistoryRequests()
     loadGeneration += 1
     resourceGeneration += 1
+    historyGeneration += 1
+    historyCurriculumGeneration += 1
+    historyDetailGeneration += 1
     currentStudentId.value = null
     catalog.value = []
     savedCurriculum.value = null
@@ -424,6 +762,24 @@ export const useTrainingStore = defineStore('training', () => {
     curriculumError.value = null
     expectedWordError.value = null
     detailError.value = null
+    historyStudentId.value = null
+    period.value = '30d'
+    curriculumLogs.value = []
+    selectedCurriculumId.value = null
+    trainingLog.value = null
+    statistics.value = null
+    selectedHistoryTrainingId.value = null
+    historyTrainingDetail.value = null
+    curriculumLogsStatus.value = 'idle'
+    trainingLogStatus.value = 'idle'
+    statisticsStatus.value = 'idle'
+    historyDetailStatus.value = 'idle'
+    exportingFormat.value = null
+    curriculumLogsError.value = null
+    trainingLogError.value = null
+    statisticsError.value = null
+    historyDetailError.value = null
+    exportError.value = null
   }
 
   return {
@@ -454,6 +810,26 @@ export const useTrainingStore = defineStore('training', () => {
     detailError,
     hasChanges,
     canEditCurriculum,
+    historyStudentId,
+    period,
+    curriculumLogs,
+    selectedCurriculumId,
+    selectedCurriculumLog,
+    trainingLog,
+    statistics,
+    selectedHistoryTrainingId,
+    selectedHistoryTraining,
+    historyTrainingDetail,
+    curriculumLogsStatus,
+    trainingLogStatus,
+    statisticsStatus,
+    historyDetailStatus,
+    exportingFormat,
+    curriculumLogsError,
+    trainingLogError,
+    statisticsError,
+    historyDetailError,
+    exportError,
     setRepository,
     loadForStudent,
     selectTemplate,
@@ -466,6 +842,13 @@ export const useTrainingStore = defineStore('training', () => {
     loadSelectedTrainingResources,
     addExpectedWord,
     deleteExpectedWord,
+    loadHistoryForStudent,
+    setHistoryPeriod,
+    retryHistory,
+    selectHistoryCurriculum,
+    selectHistoryTraining,
+    loadHistoryTrainingDetail,
+    exportSelectedTraining,
     reset,
   }
 })
