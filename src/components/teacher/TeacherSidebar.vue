@@ -14,6 +14,8 @@ import {
 import type { StudentNavigationItem } from '@/features/teacher/student'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
+import { useTestStore } from '@/stores/test'
+import { useTrainingStore } from '@/stores/training'
 import SidebarIcon from '@/components/teacher/SidebarIcon.vue'
 import StudentSwitcher from '@/components/teacher/StudentSwitcher.vue'
 
@@ -21,6 +23,8 @@ const route = useRoute()
 const router = useRouter()
 const sessionStore = useSessionStore()
 const studentStore = useStudentStore()
+const testStore = useTestStore()
+const trainingStore = useTrainingStore()
 const { teacher, logoutPending } = storeToRefs(sessionStore)
 const { navigationItems, navigationItemsById, selectedStudentId } = storeToRefs(studentStore)
 const logoutError = ref('')
@@ -63,6 +67,8 @@ async function logout() {
   try {
     await sessionStore.logout()
     studentStore.reset()
+    testStore.reset()
+    trainingStore.reset()
     await router.push('/login')
   } catch {
     logoutError.value = '로그아웃에 실패했습니다. 잠시 후 다시 시도해 주세요.'
@@ -125,7 +131,7 @@ onMounted(() => {
           </RouterLink>
           <RouterLink :to="{ name: 'student-test-history', params: { id: currentStudent.studentId } }">
             <span class="sidebar-nav__icon"><SidebarIcon name="clipboard" /></span
-            ><strong>테스트 이력</strong>
+            ><strong>검사 이력</strong>
           </RouterLink>
           <RouterLink :to="{ name: 'student-report', params: { id: currentStudent.studentId } }">
             <span class="sidebar-nav__icon"><SidebarIcon name="report" /></span

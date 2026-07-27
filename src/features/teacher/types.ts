@@ -26,65 +26,6 @@ export interface Student {
   weeklyAttendance: string
 }
 
-// 아동에게 배정된 커리큘럼 한 항목의 형태입니다.
-export type LessonContentType = 'word' | 'sentence' | 'question'
-
-export interface LessonContentItem {
-  id: number
-  type: LessonContentType
-  label: string
-  content: string
-  answer: string
-  hint: string
-}
-
-export interface LessonMaterial {
-  duration: number
-  objective: string
-  teacherGuide: string
-  childInstruction: string
-  contentItems: LessonContentItem[]
-  updatedAt: string
-}
-
-export interface CurriculumItem {
-  id: number
-  studentId: number
-  category: string
-  order: number
-  title: string
-  // 화면에서는 0~100 사이의 달성률 숫자로 사용합니다.
-  achievement: number
-  material: LessonMaterial
-}
-
-// 한 번의 훈련 기록에 필요한 데이터 형태입니다.
-export interface TrainingSession {
-  id: number
-  title: string
-  date: string
-  achievement: number
-  curriculum: string
-  summary: string
-  questions: Array<{
-    questionNumber: number
-    question: string | null
-    correct: boolean
-    selectedAnswer: string | null
-    correctAnswer: string | null
-  }>
-}
-
-export interface RecommendedCurriculumItem {
-  id: number
-  trainingId: number
-  category: string
-  title: string
-  count: number
-  // 다음 회차에 배정된 항목만 수정할 수 있도록 훈련 원본과 분리된 교안입니다.
-  material?: LessonMaterial
-}
-
 export type ReportStatus = 'draft' | 'published'
 
 export interface ReportVersion {
