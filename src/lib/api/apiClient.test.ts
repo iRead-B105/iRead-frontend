@@ -50,10 +50,10 @@ describe('ApiClient', () => {
       fetch: fetchMock,
     })
 
-    await client.request<void>('/api/auth/logout')
+    await client.request<void>('/api/auth/admin/logout')
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/auth/logout',
+      '/api/auth/admin/logout',
       expect.objectContaining({
         credentials: 'include',
       }),

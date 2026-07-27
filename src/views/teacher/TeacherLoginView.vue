@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineAsyncComponent, reactive, ref } from 'vue'
+import { defineAsyncComponent, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,9 +15,22 @@ const form = reactive({ email: '', password: '' })
 const showPassword = ref(false)
 const submitting = ref(false)
 const errorMessage = ref('')
+const successMessage = ref(
+  route.query.passwordReset === 'success'
+    ? '비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해 주세요.'
+    : '',
+)
 const MockAuthEntry = !import.meta.env.PROD
   ? defineAsyncComponent(() => import('@/features/teacher/auth/components/MockAuthEntry.vue'))
   : null
+
+onMounted(async () => {
+  if (route.query.passwordReset !== 'success') return
+
+  const query = { ...route.query }
+  delete query.passwordReset
+  await router.replace({ query })
+})
 
 async function login() {
   if (submitting.value) return
@@ -35,7 +48,6 @@ async function login() {
     submitting.value = false
   }
 }
-
 </script>
 
 <template>
@@ -96,11 +108,10 @@ async function login() {
         </div>
 
         <div class="login-help-links">
-          <RouterLink to="/find-id">로그인 이메일 확인</RouterLink>
-          <span aria-hidden="true"></span>
           <RouterLink to="/reset-password">비밀번호 찾기</RouterLink>
         </div>
 
+        <p v-if="successMessage" class="form-success" role="status">{{ successMessage }}</p>
         <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
         <Button class="login-submit" type="submit" :disabled="submitting || isMockAuthSource">
           {{ submitting ? '로그인 중...' : '로그인' }}
@@ -222,11 +233,6 @@ async function login() {
   text-decoration: underline;
 }
 
-.login-help-links span {
-  width: 1px;
-  background: var(--slate-200);
-}
-
 .login-submit {
   width: 100%;
   min-height: 50px;
@@ -236,6 +242,12 @@ async function login() {
 .form-error {
   margin: 14px 0 0;
   color: var(--destructive);
+  font-size: 13px;
+}
+
+.form-success {
+  margin: 14px 0 0;
+  color: var(--primary-700);
   font-size: 13px;
 }
 

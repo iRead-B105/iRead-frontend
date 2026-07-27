@@ -183,21 +183,6 @@ export interface Report {
   teacherMemo: string
 }
 
-export const authApi = {
-  login: (email: string, password: string) =>
-    apiRequest<TeacherInfo>('/api/auth/login', {
-      method: 'POST',
-      body: jsonBody({ email, password }),
-    }),
-  signup: (payload: { email: string; password: string; name: string; organization: string; gender: TeacherGender }) =>
-    apiRequest<TeacherInfo>('/api/auth/sign-up', {
-      method: 'POST',
-      body: jsonBody(payload),
-    }),
-  me: () => apiRequest<TeacherInfo>('/api/auth/me'),
-  logout: () => apiRequest<void>('/api/auth/logout', { method: 'POST' }),
-}
-
 export const teacherApi = {
   getInfo: () => apiRequest<TeacherInfo>('/api/admin/teacher/info'),
 }

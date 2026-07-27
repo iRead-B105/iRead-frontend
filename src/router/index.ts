@@ -6,7 +6,6 @@ import { useSessionStore } from '@/stores/session'
 const publicAuthenticationRoutes = new Set([
   'teacher-login',
   'teacher-signup',
-  'teacher-find-id',
   'teacher-reset-password',
 ])
 
@@ -39,11 +38,6 @@ const router = createRouter({
       path: '/signup',
       name: 'teacher-signup',
       component: () => import('@/views/teacher/TeacherSignupView.vue'),
-    },
-    {
-      path: '/find-id',
-      name: 'teacher-find-id',
-      component: () => import('@/views/teacher/TeacherFindIdView.vue'),
     },
     {
       path: '/reset-password',
