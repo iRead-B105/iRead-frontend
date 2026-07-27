@@ -1,7 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import type { Student } from '@/features/teacher/types'
 import { useTeacherAdmin } from '@/features/teacher/useTeacherAdmin'
 import SidebarIcon from '@/components/teacher/SidebarIcon.vue'
@@ -10,14 +18,13 @@ import StudentSwitcher from '@/components/teacher/StudentSwitcher.vue'
 const route = useRoute()
 const router = useRouter()
 const { students, teacher, loadAdminData, logout: logoutSession } = useTeacherAdmin()
-const fallbackStudent: Student = {
-  id: 0, name: '학생 없음', age: 0, birthDate: '', gender: '남자', phone: '', school: '',
-  guardianName: '', guardianRelation: '', guardianPhone: '', guardianEmail: '', address: '',
-  lastLearningDate: '', lastTestDate: '', totalLearningTime: '0시간', latestTraining: '-',
-  lastAccess: '-', learningStartDate: '', weeklyAttendance: '0%',
-}
+const logoutPending = ref(false)
+const logoutError = ref('')
 const currentStudent = computed(
-  () => students.find((student) => student.id === Number(route.params.id)) ?? students[0] ?? fallbackStudent,
+  () => students.find((student) => student.id === Number(route.params.id)) ?? students[0] ?? null,
+)
+const profileImageUrl = computed(
+  () => teacher.value?.profileImageUrl ?? '/images/teacher-profile.png',
 )
 const studentRouteNames = new Set([
   'student-overview',
@@ -36,92 +43,133 @@ function selectStudent(student: Student) {
 }
 
 function openProfileSettings() {
-  router.push('/teacher/settings')
+  void router.push('/teacher/settings')
 }
 
 async function logout() {
-  await logoutSession()
-  await router.push('/login')
+  if (logoutPending.value) return
+
+  logoutPending.value = true
+  logoutError.value = ''
+  try {
+    await logoutSession()
+    await router.push('/login')
+  } catch {
+    logoutError.value = '로그아웃에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    logoutPending.value = false
+  }
 }
 
-onMounted(() => void loadAdminData())
+onMounted(() => {
+  void loadAdminData().catch(() => undefined)
+})
 </script>
 
 <template>
   <aside class="teacher-sidebar">
-    <RouterLink class="sidebar-brand" to="/teacher/dashboard" aria-label="iRead 아동 목록">
-      <img src="/images/iread-logo.png" alt="iRead" />
+    <RouterLink class="sidebar-brand" to="/teacher/dashboard" aria-label="iRead 대시보드">
+      <img :src="'/images/iread-logo.png'" alt="iRead" />
     </RouterLink>
 
     <div class="sidebar-panel">
       <StudentSwitcher
+        v-if="currentStudent"
         :students="students"
         :current-student="currentStudent"
         @select="selectStudent"
-        @manage="router.push('/teacher/dashboard')"
+        @manage="router.push('/teacher/students')"
       />
+      <Button
+        v-else
+        class="student-list-link"
+        variant="outline"
+        type="button"
+        @click="router.push('/teacher/students')"
+      >
+        등록된 아동이 없습니다
+      </Button>
 
       <nav class="sidebar-nav" aria-label="교수자 아동 관리 메뉴">
         <RouterLink to="/teacher/dashboard">
+          <span class="sidebar-nav__icon"><SidebarIcon name="home" /></span>
+          <strong>대시보드</strong>
+        </RouterLink>
+        <RouterLink to="/teacher/students">
           <span class="sidebar-nav__icon"><SidebarIcon name="users" /></span>
           <strong>아동 목록</strong>
         </RouterLink>
-        <RouterLink :to="{ name: 'student-overview', params: { id: currentStudent.id } }">
-          <span class="sidebar-nav__icon"><SidebarIcon name="home" /></span><strong>학습 현황</strong>
-        </RouterLink>
-        <RouterLink :to="{ name: 'student-curriculum', params: { id: currentStudent.id } }">
-          <span class="sidebar-nav__icon"><SidebarIcon name="book" /></span
-          ><strong>커리큘럼 관리</strong>
-        </RouterLink>
-        <RouterLink :to="{ name: 'student-training-history', params: { id: currentStudent.id } }">
-          <span class="sidebar-nav__icon"><SidebarIcon name="chart" /></span
-          ><strong>훈련 이력</strong>
-        </RouterLink>
-        <RouterLink :to="{ name: 'student-test-history', params: { id: currentStudent.id } }">
-          <span class="sidebar-nav__icon"><SidebarIcon name="clipboard" /></span
-          ><strong>테스트 이력</strong>
-        </RouterLink>
-        <RouterLink :to="{ name: 'student-report', params: { id: currentStudent.id } }">
-          <span class="sidebar-nav__icon"><SidebarIcon name="report" /></span
-          ><strong>보고서</strong>
-        </RouterLink>
-        <RouterLink :to="{ name: 'student-edit', params: { id: currentStudent.id } }">
-          <span class="sidebar-nav__icon"><SidebarIcon name="edit" /></span
-          ><strong>아동 정보 관리</strong>
+        <template v-if="currentStudent">
+          <RouterLink :to="{ name: 'student-overview', params: { id: currentStudent.id } }">
+            <span class="sidebar-nav__icon"><SidebarIcon name="home" /></span
+            ><strong>학습 현황</strong>
+          </RouterLink>
+          <RouterLink :to="{ name: 'student-curriculum', params: { id: currentStudent.id } }">
+            <span class="sidebar-nav__icon"><SidebarIcon name="book" /></span
+            ><strong>커리큘럼 관리</strong>
+          </RouterLink>
+          <RouterLink
+            :to="{ name: 'student-training-history', params: { id: currentStudent.id } }"
+          >
+            <span class="sidebar-nav__icon"><SidebarIcon name="chart" /></span
+            ><strong>훈련 이력</strong>
+          </RouterLink>
+          <RouterLink :to="{ name: 'student-test-history', params: { id: currentStudent.id } }">
+            <span class="sidebar-nav__icon"><SidebarIcon name="clipboard" /></span
+            ><strong>테스트 이력</strong>
+          </RouterLink>
+          <RouterLink :to="{ name: 'student-report', params: { id: currentStudent.id } }">
+            <span class="sidebar-nav__icon"><SidebarIcon name="report" /></span
+            ><strong>보고서</strong>
+          </RouterLink>
+          <RouterLink :to="{ name: 'student-edit', params: { id: currentStudent.id } }">
+            <span class="sidebar-nav__icon"><SidebarIcon name="edit" /></span
+            ><strong>아동 정보 관리</strong>
+          </RouterLink>
+        </template>
+        <RouterLink to="/teacher/settings">
+          <span class="sidebar-nav__icon"><SidebarIcon name="settings" /></span>
+          <strong>설정</strong>
         </RouterLink>
       </nav>
     </div>
 
     <div class="sidebar-footer">
-      <div class="sidebar-account">
-        <Button
-          class="sidebar-account__trigger"
-          variant="ghost"
-          type="button"
-          aria-label="프로필 설정으로 이동"
-          @click="openProfileSettings"
-        >
-          <img src="/images/teacher-profile.png" alt="" />
-          <span>
-            <strong>{{ teacher?.name ?? '교수자' }}</strong>
-            <small>{{ teacher?.organization ?? '' }}</small>
-          </span>
-        </Button>
-        <Button
-          class="sidebar-account__logout"
-          variant="ghost"
-          size="icon"
-          type="button"
-          aria-label="로그아웃"
-          title="로그아웃"
-          @click="logout"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M10 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19H10" />
-            <path d="m15 8 4 4-4 4M19 12H9" />
-          </svg>
-        </Button>
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button
+            class="sidebar-account__trigger"
+            variant="ghost"
+            type="button"
+            aria-label="계정 메뉴 열기"
+          >
+            <img :src="profileImageUrl" :alt="`${teacher?.name ?? '교수자'} 프로필`" />
+            <span>
+              <strong>{{ teacher?.name ?? '교수자' }}</strong>
+              <small>{{ teacher?.organization ?? '' }}</small>
+            </span>
+            <span class="sidebar-account__chevron" aria-hidden="true">⌃</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent class="sidebar-account__menu" side="right" align="end">
+          <DropdownMenuLabel>계정 메뉴</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem @select="openProfileSettings">프로필 설정</DropdownMenuItem>
+          <DropdownMenuItem
+            variant="destructive"
+            :disabled="logoutPending"
+            @select="logout"
+          >
+            {{ logoutPending ? '로그아웃 중...' : '로그아웃' }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <p v-if="logoutPending" class="sidebar-account__status" role="status">
+        로그아웃 중...
+      </p>
+      <p v-if="logoutError" class="sidebar-account__error" role="alert">
+        {{ logoutError }}
+      </p>
     </div>
   </aside>
 </template>
@@ -164,6 +212,13 @@ onMounted(() => void loadAdminData())
 .sidebar-panel {
   display: grid;
   gap: 16px;
+}
+
+.student-list-link {
+  width: 100%;
+  min-height: 58px;
+  color: var(--slate-600);
+  font-size: 11px;
 }
 
 .sidebar-nav {
@@ -219,12 +274,6 @@ onMounted(() => void loadAdminData())
   background: var(--sidebar);
 }
 
-.sidebar-account {
-  position: relative;
-  width: 100%;
-  min-height: 64px;
-}
-
 .sidebar-account__trigger {
   display: grid;
   width: 100%;
@@ -232,14 +281,14 @@ onMounted(() => void loadAdminData())
   min-height: 64px;
   align-items: center;
   gap: 7px;
-  padding: 8px 54px 8px 16px;
+  padding: 8px 16px;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: var(--slate-700);
   box-shadow: none;
   text-align: left;
-  grid-template-columns: 34px minmax(0, 1fr);
+  grid-template-columns: 34px minmax(0, 1fr) 18px;
 }
 
 .sidebar-account__trigger:hover {
@@ -280,32 +329,61 @@ onMounted(() => void loadAdminData())
   white-space: nowrap;
 }
 
-.sidebar-account__logout {
-  position: absolute;
-  top: 50%;
-  right: 14px;
-  width: 30px;
-  height: 30px;
-  border: 1px solid color-mix(in oklch, var(--destructive) 32%, var(--sidebar-border));
-  border-radius: 50%;
-  background: var(--sidebar);
-  color: var(--danger-600);
-  transform: translateY(-50%);
+.sidebar-account__chevron {
+  color: var(--slate-400);
+  font-size: 14px;
+  text-align: center;
 }
 
-.sidebar-account__logout:hover {
-  border-color: color-mix(in oklch, var(--destructive) 56%, var(--sidebar-border));
-  background: color-mix(in oklch, var(--destructive) 8%, var(--sidebar));
+.sidebar-account__status,
+.sidebar-account__error {
+  margin: 0;
+  padding: 0 16px 12px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.sidebar-account__status {
+  color: var(--slate-500);
+}
+
+.sidebar-account__error {
   color: var(--danger-600);
 }
 
-.sidebar-account__logout svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
+@media (max-width: 900px) {
+  .teacher-sidebar {
+    position: relative;
+    width: 100%;
+    height: auto;
+    min-width: 0;
+    padding: 10px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--sidebar-border);
+  }
+
+  .sidebar-brand {
+    height: 40px;
+    flex-basis: 40px;
+    margin-bottom: 8px;
+  }
+
+  .sidebar-panel {
+    gap: 10px;
+  }
+
+  .sidebar-nav {
+    display: flex;
+    padding-bottom: 2px;
+    overflow-x: auto;
+  }
+
+  .sidebar-nav a {
+    min-width: max-content;
+  }
+
+  .sidebar-footer {
+    margin: 10px -16px -10px;
+  }
 }
 </style>

@@ -59,6 +59,12 @@ const router = createRouter({
           meta: { title: '대시보드', section: 'dashboard' },
         },
         {
+          path: 'students',
+          name: 'teacher-students',
+          component: () => import('@/views/teacher/TeacherDashboardView.vue'),
+          meta: { title: '아동 목록', section: 'students' },
+        },
+        {
           path: 'students/new',
           name: 'student-create',
           component: () => import('@/views/teacher/StudentCreateView.vue'),

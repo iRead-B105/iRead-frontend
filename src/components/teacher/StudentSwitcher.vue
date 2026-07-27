@@ -428,6 +428,14 @@ onBeforeUnmount(() => {
 .student-switcher__manage:hover {
   background: var(--sidebar-accent);
 }
+
+@media (max-width: 900px) {
+  .student-switcher__popover {
+    top: calc(100% + 8px);
+    left: 0;
+    width: min(300px, calc(100vw - 32px));
+  }
+}
 </style>
             variant="ghost"
             variant="ghost"
