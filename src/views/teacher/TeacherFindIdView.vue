@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 const form = reactive({ name: '', email: '' })
 const found = ref(false)
 
-function findId() {
+function findEmail() {
   found.value = true
 }
 
@@ -20,7 +20,7 @@ function tryAgain() {
 
 <template>
   <main class="recovery-page">
-    <section class="recovery-shell" aria-labelledby="find-id-title">
+    <section class="recovery-shell" aria-labelledby="find-email-title">
       <RouterLink class="recovery-logo" to="/login" aria-label="로그인으로 이동">
         <img src="/images/iread-logo.png" alt="iRead" />
       </RouterLink>
@@ -29,11 +29,11 @@ function tryAgain() {
         <template v-if="!found">
           <header class="recovery-heading">
             <p class="recovery-eyebrow">계정 찾기</p>
-            <h1 id="find-id-title">아이디 찾기</h1>
+            <h1 id="find-email-title">로그인 이메일 확인</h1>
             <p>회원가입 시 등록한 이름과 이메일을 입력해 주세요.</p>
           </header>
 
-          <form class="recovery-form" @submit.prevent="findId">
+          <form class="recovery-form" @submit.prevent="findEmail">
             <div class="field">
               <label for="find-name">이름</label>
               <Input id="find-name" v-model.trim="form.name" class="input" required placeholder="이름 입력" />
@@ -49,16 +49,16 @@ function tryAgain() {
                 placeholder="example@iread.co.kr"
               />
             </div>
-            <Button class="recovery-submit" type="submit">아이디 확인</Button>
+            <Button class="recovery-submit" type="submit">이메일 확인</Button>
           </form>
         </template>
 
         <div v-else class="recovery-result" role="status">
           <div class="result-icon" aria-hidden="true">✓</div>
-          <p class="recovery-eyebrow">아이디 찾기 완료</p>
-          <h1 id="find-id-title">가입된 아이디를 찾았어요</h1>
-          <p><strong>{{ form.name }}</strong> 님의 회원 정보와 일치하는 아이디입니다.</p>
-          <div class="found-id" aria-label="마스킹된 아이디">iread_t***</div>
+          <p class="recovery-eyebrow">이메일 확인 완료</p>
+          <h1 id="find-email-title">가입된 이메일을 확인했어요</h1>
+          <p><strong>{{ form.name }}</strong> 님의 회원 정보와 일치하는 로그인 이메일입니다.</p>
+          <div class="found-id" aria-label="마스킹된 이메일">ire***@example.com</div>
           <div class="recovery-actions">
             <Button as-child>
               <RouterLink to="/login">로그인하기</RouterLink>

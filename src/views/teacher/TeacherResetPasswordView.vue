@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
 const step = ref<1 | 2 | 3>(1)
-const identity = reactive({ loginId: '', email: '' })
+const identity = reactive({ email: '' })
 const password = reactive({ newPassword: '', confirmation: '' })
 const errorMessage = ref('')
 const showPassword = ref(false)
@@ -48,14 +48,10 @@ function resetPassword() {
           <header class="recovery-heading">
             <p class="recovery-eyebrow">계정 확인</p>
             <h1 id="reset-password-title">비밀번호 찾기</h1>
-            <p>아이디와 회원가입 시 등록한 이메일을 입력해 주세요.</p>
+            <p>회원가입 시 등록한 이메일을 입력해 주세요.</p>
           </header>
 
           <form class="recovery-form" @submit.prevent="verifyIdentity">
-            <div class="field">
-              <label for="reset-id">아이디</label>
-              <Input id="reset-id" v-model.trim="identity.loginId" class="input" required placeholder="아이디 입력" />
-            </div>
             <div class="field">
               <label for="reset-email">이메일</label>
               <Input
