@@ -1,67 +1,98 @@
 <script setup lang="ts">
-withDefaults(
+import { computed } from 'vue'
+import { Button } from '@/components/ui/button'
+import {
+  formatGazeAverage,
+  formatGazeCount,
+  formatGazeDuration,
+  type GazeAnalysisRequestStatus,
+  type GazeAnalysisState,
+} from '@/features/teacher/gaze'
+
+const props = withDefaults(
   defineProps<{
     title?: string
-    description?: string
+    state: GazeAnalysisState | null
+    status: GazeAnalysisRequestStatus
+    error?: string | null
     compact?: boolean
   }>(),
   {
     title: '시선 분석',
-    description: '읽는 동안 시선이 머문 위치와 되돌아본 구간을 분석했습니다.',
+    error: null,
     compact: false,
   },
 )
 
-const metrics = [
-  { label: '평균 시선 체류', value: '0.82초', note: '이전 기록보다 0.14초 감소' },
-  { label: '되돌아보기', value: '4회', note: '문장 후반에 3회 집중' },
-  { label: '읽기 이탈', value: '1회', note: '보조 안내 후 학습 재개' },
-]
+defineEmits<{
+  retry: []
+}>()
 
-const segments = [
-  { label: '문장 시작', value: 34, tone: 'stable' },
-  { label: '받침 낱말', value: 82, tone: 'attention' },
-  { label: '연결 문장', value: 58, tone: 'watch' },
-  { label: '문장 마무리', value: 41, tone: 'stable' },
-]
+const metrics = computed(() => {
+  if (props.state?.status !== 'AVAILABLE') return []
+  const analysis = props.state.analysis
+  return [
+    {
+      label: '총 시선 체류 시간',
+      value: formatGazeDuration(analysis.totalVisitedDurationMs),
+    },
+    {
+      label: '평균 시선 체류 시간',
+      value: formatGazeAverage(analysis.avgVisitedDurationMs),
+    },
+    {
+      label: '총 시선 체류 횟수',
+      value: formatGazeCount(analysis.totalVisitedCount),
+    },
+    {
+      label: '되돌아보기 횟수',
+      value: formatGazeCount(analysis.reverseReadCount),
+    },
+  ]
+})
 </script>
 
 <template>
-  <section class="gaze-analysis" :class="{ 'gaze-analysis--compact': compact }" aria-labelledby="gaze-analysis-title">
-    <header>
+  <section class="gaze-analysis" :class="{ 'gaze-analysis--compact': compact }" :aria-label="title">
+    <header class="gaze-analysis__heading">
       <div>
         <span>시선트래킹</span>
-        <h2 id="gaze-analysis-title">{{ title }}</h2>
-        <p>{{ description }}</p>
+        <h2>{{ title }}</h2>
+        <p>학습 중 수집된 시선 데이터의 집계 결과입니다.</p>
       </div>
-      <strong class="analysis-status">확인 필요 1개 구간</strong>
+      <strong v-if="status === 'success' && state?.status === 'AVAILABLE'" class="analysis-status">
+        분석 완료
+      </strong>
     </header>
 
-    <div class="gaze-analysis__body">
-      <dl class="gaze-metrics">
-        <div v-for="metric in metrics" :key="metric.label">
-          <dt>{{ metric.label }}</dt>
-          <dd>{{ metric.value }}</dd>
-          <small>{{ metric.note }}</small>
-        </div>
-      </dl>
+    <p v-if="status === 'idle' || status === 'loading'" class="analysis-state" aria-live="polite">
+      시선 분석 결과를 불러오는 중입니다.
+    </p>
 
-      <div class="gaze-map" aria-label="문장 구간별 시선 체류 강도">
-        <div v-for="segment in segments" :key="segment.label">
-          <div class="gaze-map__label">
-            <span>{{ segment.label }}</span>
-            <strong>{{ segment.value }}%</strong>
-          </div>
-          <span class="gaze-map__track">
-            <i :class="`is-${segment.tone}`" :style="{ width: `${segment.value}%` }"></i>
-          </span>
-        </div>
-      </div>
+    <div v-else-if="status === 'error'" class="analysis-state analysis-state--error" role="alert">
+      <p>{{ error ?? '시선 분석 결과를 불러오지 못했습니다.' }}</p>
+      <Button variant="outline" type="button" @click="$emit('retry')"> 다시 불러오기 </Button>
     </div>
 
-    <p class="gaze-insight">
-      받침이 연속되는 낱말에서 체류 시간이 길고 되돌아보기가 반복되었습니다. 다음 학습에서는
-      해당 구간을 짧게 나누어 읽도록 안내하는 것을 권장합니다.
+    <p v-else-if="state?.status === 'NO_DATA'" class="analysis-state">
+      시선 분석 데이터가 없습니다.
+    </p>
+
+    <p v-else-if="state?.status === 'FAILED'" class="analysis-state analysis-state--warning">
+      시선 분석을 완료하지 못했습니다.
+    </p>
+
+    <dl v-else-if="state?.status === 'AVAILABLE'" class="gaze-metrics">
+      <div v-for="metric in metrics" :key="metric.label">
+        <dt>{{ metric.label }}</dt>
+        <dd>{{ metric.value }}</dd>
+      </div>
+    </dl>
+
+    <p v-else class="analysis-state">표시할 시선 분석 결과가 없습니다.</p>
+
+    <p class="gaze-disclaimer">
+      시선 지표는 학습 과정 참고용이며 의학적·임상적 진단 결과가 아닙니다.
     </p>
   </section>
 </template>
@@ -73,117 +104,152 @@ const segments = [
   padding: 22px 0 4px;
   border-top: 1px solid var(--slate-200);
 }
-.gaze-analysis > header {
+
+.gaze-analysis__heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
 }
-.gaze-analysis header span {
+
+.gaze-analysis__heading span {
   color: var(--primary-600);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.06em;
 }
+
 .gaze-analysis h2 {
   margin: 3px 0 0;
+  color: var(--slate-900);
   font-size: 17px;
 }
-.gaze-analysis header p {
+
+.gaze-analysis__heading p {
   margin: 4px 0 0;
   color: var(--slate-500);
   font-size: 12px;
 }
+
 .analysis-status {
+  flex: 0 0 auto;
   padding: 5px 9px;
   border-radius: 999px;
-  background: #fff7ed;
-  color: #c2410c;
+  background: color-mix(in oklch, var(--success-600) 12%, transparent);
+  color: var(--success-600);
   font-size: 10px;
 }
-.gaze-analysis__body {
-  display: grid;
-  gap: 24px;
-  grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
-}
+
 .gaze-metrics {
   display: grid;
   margin: 0;
-  border-top: 1px solid var(--slate-200);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
+
 .gaze-metrics > div {
   display: grid;
-  gap: 3px;
-  padding: 13px 12px;
-  border-bottom: 1px solid var(--slate-200);
+  gap: 6px;
+  min-width: 0;
+  padding: 16px;
+  background: var(--white);
 }
+
 .gaze-metrics > div + div {
   border-left: 1px solid var(--slate-200);
 }
-.gaze-metrics dt,
-.gaze-metrics small {
+
+.gaze-metrics dt {
   color: var(--slate-500);
-  font-size: 10px;
+  font-size: 11px;
 }
+
 .gaze-metrics dd {
   margin: 0;
   color: var(--slate-900);
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 800;
 }
-.gaze-map {
+
+.analysis-state {
   display: grid;
-  gap: 10px;
-}
-.gaze-map__label {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  color: var(--slate-600);
-  font-size: 11px;
-  font-weight: 500;
-}
-.gaze-map__label strong {
-  color: var(--slate-800);
-}
-.gaze-map__track {
-  display: block;
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--muted);
-}
-.gaze-map__track i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--primary-600);
-}
-.gaze-map__track i.is-watch {
-  background: var(--warning-500);
-}
-.gaze-map__track i.is-attention {
-  background: var(--danger-600);
-}
-.gaze-insight {
+  min-height: 92px;
   margin: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--card);
+  padding: 18px;
+  border: 1px dashed var(--slate-300);
+  border-radius: var(--radius-md);
   color: var(--slate-600);
-  font-size: 11px;
-  line-height: 1.65;
+  font-size: 13px;
+  place-items: center;
 }
+
+.analysis-state p {
+  margin: 0;
+}
+
+.analysis-state--error {
+  justify-items: start;
+  gap: 12px;
+  border-style: solid;
+  border-color: color-mix(in oklch, var(--danger-600) 28%, var(--border));
+  color: var(--danger-600);
+}
+
+.analysis-state--warning {
+  border-style: solid;
+  border-color: color-mix(in oklch, var(--warning-500) 32%, var(--border));
+}
+
+.gaze-disclaimer {
+  margin: 0;
+  color: var(--slate-500);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
 .gaze-analysis--compact {
   gap: 12px;
   padding-top: 18px;
 }
-.gaze-analysis--compact .gaze-analysis__body {
-  grid-template-columns: 1fr;
+
+.gaze-analysis--compact .gaze-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.gaze-analysis--compact .gaze-metrics dd {
-  font-size: 15px;
+
+.gaze-analysis--compact .gaze-metrics > div:nth-child(3) {
+  border-left: 0;
+}
+
+.gaze-analysis--compact .gaze-metrics > div:nth-child(n + 3) {
+  border-top: 1px solid var(--slate-200);
+}
+
+@container (max-width: 680px) {
+  .gaze-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gaze-metrics > div:nth-child(3) {
+    border-left: 0;
+  }
+
+  .gaze-metrics > div:nth-child(n + 3) {
+    border-top: 1px solid var(--slate-200);
+  }
+}
+
+@container (max-width: 420px) {
+  .gaze-metrics,
+  .gaze-analysis--compact .gaze-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .gaze-metrics > div + div,
+  .gaze-analysis--compact .gaze-metrics > div + div {
+    border-top: 1px solid var(--slate-200);
+    border-left: 0;
+  }
 }
 </style>

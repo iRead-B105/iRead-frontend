@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
 import ChartPanel from '@/components/common/ChartPanel.vue'
+import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
 import HistoryToolbar from '@/components/teacher/HistoryToolbar.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
@@ -30,19 +31,18 @@ const {
   currentTestId,
   comparisonTestIds,
   comparisonResult,
+  gazeAnalysis,
   availableComparisonTests,
   canAddComparison,
   listStatus,
   comparisonStatus,
+  gazeStatus,
   listError,
   comparisonError,
+  gazeError,
 } = storeToRefs(testStore)
 
-const chartPalette = [
-  chartColors.blue,
-  chartColors.green,
-  chartColors.amber,
-] as const
+const chartPalette = [chartColors.blue, chartColors.green, chartColors.amber] as const
 
 function parseStudentId(value: unknown): number | null {
   const normalized = Array.isArray(value) ? value[0] : value
@@ -54,10 +54,7 @@ const studentId = computed(() => parseStudentId(route.params.id))
 const invalidStudentId = computed(() => studentId.value === null)
 const displayedDetails = computed<TestDetail[]>(() => {
   if (!comparisonResult.value) return []
-  return [
-    comparisonResult.value.currentTest,
-    ...comparisonResult.value.comparisonTests,
-  ]
+  return [comparisonResult.value.currentTest, ...comparisonResult.value.comparisonTests]
 })
 const areaNames = computed(() => {
   const names = new Set<string>()
@@ -73,9 +70,7 @@ const areaChart = computed<EChartsOption>(() => ({
     valueFormatter: (value) => (value == null ? '-' : `${value}점`),
   },
   legend: {
-    data: displayedDetails.value.map((detail, index) =>
-      seriesLabel(detail, index),
-    ),
+    data: displayedDetails.value.map((detail, index) => seriesLabel(detail, index)),
     top: 4,
   },
   grid: { left: 52, right: 24, top: 52, bottom: 58 },
@@ -94,9 +89,7 @@ const areaChart = computed<EChartsOption>(() => ({
     name: seriesLabel(detail, index),
     type: 'bar',
     data: areaNames.value.map(
-      (area) =>
-        detail.areaScores.find((areaScore) => areaScore.area === area)?.score ??
-        null,
+      (area) => detail.areaScores.find((areaScore) => areaScore.area === area)?.score ?? null,
     ),
     itemStyle: {
       color: chartPalette[index] ?? chartColors.muted,
@@ -213,11 +206,7 @@ function testOptionLabel(test: TestListItem): string {
                 :disabled="comparisonStatus === 'loading'"
                 @change="changeCurrentTest"
               >
-                <option
-                  v-for="test in tests"
-                  :key="test.testId"
-                  :value="test.testId"
-                >
+                <option v-for="test in tests" :key="test.testId" :value="test.testId">
                   {{ testOptionLabel(test) }}
                 </option>
               </select>
@@ -254,7 +243,11 @@ function testOptionLabel(test: TestListItem): string {
           </HistoryToolbar>
         </Card>
 
-        <div v-if="comparisonTestIds.length > 0" class="comparison-chips" aria-label="선택한 비교 검사">
+        <div
+          v-if="comparisonTestIds.length > 0"
+          class="comparison-chips"
+          aria-label="선택한 비교 검사"
+        >
           <span
             v-for="test in testStore.comparisonTests"
             :key="test.testId"
@@ -272,15 +265,22 @@ function testOptionLabel(test: TestListItem): string {
           </span>
         </div>
 
+        <Card v-if="currentTestId !== null" class="gaze-card">
+          <GazeAnalysisPanel
+            title="검사 시선 분석"
+            :state="gazeAnalysis"
+            :status="gazeStatus"
+            :error="gazeError"
+            @retry="testStore.retryGazeAnalysis()"
+          />
+        </Card>
+
         <Card v-if="comparisonStatus === 'loading'" class="state-card" aria-live="polite">
           <strong>선택한 검사 결과를 불러오는 중입니다.</strong>
           <p>최신 선택의 응답만 화면에 반영합니다.</p>
         </Card>
 
-        <Card
-          v-else-if="comparisonStatus === 'error'"
-          class="state-card state-card--error"
-        >
+        <Card v-else-if="comparisonStatus === 'error'" class="state-card state-card--error">
           <strong>{{ comparisonError }}</strong>
           <Button type="button" @click="testStore.retryComparison()">다시 시도</Button>
         </Card>
@@ -300,9 +300,7 @@ function testOptionLabel(test: TestListItem): string {
                 height="330px"
                 aria-label="기준 검사와 선택한 비교 검사의 영역별 점수 차트"
               />
-              <div v-else class="inline-empty">
-                표시할 영역별 점수가 없습니다.
-              </div>
+              <div v-else class="inline-empty">표시할 영역별 점수가 없습니다.</div>
             </Card>
 
             <Card class="result-summary">
@@ -310,7 +308,9 @@ function testOptionLabel(test: TestListItem): string {
                 <span>기준 검사 종합</span>
                 <div>
                   <strong>{{ formatTestScore(comparisonResult.currentTest.overallScore) }}</strong>
-                  <small>{{ formatTestChange(comparisonResult.currentTest.changeFromPrevious) }}</small>
+                  <small>{{
+                    formatTestChange(comparisonResult.currentTest.changeFromPrevious)
+                  }}</small>
                 </div>
               </header>
               <dl>
@@ -380,10 +380,7 @@ function testOptionLabel(test: TestListItem): string {
                 <p>{{ formatTestDate(comparisonResult.currentTest.date) }} 검사 응답입니다.</p>
               </div>
             </header>
-            <div
-              v-if="comparisonResult.currentTest.questions.length === 0"
-              class="inline-empty"
-            >
+            <div v-if="comparisonResult.currentTest.questions.length === 0" class="inline-empty">
               제공된 문항 결과가 없습니다.
             </div>
             <ol v-else class="question-list">
@@ -549,10 +546,16 @@ function testOptionLabel(test: TestListItem): string {
 .result-chart,
 .result-summary,
 .metric-section,
-.question-section {
+.question-section,
+.gaze-card {
   min-width: 0;
   padding: 20px;
   border-radius: var(--radius-lg);
+}
+
+.gaze-card :deep(.gaze-analysis) {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .result-chart {

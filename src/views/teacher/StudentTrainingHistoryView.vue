@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
 import ChartPanel from '@/components/common/ChartPanel.vue'
+import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
 import HistoryToolbar from '@/components/teacher/HistoryToolbar.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
@@ -36,15 +37,18 @@ const {
   statistics,
   selectedHistoryTrainingId,
   historyTrainingDetail,
+  historyGazeAnalysis,
   curriculumLogsStatus,
   trainingLogStatus,
   statisticsStatus,
   historyDetailStatus,
+  historyGazeStatus,
   exportingFormat,
   curriculumLogsError,
   trainingLogError,
   statisticsError,
   historyDetailError,
+  historyGazeError,
   exportError,
 } = storeToRefs(trainingStore)
 
@@ -63,9 +67,7 @@ const selectedAccuracyComparison = computed(
       (comparison) => comparison.trainingId === selectedHistoryTrainingId.value,
     ) ?? null,
 )
-const readingSpeedPoints = computed(
-  () => statistics.value?.readingSpeedTrend.points ?? [],
-)
+const readingSpeedPoints = computed(() => statistics.value?.readingSpeedTrend.points ?? [])
 const speedChart = computed<EChartsOption>(() => ({
   tooltip: {
     trigger: 'axis',
@@ -136,10 +138,7 @@ async function retrySelectedCurriculum(): Promise<void> {
 
 async function retryDetail(): Promise<void> {
   if (studentId.value === null || selectedHistoryTrainingId.value === null) return
-  await trainingStore.loadHistoryTrainingDetail(
-    studentId.value,
-    selectedHistoryTrainingId.value,
-  )
+  await trainingStore.loadHistoryTrainingDetail(studentId.value, selectedHistoryTrainingId.value)
 }
 
 async function downloadTraining(format: TrainingExportFormat): Promise<void> {
@@ -227,9 +226,7 @@ function questionStatusClass(question: TrainingQuestionResult): string {
               <option value="3m">최근 3개월</option>
             </select>
           </div>
-          <template #status>
-            완료 커리큘럼 {{ curriculumLogs.length }}건
-          </template>
+          <template #status> 완료 커리큘럼 {{ curriculumLogs.length }}건 </template>
         </HistoryToolbar>
       </Card>
 
@@ -245,7 +242,10 @@ function questionStatusClass(question: TrainingQuestionResult): string {
           <p v-if="curriculumLogsStatus === 'loading'" class="section-state">
             완료된 커리큘럼을 불러오는 중입니다.
           </p>
-          <div v-else-if="curriculumLogsStatus === 'error'" class="section-state section-state--error">
+          <div
+            v-else-if="curriculumLogsStatus === 'error'"
+            class="section-state section-state--error"
+          >
             <p>{{ curriculumLogsError }}</p>
             <Button variant="outline" type="button" @click="trainingStore.retryHistory()">
               다시 불러오기
@@ -278,7 +278,13 @@ function questionStatusClass(question: TrainingQuestionResult): string {
           <header class="section-heading">
             <div>
               <h2>커리큘럼별 훈련</h2>
-              <p>{{ selectedCurriculumLog ? `${formatDate(selectedCurriculumLog.date)} 완료` : '커리큘럼을 선택해 주세요.' }}</p>
+              <p>
+                {{
+                  selectedCurriculumLog
+                    ? `${formatDate(selectedCurriculumLog.date)} 완료`
+                    : '커리큘럼을 선택해 주세요.'
+                }}
+              </p>
             </div>
           </header>
 
@@ -330,7 +336,10 @@ function questionStatusClass(question: TrainingQuestionResult): string {
           <p v-if="statisticsStatus === 'loading'" class="section-state section-state--chart">
             통계를 불러오는 중입니다.
           </p>
-          <div v-else-if="statisticsStatus === 'error'" class="section-state section-state--chart section-state--error">
+          <div
+            v-else-if="statisticsStatus === 'error'"
+            class="section-state section-state--chart section-state--error"
+          >
             <p>{{ statisticsError }}</p>
             <Button variant="outline" type="button" @click="retrySelectedCurriculum">
               다시 불러오기
@@ -369,7 +378,10 @@ function questionStatusClass(question: TrainingQuestionResult): string {
           <p v-if="historyDetailStatus === 'loading'" class="section-state detail-state">
             훈련 상세를 불러오는 중입니다.
           </p>
-          <div v-else-if="historyDetailStatus === 'error'" class="section-state detail-state section-state--error">
+          <div
+            v-else-if="historyDetailStatus === 'error'"
+            class="section-state detail-state section-state--error"
+          >
             <p>{{ historyDetailError }}</p>
             <Button variant="outline" type="button" @click="retryDetail">
               상세 다시 불러오기
@@ -399,7 +411,14 @@ function questionStatusClass(question: TrainingQuestionResult): string {
               </div>
               <div>
                 <dt>전체 학습 시간</dt>
-                <dd>{{ formatTrainingDuration(historyTrainingDetail.startedAt, historyTrainingDetail.finishedAt) }}</dd>
+                <dd>
+                  {{
+                    formatTrainingDuration(
+                      historyTrainingDetail.startedAt,
+                      historyTrainingDetail.finishedAt,
+                    )
+                  }}
+                </dd>
               </div>
               <div>
                 <dt>학습 판단</dt>
@@ -460,6 +479,15 @@ function questionStatusClass(question: TrainingQuestionResult): string {
               </Button>
             </div>
           </template>
+
+          <GazeAnalysisPanel
+            v-if="selectedHistoryTrainingId !== null"
+            title="훈련 시선 분석"
+            :state="historyGazeAnalysis"
+            :status="historyGazeStatus"
+            :error="historyGazeError"
+            @retry="trainingStore.retryHistoryGaze()"
+          />
         </Card>
       </div>
     </template>

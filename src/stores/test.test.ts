@@ -6,6 +6,7 @@ import {
   type TestListItem,
   type TestRepository,
 } from '@/features/teacher/test'
+import type { GazeAnalysisState } from '@/features/teacher/gaze'
 import { ApiError } from '@/lib/api'
 import { useTestStore } from './test'
 
@@ -21,6 +22,7 @@ function repository(overrides: Partial<TestRepository> = {}): TestRepository {
   return {
     getTests: vi.fn().mockResolvedValue([]),
     compareTests: vi.fn(),
+    getGazeAnalysis: vi.fn().mockResolvedValue({ status: 'NO_DATA', analysis: null }),
     ...overrides,
   }
 }
@@ -38,12 +40,7 @@ describe('Test store', () => {
 
     await store.loadForStudent(1)
 
-    expect(store.tests.map((test) => test.testId)).toEqual([
-      1_011,
-      1_008,
-      1_005,
-      1_004,
-    ])
+    expect(store.tests.map((test) => test.testId)).toEqual([1_011, 1_008, 1_005, 1_004])
     expect(store.currentTestId).toBe(1_011)
     expect(store.comparisonTestIds).toEqual([])
     expect(store.comparisonResult?.currentTest.testId).toBe(1_011)
@@ -53,6 +50,8 @@ describe('Test store', () => {
       [],
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
+    expect(store.gazeStatus).toBe('success')
+    expect(store.gazeAnalysis).toMatchObject({ status: 'AVAILABLE' })
   })
 
   it('비교 검사를 최대 두 건만 추가하고 개별 해제한다', async () => {
@@ -68,9 +67,7 @@ describe('Test store', () => {
 
     await expect(store.removeComparisonTest(1, 1_008)).resolves.toBe(true)
     expect(store.comparisonTestIds).toEqual([1_005])
-    expect(store.comparisonResult?.comparisonTests.map((test) => test.testId)).toEqual([
-      1_005,
-    ])
+    expect(store.comparisonResult?.comparisonTests.map((test) => test.testId)).toEqual([1_005])
   })
 
   it('기준 검사 변경 시 중복되는 비교 검사를 제거한다', async () => {
@@ -113,6 +110,60 @@ describe('Test store', () => {
     expect(store.comparisonResult?.currentTest.testId).toBe(1_005)
   })
 
+  it('빠른 기준 검사 변경에서 늦게 끝난 이전 시선 응답을 무시한다', async () => {
+    const oldGaze = deferred<GazeAnalysisState>()
+    const mock = new MockTestRepository()
+    const getGazeAnalysis = vi
+      .fn()
+      .mockResolvedValueOnce(await mock.getGazeAnalysis(1, 1_011))
+      .mockReturnValueOnce(oldGaze.promise)
+      .mockResolvedValueOnce({ status: 'FAILED', analysis: null })
+    const store = useTestStore()
+    store.setRepository(
+      repository({
+        getTests: vi.fn().mockResolvedValue(await mock.getTests(1)),
+        compareTests: vi
+          .fn()
+          .mockImplementation((studentId, currentTestId, ids) =>
+            mock.compareTests(studentId, currentTestId, ids),
+          ),
+        getGazeAnalysis,
+      }),
+    )
+    await store.loadForStudent(1)
+
+    const oldRequest = store.selectCurrentTest(1, 1_008)
+    await store.selectCurrentTest(1, 1_005)
+    oldGaze.resolve({ status: 'NO_DATA', analysis: null })
+    await oldRequest
+
+    expect(store.currentTestId).toBe(1_005)
+    expect(store.gazeAnalysis).toEqual({ status: 'FAILED', analysis: null })
+  })
+
+  it('시선 요청 오류를 검사 상세 성공과 도메인 상태에서 분리한다', async () => {
+    const mock = new MockTestRepository()
+    const store = useTestStore()
+    store.setRepository(
+      repository({
+        getTests: vi.fn().mockResolvedValue(await mock.getTests(1)),
+        compareTests: vi
+          .fn()
+          .mockImplementation((studentId, currentTestId, ids) =>
+            mock.compareTests(studentId, currentTestId, ids),
+          ),
+        getGazeAnalysis: vi.fn().mockRejectedValue(new Error('internal details')),
+      }),
+    )
+
+    await store.loadForStudent(1)
+
+    expect(store.comparisonStatus).toBe('success')
+    expect(store.gazeStatus).toBe('error')
+    expect(store.gazeError).toBe('시선 분석 결과를 불러오지 못했습니다.')
+    expect(store.gazeAnalysis).toBeNull()
+  })
+
   it('학습자 route 변경에서 늦게 끝난 이전 목록 응답을 무시한다', async () => {
     const oldList = deferred<readonly TestListItem[]>()
     const mock = new MockTestRepository()
@@ -124,9 +175,11 @@ describe('Test store', () => {
     store.setRepository(
       repository({
         getTests,
-        compareTests: vi.fn().mockImplementation((studentId, currentTestId, ids) =>
-          mock.compareTests(studentId, currentTestId, ids),
-        ),
+        compareTests: vi
+          .fn()
+          .mockImplementation((studentId, currentTestId, ids) =>
+            mock.compareTests(studentId, currentTestId, ids),
+          ),
       }),
     )
 

@@ -1,4 +1,5 @@
 import { ApiError } from '@/lib/api'
+import { testGazeFixtures, type GazeAnalysisState } from '@/features/teacher/gaze'
 import { testDetailFixtures, testListFixtures } from '../fixtures'
 import type { TestDetail, TestListItem } from '../model'
 import {
@@ -11,6 +12,7 @@ export interface MockTestRepositoryFixtures {
   readonly testsByStudent?: Readonly<Record<number, readonly TestListItem[]>>
   readonly details?: readonly TestDetail[]
   readonly forbiddenStudentIds?: readonly number[]
+  readonly gazeByTestId?: Readonly<Record<number, GazeAnalysisState>>
 }
 
 function clone<T>(value: T): T {
@@ -35,6 +37,7 @@ export class MockTestRepository implements TestRepository {
   private readonly testsByStudent: Readonly<Record<number, readonly TestListItem[]>>
   private readonly details = new Map<number, TestDetail>()
   private readonly forbiddenStudentIds: ReadonlySet<number>
+  private readonly gazeByTestId = new Map<number, GazeAnalysisState>()
 
   constructor(fixtures: MockTestRepositoryFixtures = {}) {
     this.testsByStudent = clone(fixtures.testsByStudent ?? testListFixtures)
@@ -42,6 +45,9 @@ export class MockTestRepository implements TestRepository {
       this.details.set(detail.testId, clone(detail))
     }
     this.forbiddenStudentIds = new Set(fixtures.forbiddenStudentIds ?? [])
+    for (const [testId, gaze] of Object.entries(fixtures.gazeByTestId ?? testGazeFixtures)) {
+      this.gazeByTestId.set(Number(testId), clone(gaze))
+    }
   }
 
   async getTests(studentId: number, options?: TestRequestOptions) {
@@ -49,8 +55,7 @@ export class MockTestRepository implements TestRepository {
     assertNotAborted(options)
     return clone(
       [...(this.testsByStudent[studentId] ?? [])].sort(
-        (left, right) =>
-          right.date.localeCompare(left.date) || right.testId - left.testId,
+        (left, right) => right.date.localeCompare(left.date) || right.testId - left.testId,
       ),
     )
   }
@@ -89,6 +94,31 @@ export class MockTestRepository implements TestRepository {
       currentTest,
       comparisonTests: comparisonTests as TestDetail[],
     })
+  }
+
+  async getGazeAnalysis(
+    studentId: number,
+    testId: number,
+    options?: TestRequestOptions,
+  ): Promise<GazeAnalysisState> {
+    this.assertStudentAccess(studentId)
+    assertNotAborted(options)
+    const belongsToStudent = (this.testsByStudent[studentId] ?? []).some(
+      (test) => test.testId === testId,
+    )
+    if (!belongsToStudent) {
+      throw new ApiError({
+        status: 404,
+        code: 'TEST_NOT_FOUND',
+        message: '완료된 검사 기록을 찾을 수 없습니다.',
+      })
+    }
+    return clone(
+      this.gazeByTestId.get(testId) ?? {
+        status: 'NO_DATA',
+        analysis: null,
+      },
+    )
   }
 
   private assertStudentAccess(studentId: number): void {

@@ -12,9 +12,7 @@ import {
 import { useTrainingStore } from '@/stores/training'
 import StudentCurriculumView from './StudentCurriculumView.vue'
 
-function repository(
-  overrides: Partial<TrainingRepository> = {},
-): TrainingRepository {
+function repository(overrides: Partial<TrainingRepository> = {}): TrainingRepository {
   return {
     getCatalog: vi.fn().mockResolvedValue(trainingCatalogFixture),
     getCurrentCurriculum: vi.fn().mockResolvedValue(currentCurriculumFixture),
@@ -28,6 +26,7 @@ function repository(
     getCurriculumLogs: vi.fn().mockResolvedValue([]),
     getTrainingLog: vi.fn(),
     getStatistics: vi.fn(),
+    getGazeAnalysis: vi.fn().mockResolvedValue({ status: 'NO_DATA', analysis: null }),
     exportTraining: vi.fn(),
     ...overrides,
   }
@@ -57,18 +56,21 @@ async function mountCurriculum(
   })
   await router.push(initialPath)
   await router.isReady()
-  const wrapper = mount({ template: '<RouterView />' }, {
-    global: {
-      plugins: [pinia, router],
-      stubs: {
-        teleport: true,
-        Dialog: { template: '<div><slot /></div>' },
-        DialogContent: { template: '<section><slot /></section>' },
-        DialogDescription: { template: '<p><slot /></p>' },
-        DialogTitle: { template: '<div><slot /></div>' },
+  const wrapper = mount(
+    { template: '<RouterView />' },
+    {
+      global: {
+        plugins: [pinia, router],
+        stubs: {
+          teleport: true,
+          Dialog: { template: '<div><slot /></div>' },
+          DialogContent: { template: '<section><slot /></section>' },
+          DialogDescription: { template: '<p><slot /></p>' },
+          DialogTitle: { template: '<div><slot /></div>' },
+        },
       },
     },
-  })
+  )
   await flushPromises()
   return { wrapper, router, store }
 }
@@ -124,9 +126,7 @@ describe('StudentCurriculumView', () => {
   })
 
   it('실제 training ID가 있는 반복 시행에서만 예상 단어·미리보기를 연다', async () => {
-    const getExpectedWords = vi.fn().mockResolvedValue([
-      { wordId: 1, wordName: '꽃' },
-    ])
+    const getExpectedWords = vi.fn().mockResolvedValue([{ wordId: 1, wordName: '꽃' }])
     const { wrapper } = await mountCurriculum(repository({ getExpectedWords }))
 
     const previewButtons = wrapper

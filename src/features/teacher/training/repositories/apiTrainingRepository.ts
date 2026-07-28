@@ -5,10 +5,7 @@ import type { TrainingRepository } from './trainingRepository'
 export class ApiTrainingRepository implements TrainingRepository {
   constructor(private readonly api: TrainingApi = createTrainingApi()) {}
 
-  getCatalog(
-    studentId: number,
-    options: Parameters<TrainingRepository['getCatalog']>[1] = {},
-  ) {
+  getCatalog(studentId: number, options: Parameters<TrainingRepository['getCatalog']>[1] = {}) {
     return this.api.getCatalog(studentId, options)
   }
 
@@ -96,6 +93,14 @@ export class ApiTrainingRepository implements TrainingRepository {
     options: Parameters<TrainingRepository['getStatistics']>[3] = {},
   ) {
     return this.api.getStatistics(studentId, curriculumId, period, options)
+  }
+
+  getGazeAnalysis(
+    studentId: number,
+    trainingId: number,
+    options: Parameters<TrainingRepository['getGazeAnalysis']>[2] = {},
+  ) {
+    return this.api.getGazeAnalysis(studentId, trainingId, options)
   }
 
   exportTraining(

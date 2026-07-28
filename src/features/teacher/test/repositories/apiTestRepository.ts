@@ -1,5 +1,6 @@
 import { createTestApi, type TestApi } from '../api'
 import {
+  assertPositiveId,
   assertTestComparisonSelection,
   type TestRepository,
 } from './testRepository'
@@ -7,10 +8,7 @@ import {
 export class ApiTestRepository implements TestRepository {
   constructor(private readonly api: TestApi = createTestApi()) {}
 
-  getTests(
-    studentId: number,
-    options: Parameters<TestRepository['getTests']>[1] = {},
-  ) {
+  getTests(studentId: number, options: Parameters<TestRepository['getTests']>[1] = {}) {
     return this.api.getTests(studentId, options)
   }
 
@@ -21,11 +19,16 @@ export class ApiTestRepository implements TestRepository {
     options: Parameters<TestRepository['compareTests']>[3] = {},
   ) {
     assertTestComparisonSelection(studentId, currentTestId, comparisonTestIds)
-    return this.api.compareTests(
-      studentId,
-      currentTestId,
-      comparisonTestIds,
-      options,
-    )
+    return this.api.compareTests(studentId, currentTestId, comparisonTestIds, options)
+  }
+
+  getGazeAnalysis(
+    studentId: number,
+    testId: number,
+    options: Parameters<TestRepository['getGazeAnalysis']>[2] = {},
+  ) {
+    assertPositiveId(studentId, 'studentId')
+    assertPositiveId(testId, 'testId')
+    return this.api.getGazeAnalysis(studentId, testId, options)
   }
 }
