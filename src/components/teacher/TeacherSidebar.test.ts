@@ -11,6 +11,7 @@ import type {
 } from '@/features/teacher/student'
 import { useSessionStore } from '@/stores/session'
 import { useReportStore } from '@/stores/report'
+import { installSessionScopedStoreReset } from '@/stores/sessionScopedStores'
 import { useStudentStore } from '@/stores/students'
 
 const defaultStudents: readonly StudentListItem[] = [
@@ -85,6 +86,7 @@ async function mountSidebar(
 }> {
   const pinia = createPinia()
   const router = createTestRouter()
+  installSessionScopedStoreReset(pinia)
   const session = useSessionStore(pinia)
   session.initialize({
     email: 'teacher@example.com',

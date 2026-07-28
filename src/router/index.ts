@@ -71,13 +71,6 @@ const router = createRouter({
           meta: { title: '아동 관리', section: 'students' },
         },
         {
-          // :id는 아동마다 달라지는 주소 부분입니다. 예: students/1/edit
-          path: 'students/:id/edit',
-          name: 'student-edit',
-          component: () => import('@/views/teacher/StudentEditView.vue'),
-          meta: { title: '아동 관리', section: 'students' },
-        },
-        {
           path: 'students/:id',
           component: () => import('@/layouts/StudentManagementLayout.vue'),
           meta: { title: '아동 관리', section: 'students' },
@@ -87,6 +80,11 @@ const router = createRouter({
               path: '',
               name: 'student-overview',
               component: () => import('@/views/teacher/StudentOverviewView.vue'),
+            },
+            {
+              path: 'edit',
+              name: 'student-edit',
+              component: () => import('@/views/teacher/StudentEditView.vue'),
             },
             {
               path: 'curriculum',

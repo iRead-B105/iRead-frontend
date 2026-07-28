@@ -68,4 +68,26 @@ describe('session API auth hooks', () => {
     expect(router.currentRoute.value.name).toBe('teacher-login')
     expect(router.currentRoute.value.query.redirect).toBe('/teacher/dashboard?tab=recent')
   })
+
+  it('동시 401 복구 실패에서는 로그인 이동을 한 번만 수행한다', async () => {
+    const router = createTestRouter()
+    await router.push('/teacher/dashboard?tab=recent')
+    const session = useSessionStore()
+    session.handleUnauthorized = vi.fn().mockResolvedValue(false)
+    const replace = vi.spyOn(router, 'replace')
+    const hooks = createSessionApiAuthHooks(session, router)
+    const error = new ApiError({
+      status: 401,
+      code: 'INVALID_REFRESH_TOKEN',
+      message: 'refresh 실패',
+    })
+
+    await Promise.all([
+      hooks.onUnauthorized?.(error, { requestRetried: false }),
+      hooks.onUnauthorized?.(error, { requestRetried: false }),
+    ])
+
+    expect(replace).toHaveBeenCalledOnce()
+    expect(router.currentRoute.value.query.redirect).toBe('/teacher/dashboard?tab=recent')
+  })
 })
