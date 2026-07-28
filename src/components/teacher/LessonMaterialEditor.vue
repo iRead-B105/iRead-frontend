@@ -91,12 +91,7 @@ function confirmDeleteWord(): void {
 <template>
   <Dialog :open="true" @update:open="(open) => !open && emit('close')">
     <DialogContent
-      class="!max-w-none !gap-0 !overflow-hidden !bg-transparent !p-0 !ring-0"
-      :style="{
-        width: 'min(1040px, calc(100vw - 48px))',
-        height: 'min(760px, calc(100vh - 48px))',
-        maxWidth: '1040px',
-      }"
+      class="material-dialog !max-w-none !gap-0 !overflow-hidden !bg-transparent !p-0 !ring-0"
       :show-close-button="false"
     >
       <div class="material-editor">
@@ -258,6 +253,13 @@ function confirmDeleteWord(): void {
 </template>
 
 <style scoped>
+.material-dialog {
+  width: min(1040px, calc(100vw - 48px));
+  height: min(760px, calc(100dvh - 48px));
+  max-width: 1040px;
+  max-height: calc(100dvh - 48px);
+}
+
 .material-editor {
   display: grid;
   height: 100%;
@@ -276,6 +278,10 @@ function confirmDeleteWord(): void {
   padding: 18px 22px;
   border-bottom: 1px solid var(--border);
 }
+
+.editor-header > div:first-child {
+  min-width: 0;
+}
 .editor-header span,
 .word-panel header p,
 .preview-panel header p {
@@ -292,6 +298,7 @@ function confirmDeleteWord(): void {
 }
 .editor-header h2 {
   font-size: 19px;
+  overflow-wrap: anywhere;
 }
 .editor-header__actions {
   display: flex;
@@ -474,12 +481,75 @@ function confirmDeleteWord(): void {
   font-size: 13px;
 }
 @media (max-width: 760px) {
-  .editor-workspace {
-    grid-template-columns: 1fr;
+  .material-dialog {
+    width: calc(100vw - 24px);
+    height: calc(100dvh - 24px);
+    max-height: calc(100dvh - 24px);
   }
+
+  .material-editor {
+    overflow: hidden;
+  }
+
+  .editor-workspace {
+    overflow-y: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .word-panel,
+  .preview-panel {
+    overflow: visible;
+  }
+
   .word-panel {
     border-right: 0;
     border-bottom: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 480px) {
+  .material-dialog {
+    width: calc(100vw - 12px);
+    height: calc(100dvh - 12px);
+    max-height: calc(100dvh - 12px);
+  }
+
+  .editor-header,
+  .word-panel,
+  .preview-panel {
+    padding: 14px;
+  }
+
+  .editor-header {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .editor-header h2 {
+    font-size: 17px;
+  }
+
+  .editor-header__actions {
+    flex: 0 0 auto;
+  }
+
+  .word-form > div {
+    grid-template-columns: 1fr;
+  }
+
+  .word-form :deep([data-slot='button']) {
+    width: 100%;
+  }
+
+  .preview-device {
+    min-height: 360px;
+    border-width: 5px;
+    border-radius: 16px;
+  }
+
+  .preview-content {
+    padding: 18px 14px;
   }
 }
 </style>

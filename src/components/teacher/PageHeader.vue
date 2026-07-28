@@ -52,8 +52,29 @@ defineProps<{
 
 .page-header__actions {
   display: flex;
+  min-width: 0;
   flex: 0 0 auto;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .page-header {
+    min-height: 0;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .page-header h1 {
+    font-size: 22px;
+  }
+
+  .page-header__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 </style>

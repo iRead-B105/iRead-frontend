@@ -144,6 +144,7 @@ async function login() {
 .login-page {
   display: grid;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 64px 48px 52px;
   background: var(--background);
   place-items: start center;
@@ -189,6 +190,7 @@ async function login() {
 .login-heading p {
   margin: 0;
   color: var(--slate-500);
+  overflow-wrap: anywhere;
 }
 
 .login-fields {
@@ -300,6 +302,28 @@ async function login() {
 
   .login-shell {
     padding: 30px 22px;
+  }
+
+  .login-heading h1 {
+    font-size: 26px;
+  }
+}
+
+@media (max-width: 360px), (max-height: 620px) {
+  .login-page {
+    padding: 20px 14px 28px;
+  }
+
+  .login-shell {
+    padding: 24px 18px;
+  }
+
+  .login-logo {
+    margin-bottom: 20px;
+  }
+
+  .login-heading {
+    margin-bottom: 24px;
   }
 }
 </style>

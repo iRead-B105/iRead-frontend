@@ -241,6 +241,11 @@ const metrics = computed(() => {
 }
 
 @container (max-width: 420px) {
+  .gaze-analysis__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .gaze-metrics,
   .gaze-analysis--compact .gaze-metrics {
     grid-template-columns: 1fr;

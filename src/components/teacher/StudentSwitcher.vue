@@ -262,6 +262,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .student-switcher {
   position: relative;
+  min-width: 0;
+  max-width: 100%;
 }
 .student-switcher__trigger {
   display: grid;
@@ -394,6 +396,13 @@ onBeforeUnmount(() => {
     top: calc(100% + 8px);
     left: 0;
     width: min(300px, calc(100vw - 32px));
+    max-height: min(520px, calc(100dvh - 24px));
+  }
+}
+
+@media (max-width: 480px) {
+  .student-switcher__popover {
+    width: min(300px, calc(100vw - 24px));
   }
 }
 </style>

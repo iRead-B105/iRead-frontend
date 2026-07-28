@@ -67,4 +67,11 @@ defineProps<{
     padding-left: 16px;
   }
 }
+
+@media (max-width: 480px) {
+  .settings-section__header {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
 </style>

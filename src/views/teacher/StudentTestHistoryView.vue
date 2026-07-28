@@ -510,6 +510,7 @@ function testOptionLabel(test: TestListItem): string {
 
 .comparison-chip {
   display: inline-flex;
+  max-width: 100%;
   align-items: center;
   gap: 8px;
   padding: 7px 8px 7px 12px;
@@ -519,6 +520,7 @@ function testOptionLabel(test: TestListItem): string {
   color: var(--primary-700);
   font-size: 12px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .comparison-chip button {
@@ -835,6 +837,33 @@ function testOptionLabel(test: TestListItem): string {
   .detail-card dl,
   .question-list dl {
     grid-template-columns: 1fr;
+  }
+
+  .result-chart,
+  .result-summary,
+  .metric-section,
+  .question-section,
+  .gaze-card {
+    padding: 16px;
+  }
+}
+
+@container (max-width: 480px) {
+  .section-heading,
+  .detail-card header,
+  .question-list li > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .comparison-chips {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .comparison-chip {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 </style>

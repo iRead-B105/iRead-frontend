@@ -43,21 +43,27 @@ function selectTab(value: string | number) {
 .student-tabs {
   /* 탭들을 가로로 나열하고 공통 흰 배경과 테두리로 하나의 메뉴처럼 묶습니다. */
   display: flex;
+  width: 100%;
   gap: 4px;
   margin-top: 12px;
   padding: 6px;
+  overflow-x: auto;
   border: 1px solid var(--slate-200);
   border-radius: 10px;
   background: var(--white);
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 6px;
 }
 
 .student-tabs :deep([data-slot='tabs-trigger']) {
+  flex: 0 0 auto;
   min-width: 112px;
   padding: 10px 14px;
   border-radius: 7px;
   color: var(--slate-500);
   font-weight: 700;
   text-align: center;
+  scroll-snap-align: start;
 }
 
 .student-tabs :deep([data-slot='tabs-trigger']:hover) {
@@ -68,5 +74,14 @@ function selectTab(value: string | number) {
 .student-tabs :deep([data-slot='tabs-trigger'][data-active]) {
   background: var(--primary-50);
   color: var(--primary-700);
+}
+
+@media (max-width: 480px) {
+  .student-tabs :deep([data-slot='tabs-trigger']) {
+    min-width: 104px;
+    min-height: 44px;
+    padding-right: 10px;
+    padding-left: 10px;
+  }
 }
 </style>
