@@ -1,6 +1,7 @@
 import { resolveEnvironment } from '@/config/env'
 import { ApiError } from './apiError'
 import { createDownloadResult, type DownloadResult } from './download'
+import { isAbortError } from './isAbortError'
 import {
   hasResponseData,
   isErrorResponse,
@@ -45,12 +46,6 @@ interface ParsedBody {
 
 export interface ApiRequestOptions {
   readonly retryOnUnauthorized?: boolean
-}
-
-function isAbortError(error: unknown): boolean {
-  return (
-    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError'
-  )
 }
 
 async function readResponseBody(response: Response): Promise<ParsedBody> {

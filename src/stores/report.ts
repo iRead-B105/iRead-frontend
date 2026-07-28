@@ -14,16 +14,7 @@ import {
   type ReportRepository,
   type ReportRequestStatus,
 } from '@/features/teacher/report'
-import { isApiError } from '@/lib/api'
-
-function isAbortError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    error.name === 'AbortError'
-  )
-}
+import { isAbortError, isApiError } from '@/lib/api'
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback

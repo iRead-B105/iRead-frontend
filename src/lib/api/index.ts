@@ -11,6 +11,7 @@ export * from './apiClient'
 export * from './apiError'
 export * from './apiTypes'
 export * from './download'
+export * from './isAbortError'
 
 export const apiClient = new ApiClient({
   baseUrl: appEnvironment.apiBaseUrl,
