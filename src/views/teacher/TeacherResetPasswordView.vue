@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { nextTick, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,19 +17,42 @@ const step = ref<1 | 2>(1)
 const identity = reactive({ email: '' })
 const password = reactive({ verificationCode: '', newPassword: '', confirmation: '' })
 const errorMessage = ref('')
+const errorField = ref('')
+const errorSummary = ref<HTMLElement | null>(null)
 const showPassword = ref(false)
 const submitting = ref(false)
 
-function verifyIdentity() {
+async function focusHeading(): Promise<void> {
+  await nextTick()
+  document.getElementById('reset-password-title')?.focus()
+}
+
+async function focusError(field?: string): Promise<void> {
+  await nextTick()
+  const fieldIds: Record<string, string> = {
+    email: 'reset-email',
+    verificationCode: 'verification-code',
+    newPassword: 'new-password',
+    passwordConfirm: 'password-confirmation',
+  }
+  const target = field ? document.getElementById(fieldIds[field] ?? '') : null
+  ;(target ?? errorSummary.value)?.focus()
+}
+
+async function verifyIdentity() {
   errorMessage.value = ''
+  errorField.value = ''
   const validation = validateEmail(identity.email)
   if (!validation.ok) {
     errorMessage.value = validation.message
+    errorField.value = validation.field
+    await focusError(validation.field)
     return
   }
 
   identity.email = validation.value
   step.value = 2
+  await focusHeading()
 }
 
 async function resetPassword() {
@@ -43,11 +66,14 @@ async function resetPassword() {
   })
   if (!validation.ok) {
     errorMessage.value = validation.message
+    errorField.value = validation.field
+    await focusError(validation.field)
     return
   }
 
   submitting.value = true
   errorMessage.value = ''
+  errorField.value = ''
 
   try {
     await authRepositories.auth.resetPassword(validation.value)
@@ -58,9 +84,17 @@ async function resetPassword() {
     })
   } catch (error) {
     errorMessage.value = getResetPasswordErrorMessage(error)
+    await focusError()
   } finally {
     submitting.value = false
   }
+}
+
+async function returnToIdentityStep(): Promise<void> {
+  errorMessage.value = ''
+  errorField.value = ''
+  step.value = 1
+  await focusHeading()
 }
 </script>
 
@@ -73,14 +107,21 @@ async function resetPassword() {
 
       <div class="recovery-card">
         <ol class="stepper" aria-label="비밀번호 재설정 단계">
-          <li :class="{ active: step === 1, complete: step > 1 }"><span>1</span>본인 확인</li>
-          <li :class="{ active: step === 2 }"><span>2</span>비밀번호 변경</li>
+          <li
+            :class="{ active: step === 1, complete: step > 1 }"
+            :aria-current="step === 1 ? 'step' : undefined"
+          >
+            <span>1</span>본인 확인
+          </li>
+          <li :class="{ active: step === 2 }" :aria-current="step === 2 ? 'step' : undefined">
+            <span>2</span>비밀번호 변경
+          </li>
         </ol>
 
         <template v-if="step === 1">
           <header class="recovery-heading">
             <p class="recovery-eyebrow">계정 확인</p>
-            <h1 id="reset-password-title">비밀번호 찾기</h1>
+            <h1 id="reset-password-title" tabindex="-1">비밀번호 찾기</h1>
             <p>회원가입 시 등록한 이메일을 입력해 주세요.</p>
           </header>
 
@@ -96,9 +137,20 @@ async function resetPassword() {
                 maxlength="50"
                 autocomplete="email"
                 placeholder="example@iread.co.kr"
+                :aria-invalid="errorField === 'email'"
+                :aria-describedby="errorField === 'email' ? 'reset-password-error' : undefined"
               />
             </div>
-            <p v-if="errorMessage" class="error-message" role="alert">{{ errorMessage }}</p>
+            <p
+              v-if="errorMessage"
+              id="reset-password-error"
+              ref="errorSummary"
+              class="error-message"
+              role="alert"
+              tabindex="-1"
+            >
+              {{ errorMessage }}
+            </p>
             <Button class="recovery-submit" type="submit">본인 확인</Button>
           </form>
         </template>
@@ -106,7 +158,7 @@ async function resetPassword() {
         <template v-else-if="step === 2">
           <header class="recovery-heading">
             <p class="recovery-eyebrow">본인 확인 완료</p>
-            <h1 id="reset-password-title">새 비밀번호 설정</h1>
+            <h1 id="reset-password-title" tabindex="-1">새 비밀번호 설정</h1>
             <p>전달받은 검증 코드와 8~100자의 새 비밀번호를 입력해 주세요.</p>
           </header>
 
@@ -120,6 +172,10 @@ async function resetPassword() {
                 required
                 autocomplete="one-time-code"
                 placeholder="검증 코드 입력"
+                :aria-invalid="errorField === 'verificationCode'"
+                :aria-describedby="
+                  errorField === 'verificationCode' ? 'reset-password-error' : undefined
+                "
               />
             </div>
             <div class="field">
@@ -135,11 +191,17 @@ async function resetPassword() {
                   :type="showPassword ? 'text' : 'password'"
                   autocomplete="new-password"
                   placeholder="새 비밀번호 입력"
+                  :aria-invalid="errorField === 'newPassword'"
+                  :aria-describedby="
+                    errorField === 'newPassword' ? 'reset-password-error' : undefined
+                  "
                 />
                 <Button
                   variant="ghost"
                   size="sm"
                   type="button"
+                  :aria-label="showPassword ? '새 비밀번호 숨기기' : '새 비밀번호 보기'"
+                  :aria-pressed="showPassword"
                   @click="showPassword = !showPassword"
                 >
                   {{ showPassword ? '숨기기' : '보기' }}
@@ -158,9 +220,22 @@ async function resetPassword() {
                 :type="showPassword ? 'text' : 'password'"
                 autocomplete="new-password"
                 placeholder="새 비밀번호 다시 입력"
+                :aria-invalid="errorField === 'passwordConfirm'"
+                :aria-describedby="
+                  errorField === 'passwordConfirm' ? 'reset-password-error' : undefined
+                "
               />
             </div>
-            <p v-if="errorMessage" class="error-message" role="alert">{{ errorMessage }}</p>
+            <p
+              v-if="errorMessage"
+              id="reset-password-error"
+              ref="errorSummary"
+              class="error-message"
+              role="alert"
+              tabindex="-1"
+            >
+              {{ errorMessage }}
+            </p>
             <Button class="recovery-submit" type="submit" :disabled="submitting">
               {{ submitting ? '변경 중...' : '비밀번호 변경' }}
             </Button>
@@ -169,7 +244,7 @@ async function resetPassword() {
               class="text-button"
               type="button"
               :disabled="submitting"
-              @click="step = 1"
+              @click="returnToIdentityStep"
             >
               이전 단계
             </Button>

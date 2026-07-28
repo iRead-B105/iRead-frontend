@@ -23,11 +23,11 @@ describe('authentication form validation', () => {
   })
 
   it.each([
-    ['invalid-email', '올바른 이메일을 50자 이내로 입력해 주세요.'],
-    ['password', '비밀번호와 비밀번호 확인이 일치하지 않습니다.'],
-    ['name', '이름은 1~10자로 입력해 주세요.'],
-    ['organization', '소속은 1~100자로 입력해 주세요.'],
-  ])('잘못된 회원가입 %s 입력을 거부한다', (field, expected) => {
+    ['invalid-email', '올바른 이메일을 50자 이내로 입력해 주세요.', 'email'],
+    ['password', '비밀번호와 비밀번호 확인이 일치하지 않습니다.', 'passwordConfirm'],
+    ['name', '이름은 1~10자로 입력해 주세요.', 'name'],
+    ['organization', '소속은 1~100자로 입력해 주세요.', 'organization'],
+  ])('잘못된 회원가입 %s 입력을 거부한다', (field, expected, expectedField) => {
     const input = {
       email: field === 'invalid-email' ? 'invalid' : 'teacher@example.com',
       password: 'password',
@@ -36,7 +36,11 @@ describe('authentication form validation', () => {
       organization: field === 'organization' ? 'a'.repeat(101) : 'iRead 센터',
     }
 
-    expect(validateSignUpForm(input)).toEqual({ ok: false, message: expected })
+    expect(validateSignUpForm(input)).toEqual({
+      ok: false,
+      message: expected,
+      field: expectedField,
+    })
   })
 
   it('비밀번호 재설정 요청 필드를 검증하고 trim한다', () => {

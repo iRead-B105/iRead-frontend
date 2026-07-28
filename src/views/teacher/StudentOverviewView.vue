@@ -114,6 +114,12 @@ const accuracyDelta = computed(() => {
     accuracyTrend.value[0]!.accuracy
   )
 })
+const accuracyChartSummary = computed(
+  () =>
+    `날짜별 읽기 정확도: ${accuracyTrend.value
+      .map((point) => `${point.date} ${point.accuracy}%`)
+      .join(', ')}`,
+)
 const accuracyChartOption = computed<EChartsOption>(() => ({
   grid: { left: 42, right: 18, top: 24, bottom: 34 },
   tooltip: {
@@ -484,6 +490,7 @@ watch(studentId, loadOverview, { immediate: true })
               :option="accuracyChartOption"
               height="260px"
               aria-label="최근 6주 날짜별 읽기 정확도 추이 차트"
+              :summary="accuracyChartSummary"
             />
           </template>
         </section>

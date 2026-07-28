@@ -182,6 +182,10 @@ function openDeleteDialog(): void {
   deleteDialogOpen.value = true
 }
 
+function handleDeleteDialogOpen(nextOpen: boolean): void {
+  if (!nextOpen && !deleting.value) deleteDialogOpen.value = false
+}
+
 async function confirmStudentDeletion(): Promise<void> {
   if (!canDelete.value || !currentDetail.value) return
 
@@ -241,9 +245,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
           <Input
             id="student-name"
             v-model="form.name"
+            required
             :maxlength="STUDENT_FIELD_MAX_LENGTH.name"
             :aria-invalid="Boolean(fieldErrors.name)"
-            aria-describedby="student-name-error"
+            :aria-describedby="fieldErrors.name ? 'student-name-error' : undefined"
             placeholder="아동 이름"
           />
           <p v-if="fieldErrors.name" id="student-name-error" class="field-error">
@@ -255,8 +260,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
           <Input
             id="student-birthday"
             v-model="form.birthday"
+            required
             :aria-invalid="Boolean(fieldErrors.birthday)"
-            aria-describedby="student-birthday-error"
+            :aria-describedby="fieldErrors.birthday ? 'student-birthday-error' : undefined"
             type="date"
           />
           <p v-if="fieldErrors.birthday" id="student-birthday-error" class="field-error">
@@ -269,8 +275,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
             <SelectTrigger
               id="student-gender"
               class="!w-full"
+              aria-required="true"
               :aria-invalid="Boolean(fieldErrors.gender)"
-              aria-describedby="student-gender-error"
+              :aria-describedby="fieldErrors.gender ? 'student-gender-error' : undefined"
             >
               <SelectValue placeholder="성별 선택" />
             </SelectTrigger>
@@ -288,9 +295,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
           <Input
             id="student-school"
             v-model="form.school"
+            required
             :maxlength="STUDENT_FIELD_MAX_LENGTH.school"
             :aria-invalid="Boolean(fieldErrors.school)"
-            aria-describedby="student-school-error"
+            :aria-describedby="fieldErrors.school ? 'student-school-error' : undefined"
             placeholder="학교명"
           />
           <p v-if="fieldErrors.school" id="student-school-error" class="field-error">
@@ -307,9 +315,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
           <Input
             id="guardian-name"
             v-model="form.guardian"
+            required
             :maxlength="STUDENT_FIELD_MAX_LENGTH.guardian"
             :aria-invalid="Boolean(fieldErrors.guardian)"
-            aria-describedby="guardian-name-error"
+            :aria-describedby="fieldErrors.guardian ? 'guardian-name-error' : undefined"
             placeholder="보호자 이름"
           />
           <p v-if="fieldErrors.guardian" id="guardian-name-error" class="field-error">
@@ -321,9 +330,12 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
           <Input
             id="guardian-contact"
             v-model="form.guardianContact"
+            required
             :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianContact"
             :aria-invalid="Boolean(fieldErrors.guardianContact)"
-            aria-describedby="guardian-contact-error"
+            :aria-describedby="
+              fieldErrors.guardianContact ? 'guardian-contact-error' : undefined
+            "
             inputmode="tel"
             placeholder="010-0000-0000"
           />
@@ -338,7 +350,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
             v-model="form.guardianEmail"
             :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianEmail"
             :aria-invalid="Boolean(fieldErrors.guardianEmail)"
-            aria-describedby="guardian-email-error"
+            :aria-describedby="fieldErrors.guardianEmail ? 'guardian-email-error' : undefined"
             type="email"
             placeholder="example@email.com"
           />
@@ -353,7 +365,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
             v-model="form.address"
             :maxlength="STUDENT_FIELD_MAX_LENGTH.address"
             :aria-invalid="Boolean(fieldErrors.address)"
-            aria-describedby="student-address-error"
+            :aria-describedby="fieldErrors.address ? 'student-address-error' : undefined"
             placeholder="주소를 입력하세요"
           />
           <p v-if="fieldErrors.address" id="student-address-error" class="field-error">
@@ -386,7 +398,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
       </section>
     </div>
 
-    <AlertDialog :open="deleteDialogOpen">
+    <AlertDialog :open="deleteDialogOpen" @update:open="handleDeleteDialogOpen">
       <AlertDialogContent class="delete-dialog">
         <AlertDialogHeader>
           <AlertDialogTitle>아동을 영구 삭제할까요?</AlertDialogTitle>

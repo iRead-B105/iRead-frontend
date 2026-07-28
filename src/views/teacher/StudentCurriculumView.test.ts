@@ -69,6 +69,7 @@ async function mountCurriculum(
           DialogTitle: { template: '<div><slot /></div>' },
         },
       },
+      attachTo: document.body,
     },
   )
   await flushPromises()
@@ -152,5 +153,29 @@ describe('StudentCurriculumView', () => {
 
     expect(wrapper.text()).toContain('기록 없음')
     expect(wrapper.text()).not.toContain('첫소리 구별하기0%')
+  })
+
+  it('drag 없이 위로·아래로 순서를 바꾸고 이동한 항목 안에 focus를 유지한다', async () => {
+    const { wrapper, store } = await mountCurriculum(repository())
+    const firstItem = store.draftItems[0]!
+    const firstTemplate = trainingCatalogFixture.find(
+      (template) => template.trainingTemplateId === firstItem.trainingTemplateId,
+    )!
+
+    await buttonWithText(wrapper, '순서 편집')?.trigger('click')
+    const moveDown = wrapper
+      .findAll('button')
+      .find(
+        (button) =>
+          button.attributes('aria-label') === `${firstTemplate.trainingName} 아래로 이동`,
+      )
+    await moveDown?.trigger('click')
+    await flushPromises()
+
+    expect(store.draftItems[1]?.key).toBe(firstItem.key)
+    expect(wrapper.text()).toContain(`${firstTemplate.trainingName}을(를) 2번째로 이동했습니다.`)
+    expect(document.activeElement?.closest('article')?.id).toBe(
+      `curriculum-item-${firstItem.key}`,
+    )
   })
 })

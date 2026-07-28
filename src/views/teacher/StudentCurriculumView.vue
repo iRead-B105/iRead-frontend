@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   onBeforeRouteLeave,
@@ -14,9 +14,10 @@ import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
-import type {
-  CurriculumDraftItem,
-  TrainingCatalogItem,
+import {
+  trainingStatusLabel,
+  type CurriculumDraftItem,
+  type TrainingCatalogItem,
 } from '@/features/teacher/training'
 import { useTrainingStore } from '@/stores/training'
 
@@ -53,6 +54,7 @@ const draggedDraftKey = ref<string | null>(null)
 const editCurriculum = ref(false)
 const materialEditorOpen = ref(false)
 const draftPendingDeletion = ref<CurriculumDraftItem | null>(null)
+const reorderAnnouncement = ref('')
 const { visible: saved, show: showSaved } = useTemporaryNotice()
 
 function parseStudentId(value: unknown): number | null {
@@ -149,6 +151,24 @@ function dropDraftItem(targetKey: string): void {
   if (!draggedDraftKey.value) return
   trainingStore.moveDraftItem(draggedDraftKey.value, targetKey)
   draggedDraftKey.value = null
+}
+
+async function moveDraftItem(
+  item: CurriculumDraftItem,
+  index: number,
+  direction: -1 | 1,
+): Promise<void> {
+  const target = draftItems.value[index + direction]
+  if (!target || isSavingCurriculum.value) return
+
+  trainingStore.moveDraftItem(item.key, target.key)
+  const nextIndex = index + direction
+  reorderAnnouncement.value = `${templateFor(item)?.trainingName ?? '훈련'}을(를) ${nextIndex + 1}번째로 이동했습니다.`
+  await nextTick()
+  document
+    .getElementById(`curriculum-item-${item.key}`)
+    ?.querySelector<HTMLButtonElement>('button:not(:disabled)')
+    ?.focus()
 }
 
 async function selectDraftItem(item: CurriculumDraftItem): Promise<void> {
@@ -285,6 +305,7 @@ function deletionMessage(): string {
               class="curriculum-row"
               :class="{ active: item.trainingTemplateId === selectedTemplateId }"
               type="button"
+              :aria-pressed="item.trainingTemplateId === selectedTemplateId"
               @click="trainingStore.selectTemplate(item.trainingTemplateId)"
             >
               <b>{{ item.sequence }}</b>
@@ -361,7 +382,7 @@ function deletionMessage(): string {
                 <h2>다음 회차 순서</h2>
                 <p v-if="curriculumStatus === 'loading'">커리큘럼을 불러오는 중입니다.</p>
                 <p v-else-if="savedCurriculum">
-                  {{ draftItems.length }}회 시행 · {{ savedCurriculum.status }}
+                  {{ draftItems.length }}회 시행 · {{ trainingStatusLabel(savedCurriculum.status) }}
                 </p>
                 <p v-else>저장된 다음 회차가 없습니다. 훈련을 추가해 새로 구성하세요.</p>
               </div>
@@ -382,6 +403,7 @@ function deletionMessage(): string {
             <div class="recommendation-list">
               <article
                 v-for="(item, index) in draftItems"
+                :id="`curriculum-item-${item.key}`"
                 :key="item.key"
                 :draggable="editCurriculum && !isSavingCurriculum"
                 :class="{
@@ -393,15 +415,47 @@ function deletionMessage(): string {
                 @dragend="draggedDraftKey = null"
                 @dragover.prevent
                 @drop="dropDraftItem(item.key)"
-                @click="selectDraftItem(item)"
               >
                 <span class="drag-handle" :class="{ enabled: editCurriculum }" aria-hidden="true"></span>
                 <b class="recommendation-order">{{ index + 1 }}</b>
-                <div class="recommendation-copy">
+                <button
+                  class="recommendation-copy"
+                  type="button"
+                  :aria-label="`${attemptLabel(item)} 선택`"
+                  :aria-pressed="selectedDraftItemKey === item.key"
+                  @click="selectDraftItem(item)"
+                >
                   <small>{{ templateFor(item)?.unitName }} · {{ attemptNumber(item) }}회차</small>
                   <strong>{{ templateFor(item)?.trainingName }}</strong>
-                </div>
+                </button>
                 <div class="recommendation-actions">
+                  <div
+                    v-if="editCurriculum"
+                    class="reorder-controls"
+                    role="group"
+                    :aria-label="`${templateFor(item)?.trainingName ?? '훈련'} 순서 변경`"
+                  >
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      type="button"
+                      :aria-label="`${templateFor(item)?.trainingName ?? '훈련'} 위로 이동`"
+                      :disabled="index === 0 || isSavingCurriculum"
+                      @click.stop="moveDraftItem(item, index, -1)"
+                    >
+                      <span aria-hidden="true">↑</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon-sm"
+                      type="button"
+                      :aria-label="`${templateFor(item)?.trainingName ?? '훈련'} 아래로 이동`"
+                      :disabled="index === draftItems.length - 1 || isSavingCurriculum"
+                      @click.stop="moveDraftItem(item, index, 1)"
+                    >
+                      <span aria-hidden="true">↓</span>
+                    </Button>
+                  </div>
                   <span v-if="item.trainingId === null" class="unsaved-label">저장 전</span>
                   <Button
                     variant="outline"
@@ -430,6 +484,9 @@ function deletionMessage(): string {
                 다음 회차가 비어 있습니다. 전체 훈련 목록에서 한 개 이상 추가해 주세요.
               </p>
             </div>
+            <p class="sr-only" role="status" aria-live="polite">
+              {{ reorderAnnouncement }}
+            </p>
 
             <div v-if="hasChanges" class="draft-actions">
               <span>저장되지 않은 변경 사항이 있습니다.</span>
@@ -728,6 +785,14 @@ function deletionMessage(): string {
 .recommendation-copy strong {
   display: block;
 }
+.recommendation-copy {
+  min-width: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+}
 .recommendation-copy small {
   margin-bottom: 2px;
   color: var(--slate-500);
@@ -741,6 +806,10 @@ function deletionMessage(): string {
   display: flex;
   align-items: center;
   gap: 7px;
+}
+.reorder-controls {
+  display: flex;
+  gap: 4px;
 }
 .unsaved-label {
   color: var(--slate-500);

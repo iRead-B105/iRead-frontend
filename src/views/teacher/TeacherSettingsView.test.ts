@@ -36,6 +36,7 @@ async function mountSettingsView() {
   )
 
   const wrapper = mount(TeacherSettingsView, {
+    attachTo: document.body,
     global: {
       plugins: [pinia],
     },
@@ -176,5 +177,17 @@ describe('TeacherSettingsView', () => {
 
     expect(authRepositories.teacher.updateProfile).not.toHaveBeenCalled()
     expect(authRepositories.teacher.updateProfileImage).toHaveBeenCalledWith(image)
+  })
+
+  it('검증 실패 시 첫 오류 field로 focus한다', async () => {
+    const { wrapper } = await mountSettingsView()
+    const name = wrapper.get<HTMLInputElement>('#teacher-name')
+    await name.setValue('')
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(name.attributes('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(name.element)
   })
 })

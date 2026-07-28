@@ -68,6 +68,21 @@ const areaNames = computed(() => {
   return [...names]
 })
 const hasAreaScores = computed(() => areaNames.value.length > 0)
+const areaChartSummary = computed(
+  () =>
+    `검사별 영역 점수: ${displayedDetails.value
+      .map(
+        (detail, index) =>
+          `${seriesLabel(detail, index)} ${areaNames.value
+            .map((area) => {
+              const score =
+                detail.areaScores.find((areaScore) => areaScore.area === area)?.score ?? null
+              return `${area} ${score === null ? '기록 없음' : `${score}점`}`
+            })
+            .join(', ')}`,
+      )
+      .join('; ')}`,
+)
 const areaChart = computed<EChartsOption>(() => ({
   tooltip: {
     trigger: 'axis',
@@ -320,6 +335,7 @@ function testOptionLabel(test: TestListItem): string {
                 :option="areaChart"
                 height="330px"
                 aria-label="기준 검사와 선택한 비교 검사의 영역별 점수 차트"
+                :summary="areaChartSummary"
               />
               <div v-else class="inline-empty">표시할 영역별 점수가 없습니다.</div>
             </Card>

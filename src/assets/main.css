@@ -126,10 +126,17 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+[tabindex]:focus-visible {
   /* 키보드로 이동했을 때 현재 초점 위치를 뚜렷하게 보여 주는 접근성 스타일입니다. */
-  outline: 3px solid color-mix(in oklch, var(--ring) 28%, transparent);
-  outline-offset: 2px;
+  outline: 3px solid var(--primary-700);
+  outline-offset: 3px;
+}
+
+main,
+h1,
+[data-route-focus] {
+  scroll-margin-top: 24px;
 }
 
 a {
@@ -385,6 +392,17 @@ th {
 .muted {
   /* 중요도가 낮은 보조 문구를 공통 회색으로 표시하는 도우미 클래스입니다. */
   color: var(--slate-500);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @media print {
