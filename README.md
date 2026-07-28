@@ -41,6 +41,16 @@ VITE_BACKEND_URL=http://localhost:8080
 pnpm dev
 ```
 
+## 데모
+
+Frontend 단독 mock과 Backend API 연동의 실행, 초기화, 핵심 시나리오와 실패 복구
+절차는 [DEMO.md](./DEMO.md)를 따릅니다.
+
+- mock fixture는 `2026-07-28`을 기준으로 결정적인 결과를 제공합니다.
+- mock mutation과 세션은 브라우저 새로고침으로 초기화됩니다.
+- API 실패는 mock 데이터로 자동 전환되지 않습니다.
+- mock 전체 데모와 Backend API 통합 데모 결과를 구분해 기록합니다.
+
 ## 검증
 
 ```bash
@@ -63,12 +73,3 @@ pnpm build
 ```
 
 두 소스가 없거나 하나라도 `mock`이면 production build는 설정 오류로 실패해야 합니다.
-
-## 후속 Repository 이전 대상
-
-FE-001에서는 교수자 정보와 아동 목록 조회를 대표 경로로 이전했습니다. 다음 직접
-`mockData.ts` 사용 위치는 각 화면 작업인 FE-003~FE-005에서 Repository로 이전합니다.
-
-- `src/components/teacher/StudentSummaryHeader.vue`
-- `src/views/teacher/StudentOverviewView.vue`
-- `src/views/teacher/StudentReportView.vue`
