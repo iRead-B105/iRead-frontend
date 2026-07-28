@@ -1,4 +1,9 @@
 import { apiRequest, downloadFile, jsonBody } from '@/lib/api'
+import {
+  mapGazeAnalysisState,
+  type GazeAnalysisState,
+  type GazeAnalysisStateDto,
+} from '@/features/teacher/gaze'
 import type {
   CurriculumLog,
   CurriculumTrainingLog,
@@ -258,6 +263,11 @@ export interface TrainingApi {
     period: TrainingPeriod,
     options?: TrainingRequestOptions,
   ) => Promise<TrainingStatistics>
+  readonly getGazeAnalysis: (
+    studentId: number,
+    trainingId: number,
+    options?: TrainingRequestOptions,
+  ) => Promise<GazeAnalysisState>
   readonly exportTraining: (
     studentId: number,
     trainingId: number,
@@ -285,13 +295,10 @@ export function createTrainingApi(
       return mapCurriculum(dto)
     },
     async createCurriculum(studentId, command) {
-      const dto = await request<DailyCurriculumDto>(
-        `/api/admin/training/${studentId}/curriculum`,
-        {
-          method: 'POST',
-          body: jsonBody(command),
-        },
-      )
+      const dto = await request<DailyCurriculumDto>(`/api/admin/training/${studentId}/curriculum`, {
+        method: 'POST',
+        body: jsonBody(command),
+      })
       return mapCurriculum(dto)
     },
     async getCurriculum(studentId, curriculumId, options) {
@@ -319,13 +326,10 @@ export function createTrainingApi(
       return dto.words.map(mapExpectedWord)
     },
     async addExpectedWord(studentId, trainingId, wordName) {
-      await request<void>(
-        `/api/admin/training/${studentId}/${trainingId}/expected-word`,
-        {
-          method: 'POST',
-          body: jsonBody({ wordName }),
-        },
-      )
+      await request<void>(`/api/admin/training/${studentId}/${trainingId}/expected-word`, {
+        method: 'POST',
+        body: jsonBody({ wordName }),
+      })
     },
     async deleteExpectedWord(studentId, trainingId, wordId) {
       await request<void>(
@@ -348,8 +352,7 @@ export function createTrainingApi(
       return [...dto]
         .sort(
           (left, right) =>
-            right.date.localeCompare(left.date) ||
-            right.curriculumId - left.curriculumId,
+            right.date.localeCompare(left.date) || right.curriculumId - left.curriculumId,
         )
         .map(mapCurriculumLog)
     },
@@ -367,11 +370,17 @@ export function createTrainingApi(
       )
       return mapStatistics(dto)
     },
-    exportTraining(studentId, trainingId, format) {
-      return download(
-        `/api/admin/training/${studentId}/${trainingId}/export?format=${format}`,
-        { method: 'POST' },
+    async getGazeAnalysis(studentId, trainingId, options) {
+      const dto = await request<GazeAnalysisStateDto>(
+        `/api/admin/training/${studentId}/${trainingId}/gaze-analysis`,
+        requestInit(options),
       )
+      return mapGazeAnalysisState(dto)
+    },
+    exportTraining(studentId, trainingId, format) {
+      return download(`/api/admin/training/${studentId}/${trainingId}/export?format=${format}`, {
+        method: 'POST',
+      })
     },
   }
 }

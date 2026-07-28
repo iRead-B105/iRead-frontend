@@ -1,4 +1,9 @@
 import { apiRequest } from '@/lib/api'
+import {
+  mapGazeAnalysisState,
+  type GazeAnalysisState,
+  type GazeAnalysisStateDto,
+} from '@/features/teacher/gaze'
 import type {
   TestAreaScore,
   TestComparison,
@@ -104,6 +109,11 @@ export interface TestApi {
     comparisonTestIds: readonly number[],
     options?: TestRequestOptions,
   ) => Promise<TestComparison>
+  readonly getGazeAnalysis: (
+    studentId: number,
+    testId: number,
+    options?: TestRequestOptions,
+  ) => Promise<GazeAnalysisState>
 }
 
 export function createTestApi(request: TestApiRequest = apiRequest): TestApi {
@@ -114,10 +124,7 @@ export function createTestApi(request: TestApiRequest = apiRequest): TestApi {
         requestInit(options),
       )
       return [...dto]
-        .sort(
-          (left, right) =>
-            right.date.localeCompare(left.date) || right.testId - left.testId,
-        )
+        .sort((left, right) => right.date.localeCompare(left.date) || right.testId - left.testId)
         .map((item) => ({ ...item }))
     },
     async compareTests(studentId, currentTestId, comparisonTestIds, options) {
@@ -133,6 +140,13 @@ export function createTestApi(request: TestApiRequest = apiRequest): TestApi {
         currentTest: mapDetail(dto.currentTest),
         comparisonTests: (dto.comparisonTests ?? []).map(mapDetail),
       }
+    },
+    async getGazeAnalysis(studentId, testId, options) {
+      const dto = await request<GazeAnalysisStateDto>(
+        `/api/admin/test/${studentId}/${testId}/gaze-analysis`,
+        requestInit(options),
+      )
+      return mapGazeAnalysisState(dto)
     },
   }
 }

@@ -1,4 +1,5 @@
 import { ApiError } from '@/lib/api'
+import { trainingGazeFixtures, type GazeAnalysisState } from '@/features/teacher/gaze'
 import {
   curriculumLogFixtures,
   currentCurriculumFixture,
@@ -21,10 +22,7 @@ import type {
   TrainingPeriod,
   TrainingStatistics,
 } from '../model'
-import type {
-  TrainingRepository,
-  TrainingRequestOptions,
-} from './trainingRepository'
+import type { TrainingRepository, TrainingRequestOptions } from './trainingRepository'
 
 export interface MockTrainingRepositoryFixtures {
   readonly catalog?: readonly TrainingCatalogItem[]
@@ -36,6 +34,7 @@ export interface MockTrainingRepositoryFixtures {
   >
   readonly trainingLogs?: Readonly<Record<number, CurriculumTrainingLog>>
   readonly statistics?: Readonly<Record<string, TrainingStatistics>>
+  readonly gazeByTrainingId?: Readonly<Record<number, GazeAnalysisState>>
 }
 
 function clone<T>(value: T): T {
@@ -67,6 +66,7 @@ export class MockTrainingRepository implements TrainingRepository {
   >()
   private readonly trainingLogs = new Map<number, CurriculumTrainingLog>()
   private readonly statistics = new Map<string, TrainingStatistics>()
+  private readonly gazeByTrainingId = new Map<number, GazeAnalysisState>()
   private nextCurriculumId = 300
   private nextTrainingId = 1_000
   private nextWordId = 10_000
@@ -81,7 +81,9 @@ export class MockTrainingRepository implements TrainingRepository {
       this.details.set(detail.trainingId, clone(detail))
       this.nextTrainingId = Math.max(this.nextTrainingId, detail.trainingId + 1)
     }
-    for (const [trainingId, words] of Object.entries(fixtures.expectedWords ?? expectedWordFixtures)) {
+    for (const [trainingId, words] of Object.entries(
+      fixtures.expectedWords ?? expectedWordFixtures,
+    )) {
       const clonedWords = clone(words) as ExpectedWord[]
       this.expectedWords.set(Number(trainingId), clonedWords)
       for (const word of clonedWords) this.nextWordId = Math.max(this.nextWordId, word.wordId + 1)
@@ -100,6 +102,11 @@ export class MockTrainingRepository implements TrainingRepository {
       fixtures.statistics ?? trainingStatisticsFixtures,
     )) {
       this.statistics.set(key, clone(statistics))
+    }
+    for (const [trainingId, gaze] of Object.entries(
+      fixtures.gazeByTrainingId ?? trainingGazeFixtures,
+    )) {
+      this.gazeByTrainingId.set(Number(trainingId), clone(gaze))
     }
   }
 
@@ -135,11 +142,7 @@ export class MockTrainingRepository implements TrainingRepository {
     return clone(curriculum)
   }
 
-  async getCurriculum(
-    studentId: number,
-    curriculumId: number,
-    options?: TrainingRequestOptions,
-  ) {
+  async getCurriculum(studentId: number, curriculumId: number, options?: TrainingRequestOptions) {
     assertPositiveId(studentId, 'studentId')
     assertPositiveId(curriculumId, 'curriculumId')
     assertNotAborted(options)
@@ -154,11 +157,7 @@ export class MockTrainingRepository implements TrainingRepository {
     return clone(curriculum)
   }
 
-  async updateCurriculum(
-    studentId: number,
-    curriculumId: number,
-    request: SaveCurriculumRequest,
-  ) {
+  async updateCurriculum(studentId: number, curriculumId: number, request: SaveCurriculumRequest) {
     this.assertSaveRequest(request)
     const current = await this.getCurriculum(studentId, curriculumId)
     if (current.status !== 'NOT_STARTED') {
@@ -182,11 +181,7 @@ export class MockTrainingRepository implements TrainingRepository {
     return clone(updated)
   }
 
-  async getExpectedWords(
-    studentId: number,
-    trainingId: number,
-    options?: TrainingRequestOptions,
-  ) {
+  async getExpectedWords(studentId: number, trainingId: number, options?: TrainingRequestOptions) {
     this.assertTrainingBelongsToStudent(studentId, trainingId)
     assertNotAborted(options)
     return clone(this.expectedWords.get(trainingId) ?? [])
@@ -234,11 +229,7 @@ export class MockTrainingRepository implements TrainingRepository {
     this.invalidateGeneratedTraining(trainingId)
   }
 
-  async getTrainingDetail(
-    studentId: number,
-    trainingId: number,
-    options?: TrainingRequestOptions,
-  ) {
+  async getTrainingDetail(studentId: number, trainingId: number, options?: TrainingRequestOptions) {
     this.assertTrainingBelongsToStudent(studentId, trainingId)
     assertNotAborted(options)
     const detail = this.details.get(trainingId)
@@ -263,17 +254,12 @@ export class MockTrainingRepository implements TrainingRepository {
     return clone(
       [...logs].sort(
         (left, right) =>
-          right.date.localeCompare(left.date) ||
-          right.curriculumId - left.curriculumId,
+          right.date.localeCompare(left.date) || right.curriculumId - left.curriculumId,
       ),
     )
   }
 
-  async getTrainingLog(
-    studentId: number,
-    curriculumId: number,
-    options?: TrainingRequestOptions,
-  ) {
+  async getTrainingLog(studentId: number, curriculumId: number, options?: TrainingRequestOptions) {
     this.assertCurriculumBelongsToStudent(studentId, curriculumId)
     assertNotAborted(options)
     const log = this.trainingLogs.get(curriculumId)
@@ -297,21 +283,32 @@ export class MockTrainingRepository implements TrainingRepository {
     assertNotAborted(options)
     const statistics = this.statistics.get(`${curriculumId}:${period}`)
     const emptyStatistics: TrainingStatistics = {
-        accuracyComparisons: [],
-        readingSpeedTrend: {
-          unit: 'CORRECT_WORDS_PER_MINUTE',
-          changeRate: null,
-          points: [],
-        },
-      }
+      accuracyComparisons: [],
+      readingSpeedTrend: {
+        unit: 'CORRECT_WORDS_PER_MINUTE',
+        changeRate: null,
+        points: [],
+      },
+    }
     return clone(statistics ?? emptyStatistics)
   }
 
-  async exportTraining(
+  async getGazeAnalysis(
     studentId: number,
     trainingId: number,
-    format: TrainingExportFormat,
-  ) {
+    options?: TrainingRequestOptions,
+  ): Promise<GazeAnalysisState> {
+    this.assertTrainingBelongsToStudent(studentId, trainingId)
+    assertNotAborted(options)
+    return clone(
+      this.gazeByTrainingId.get(trainingId) ?? {
+        status: 'NO_DATA',
+        analysis: null,
+      },
+    )
+  }
+
+  async exportTraining(studentId: number, trainingId: number, format: TrainingExportFormat) {
     this.assertTrainingBelongsToStudent(studentId, trainingId)
     const detail = this.details.get(trainingId)
     if (!detail) {
@@ -367,9 +364,8 @@ export class MockTrainingRepository implements TrainingRepository {
     const belongsToCurrent = currentCurriculum?.trainings.some(
       (training) => training.trainingId === trainingId,
     )
-    const belongsToHistory = (this.curriculumLogs.get(studentId)?.['3m'] ?? []).some(
-      (curriculum) =>
-        curriculum.trainings.some((training) => training.trainingId === trainingId),
+    const belongsToHistory = (this.curriculumLogs.get(studentId)?.['3m'] ?? []).some((curriculum) =>
+      curriculum.trainings.some((training) => training.trainingId === trainingId),
     )
     if (!belongsToCurrent && !belongsToHistory) {
       throw new ApiError({
@@ -380,10 +376,7 @@ export class MockTrainingRepository implements TrainingRepository {
     }
   }
 
-  private assertCurriculumBelongsToStudent(
-    studentId: number,
-    curriculumId: number,
-  ): void {
+  private assertCurriculumBelongsToStudent(studentId: number, curriculumId: number): void {
     assertPositiveId(studentId, 'studentId')
     assertPositiveId(curriculumId, 'curriculumId')
     const belongs = (this.curriculumLogs.get(studentId)?.['3m'] ?? []).some(
@@ -432,10 +425,7 @@ export class MockTrainingRepository implements TrainingRepository {
     })
   }
 
-  private ensureTrainingDetail(
-    training: CurriculumTraining,
-    template: TrainingCatalogItem,
-  ): void {
+  private ensureTrainingDetail(training: CurriculumTraining, template: TrainingCatalogItem): void {
     const current = this.details.get(training.trainingId)
     this.details.set(training.trainingId, {
       trainingId: training.trainingId,
