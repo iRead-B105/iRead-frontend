@@ -4,11 +4,13 @@ import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import TeacherSidebar from './TeacherSidebar.vue'
+import { MockReportRepository } from '@/features/teacher/report'
 import type {
   StudentListItem,
   StudentRepository,
 } from '@/features/teacher/student'
 import { useSessionStore } from '@/stores/session'
+import { useReportStore } from '@/stores/report'
 import { useStudentStore } from '@/stores/students'
 
 const defaultStudents: readonly StudentListItem[] = [
@@ -151,15 +153,21 @@ describe('TeacherSidebar', () => {
     expect(wrapper.html()).not.toContain('/teacher/students/0')
   })
 
-  it('로그아웃 성공 시 Student 상태를 초기화하고 로그인 화면으로 이동한다', async () => {
+  it('로그아웃 성공 시 Student·Report 상태를 초기화하고 로그인 화면으로 이동한다', async () => {
     const { wrapper, router, pinia } = await mountSidebar(createRepository())
     const session = useSessionStore(pinia)
     const students = useStudentStore(pinia)
+    const reports = useReportStore(pinia)
+    reports.setRepository(new MockReportRepository({ delayMs: 0 }))
+    await reports.loadForStudent(1)
+    expect(reports.reports.length).toBeGreaterThan(0)
 
     await selectAccountMenuItem(wrapper, '로그아웃')
 
     expect(session.authenticated).toBe(false)
     expect(students.navigationItems).toEqual([])
+    expect(reports.activeStudentId).toBeNull()
+    expect(reports.reports).toEqual([])
     expect(router.currentRoute.value.name).toBe('teacher-login')
   })
 

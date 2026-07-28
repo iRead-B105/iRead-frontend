@@ -57,35 +57,6 @@ export interface AccuracyTrend {
   accuracy: number
 }
 
-export interface ReportSnapshot {
-  learningDays: number
-  totalTrainingTimeMinutes: number
-  completedTrainingCount: number
-  averageAccuracy: number
-  averageReadingSpeed: number
-  readingSpeedUnit: string
-  growthHistory: Array<{ date: string; accuracy: number; readingSpeed: number; pronunciationScore: number }>
-  areaAchievements: Array<{ area: string; achievement: number }>
-  frequentlyIncorrectWords: Array<{
-    wordId: number
-    wordName: string
-    attemptCount: number
-    incorrectCount: number
-    incorrectRate: number
-  }>
-  improvedPatterns: string[]
-  persistentDifficultyPatterns: string[]
-}
-
-export interface Report {
-  reportId: number
-  studentId: number
-  startDate: string
-  endDate: string
-  snapshot: ReportSnapshot
-  teacherMemo: string
-}
-
 export const teacherApi = {
   getInfo: () => apiRequest<TeacherInfo>('/api/admin/teacher/info'),
 }
@@ -107,13 +78,4 @@ export const studentApi = {
     apiRequest<void>(`/api/admin/student/${studentId}`, { method: 'DELETE' }),
   accuracyTrend: (studentId: number) =>
     apiRequest<AccuracyTrend[]>(`/api/admin/student/${studentId}/accuracy-trend`),
-}
-
-export const reportApi = {
-  create: (studentId: number, startDate: string, endDate: string, teacherMemo: string) =>
-    apiRequest<{ reportId: number }>('/api/admin/report', {
-      method: 'POST',
-      body: jsonBody({ studentId, startDate, endDate, teacherMemo }),
-    }),
-  get: (reportId: number) => apiRequest<Report>(`/api/admin/report/${reportId}`),
 }

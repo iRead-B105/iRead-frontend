@@ -6,12 +6,14 @@ import { RouterView } from 'vue-router'
 import DataSourceNotice from '@/components/common/DataSourceNotice.vue'
 import TeacherSidebar from '@/components/teacher/TeacherSidebar.vue'
 import { dataSource } from '@/config/dataSource'
+import { useReportStore } from '@/stores/report'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
 import { useTestStore } from '@/stores/test'
 import { useTrainingStore } from '@/stores/training'
 
 const sessionStore = useSessionStore()
+const reportStore = useReportStore()
 const studentStore = useStudentStore()
 const testStore = useTestStore()
 const trainingStore = useTrainingStore()
@@ -22,6 +24,7 @@ watch(
   (nextEmail, previousEmail) => {
     if (previousEmail && nextEmail !== previousEmail) {
       studentStore.reset()
+      reportStore.reset()
       testStore.reset()
       trainingStore.reset()
     }
@@ -30,6 +33,7 @@ watch(
 watch(status, (nextStatus) => {
   if (nextStatus === 'anonymous') {
     studentStore.reset()
+    reportStore.reset()
     testStore.reset()
     trainingStore.reset()
   }
