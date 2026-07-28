@@ -88,6 +88,38 @@ beforeEach(() => {
 })
 
 describe('Student store', () => {
+  it('목록 재조회 실패 시 기존 목록을 유지하고 서버 원문을 노출하지 않는다', async () => {
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce(result([firstStudent]))
+      .mockRejectedValueOnce(
+        new ApiError({
+          status: 500,
+          code: 'INTERNAL_ERROR',
+          message: 'database connection details',
+        }),
+      )
+    const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
+      list,
+      getSummary: vi.fn().mockResolvedValue({
+        totalStudents: 1,
+        scheduledTodayCount: 0,
+      }),
+    }
+    const store = useStudentStore()
+    store.setRepository(repository)
+
+    await store.loadList()
+    await store.loadList()
+
+    expect(store.listStatus).toBe('error')
+    expect(store.students).toEqual([firstStudent])
+    expect(store.listError).toBe('잠시 후 다시 시도해 주세요.')
+    expect(store.listError).not.toContain('database')
+    expect(store.listUiError?.kind).toBe('server')
+  })
+
   it('목록과 summary 실패 상태를 서로 독립적으로 관리한다', async () => {
     const repository: StudentRepository = {
       ...mutationRepositoryMethods,
@@ -111,9 +143,7 @@ describe('Student store', () => {
     const newerStudent = { ...firstStudent, studentId: 2, name: '최신 학습자' }
     const repository: StudentRepository = {
       ...mutationRepositoryMethods,
-      list: vi.fn()
-        .mockReturnValueOnce(first.promise)
-        .mockReturnValueOnce(second.promise),
+      list: vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise),
       getSummary: vi.fn().mockResolvedValue({ totalStudents: 2, scheduledTodayCount: 0 }),
     }
     const store = useStudentStore()
@@ -134,16 +164,13 @@ describe('Student store', () => {
   it('관리 목록과 Sidebar query·page 상태를 분리한다', async () => {
     const repository: StudentRepository = {
       ...mutationRepositoryMethods,
-      list: vi.fn().mockImplementation((query = {}) =>
-        Promise.resolve(
-          result(
-            [{ ...firstStudent, studentId: (query.page ?? 0) + 1 }],
-            query.page ?? 0,
-            20,
-            2,
+      list: vi
+        .fn()
+        .mockImplementation((query = {}) =>
+          Promise.resolve(
+            result([{ ...firstStudent, studentId: (query.page ?? 0) + 1 }], query.page ?? 0, 20, 2),
           ),
         ),
-      ),
       getSummary: vi.fn().mockResolvedValue({ totalStudents: 20, scheduledTodayCount: 0 }),
     }
     const store = useStudentStore()
@@ -165,7 +192,8 @@ describe('Student store', () => {
     const secondStudent = { ...firstStudent, studentId: 2, name: '둘째 학습자' }
     const repository: StudentRepository = {
       ...mutationRepositoryMethods,
-      list: vi.fn()
+      list: vi
+        .fn()
         .mockResolvedValueOnce(result([firstStudent, secondStudent]))
         .mockResolvedValueOnce(result([secondStudent])),
       getSummary: vi.fn().mockResolvedValue({ totalStudents: 2, scheduledTodayCount: 0 }),

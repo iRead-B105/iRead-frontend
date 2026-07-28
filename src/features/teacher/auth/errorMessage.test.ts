@@ -4,6 +4,7 @@ import {
   getLoginErrorMessage,
   getResetPasswordErrorMessage,
   getSignUpErrorMessage,
+  getTeacherProfileErrorMessage,
 } from './errorMessage'
 
 describe('getLoginErrorMessage', () => {
@@ -60,5 +61,29 @@ describe('account recovery error messages', () => {
         }),
       ),
     ).toBe(expected)
+  })
+})
+
+describe('teacher profile error messages', () => {
+  it.each([
+    [413, 'PAYLOAD_TOO_LARGE', '허용된 용량보다 작은 파일을 선택해 주세요.'],
+    [415, 'UNSUPPORTED_MEDIA_TYPE', '허용된 형식의 파일을 선택해 주세요.'],
+  ])('%i 이미지 오류를 안전한 파일 안내로 변환한다', (status, code, expected) => {
+    expect(
+      getTeacherProfileErrorMessage(
+        new ApiError({
+          status,
+          code,
+          message: '내부 저장소 오류',
+        }),
+        'image',
+      ),
+    ).toBe(expected)
+  })
+
+  it('일반 오류의 원문 대신 안전한 공통 안내를 사용한다', () => {
+    expect(getTeacherProfileErrorMessage(new Error('내부 저장소 오류'), 'save')).toBe(
+      '잠시 후 다시 시도해 주세요.',
+    )
   })
 })

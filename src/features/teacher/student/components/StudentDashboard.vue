@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
+import SaveToast from '@/components/common/SaveToast.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -32,16 +34,22 @@ import {
   formatWeeklyParticipation,
   type StudentListItem,
 } from '@/features/teacher/student'
+import { asyncStateKind } from '@/features/teacher/error'
+import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import { useStudentStore } from '@/stores/students'
 
+const route = useRoute()
 const router = useRouter()
 const studentStore = useStudentStore()
+const { visible: mutationNoticeVisible, show: showMutationNotice } = useTemporaryNotice()
+const mutationNoticeMessage = ref('')
 const {
   students,
   totalElements,
   totalPages,
   listStatus,
   listError,
+  listUiError,
   summary,
   summaryStatus,
   summaryError,
@@ -62,11 +70,10 @@ const pageNumbers = computed(() =>
 const isInitialLoading = computed(
   () => listStatus.value === 'loading' && students.value.length === 0,
 )
+const hasRetainedStudents = computed(() => students.value.length > 0)
+const listErrorKind = computed(() => asyncStateKind(listUiError.value))
 const isEmptyAccount = computed(
-  () =>
-    listStatus.value === 'success' &&
-    summaryStatus.value === 'success' &&
-    summary.value?.totalStudents === 0,
+  () => listStatus.value === 'success' && totalElements.value === 0 && !hasActiveFilters.value,
 )
 const isEmptySearch = computed(
   () =>
@@ -84,8 +91,7 @@ function applyFilters(): void {
   studentStore.setListFilters({
     keyword: keyword.value,
     age: age.value === 'all' ? undefined : Number(age.value),
-    recentDays:
-      recentDays.value === 'all' ? undefined : (Number(recentDays.value) as 7 | 30),
+    recentDays: recentDays.value === 'all' ? undefined : (Number(recentDays.value) as 7 | 30),
   })
   void studentStore.loadList()
 }
@@ -121,6 +127,17 @@ watch(keyword, scheduleKeywordSearch)
 watch([age, recentDays], applyFilters)
 
 onMounted(() => {
+  const mutation = Array.isArray(route.query.studentSaved)
+    ? route.query.studentSaved[0]
+    : route.query.studentSaved
+  if (mutation === 'created' || mutation === 'deleted') {
+    mutationNoticeMessage.value =
+      mutation === 'created' ? '학습자가 등록되었습니다.' : '학습자가 삭제되었습니다.'
+    showMutationNotice()
+    const query = { ...route.query }
+    delete query.studentSaved
+    void router.replace({ query })
+  }
   void Promise.all([studentStore.loadList(), studentStore.loadSummary()])
 })
 
@@ -140,6 +157,8 @@ onBeforeUnmount(() => {
         ＋ 학습자 등록
       </Button>
     </header>
+
+    <SaveToast :visible="mutationNoticeVisible" :message="mutationNoticeMessage" inline />
 
     <Card class="filters">
       <label class="search">
@@ -178,13 +197,11 @@ onBeforeUnmount(() => {
       <Card>
         <span>전체 학습자</span>
         <strong v-if="summary">{{ summary.totalStudents }}명</strong>
-        <small v-else-if="summaryStatus === 'error'">{{ summaryError }}</small>
         <strong v-else>—</strong>
       </Card>
       <Card>
         <span>오늘 학습 예정</span>
         <strong v-if="summary">{{ summary.scheduledTodayCount }}명</strong>
-        <small v-else-if="summaryStatus === 'error'">{{ summaryError }}</small>
         <strong v-else>—</strong>
       </Card>
       <Card v-if="hasActiveFilters">
@@ -193,30 +210,71 @@ onBeforeUnmount(() => {
       </Card>
     </div>
 
-    <Card v-if="listStatus === 'error'" class="state-card" role="alert">
-      <h2>학습자 목록을 불러오지 못했습니다.</h2>
-      <p>{{ listError }}</p>
-      <Button type="button" variant="outline" @click="studentStore.loadList()">다시 시도</Button>
-    </Card>
+    <AsyncStatePanel
+      v-if="summaryStatus === 'error'"
+      kind="error"
+      title="학습자 요약을 불러오지 못했습니다"
+      :message="summaryError ?? '잠시 후 다시 시도해 주세요.'"
+      retry-label="요약 다시 불러오기"
+      compact
+      @retry="studentStore.loadSummary()"
+    />
 
-    <Card v-else-if="isInitialLoading" class="state-card" aria-live="polite">
-      <h2>학습자 목록을 불러오는 중입니다.</h2>
-      <p>잠시만 기다려 주세요.</p>
-    </Card>
+    <AsyncStatePanel
+      v-if="isInitialLoading"
+      kind="loading"
+      title="학습자 목록을 불러오는 중입니다"
+      message="잠시만 기다려 주세요."
+    />
 
-    <Card v-else-if="isEmptyAccount" class="state-card">
-      <h2>등록된 학습자가 없습니다.</h2>
-      <p>첫 학습자를 등록하면 학습 현황을 확인할 수 있습니다.</p>
-      <Button type="button" @click="router.push({ name: 'student-create' })">학습자 등록</Button>
-    </Card>
+    <AsyncStatePanel
+      v-else-if="listStatus === 'error' && !hasRetainedStudents"
+      :kind="listErrorKind"
+      title="학습자 목록을 불러오지 못했습니다"
+      :message="listError ?? '잠시 후 다시 시도해 주세요.'"
+      :retry-label="listUiError?.retryable ? '다시 시도' : undefined"
+      :action-label="hasActiveFilters ? '검색 조건 초기화' : undefined"
+      @retry="studentStore.loadList()"
+      @action="clearFilters"
+    />
 
-    <Card v-else-if="isEmptySearch" class="state-card">
-      <h2>검색 조건에 맞는 학습자가 없습니다.</h2>
-      <p>검색어나 필터를 변경해 주세요.</p>
-      <Button type="button" variant="outline" @click="clearFilters">검색 조건 초기화</Button>
-    </Card>
+    <AsyncStatePanel
+      v-else-if="isEmptyAccount"
+      kind="empty"
+      title="등록된 학습자가 없습니다"
+      message="첫 학습자를 등록하면 학습 현황을 확인할 수 있습니다."
+      action-label="학습자 등록"
+      @action="router.push({ name: 'student-create' })"
+    />
 
-    <Card v-else class="table-card">
+    <AsyncStatePanel
+      v-else-if="isEmptySearch"
+      kind="empty"
+      title="검색 조건에 맞는 학습자가 없습니다"
+      message="검색어나 필터를 변경해 주세요."
+      action-label="검색 조건 초기화"
+      @action="clearFilters"
+    />
+
+    <AsyncStatePanel
+      v-if="listStatus === 'error' && hasRetainedStudents"
+      :kind="listErrorKind"
+      title="최신 목록을 불러오지 못했습니다"
+      :message="`${listError ?? '잠시 후 다시 시도해 주세요.'} 이전 목록을 계속 표시합니다.`"
+      :retry-label="listUiError?.retryable ? '다시 시도' : undefined"
+      compact
+      @retry="studentStore.loadList()"
+    />
+
+    <Card
+      v-if="
+        !isInitialLoading &&
+        !isEmptyAccount &&
+        !isEmptySearch &&
+        (listStatus !== 'error' || hasRetainedStudents)
+      "
+      class="table-card"
+    >
       <Table>
         <TableHeader>
           <TableRow>
@@ -232,9 +290,16 @@ onBeforeUnmount(() => {
         <TableBody>
           <TableRow v-for="student in students" :key="student.studentId">
             <TableCell>
-              <Button class="student-link" variant="ghost" type="button" @click="openStudent(student)">
+              <Button
+                class="student-link"
+                variant="ghost"
+                type="button"
+                @click="openStudent(student)"
+              >
                 <img v-if="student.imageUrl" :src="student.imageUrl" alt="" />
-                <span v-else class="avatar" aria-hidden="true">{{ studentInitial(student.name) }}</span>
+                <span v-else class="avatar" aria-hidden="true">{{
+                  studentInitial(student.name)
+                }}</span>
                 <strong>{{ student.name }}</strong>
               </Button>
             </TableCell>

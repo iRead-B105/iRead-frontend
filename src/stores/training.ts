@@ -1,5 +1,6 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
+import { mapCommonError, type UiError } from '@/features/teacher/error'
 import { isAbortError, isApiError } from '@/lib/api'
 import type { GazeAnalysisRequestStatus, GazeAnalysisState } from '@/features/teacher/gaze'
 import {
@@ -20,17 +21,34 @@ import {
 } from '@/features/teacher/training'
 
 function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
+  if (!isApiError(error)) return fallback
+  return (
+    mapCommonError(error, {
+      overrides: {
+        NEXT_CURRICULUM_ALREADY_EXISTS: {
+          message: '이미 수정 가능한 다음 회차 커리큘럼이 있습니다.',
+          retryable: false,
+        },
+        CURRICULUM_ALREADY_STARTED: {
+          message: '시작된 커리큘럼은 수정할 수 없습니다.',
+          retryable: false,
+        },
+        DUPLICATE_EXPECTED_WORD: {
+          message: '이미 추가된 예상 단어입니다.',
+          action: 'edit-input',
+          retryable: false,
+        },
+      },
+    })?.message ?? fallback
+  )
 }
 
 function historyErrorMessage(error: unknown, fallback: string): string {
   if (!isApiError(error)) return fallback
-  if (error.status === 0) return '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
   if (error.status === 400) return '조회 조건이 올바르지 않습니다.'
   if (error.status === 403) return '이 학습자의 훈련 기록을 볼 권한이 없습니다.'
   if (error.status === 404) return '요청한 훈련 기록을 찾을 수 없습니다.'
-  if (error.status >= 500) return '서버에서 훈련 기록을 불러오지 못했습니다.'
-  return fallback
+  return mapCommonError(error)?.message ?? fallback
 }
 
 function draftFromCurriculum(curriculum: DailyCurriculum | null): CurriculumDraftItem[] {
@@ -82,6 +100,7 @@ export const useTrainingStore = defineStore('training', () => {
   const historyGazeStatus = ref<GazeAnalysisRequestStatus>('idle')
   const exportingFormat = ref<TrainingExportFormat | null>(null)
   const curriculumLogsError = ref<string | null>(null)
+  const curriculumLogsUiError = ref<UiError | null>(null)
   const trainingLogError = ref<string | null>(null)
   const statisticsError = ref<string | null>(null)
   const historyDetailError = ref<string | null>(null)
@@ -468,6 +487,7 @@ export const useTrainingStore = defineStore('training', () => {
     historyGazeStatus.value = 'idle'
     exportingFormat.value = null
     curriculumLogsError.value = null
+    curriculumLogsUiError.value = null
     trainingLogError.value = null
     statisticsError.value = null
     historyDetailError.value = null
@@ -507,7 +527,9 @@ export const useTrainingStore = defineStore('training', () => {
     historyCurriculumGeneration += 1
     historyDetailGeneration += 1
     historyGazeGeneration += 1
-    clearHistoryState(studentId, false)
+    curriculumLogsStatus.value = 'loading'
+    curriculumLogsError.value = null
+    curriculumLogsUiError.value = null
     await loadCurriculumLogs(studentId)
   }
 
@@ -537,10 +559,21 @@ export const useTrainingStore = defineStore('training', () => {
       curriculumLogsStatus.value = 'success'
       if (selectedCurriculumId.value !== null) {
         await loadHistoryCurriculum(studentId, selectedCurriculumId.value)
+      } else {
+        trainingLog.value = null
+        statistics.value = null
+        selectedHistoryTrainingId.value = null
+        historyTrainingDetail.value = null
+        historyGazeAnalysis.value = null
+        trainingLogStatus.value = 'idle'
+        statisticsStatus.value = 'idle'
+        historyDetailStatus.value = 'idle'
+        historyGazeStatus.value = 'idle'
       }
     } catch (error) {
       if (isAbortError(error) || generation !== historyGeneration) return
       curriculumLogsStatus.value = 'error'
+      curriculumLogsUiError.value = mapCommonError(error)
       curriculumLogsError.value = historyErrorMessage(
         error,
         '완료된 커리큘럼 기록을 불러오지 못했습니다.',
@@ -851,6 +884,7 @@ export const useTrainingStore = defineStore('training', () => {
     historyGazeStatus,
     exportingFormat,
     curriculumLogsError,
+    curriculumLogsUiError,
     trainingLogError,
     statisticsError,
     historyDetailError,

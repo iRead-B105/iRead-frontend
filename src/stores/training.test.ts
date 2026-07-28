@@ -6,6 +6,7 @@ import {
   type TrainingRepository,
 } from '@/features/teacher/training'
 import type { GazeAnalysisState } from '@/features/teacher/gaze'
+import { ApiError } from '@/lib/api'
 import { useTrainingStore } from './training'
 
 function deferred<T>() {
@@ -41,6 +42,48 @@ beforeEach(() => {
 })
 
 describe('Training store', () => {
+  it('훈련 이력 재조회 실패 시 이전 커리큘럼을 유지한다', async () => {
+    const mock = new MockTrainingRepository()
+    const getCurriculumLogs = vi.spyOn(mock, 'getCurriculumLogs')
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadHistoryForStudent(1)
+    const previousLogs = store.curriculumLogs
+
+    getCurriculumLogs.mockRejectedValueOnce(
+      new ApiError({
+        status: 500,
+        code: 'INTERNAL_ERROR',
+        message: 'internal details',
+      }),
+    )
+    await store.retryHistory()
+
+    expect(store.curriculumLogsStatus).toBe('error')
+    expect(store.curriculumLogs).toBe(previousLogs)
+    expect(store.curriculumLogsError).not.toContain('internal')
+    expect(store.curriculumLogsUiError?.kind).toBe('server')
+  })
+
+  it('훈련 이력 재조회가 빈 결과이면 이전 하위 선택을 정리한다', async () => {
+    const mock = new MockTrainingRepository()
+    const getCurriculumLogs = vi.spyOn(mock, 'getCurriculumLogs')
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadHistoryForStudent(1)
+
+    getCurriculumLogs.mockResolvedValueOnce([])
+    await store.retryHistory()
+
+    expect(store.curriculumLogsStatus).toBe('success')
+    expect(store.curriculumLogs).toEqual([])
+    expect(store.selectedCurriculumId).toBeNull()
+    expect(store.trainingLog).toBeNull()
+    expect(store.statistics).toBeNull()
+    expect(store.historyTrainingDetail).toBeNull()
+    expect(store.historyGazeAnalysis).toBeNull()
+  })
+
   it('저장된 커리큘럼과 local draft를 분리하고 실제 ID를 유지한다', async () => {
     const store = useTrainingStore()
     store.setRepository(new MockTrainingRepository())
