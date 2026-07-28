@@ -20,16 +20,7 @@ import {
   type StudentTrainingHistoryPeriod,
   type StudentUpdateInput,
 } from '@/features/teacher/student'
-import { isApiError } from '@/lib/api'
-
-function isAbortError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    error.name === 'AbortError'
-  )
-}
+import { isAbortError, isApiError } from '@/lib/api'
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : '학습자 정보를 불러오지 못했습니다.'

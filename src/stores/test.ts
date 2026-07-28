@@ -8,13 +8,7 @@ import {
   type TestRepository,
   type TestRequestStatus,
 } from '@/features/teacher/test'
-import { isApiError } from '@/lib/api'
-
-function isAbortError(error: unknown): boolean {
-  return (
-    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError'
-  )
-}
+import { isAbortError, isApiError } from '@/lib/api'
 
 function testErrorMessage(error: unknown, fallback: string): string {
   if (!isApiError(error)) return fallback

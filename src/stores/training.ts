@@ -1,6 +1,6 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
-import { isApiError } from '@/lib/api'
+import { isAbortError, isApiError } from '@/lib/api'
 import type { GazeAnalysisRequestStatus, GazeAnalysisState } from '@/features/teacher/gaze'
 import {
   trainingRepository,
@@ -18,12 +18,6 @@ import {
   type TrainingRequestStatus,
   type TrainingStatistics,
 } from '@/features/teacher/training'
-
-function isAbortError(error: unknown): boolean {
-  return (
-    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError'
-  )
-}
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback
