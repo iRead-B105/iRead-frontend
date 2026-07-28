@@ -570,7 +570,7 @@ function questionStatusClass(question: TrainingQuestionResult): string {
 
 .period-field {
   display: grid;
-  width: 180px;
+  width: min(100%, 180px);
   gap: 6px;
 }
 
@@ -653,6 +653,7 @@ function questionStatusClass(question: TrainingQuestionResult): string {
   display: grid;
   min-width: 0;
   gap: 3px;
+  overflow-wrap: anywhere;
 }
 
 .curriculum-row small,
@@ -900,6 +901,7 @@ dd {
 
 .download-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
 }
@@ -938,6 +940,30 @@ dd {
   .statistics-card,
   .detail-card {
     grid-column: auto;
+  }
+
+  .curriculum-card,
+  .training-list-card,
+  .statistics-card,
+  .detail-card {
+    padding: 16px;
+  }
+}
+
+@container (max-width: 480px) {
+  .section-heading,
+  .detail-heading,
+  .question-results > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .period-field {
+    width: 100%;
+  }
+
+  .download-actions :deep([data-slot='button']) {
+    flex: 1 1 120px;
   }
 }
 </style>

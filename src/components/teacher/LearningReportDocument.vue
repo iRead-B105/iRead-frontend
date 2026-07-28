@@ -167,6 +167,7 @@ const emit = defineEmits<{
   margin: 0;
   font-size: 12px;
   font-weight: 650;
+  overflow-wrap: anywhere;
 }
 .report-opinion {
   margin-top: 28px;
@@ -223,6 +224,35 @@ const emit = defineEmits<{
     padding: 28px 22px 24px;
   }
   .report-profile {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .learning-report {
+    padding: 22px 16px 20px;
+    border-right: 0;
+    border-left: 0;
+  }
+
+  .learning-report__header,
+  .report-opinion > header,
+  .learning-report__footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .learning-report__title {
+    text-align: left;
+  }
+
+  .learning-report__title h1 {
+    font-size: 22px;
+    overflow-wrap: anywhere;
+  }
+
+  .report-profile div {
+    gap: 4px;
     grid-template-columns: 1fr;
   }
 }

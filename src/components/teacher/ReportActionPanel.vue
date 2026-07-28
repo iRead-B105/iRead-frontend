@@ -77,7 +77,8 @@ const emit = defineEmits<{
     justify-content: stretch;
   }
   .report-actions__group :deep(button) {
-    flex: 1;
+    min-width: 120px;
+    flex: 1 1 120px;
   }
 }
 </style>

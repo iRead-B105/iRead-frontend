@@ -559,6 +559,7 @@ function deletionMessage(): string {
 }
 .load-errors {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 18px;
   border: 1px solid color-mix(in oklch, var(--danger-600) 32%, var(--border));
@@ -625,7 +626,7 @@ function deletionMessage(): string {
 }
 .curriculum-table {
   overflow: auto;
-  max-height: min(640px, calc(100vh - 250px));
+  max-height: min(640px, max(240px, calc(100dvh - 250px)));
   margin: 18px 0 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -801,10 +802,13 @@ function deletionMessage(): string {
 .recommendation-copy strong {
   color: var(--slate-800);
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 .recommendation-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 7px;
 }
 .reorder-controls {
@@ -850,6 +854,11 @@ function deletionMessage(): string {
   }
 }
 @media (max-width: 640px) {
+  .curriculum-library,
+  .curriculum-panel {
+    padding: 16px;
+  }
+
   .curriculum-table__head,
   .curriculum-row {
     grid-template-columns: 36px 92px minmax(130px, 1fr) 80px;
@@ -859,6 +868,37 @@ function deletionMessage(): string {
   }
   .recommendation-actions {
     grid-column: 3;
+  }
+
+  .draft-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .load-errors,
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .load-errors .button {
+    margin-left: 0;
+  }
+
+  .curriculum-library,
+  .curriculum-panel {
+    padding: 14px;
+  }
+
+  .selected-training dl {
+    grid-template-columns: 1fr;
+  }
+
+  .recommendation-list article {
+    gap: 6px;
+    padding: 10px 8px;
   }
 }
 </style>

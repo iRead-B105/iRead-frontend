@@ -559,6 +559,8 @@ watch(studentId, loadOverview, { immediate: true })
 
 <style scoped>
 .overview {
+  width: 100%;
+  min-width: 0;
   max-width: 1120px;
   margin: 0 auto;
   gap: 20px;
@@ -592,6 +594,7 @@ watch(studentId, loadOverview, { immediate: true })
 
 .overview-state > div {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
 }
@@ -632,6 +635,7 @@ watch(studentId, loadOverview, { immediate: true })
 
 .student-profile-card__identity {
   display: grid;
+  min-width: 0;
   gap: 4px;
 }
 
@@ -668,6 +672,7 @@ watch(studentId, loadOverview, { immediate: true })
   color: var(--slate-800);
   font-size: 13px;
   font-weight: 650;
+  overflow-wrap: anywhere;
 }
 
 .learning-summary-section {
@@ -886,6 +891,7 @@ watch(studentId, loadOverview, { immediate: true })
 
 .training-history-list li > div {
   display: grid;
+  min-width: 0;
   gap: 5px;
 }
 
@@ -930,8 +936,35 @@ watch(studentId, loadOverview, { immediate: true })
 }
 
 @media (max-width: 560px) {
+  .student-profile-card {
+    gap: 14px;
+    padding: 16px;
+  }
+
   .student-profile-card dl {
     grid-template-columns: 1fr;
+  }
+
+  .learning-summary-section > header,
+  .accuracy-panel > header,
+  .training-history-panel > header,
+  .training-history-list li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .overview-state {
+    min-height: 240px;
+    padding: 24px 16px;
+  }
+
+  .overview-state > div {
+    justify-content: center;
+  }
+
+  .learning-insights-grid > *,
+  .training-history-panel {
+    padding: 16px;
   }
 }
 </style>

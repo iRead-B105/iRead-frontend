@@ -312,5 +312,20 @@ const reportSections = [
   .report-period__fields > span {
     display: none;
   }
+
+  .report-period,
+  .report-contents {
+    padding: 18px 16px 20px;
+  }
+
+  .memo-field__label,
+  .create-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .report-setup__actions :deep([data-slot='button']) {
+    width: 100%;
+  }
 }
 </style>

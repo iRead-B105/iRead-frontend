@@ -194,6 +194,7 @@ async function signup() {
 <style scoped>
 .signup-page {
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 32px 48px 72px;
   background: var(--background);
 }
@@ -225,5 +226,12 @@ async function signup() {
 @media (max-width: 560px) {
   .signup-page { padding: 24px 18px 48px; }
   .signup-form { padding: 30px 22px; }
+  .signup-heading h1 { font-size: 26px; }
+}
+
+@media (max-width: 360px) {
+  .signup-page { padding: 18px 14px 36px; }
+  .signup-form { padding: 24px 18px; }
+  .signup-header { margin-bottom: 18px; }
 }
 </style>

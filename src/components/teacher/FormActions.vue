@@ -44,7 +44,25 @@ defineEmits<{
 
 .form-actions__buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-left: auto;
+}
+
+@media (max-width: 480px) {
+  .form-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .form-actions__buttons {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .form-actions__buttons :deep([data-slot='button']) {
+    min-width: 0;
+    flex: 1 1 120px;
+  }
 }
 </style>

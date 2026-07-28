@@ -438,6 +438,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
 
 <style scoped>
 .student-form {
+  width: 100%;
+  min-width: 0;
   max-width: 1080px;
   margin: 0 auto;
 }
@@ -500,6 +502,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
   margin: 3px 0 0;
   color: var(--slate-500);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .delete-dialog {
@@ -525,6 +528,17 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
   .danger-zone {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .danger-zone :deep([data-slot='button']) {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .delete-dialog {
+    width: calc(100% - 20px);
+    padding: 20px 16px;
   }
 }
 </style>

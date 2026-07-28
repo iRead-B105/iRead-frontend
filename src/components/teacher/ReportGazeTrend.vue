@@ -326,4 +326,16 @@ function statusLabel(status: ReportGazeSeries['status']): string {
     border-left: 0;
   }
 }
+
+@media (max-width: 480px) {
+  .gaze-trend__heading,
+  .gaze-series > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .gaze-series {
+    padding: 14px;
+  }
+}
 </style>

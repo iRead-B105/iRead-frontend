@@ -22,13 +22,16 @@ import { dataSource } from '@/config/dataSource'
 /* scoped는 아래 CSS가 이 컴포넌트 내부 요소에만 적용되도록 범위를 제한합니다. */
 .teacher-shell {
   display: grid;
+  width: 100%;
   min-height: 100vh;
+  min-width: 0;
   align-items: start;
   background: var(--content-background);
   grid-template-columns: 224px minmax(0, 1fr);
 }
 
 .teacher-content {
+  width: 100%;
   min-height: 100vh;
   min-width: 0;
   padding: 28px 36px 48px;
@@ -66,7 +69,7 @@ import { dataSource } from '@/config/dataSource'
 
 @media (max-width: 640px) {
   .teacher-content {
-    padding: 20px 16px 36px;
+    padding: 18px 14px 32px;
   }
 }
 </style>

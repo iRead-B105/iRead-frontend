@@ -290,6 +290,8 @@ onMounted(loadProfile)
 
 <style scoped>
 .settings {
+  width: 100%;
+  min-width: 0;
   max-width: 1020px;
   margin: 0 auto;
 }
@@ -348,6 +350,7 @@ onMounted(loadProfile)
   border-radius: 8px;
   background: #fff1f2;
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .settings .button:disabled {
@@ -356,5 +359,12 @@ onMounted(loadProfile)
   color: var(--slate-400);
   cursor: default;
   transform: none;
+}
+
+@media (max-width: 480px) {
+  .settings-state {
+    min-height: 180px;
+    padding: 24px 16px;
+  }
 }
 </style>

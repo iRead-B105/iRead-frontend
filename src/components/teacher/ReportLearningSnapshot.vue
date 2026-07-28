@@ -266,6 +266,7 @@ dd {
 }
 table {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
 }
 th,
@@ -305,6 +306,10 @@ tbody th {
   .summary-grid > div + div {
     border-top: 1px solid var(--border);
     border-left: 0;
+  }
+
+  .table-wrap {
+    overscroll-behavior-x: contain;
   }
 }
 </style>

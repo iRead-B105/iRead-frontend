@@ -251,6 +251,7 @@ const emit = defineEmits<{
 .learning-event__copy,
 .learning-event__result {
   display: grid;
+  min-width: 0;
   gap: 5px;
 }
 
@@ -351,6 +352,7 @@ const emit = defineEmits<{
   color: var(--slate-700);
   font-size: 12px;
   line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .problem-segments,
@@ -396,9 +398,26 @@ const emit = defineEmits<{
 }
 
 @media (max-width: 620px) {
+  .learning-event {
+    grid-template-columns: 1fr;
+  }
+
+  .event-detail > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .learning-event__result {
+    justify-items: start;
+  }
+
   .event-detail dl,
   .recommendation dl {
     grid-template-columns: 1fr;
+  }
+
+  .event-detail {
+    padding: 16px;
   }
 }
 </style>

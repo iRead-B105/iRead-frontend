@@ -379,6 +379,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .student-dashboard {
   display: grid;
+  min-width: 0;
   gap: 20px;
 }
 .page-heading {
@@ -406,6 +407,7 @@ onBeforeUnmount(() => {
 }
 .filters {
   display: grid;
+  min-width: 0;
   grid-template-columns: minmax(260px, 1fr) 150px 150px;
   gap: 10px;
   padding: 14px;
@@ -452,6 +454,7 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 .table-card {
+  min-width: 0;
   overflow-x: auto;
   padding: 0;
 }
@@ -480,6 +483,7 @@ onBeforeUnmount(() => {
 .pagination {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 6px;
 }
 .sr-only {
@@ -496,10 +500,35 @@ onBeforeUnmount(() => {
   .page-heading {
     align-items: stretch;
     flex-direction: column;
+    min-height: 0;
   }
   .filters,
   .summary {
     grid-template-columns: 1fr;
+  }
+
+  .filters {
+    padding: 12px;
+  }
+
+  .page-heading > :deep([data-slot='button']) {
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-heading h1 {
+    font-size: 22px;
+  }
+
+  .state-card {
+    min-height: 200px;
+    padding: 24px 16px;
+  }
+
+  .pagination :deep([data-slot='button']) {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 </style>

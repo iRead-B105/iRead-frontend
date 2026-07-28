@@ -134,6 +134,7 @@ onBeforeUnmount(() => {
 
 .profile-image-editor__copy {
   display: grid;
+  min-width: 0;
   gap: 3px;
 }
 
@@ -145,10 +146,23 @@ onBeforeUnmount(() => {
 .profile-image-editor__copy small {
   color: var(--slate-500);
   font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .profile-image-editor > label {
   justify-self: start;
   margin-left: 6px;
+}
+
+@media (max-width: 480px) {
+  .profile-image-editor {
+    align-items: center;
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .profile-image-editor > label {
+    grid-column: 1 / -1;
+    margin-left: 0;
+  }
 }
 </style>

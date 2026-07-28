@@ -261,6 +261,7 @@ async function returnToIdentityStep(): Promise<void> {
 .recovery-page {
   display: grid;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 52px 24px;
   background: var(--slate-50);
   place-items: start center;
@@ -429,8 +430,30 @@ async function returnToIdentityStep(): Promise<void> {
 }
 
 @media (max-width: 520px) {
+  .recovery-page {
+    padding: 28px 16px 40px;
+  }
+
   .recovery-card {
     padding: 30px 22px;
+  }
+
+  .recovery-heading h1 {
+    font-size: 25px;
+  }
+}
+
+@media (max-width: 360px), (max-height: 620px) {
+  .recovery-page {
+    padding: 20px 14px 32px;
+  }
+
+  .recovery-card {
+    padding: 24px 18px;
+  }
+
+  .stepper {
+    margin-bottom: 24px;
   }
 }
 </style>

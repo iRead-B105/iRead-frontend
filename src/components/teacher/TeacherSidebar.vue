@@ -190,6 +190,7 @@ onMounted(() => {
   display: flex;
   height: 100vh;
   min-width: 224px;
+  max-width: 100%;
   align-self: start;
   flex-direction: column;
   margin: 0;
@@ -219,6 +220,7 @@ onMounted(() => {
 
 .sidebar-panel {
   display: grid;
+  min-width: 0;
   gap: 16px;
 }
 
@@ -382,16 +384,38 @@ onMounted(() => {
 
   .sidebar-nav {
     display: flex;
+    width: 100%;
     padding-bottom: 2px;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 8px;
   }
 
   .sidebar-nav a {
+    flex: 0 0 auto;
     min-width: max-content;
+    scroll-snap-align: start;
   }
 
   .sidebar-footer {
     margin: 10px -16px -10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .teacher-sidebar {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .sidebar-footer {
+    margin-right: -12px;
+    margin-left: -12px;
+  }
+
+  .sidebar-account__trigger {
+    padding-right: 12px;
+    padding-left: 12px;
   }
 }
 </style>
