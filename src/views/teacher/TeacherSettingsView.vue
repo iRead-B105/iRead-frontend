@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, shallowRef } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, shallowRef } from 'vue'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import FormActions from '@/components/teacher/FormActions.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
@@ -96,12 +96,30 @@ function cancelChanges(): void {
   previewVersion.value += 1
 }
 
+async function focusFirstError(errors: TeacherProfileFormErrors): Promise<void> {
+  const fieldIds: Partial<Record<keyof TeacherProfileFormErrors, string>> = {
+    name: 'teacher-name',
+    organization: 'organization',
+    gender: 'teacher-gender',
+  }
+  const firstField = Object.keys(errors).find(
+    (field) => Boolean(errors[field as keyof TeacherProfileFormErrors]),
+  ) as keyof TeacherProfileFormErrors | undefined
+  const id = firstField ? fieldIds[firstField] : undefined
+  if (!id) return
+  await nextTick()
+  document.getElementById(id)?.focus()
+}
+
 async function saveProfile(): Promise<void> {
   if (!serverProfile.value || saving.value || !formChanged.value) return
 
   const validationErrors = validateTeacherProfileDraft(form)
   formErrors.value = validationErrors
-  if (Object.keys(validationErrors).length > 0) return
+  if (Object.keys(validationErrors).length > 0) {
+    await focusFirstError(validationErrors)
+    return
+  }
 
   saving.value = true
   saveError.value = ''
@@ -217,7 +235,12 @@ onMounted(loadProfile)
           <div class="field field--short">
             <Label for="teacher-gender">성별</Label>
             <Select v-model="form.gender" :disabled="saving">
-              <SelectTrigger id="teacher-gender" class="select !w-full">
+              <SelectTrigger
+                id="teacher-gender"
+                class="select !w-full"
+                :aria-invalid="Boolean(formErrors.gender)"
+                :aria-describedby="formErrors.gender ? 'teacher-gender-error' : undefined"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -226,6 +249,9 @@ onMounted(loadProfile)
                 <SelectItem value="MALE">남자</SelectItem>
               </SelectContent>
             </Select>
+            <p v-if="formErrors.gender" id="teacher-gender-error" class="field-error">
+              {{ formErrors.gender }}
+            </p>
           </div>
         </div>
       </SettingsSection>

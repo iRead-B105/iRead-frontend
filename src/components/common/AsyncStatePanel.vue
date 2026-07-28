@@ -68,7 +68,7 @@ const showActions = computed(
     </span>
 
     <div class="async-state-panel__content">
-      <p class="async-state-panel__title">{{ resolvedTitle }}</p>
+      <h2 class="async-state-panel__title">{{ resolvedTitle }}</h2>
       <p class="async-state-panel__message">{{ message }}</p>
       <slot />
     </div>

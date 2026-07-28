@@ -92,6 +92,15 @@ const summaryItems = computed(() => [
         : `${formatReportNumber(props.snapshot.averageReadingSpeed)} ${readingSpeedUnit.value}`.trim(),
   },
 ])
+const growthChartSummary = computed(
+  () =>
+    `기간별 성장 기록: ${props.snapshot.growthHistory
+      .map(
+        (point) =>
+          `${formatReportDate(point.date)} 정확도 ${formatReportNumber(point.accuracy, '%')}, 읽기 속도 ${formatReportNumber(point.readingSpeed, readingSpeedUnit.value)}, 발음 점수 ${formatReportNumber(point.pronunciationScore)}`,
+      )
+      .join('; ')}`,
+)
 </script>
 
 <template>
@@ -121,6 +130,7 @@ const summaryItems = computed(() => [
       :option="growthChart"
       height="260px"
       aria-label="보고서 기간별 정확도, 읽기 속도와 발음 점수 추이"
+      :summary="growthChartSummary"
     />
   </section>
 
@@ -133,6 +143,7 @@ const summaryItems = computed(() => [
     </p>
     <div v-else class="table-wrap">
       <table>
+        <caption class="sr-only">영역별 성취도</caption>
         <thead>
           <tr><th>영역</th><th>성취도</th></tr>
         </thead>
@@ -155,6 +166,7 @@ const summaryItems = computed(() => [
     </p>
     <div v-else class="table-wrap">
       <table>
+        <caption class="sr-only">자주 틀리는 낱말과 오답률</caption>
         <thead>
           <tr><th>낱말</th><th>시도</th><th>오답</th><th>오답률</th></tr>
         </thead>

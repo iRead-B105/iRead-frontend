@@ -72,6 +72,12 @@ const selectedAccuracyComparison = computed(
     ) ?? null,
 )
 const readingSpeedPoints = computed(() => statistics.value?.readingSpeedTrend.points ?? [])
+const speedChartSummary = computed(
+  () =>
+    `날짜별 음성 읽기 속도: ${readingSpeedPoints.value
+      .map((point) => `${formatChartDate(point.date)} ${point.speed}단어/분`)
+      .join(', ')}`,
+)
 const speedChart = computed<EChartsOption>(() => ({
   tooltip: {
     trigger: 'axis',
@@ -394,6 +400,7 @@ function questionStatusClass(question: TrainingQuestionResult): string {
             :option="speedChart"
             height="240px"
             aria-label="음성 기준 읽기 속도 추이 차트"
+            :summary="speedChartSummary"
           />
 
           <section class="accuracy-comparison" aria-labelledby="accuracy-comparison-title">

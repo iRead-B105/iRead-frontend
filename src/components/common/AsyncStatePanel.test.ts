@@ -14,6 +14,7 @@ describe('AsyncStatePanel', () => {
     const panel = wrapper.get('[role="status"]')
     expect(panel.attributes('aria-live')).toBe('polite')
     expect(panel.attributes('aria-busy')).toBe('true')
+    expect(wrapper.get('h2').text()).toBe('불러오는 중입니다')
     expect(panel.text()).toContain('불러오는 중입니다')
     expect(panel.text()).toContain('아동 정보를 불러오고 있습니다.')
     expect(wrapper.find('button').exists()).toBe(false)

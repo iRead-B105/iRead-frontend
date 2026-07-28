@@ -35,6 +35,7 @@ async function mountResetPasswordView() {
     pinia,
     router,
     wrapper: mount(TeacherResetPasswordView, {
+      attachTo: document.body,
       global: {
         plugins: [pinia, router],
       },
@@ -103,5 +104,21 @@ describe('TeacherResetPasswordView', () => {
 
     expect(wrapper.get('[role="alert"]').text()).toBe('검증 코드가 올바르지 않습니다.')
     expect(router.currentRoute.value.name).toBe('teacher-reset-password')
+  })
+
+  it('단계별 검증 실패 field와 heading으로 focus를 이동한다', async () => {
+    const { wrapper } = await mountResetPasswordView()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('#reset-email').element)
+
+    await moveToPasswordStep(wrapper)
+    expect(document.activeElement).toBe(wrapper.get('#reset-password-title').element)
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('#verification-code').element)
+    expect(wrapper.get('#verification-code').attributes('aria-invalid')).toBe('true')
   })
 })

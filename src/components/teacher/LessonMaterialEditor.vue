@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
+  trainingStatusLabel,
   toTrainingPreview,
   type CurriculumTraining,
   type ExpectedWord,
@@ -110,7 +111,7 @@ function confirmDeleteWord(): void {
             </DialogDescription>
           </div>
           <div class="editor-header__actions">
-            <Badge variant="secondary">{{ training.status }}</Badge>
+            <Badge variant="secondary">{{ trainingStatusLabel(training.status) }}</Badge>
             <Button
               variant="ghost"
               size="icon"
@@ -143,12 +144,18 @@ function confirmDeleteWord(): void {
                   autocomplete="off"
                   placeholder="최대 50자"
                   :disabled="isMutating"
+                  :aria-invalid="Boolean(wordValidationError)"
+                  aria-describedby="expected-word-help"
                 />
                 <Button type="submit" :disabled="!canAddWord">
                   {{ isMutating ? '처리 중' : '추가' }}
                 </Button>
               </div>
-              <small :class="{ error: wordValidationError }">
+              <small
+                id="expected-word-help"
+                :class="{ error: wordValidationError }"
+                :role="wordValidationError ? 'alert' : undefined"
+              >
                 {{ wordValidationError ?? `${normalizedWord.length}/50자` }}
               </small>
             </form>

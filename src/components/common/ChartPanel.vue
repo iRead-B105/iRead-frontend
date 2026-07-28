@@ -11,7 +11,7 @@ import {
 import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { ECharts, EChartsOption } from 'echarts'
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { twitterChartTheme } from '@/features/teacher/chartTheme'
 
 const chartThemeName = 'iread-twitter'
@@ -35,12 +35,14 @@ const props = withDefaults(
     option: EChartsOption
     height?: string
     ariaLabel?: string
+    summary?: string
   }>(),
-  { height: '320px', ariaLabel: '학습 데이터 차트' },
+  { height: '320px', ariaLabel: '학습 데이터 차트', summary: undefined },
 )
 
 // template의 실제 div 요소, 생성된 차트, 크기 감시 도구를 각각 기억합니다.
 const chartElement = ref<HTMLDivElement | null>(null)
+const summaryId = `chart-summary-${useId()}`
 let chart: ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
 
@@ -50,7 +52,7 @@ function renderChart() {
   // ??=는 chart가 없을 때만 새 인스턴스를 만든다는 뜻이라 중복 생성을 방지합니다.
   chart ??= echarts.init(chartElement.value, chartThemeName)
   // 부모가 전달한 최신 설정으로 차트를 다시 그립니다.
-  chart.setOption(props.option, true)
+  chart.setOption({ ...props.option, animation: false }, true)
 }
 
 onMounted(async () => {
@@ -75,17 +77,29 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <!-- ref 연결로 이 div가 chartElement.value에 담기며, role/aria-label은 차트 목적을 설명합니다. -->
-  <div
-    ref="chartElement"
-    class="chart-panel"
-    :style="{ height }"
-    role="img"
-    :aria-label="ariaLabel"
-  ></div>
+  <figure class="chart-figure">
+    <!-- ref 연결로 이 div가 chartElement.value에 담기며, role/aria-label은 차트 목적을 설명합니다. -->
+    <div
+      ref="chartElement"
+      class="chart-panel"
+      :style="{ height }"
+      role="img"
+      :aria-label="ariaLabel"
+      :aria-describedby="summary ? summaryId : undefined"
+    ></div>
+    <figcaption v-if="summary" :id="summaryId" class="sr-only">
+      {{ summary }}
+    </figcaption>
+  </figure>
 </template>
 
 <style scoped>
+.chart-figure {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
 .chart-panel {
   width: 100%;
   min-width: 0;

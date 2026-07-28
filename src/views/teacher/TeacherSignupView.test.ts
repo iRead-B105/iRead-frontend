@@ -20,6 +20,7 @@ async function mountSignupView() {
   return {
     router,
     wrapper: mount(TeacherSignupView, {
+      attachTo: document.body,
       global: {
         plugins: [createPinia(), router],
       },
@@ -103,5 +104,17 @@ describe('TeacherSignupView', () => {
     await flushPromises()
 
     expect(wrapper.get('[role="alert"]').text()).toBe('이미 가입된 이메일입니다.')
+  })
+
+  it('검증 실패 시 오류를 입력과 연결하고 첫 오류 field로 focus한다', async () => {
+    const { wrapper } = await mountSignupView()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const email = wrapper.get<HTMLInputElement>('#signup-email')
+    expect(email.attributes('aria-invalid')).toBe('true')
+    expect(email.attributes('aria-describedby')).toBe('signup-error')
+    expect(document.activeElement).toBe(email.element)
   })
 })

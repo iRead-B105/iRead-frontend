@@ -96,6 +96,18 @@ function chartOption(series: ReportGazeSeries, metric: Metric): EChartsOption {
     ],
   }
 }
+
+function chartSummary(series: ReportGazeSeries, metric: Metric, source: string): string {
+  return `${source} ${metric.label}: ${series.points
+    .map((point) => `${formatReportDateTime(point.analyzedAt)} ${metricValue(point, metric)}`)
+    .join(', ')}`
+}
+
+function statusLabel(status: ReportGazeSeries['status']): string {
+  if (status === 'AVAILABLE') return '분석 완료'
+  if (status === 'NO_DATA') return '데이터 없음'
+  return '분석 실패'
+}
 </script>
 
 <template>
@@ -119,7 +131,7 @@ function chartOption(series: ReportGazeSeries, metric: Metric): EChartsOption {
           <h3 :id="`gaze-${section.key}-title`">{{ section.title }}</h3>
           <p>{{ trend[section.key].points.length }}건의 성공 결과</p>
         </div>
-        <span class="series-status">{{ trend[section.key].status }}</span>
+        <span class="series-status">{{ statusLabel(trend[section.key].status) }}</span>
       </header>
 
       <div v-if="trend[section.key].status === 'NO_DATA'" class="series-empty">
@@ -160,6 +172,7 @@ function chartOption(series: ReportGazeSeries, metric: Metric): EChartsOption {
               :option="chartOption(trend[section.key], metric)"
               height="190px"
               :aria-label="`${section.source} ${metric.label} 시간순 추이`"
+              :summary="chartSummary(trend[section.key], metric, section.source)"
             />
           </article>
         </div>

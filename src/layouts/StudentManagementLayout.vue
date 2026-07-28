@@ -3,6 +3,7 @@ import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import AsyncStatePanel, { type AsyncStatePanelKind } from '@/components/common/AsyncStatePanel.vue'
+import { focusRouteContent } from '@/router/accessibility'
 import { useStudentStore } from '@/stores/students'
 
 interface StudentRouteState {
@@ -81,10 +82,14 @@ function goToStudentList(): void {
 }
 
 watch(studentId, loadStudentRoute, { immediate: true })
+watch(routeState, (nextState, previousState) => {
+  if (previousState && !nextState) void focusRouteContent()
+})
 </script>
 
 <template>
   <div class="student-layout">
+    <h1 v-if="routeState" class="sr-only" data-route-focus>아동 관리</h1>
     <AsyncStatePanel
       v-if="routeState"
       :kind="routeState.kind"

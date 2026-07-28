@@ -22,11 +22,11 @@ withDefaults(
   { confirmLabel: '삭제', tone: 'danger' },
 )
 
-defineEmits<{ cancel: []; confirm: [] }>()
+const emit = defineEmits<{ cancel: []; confirm: [] }>()
 </script>
 
 <template>
-  <AlertDialog :open="open">
+  <AlertDialog :open="open" @update:open="(nextOpen) => !nextOpen && emit('cancel')">
     <AlertDialogContent class="confirm-dialog">
       <AlertDialogHeader>
         <span class="confirm-dialog__icon" :class="`is-${tone}`" aria-hidden="true">

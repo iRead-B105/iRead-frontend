@@ -9,8 +9,9 @@ import { dataSource } from '@/config/dataSource'
 <template>
   <!-- shell은 교수자 페이지 전체를 감싸는 가장 바깥 컨테이너입니다. -->
   <div class="teacher-shell">
+    <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
     <TeacherSidebar />
-    <main class="teacher-content">
+    <main id="main-content" class="teacher-content" tabindex="-1">
       <DataSourceNotice :data-source="dataSource" />
       <RouterView />
     </main>
@@ -32,6 +33,24 @@ import { dataSource } from '@/config/dataSource'
   min-width: 0;
   padding: 28px 36px 48px;
   background: var(--content-background);
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 100;
+  top: 12px;
+  left: 12px;
+  padding: 10px 14px;
+  border: 2px solid var(--primary-700);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--primary-700);
+  font-weight: 800;
+  transform: translateY(calc(-100% - 24px));
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 @media (max-width: 900px) {

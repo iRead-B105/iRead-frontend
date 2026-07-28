@@ -161,12 +161,13 @@ onBeforeUnmount(() => {
     <SaveToast :visible="mutationNoticeVisible" :message="mutationNoticeMessage" inline />
 
     <Card class="filters">
-      <label class="search">
+      <label class="search" for="student-search">
         <span aria-hidden="true">⌕</span>
+        <span class="sr-only">이름 또는 학교 검색</span>
         <Input
+          id="student-search"
           v-model="keyword"
           type="search"
-          aria-label="이름 또는 학교 검색"
           placeholder="이름 또는 학교 검색"
         />
       </label>
@@ -275,7 +276,7 @@ onBeforeUnmount(() => {
       "
       class="table-card"
     >
-      <Table>
+      <Table caption="담당 학습자 목록">
         <TableHeader>
           <TableRow>
             <TableHead>학습자</TableHead>
@@ -339,7 +340,7 @@ onBeforeUnmount(() => {
       </Table>
     </Card>
 
-    <footer v-if="totalPages > 1" class="pagination">
+    <nav v-if="totalPages > 1" class="pagination" aria-label="학습자 목록 페이지 이동">
       <Button
         type="button"
         variant="outline"
@@ -356,6 +357,8 @@ onBeforeUnmount(() => {
         size="sm"
         :variant="currentPage === page ? 'default' : 'outline'"
         :disabled="listStatus === 'loading'"
+        :aria-current="currentPage === page ? 'page' : undefined"
+        :aria-label="`${page}페이지${currentPage === page ? ', 현재 페이지' : ''}`"
         @click="goToPage(page)"
       >
         {{ page }}
@@ -369,7 +372,7 @@ onBeforeUnmount(() => {
       >
         다음
       </Button>
-    </footer>
+    </nav>
   </section>
 </template>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { nextTick, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,8 @@ import {
 
 const router = useRouter()
 const errorMessage = ref('')
+const errorField = ref('')
+const errorSummary = ref<HTMLElement | null>(null)
 const form = reactive({
   email: '',
   password: '',
@@ -20,23 +22,40 @@ const form = reactive({
 })
 const submitting = ref(false)
 
+async function focusError(field?: string): Promise<void> {
+  await nextTick()
+  const fieldIds: Record<string, string> = {
+    email: 'signup-email',
+    password: 'signup-password',
+    passwordConfirm: 'signup-password-confirm',
+    name: 'signup-name',
+    organization: 'signup-organization',
+  }
+  const target = field ? document.getElementById(fieldIds[field] ?? '') : null
+  ;(target ?? errorSummary.value)?.focus()
+}
+
 async function signup() {
   if (submitting.value) return
 
   const validation = validateSignUpForm(form)
   if (!validation.ok) {
     errorMessage.value = validation.message
+    errorField.value = validation.field
+    await focusError(validation.field)
     return
   }
 
   submitting.value = true
   errorMessage.value = ''
+  errorField.value = ''
 
   try {
     await authRepositories.auth.signUp(validation.value)
     await router.push('/login')
   } catch (error) {
     errorMessage.value = getSignUpErrorMessage(error)
+    await focusError()
   } finally {
     submitting.value = false
   }
@@ -57,7 +76,8 @@ async function signup() {
         <p>아동 관리에 사용할 교수자 계정을 만들어 주세요.</p>
       </div>
 
-      <section class="signup-fields" aria-label="계정 정보">
+      <fieldset class="signup-fields">
+        <legend>계정 정보</legend>
         <div class="field">
           <label for="signup-email">이메일</label>
           <Input
@@ -69,6 +89,8 @@ async function signup() {
             maxlength="50"
             autocomplete="email"
             placeholder="example@email.com"
+            :aria-invalid="errorField === 'email'"
+            :aria-describedby="errorField === 'email' ? 'signup-error' : undefined"
           />
         </div>
 
@@ -84,8 +106,16 @@ async function signup() {
             type="password"
             autocomplete="new-password"
             placeholder="8~100자 입력"
+            :aria-invalid="errorField === 'password'"
+            :aria-describedby="
+              errorField === 'password'
+                ? 'signup-password-help signup-error'
+                : 'signup-password-help'
+            "
           />
-          <p class="field-help">8~100자의 비밀번호를 입력해 주세요.</p>
+          <p id="signup-password-help" class="field-help">
+            8~100자의 비밀번호를 입력해 주세요.
+          </p>
         </div>
 
         <div class="field">
@@ -100,13 +130,16 @@ async function signup() {
             type="password"
             autocomplete="new-password"
             placeholder="비밀번호 다시 입력"
+            :aria-invalid="errorField === 'passwordConfirm'"
+            :aria-describedby="errorField === 'passwordConfirm' ? 'signup-error' : undefined"
           />
         </div>
-      </section>
+      </fieldset>
 
       <div class="signup-divider" aria-hidden="true"></div>
 
-      <section class="signup-fields" aria-label="교수자 정보">
+      <fieldset class="signup-fields">
+        <legend>교수자 정보</legend>
         <div class="field">
           <label for="signup-name">이름</label>
           <Input
@@ -117,6 +150,8 @@ async function signup() {
             maxlength="10"
             autocomplete="name"
             placeholder="교수자 이름"
+            :aria-invalid="errorField === 'name'"
+            :aria-describedby="errorField === 'name' ? 'signup-error' : undefined"
           />
         </div>
 
@@ -130,11 +165,22 @@ async function signup() {
             maxlength="100"
             autocomplete="organization"
             placeholder="소속 기관명"
+            :aria-invalid="errorField === 'organization'"
+            :aria-describedby="errorField === 'organization' ? 'signup-error' : undefined"
           />
         </div>
-      </section>
+      </fieldset>
 
-      <p v-if="errorMessage" class="signup-error" role="alert">{{ errorMessage }}</p>
+      <p
+        v-if="errorMessage"
+        id="signup-error"
+        ref="errorSummary"
+        class="signup-error"
+        role="alert"
+        tabindex="-1"
+      >
+        {{ errorMessage }}
+      </p>
       <Button class="signup-submit" type="submit" :disabled="submitting">
         {{ submitting ? '가입 중...' : '회원가입' }}
       </Button>
@@ -166,7 +212,8 @@ async function signup() {
 .signup-heading { margin-bottom: 34px; }
 .signup-heading h1 { margin: 0 0 7px; font-size: 30px; }
 .signup-heading p { margin: 0; color: var(--slate-500); }
-.signup-fields { display: grid; gap: 19px; }
+.signup-fields { display: grid; gap: 19px; margin: 0; padding: 0; border: 0; }
+.signup-fields legend { margin-bottom: 14px; color: var(--slate-800); font-weight: 800; }
 .signup-fields .input { height: 46px; }
 .field-help { margin: -2px 0 0; color: var(--slate-500); font-size: 11px; }
 .signup-divider { height: 1px; margin: 30px 0; background: var(--slate-200); }
