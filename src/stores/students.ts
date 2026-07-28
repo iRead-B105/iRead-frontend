@@ -20,10 +20,12 @@ import {
   type StudentTrainingHistoryPeriod,
   type StudentUpdateInput,
 } from '@/features/teacher/student'
+import { mapCommonError, type UiError } from '@/features/teacher/error'
 import { isAbortError, isApiError } from '@/lib/api'
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : '학습자 정보를 불러오지 못했습니다.'
+  if (!isApiError(error)) return '학습자 정보를 불러오지 못했습니다.'
+  return mapCommonError(error)?.message ?? '학습자 정보를 불러오지 못했습니다.'
 }
 
 function errorStatus(error: unknown): number | null {
@@ -39,9 +41,7 @@ function withoutStudentInsightKeys<T>(
   studentId: number,
 ): Record<string, T> {
   const prefix = `${studentId}:`
-  return Object.fromEntries(
-    Object.entries(record).filter(([key]) => !key.startsWith(prefix)),
-  )
+  return Object.fromEntries(Object.entries(record).filter(([key]) => !key.startsWith(prefix)))
 }
 
 export const useStudentStore = defineStore('students', () => {
@@ -64,6 +64,7 @@ export const useStudentStore = defineStore('students', () => {
   const totalPages = ref(0)
   const listStatus = ref<StudentRequestStatus>('idle')
   const listError = ref<string | null>(null)
+  const listUiError = ref<UiError | null>(null)
   const listStale = ref(true)
   const summary = ref<StudentSummary | null>(null)
   const summaryStatus = ref<StudentRequestStatus>('idle')
@@ -131,9 +132,7 @@ export const useStudentStore = defineStore('students', () => {
   )
   const hasActiveFilters = computed(
     () =>
-      Boolean(query.keyword?.trim()) ||
-      query.age !== undefined ||
-      query.recentDays !== undefined,
+      Boolean(query.keyword?.trim()) || query.age !== undefined || query.recentDays !== undefined,
   )
 
   function setRepository(nextRepository: StudentRepository): void {
@@ -141,11 +140,7 @@ export const useStudentStore = defineStore('students', () => {
     reset()
   }
 
-  function setListFilters(filters: {
-    keyword?: string
-    age?: number
-    recentDays?: 7 | 30
-  }): void {
+  function setListFilters(filters: { keyword?: string; age?: number; recentDays?: 7 | 30 }): void {
     query.keyword = filters.keyword?.trim() || undefined
     query.age = filters.age
     query.recentDays = filters.recentDays
@@ -170,6 +165,7 @@ export const useStudentStore = defineStore('students', () => {
     listController = controller
     listStatus.value = 'loading'
     listError.value = null
+    listUiError.value = null
 
     try {
       const result = await repository.value.list({ ...query }, { signal: controller.signal })
@@ -191,7 +187,8 @@ export const useStudentStore = defineStore('students', () => {
     } catch (error) {
       if (isAbortError(error) || requestSequence !== listSequence) return
       listStatus.value = 'error'
-      listError.value = errorMessage(error)
+      listUiError.value = mapCommonError(error)
+      listError.value = listUiError.value?.message ?? errorMessage(error)
     } finally {
       if (requestSequence === listSequence) listController = null
     }
@@ -379,10 +376,7 @@ export const useStudentStore = defineStore('students', () => {
       }
       return summary
     } catch (error) {
-      if (
-        isAbortError(error) ||
-        learningSummarySequences.get(studentId) !== requestSequence
-      ) {
+      if (isAbortError(error) || learningSummarySequences.get(studentId) !== requestSequence) {
         return null
       }
       learningSummaryStatusById.value = {
@@ -704,10 +698,7 @@ export const useStudentStore = defineStore('students', () => {
     accuracyTrendById.value = nextAccuracyTrends
     accuracyTrendStatusById.value = nextAccuracyTrendStatuses
     accuracyTrendErrorById.value = nextAccuracyTrendErrors
-    trainingHistoryByKey.value = withoutStudentInsightKeys(
-      trainingHistoryByKey.value,
-      studentId,
-    )
+    trainingHistoryByKey.value = withoutStudentInsightKeys(trainingHistoryByKey.value, studentId)
     trainingHistoryStatusByKey.value = withoutStudentInsightKeys(
       trainingHistoryStatusByKey.value,
       studentId,
@@ -739,6 +730,7 @@ export const useStudentStore = defineStore('students', () => {
     totalPages.value = 0
     listStatus.value = 'idle'
     listError.value = null
+    listUiError.value = null
     listStale.value = true
     summary.value = null
     summaryStatus.value = 'idle'
@@ -794,6 +786,7 @@ export const useStudentStore = defineStore('students', () => {
     totalPages,
     listStatus,
     listError,
+    listUiError,
     listStale,
     summary,
     summaryStatus,

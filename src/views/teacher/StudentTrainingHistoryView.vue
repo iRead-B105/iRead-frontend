@@ -3,6 +3,7 @@ import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
+import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import ChartPanel from '@/components/common/ChartPanel.vue'
 import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
 import HistoryToolbar from '@/components/teacher/HistoryToolbar.vue'
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { chartColors } from '@/features/teacher/chartTheme'
+import { asyncStateKind } from '@/features/teacher/error'
 import {
   formatTrainingDuration,
   trainingDetailQuestions,
@@ -45,12 +47,14 @@ const {
   historyGazeStatus,
   exportingFormat,
   curriculumLogsError,
+  curriculumLogsUiError,
   trainingLogError,
   statisticsError,
   historyDetailError,
   historyGazeError,
   exportError,
 } = storeToRefs(trainingStore)
+const curriculumLogsErrorKind = computed(() => asyncStateKind(curriculumLogsUiError.value))
 
 function parseStudentId(value: unknown): number | null {
   const normalized = Array.isArray(value) ? value[0] : value
@@ -203,13 +207,14 @@ function questionStatusClass(question: TrainingQuestionResult): string {
       description="완료된 커리큘럼의 훈련 결과와 음성 기준 읽기 속도를 확인합니다."
     />
 
-    <Card v-if="invalidStudentId" class="state-card state-card--error">
-      <strong>올바른 학습자를 선택해 주세요.</strong>
-      <p>훈련 이력을 조회하려면 학습자 목록에서 대상을 다시 선택해야 합니다.</p>
-      <Button type="button" @click="router.push({ name: 'teacher-students' })">
-        학습자 목록으로 이동
-      </Button>
-    </Card>
+    <AsyncStatePanel
+      v-if="invalidStudentId"
+      kind="not-found"
+      title="올바른 학습자를 선택해 주세요."
+      message="훈련 이력을 조회하려면 학습자 목록에서 대상을 다시 선택해야 합니다."
+      action-label="학습자 목록으로 이동"
+      @action="router.push({ name: 'teacher-students' })"
+    />
 
     <template v-else>
       <Card class="toolbar-card">
@@ -239,22 +244,43 @@ function questionStatusClass(question: TrainingQuestionResult): string {
             </div>
           </header>
 
-          <p v-if="curriculumLogsStatus === 'loading'" class="section-state">
-            완료된 커리큘럼을 불러오는 중입니다.
-          </p>
-          <div
-            v-else-if="curriculumLogsStatus === 'error'"
-            class="section-state section-state--error"
-          >
-            <p>{{ curriculumLogsError }}</p>
-            <Button variant="outline" type="button" @click="trainingStore.retryHistory()">
-              다시 불러오기
-            </Button>
-          </div>
-          <p v-else-if="curriculumLogs.length === 0" class="section-state">
-            선택한 기간에 완료된 커리큘럼이 없습니다.
-          </p>
+          <AsyncStatePanel
+            v-if="curriculumLogsStatus === 'loading' && curriculumLogs.length === 0"
+            kind="loading"
+            message="완료된 커리큘럼을 불러오는 중입니다."
+            compact
+          />
+          <AsyncStatePanel
+            v-else-if="curriculumLogsStatus === 'error' && curriculumLogs.length === 0"
+            :kind="curriculumLogsErrorKind"
+            title="완료된 커리큘럼을 불러오지 못했습니다"
+            :message="curriculumLogsError ?? '잠시 후 다시 시도해 주세요.'"
+            :retry-label="curriculumLogsUiError?.retryable ? '다시 불러오기' : undefined"
+            compact
+            @retry="trainingStore.retryHistory()"
+          />
+          <AsyncStatePanel
+            v-else-if="curriculumLogsStatus === 'success' && curriculumLogs.length === 0"
+            kind="empty"
+            message="선택한 기간에 완료된 커리큘럼이 없습니다."
+            compact
+          />
           <div v-else class="curriculum-list">
+            <AsyncStatePanel
+              v-if="curriculumLogsStatus === 'error'"
+              :kind="curriculumLogsErrorKind"
+              title="최신 이력을 불러오지 못했습니다"
+              :message="`${curriculumLogsError ?? '잠시 후 다시 시도해 주세요.'} 이전 이력을 계속 표시합니다.`"
+              :retry-label="curriculumLogsUiError?.retryable ? '다시 불러오기' : undefined"
+              compact
+              @retry="trainingStore.retryHistory()"
+            />
+            <AsyncStatePanel
+              v-else-if="curriculumLogsStatus === 'loading'"
+              kind="loading"
+              message="최신 이력을 확인하는 동안 이전 이력을 표시합니다."
+              compact
+            />
             <Button
               v-for="curriculum in curriculumLogs"
               :key="curriculum.curriculumId"
@@ -288,18 +314,27 @@ function questionStatusClass(question: TrainingQuestionResult): string {
             </div>
           </header>
 
-          <p v-if="trainingLogStatus === 'loading'" class="section-state">
-            훈련 목록을 불러오는 중입니다.
-          </p>
-          <div v-else-if="trainingLogStatus === 'error'" class="section-state section-state--error">
-            <p>{{ trainingLogError }}</p>
-            <Button variant="outline" type="button" @click="retrySelectedCurriculum">
-              다시 불러오기
-            </Button>
-          </div>
-          <p v-else-if="!trainingLog?.trainings.length" class="section-state">
-            선택한 커리큘럼에 표시할 훈련이 없습니다.
-          </p>
+          <AsyncStatePanel
+            v-if="trainingLogStatus === 'loading'"
+            kind="loading"
+            message="훈련 목록을 불러오는 중입니다."
+            compact
+          />
+          <AsyncStatePanel
+            v-else-if="trainingLogStatus === 'error'"
+            kind="error"
+            title="훈련 목록을 불러오지 못했습니다"
+            :message="trainingLogError ?? '잠시 후 다시 시도해 주세요.'"
+            retry-label="다시 불러오기"
+            compact
+            @retry="retrySelectedCurriculum"
+          />
+          <AsyncStatePanel
+            v-else-if="!trainingLog?.trainings.length"
+            kind="empty"
+            message="선택한 커리큘럼에 표시할 훈련이 없습니다."
+            compact
+          />
           <div v-else class="training-list">
             <Button
               v-for="(training, index) in trainingLog.trainings"
@@ -333,21 +368,27 @@ function questionStatusClass(question: TrainingQuestionResult): string {
             </div>
           </header>
 
-          <p v-if="statisticsStatus === 'loading'" class="section-state section-state--chart">
-            통계를 불러오는 중입니다.
-          </p>
-          <div
+          <AsyncStatePanel
+            v-if="statisticsStatus === 'loading'"
+            kind="loading"
+            message="통계를 불러오는 중입니다."
+            compact
+          />
+          <AsyncStatePanel
             v-else-if="statisticsStatus === 'error'"
-            class="section-state section-state--chart section-state--error"
-          >
-            <p>{{ statisticsError }}</p>
-            <Button variant="outline" type="button" @click="retrySelectedCurriculum">
-              다시 불러오기
-            </Button>
-          </div>
-          <p v-else-if="readingSpeedPoints.length === 0" class="section-state section-state--chart">
-            선택한 기간의 음성 읽기 속도 자료가 없습니다.
-          </p>
+            kind="error"
+            title="훈련 통계를 불러오지 못했습니다"
+            :message="statisticsError ?? '잠시 후 다시 시도해 주세요.'"
+            retry-label="다시 불러오기"
+            compact
+            @retry="retrySelectedCurriculum"
+          />
+          <AsyncStatePanel
+            v-else-if="readingSpeedPoints.length === 0"
+            kind="empty"
+            message="선택한 기간의 음성 읽기 속도 자료가 없습니다."
+            compact
+          />
           <ChartPanel
             v-else
             :option="speedChart"
@@ -375,21 +416,27 @@ function questionStatusClass(question: TrainingQuestionResult): string {
         </Card>
 
         <Card class="detail-card">
-          <p v-if="historyDetailStatus === 'loading'" class="section-state detail-state">
-            훈련 상세를 불러오는 중입니다.
-          </p>
-          <div
+          <AsyncStatePanel
+            v-if="historyDetailStatus === 'loading'"
+            kind="loading"
+            message="훈련 상세를 불러오는 중입니다."
+            compact
+          />
+          <AsyncStatePanel
             v-else-if="historyDetailStatus === 'error'"
-            class="section-state detail-state section-state--error"
-          >
-            <p>{{ historyDetailError }}</p>
-            <Button variant="outline" type="button" @click="retryDetail">
-              상세 다시 불러오기
-            </Button>
-          </div>
-          <p v-else-if="!historyTrainingDetail" class="section-state detail-state">
-            상세를 확인할 훈련을 선택해 주세요.
-          </p>
+            kind="error"
+            title="훈련 상세를 불러오지 못했습니다"
+            :message="historyDetailError ?? '잠시 후 다시 시도해 주세요.'"
+            retry-label="상세 다시 불러오기"
+            compact
+            @retry="retryDetail"
+          />
+          <AsyncStatePanel
+            v-else-if="!historyTrainingDetail"
+            kind="empty"
+            message="상세를 확인할 훈련을 선택해 주세요."
+            compact
+          />
           <template v-else>
             <header class="detail-heading">
               <div>

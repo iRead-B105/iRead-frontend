@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, shallowRef } from 'vue'
+import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import FormActions from '@/components/teacher/FormActions.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import ProfileImageEditor from '@/components/teacher/ProfileImageEditor.vue'
 import SettingsSection from '@/components/teacher/SettingsSection.vue'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -145,11 +145,20 @@ onMounted(loadProfile)
   <div class="settings page-stack" :aria-busy="loading || saving">
     <PageHeader title="교수자 프로필" description="교수자 정보를 관리합니다." />
 
-    <div v-if="loading" class="settings-state" role="status">프로필 정보를 불러오는 중입니다.</div>
-    <div v-else-if="loadError" class="settings-state settings-state--error" role="alert">
-      <p>{{ loadError }}</p>
-      <Button type="button" variant="outline" @click="loadProfile">다시 시도</Button>
-    </div>
+    <AsyncStatePanel
+      v-if="loading"
+      kind="loading"
+      title="프로필 정보를 불러오는 중입니다"
+      message="잠시만 기다려 주세요."
+    />
+    <AsyncStatePanel
+      v-else-if="loadError"
+      kind="error"
+      title="프로필 정보를 불러오지 못했습니다"
+      :message="loadError"
+      retry-label="다시 시도"
+      @retry="loadProfile"
+    />
 
     <form
       v-else-if="serverProfile"
@@ -233,7 +242,9 @@ onMounted(loadProfile)
               readonly
               aria-describedby="teacher-email-help"
             />
-            <p id="teacher-email-help" class="field-help">이메일은 이 화면에서 변경할 수 없습니다.</p>
+            <p id="teacher-email-help" class="field-help">
+              이메일은 이 화면에서 변경할 수 없습니다.
+            </p>
           </div>
         </div>
       </SettingsSection>

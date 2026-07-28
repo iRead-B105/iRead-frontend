@@ -34,6 +34,30 @@ beforeEach(() => {
 })
 
 describe('Report store', () => {
+  it('보고서 목록 재조회 실패 시 이전 목록을 유지한다', async () => {
+    const listByStudent = vi
+      .fn()
+      .mockResolvedValueOnce([reportFixtures[0]!])
+      .mockRejectedValueOnce(
+        new ApiError({
+          status: 500,
+          code: 'INTERNAL_ERROR',
+          message: 'internal details',
+        }),
+      )
+    const store = useReportStore()
+    store.setRepository(repository({ listByStudent }))
+    await store.loadForStudent(1)
+    const previousReports = store.reports
+
+    await store.loadList(1)
+
+    expect(store.listStatus).toBe('error')
+    expect(store.reports).toBe(previousReports)
+    expect(store.listError).not.toContain('internal')
+    expect(store.listUiError?.kind).toBe('server')
+  })
+
   it('학습자 변경 중 늦게 끝난 이전 목록 응답을 무시한다', async () => {
     const oldList = deferred<readonly ReportListItem[]>()
     const newList = [reportFixtures[2]!]
@@ -64,10 +88,7 @@ describe('Report store', () => {
     }
     const create = vi.fn().mockResolvedValue(created)
     const get = vi.fn().mockResolvedValue(detail)
-    const listByStudent = vi
-      .fn()
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([detail])
+    const listByStudent = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([detail])
     const store = useReportStore()
     store.setRepository(repository({ create, get, listByStudent }))
     await store.loadForStudent(1)
