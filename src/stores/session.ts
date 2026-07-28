@@ -43,6 +43,9 @@ export const useSessionStore = defineStore('session', {
       this.status = 'authenticated'
       this.authenticationError = null
     },
+    replaceTeacherProfile(teacher: TeacherProfile) {
+      this.teacher = { ...teacher }
+    },
     reset() {
       this.accessToken = null
       this.teacher = null

@@ -44,6 +44,8 @@ function createRepositories(
     },
     teacher: {
       getInfo: vi.fn().mockResolvedValue(teacher),
+      updateProfile: vi.fn(),
+      updateProfileImage: vi.fn(),
       ...overrides.teacher,
     },
   }
@@ -89,6 +91,23 @@ describe('session store', () => {
     expect(session.teacher).toEqual(teacher)
     expect(localStorage).toHaveLength(0)
     expect(sessionStorage).toHaveLength(0)
+  })
+
+  it('교수자 프로필 교체 시 인증 상태와 access token을 유지한다', () => {
+    const session = useSessionStore()
+    session.initialize(teacher, 'access-token')
+
+    const updatedTeacher: TeacherProfile = {
+      ...teacher,
+      name: '박선생',
+      organization: null,
+    }
+    session.replaceTeacherProfile(updatedTeacher)
+
+    expect(session.teacher).toEqual(updatedTeacher)
+    expect(session.teacher).not.toBe(updatedTeacher)
+    expect(session.status).toBe('authenticated')
+    expect(session.accessToken).toBe('access-token')
   })
 
   it('로그인 후 교수자 정보 조회가 실패하면 불완전한 인증 상태를 남기지 않는다', async () => {

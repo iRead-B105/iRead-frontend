@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, shallowRef } from 'vue'
 import FormActions from '@/components/teacher/FormActions.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import ProfileImageEditor from '@/components/teacher/ProfileImageEditor.vue'
 import SettingsSection from '@/components/teacher/SettingsSection.vue'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -15,110 +15,237 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
-import { teacherApi } from '@/features/teacher/adminApi'
+import {
+  authRepositories,
+  createTeacherProfileDraft,
+  getTeacherProfileErrorMessage,
+  isSameTeacherProfileDraft,
+  normalizeTeacherProfileDraft,
+  TEACHER_PROFILE_MAX_LENGTH,
+  validateTeacherProfileDraft,
+  type TeacherProfile,
+  type TeacherProfileDraft,
+  type TeacherProfileFormErrors,
+} from '@/features/teacher/auth'
+import { useSessionStore } from '@/stores/session'
 
-const router = useRouter()
+const sessionStore = useSessionStore()
 const { visible: saved, show: showSaved } = useTemporaryNotice()
-const photoChanged = ref(false)
-const form = reactive({
-  name: '이OO',
-  organization: 'OO복지센터',
-  email: 'ssafy123@ssafy.com',
-  gender: '여자',
-  phone: '010-1234-5678',
-  address: '서울특별시 강남구 테헤란로 212',
+const repository = authRepositories.teacher
+
+const loading = ref(true)
+const saving = ref(false)
+const loadError = ref('')
+const saveError = ref('')
+const savedMessage = ref('프로필 변경 사항이 저장되었습니다.')
+const serverProfile = shallowRef<TeacherProfile | null>(null)
+const selectedImage = shallowRef<File | null>(null)
+const previewVersion = ref(0)
+const formErrors = ref<TeacherProfileFormErrors>({})
+const form = reactive<TeacherProfileDraft>({
+  name: '',
+  organization: '',
+  gender: 'UNSPECIFIED',
 })
-const savedSnapshot = ref(JSON.stringify(form))
-const formChanged = computed(
-  () => JSON.stringify(form) !== savedSnapshot.value || photoChanged.value,
+
+const bodyChanged = computed(
+  () => serverProfile.value !== null && !isSameTeacherProfileDraft(form, serverProfile.value),
 )
+const formChanged = computed(() => bodyChanged.value || selectedImage.value !== null)
+const fallback = computed(() => serverProfile.value?.name.trim().charAt(0) || '교')
 
-function markPhotoChanged() {
-  photoChanged.value = true
+function applyProfile(profile: TeacherProfile): void {
+  serverProfile.value = { ...profile }
+  Object.assign(form, createTeacherProfileDraft(profile))
+  sessionStore.replaceTeacherProfile(profile)
 }
 
-function saveProfile() {
-  if (!formChanged.value) return
-  savedSnapshot.value = JSON.stringify(form)
-  photoChanged.value = false
-  showSaved()
+async function loadProfile(): Promise<void> {
+  if (loading.value && serverProfile.value) return
+
+  loading.value = true
+  loadError.value = ''
+  saveError.value = ''
+
+  try {
+    applyProfile(await repository.getInfo())
+  } catch (error) {
+    serverProfile.value = null
+    loadError.value = getTeacherProfileErrorMessage(error, 'load')
+  } finally {
+    loading.value = false
+  }
 }
 
-onMounted(async () => {
-  const teacher = await teacherApi.getInfo()
-  form.name = teacher.name
-  form.organization = teacher.organization
-  form.email = teacher.email
-  form.gender = teacher.gender === 'Male' ? '남자' : '여자'
-  savedSnapshot.value = JSON.stringify(form)
-})
+function selectImage(file: File): void {
+  selectedImage.value = file
+  saveError.value = ''
+}
+
+function showImageError(message: string | null): void {
+  saveError.value = message ?? ''
+}
+
+function cancelChanges(): void {
+  if (!serverProfile.value || saving.value) return
+
+  Object.assign(form, createTeacherProfileDraft(serverProfile.value))
+  selectedImage.value = null
+  formErrors.value = {}
+  saveError.value = ''
+  previewVersion.value += 1
+}
+
+async function saveProfile(): Promise<void> {
+  if (!serverProfile.value || saving.value || !formChanged.value) return
+
+  const validationErrors = validateTeacherProfileDraft(form)
+  formErrors.value = validationErrors
+  if (Object.keys(validationErrors).length > 0) return
+
+  saving.value = true
+  saveError.value = ''
+  let bodySaved = false
+
+  try {
+    if (bodyChanged.value) {
+      const updatedProfile = await repository.updateProfile(normalizeTeacherProfileDraft(form))
+      applyProfile(updatedProfile)
+      bodySaved = true
+    }
+
+    if (selectedImage.value) {
+      try {
+        const updatedProfile = await repository.updateProfileImage(selectedImage.value)
+        applyProfile(updatedProfile)
+        selectedImage.value = null
+        previewVersion.value += 1
+      } catch (error) {
+        previewVersion.value += 1
+        saveError.value = bodySaved
+          ? '기본 정보는 저장됐지만 사진 변경에 실패했습니다.'
+          : getTeacherProfileErrorMessage(error, 'image')
+        return
+      }
+    }
+
+    savedMessage.value = '프로필 변경 사항이 저장되었습니다.'
+    showSaved()
+  } catch (error) {
+    saveError.value = getTeacherProfileErrorMessage(error, 'save')
+  } finally {
+    saving.value = false
+  }
+}
+
+onMounted(loadProfile)
 </script>
 
 <template>
-  <div class="settings page-stack">
-    <PageHeader
-      title="교수자 프로필"
-      description="교수자 정보를 관리합니다."
-    />
+  <div class="settings page-stack" :aria-busy="loading || saving">
+    <PageHeader title="교수자 프로필" description="교수자 정보를 관리합니다." />
 
-    <form id="teacher-profile-form" class="settings-form" @submit.prevent="saveProfile">
+    <div v-if="loading" class="settings-state" role="status">프로필 정보를 불러오는 중입니다.</div>
+    <div v-else-if="loadError" class="settings-state settings-state--error" role="alert">
+      <p>{{ loadError }}</p>
+      <Button type="button" variant="outline" @click="loadProfile">다시 시도</Button>
+    </div>
+
+    <form
+      v-else-if="serverProfile"
+      id="teacher-profile-form"
+      class="settings-form"
+      @submit.prevent="saveProfile"
+    >
       <SettingsSection title="프로필 사진" description="사진을 확인하거나 변경합니다.">
         <ProfileImageEditor
           input-id="teacher-photo"
           label="교수자 사진"
-          image-url="/images/teacher-profile.png"
-          fallback="이"
-          @select="markPhotoChanged"
+          :image-url="serverProfile.profileImageUrl"
+          :fallback="fallback"
+          :preview-version="previewVersion"
+          :disabled="saving"
+          @select="selectImage"
+          @error="showImageError"
         />
       </SettingsSection>
 
-      <SettingsSection title="기본 정보" description="이름과 소속 기관을 관리합니다.">
+      <SettingsSection title="기본 정보" description="이름, 소속 기관과 성별을 관리합니다.">
         <div class="form-grid">
           <div class="field field--medium">
             <Label for="teacher-name">이름</Label>
-            <Input id="teacher-name" v-model="form.name" class="input" required />
+            <Input
+              id="teacher-name"
+              v-model="form.name"
+              class="input"
+              required
+              :maxlength="TEACHER_PROFILE_MAX_LENGTH.name"
+              :disabled="saving"
+              :aria-invalid="Boolean(formErrors.name)"
+              :aria-describedby="formErrors.name ? 'teacher-name-error' : undefined"
+            />
+            <p v-if="formErrors.name" id="teacher-name-error" class="field-error">
+              {{ formErrors.name }}
+            </p>
           </div>
+
           <div class="field field--medium">
             <Label for="organization">소속 기관</Label>
-            <Input id="organization" v-model="form.organization" class="input" required />
+            <Input
+              id="organization"
+              v-model="form.organization"
+              class="input"
+              :maxlength="TEACHER_PROFILE_MAX_LENGTH.organization"
+              :disabled="saving"
+              :aria-invalid="Boolean(formErrors.organization)"
+              :aria-describedby="formErrors.organization ? 'organization-error' : undefined"
+            />
+            <p v-if="formErrors.organization" id="organization-error" class="field-error">
+              {{ formErrors.organization }}
+            </p>
           </div>
+
           <div class="field field--short">
             <Label for="teacher-gender">성별</Label>
-            <Select v-model="form.gender">
+            <Select v-model="form.gender" :disabled="saving">
               <SelectTrigger id="teacher-gender" class="select !w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="여자">여자</SelectItem>
-                <SelectItem value="남자">남자</SelectItem>
+                <SelectItem value="UNSPECIFIED">선택 안 함</SelectItem>
+                <SelectItem value="FEMALE">여자</SelectItem>
+                <SelectItem value="MALE">남자</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
       </SettingsSection>
 
-      <SettingsSection title="연락처" description="상담과 안내에 사용할 연락처입니다.">
+      <SettingsSection title="계정 정보" description="로그인에 사용하는 계정 정보입니다.">
         <div class="form-grid">
           <div class="field">
             <Label for="teacher-email">이메일</Label>
-            <Input id="teacher-email" v-model="form.email" class="input" type="email" required />
-          </div>
-          <div class="field field--phone">
-            <Label for="teacher-phone">연락처</Label>
-            <Input id="teacher-phone" v-model="form.phone" class="input" />
-          </div>
-          <div class="field form-grid__wide">
-            <Label for="teacher-address">주소</Label>
-            <Input id="teacher-address" v-model="form.address" class="input" />
+            <Input
+              id="teacher-email"
+              :model-value="serverProfile.email"
+              class="input"
+              type="email"
+              readonly
+              aria-describedby="teacher-email-help"
+            />
+            <p id="teacher-email-help" class="field-help">이메일은 이 화면에서 변경할 수 없습니다.</p>
           </div>
         </div>
       </SettingsSection>
 
+      <p v-if="saveError" class="settings-error" role="alert">{{ saveError }}</p>
+
       <FormActions
         :saved="saved"
-        :disabled="!formChanged"
-        saved-message="프로필 변경 사항이 저장되었습니다."
-        @cancel="router.back()"
+        :disabled="saving || !formChanged"
+        :save-label="saving ? '저장 중...' : '변경 사항 저장'"
+        :saved-message="savedMessage"
+        @cancel="cancelChanges"
       />
     </form>
   </div>
@@ -135,6 +262,27 @@ onMounted(async () => {
   gap: 2px;
 }
 
+.settings-state {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  color: var(--slate-600);
+}
+
+.settings-state--error {
+  align-content: center;
+  gap: 14px;
+  color: var(--danger-600);
+}
+
+.settings-state--error p {
+  margin: 0;
+}
+
 .form-grid {
   display: grid;
   max-width: 620px;
@@ -142,8 +290,27 @@ onMounted(async () => {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.form-grid__wide {
-  grid-column: 1 / -1;
+.field-help,
+.field-error {
+  margin: -2px 0 0;
+  font-size: 11px;
+}
+
+.field-help {
+  color: var(--slate-500);
+}
+
+.field-error,
+.settings-error {
+  color: var(--danger-600);
+}
+
+.settings-error {
+  margin: 10px 0;
+  padding: 10px 13px;
+  border-radius: 8px;
+  background: #fff1f2;
+  font-size: 12px;
 }
 
 .settings .button:disabled {

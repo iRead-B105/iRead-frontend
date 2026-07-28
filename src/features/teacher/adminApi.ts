@@ -1,17 +1,6 @@
 import { apiRequest, jsonBody } from '@/lib/api'
 
-export type TeacherGender = 'Male' | 'Female'
 export type StudentGender = 'Boy' | 'Girl'
-
-export interface TeacherInfo {
-  id?: number
-  email: string
-  name: string
-  organization: string
-  gender: TeacherGender
-  imagesId?: number | null
-  profileImageUrl?: string | null
-}
 
 export interface StudentListItem {
   id: number
@@ -55,10 +44,6 @@ export interface CreateStudentResponse {
 export interface AccuracyTrend {
   date: string
   accuracy: number
-}
-
-export const teacherApi = {
-  getInfo: () => apiRequest<TeacherInfo>('/api/admin/teacher/info'),
 }
 
 export const studentApi = {
