@@ -5,6 +5,7 @@ import {
   type DailyCurriculum,
   type TrainingRepository,
 } from '@/features/teacher/training'
+import type { GazeAnalysisState } from '@/features/teacher/gaze'
 import { useTrainingStore } from './training'
 
 function deferred<T>() {
@@ -29,6 +30,7 @@ function repository(overrides: Partial<TrainingRepository> = {}): TrainingReposi
     getCurriculumLogs: vi.fn().mockResolvedValue([]),
     getTrainingLog: vi.fn(),
     getStatistics: vi.fn(),
+    getGazeAnalysis: vi.fn().mockResolvedValue({ status: 'NO_DATA', analysis: null }),
     exportTraining: vi.fn(),
     ...overrides,
   }
@@ -47,20 +49,13 @@ describe('Training store', () => {
     store.selectTemplate(14)
     store.addSelectedTemplate()
 
-    expect(store.savedCurriculum?.trainings.map((item) => item.trainingId)).toEqual([
-      101,
-      102,
-      103,
-    ])
+    expect(store.savedCurriculum?.trainings.map((item) => item.trainingId)).toEqual([101, 102, 103])
     expect(store.draftTrainingIds).toEqual([12, 12, 13, 14])
     expect(store.hasChanges).toBe(true)
 
     await expect(store.saveCurriculum()).resolves.toBe(true)
     expect(store.savedCurriculum?.trainings.map((item) => item.trainingId)).toEqual([
-      101,
-      102,
-      103,
-      1_000,
+      101, 102, 103, 1_000,
     ])
     expect(store.hasChanges).toBe(false)
   })
@@ -161,17 +156,61 @@ describe('Training store', () => {
       trainingId: 901,
       status: 'COMPLETED',
     })
-    expect(store.statistics?.readingSpeedTrend.unit).toBe(
-      'CORRECT_WORDS_PER_MINUTE',
-    )
+    expect(store.statistics?.readingSpeedTrend.unit).toBe('CORRECT_WORDS_PER_MINUTE')
+    expect(store.historyGazeStatus).toBe('success')
+    expect(store.historyGazeAnalysis).toMatchObject({ status: 'AVAILABLE' })
+  })
+
+  it('빠른 훈련 선택 변경에서 늦게 끝난 이전 시선 응답을 무시한다', async () => {
+    const oldGaze = deferred<GazeAnalysisState>()
+    const mock = new MockTrainingRepository()
+    vi.spyOn(mock, 'getGazeAnalysis')
+      .mockResolvedValueOnce({
+        status: 'AVAILABLE',
+        analysis: {
+          gazeSessionId: 1,
+          gazeAnalysisResultId: 2,
+          totalVisitedDurationMs: 100,
+          totalVisitedCount: 1,
+          reverseReadCount: 0,
+          avgVisitedDurationMs: 100,
+        },
+      })
+      .mockReturnValueOnce(oldGaze.promise)
+      .mockResolvedValueOnce({ status: 'FAILED', analysis: null })
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadHistoryForStudent(1)
+
+    const oldRequest = store.selectHistoryTraining(1, 902)
+    await store.selectHistoryTraining(1, 903)
+    oldGaze.resolve({ status: 'NO_DATA', analysis: null })
+    await oldRequest
+
+    expect(store.selectedHistoryTrainingId).toBe(903)
+    expect(store.historyGazeAnalysis).toEqual({
+      status: 'FAILED',
+      analysis: null,
+    })
+  })
+
+  it('시선 요청 오류를 상세 성공과 도메인 상태에서 분리한다', async () => {
+    const mock = new MockTrainingRepository()
+    vi.spyOn(mock, 'getGazeAnalysis').mockRejectedValue(new Error('internal details'))
+    const store = useTrainingStore()
+    store.setRepository(mock)
+
+    await store.loadHistoryForStudent(1)
+
+    expect(store.historyDetailStatus).toBe('success')
+    expect(store.historyGazeStatus).toBe('error')
+    expect(store.historyGazeError).toBe('시선 분석 결과를 불러오지 못했습니다.')
+    expect(store.historyGazeAnalysis).toBeNull()
   })
 
   it('기간을 바꿀 때 늦게 끝난 이전 응답을 무시한다', async () => {
     const oldLogs = deferred<Awaited<ReturnType<TrainingRepository['getCurriculumLogs']>>>()
-    const getCurriculumLogs = vi
-      .fn()
-      .mockReturnValueOnce(oldLogs.promise)
-      .mockResolvedValueOnce([])
+    const getCurriculumLogs = vi.fn().mockReturnValueOnce(oldLogs.promise).mockResolvedValueOnce([])
     const store = useTrainingStore()
     store.setRepository(repository({ getCurriculumLogs }))
 

@@ -2,10 +2,7 @@ import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  MockTestRepository,
-  type TestRepository,
-} from '@/features/teacher/test'
+import { MockTestRepository, type TestRepository } from '@/features/teacher/test'
 import { useTestStore } from '@/stores/test'
 import StudentTestHistoryView from './StudentTestHistoryView.vue'
 
@@ -65,7 +62,7 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('학습자 목록으로 이동')
   })
 
-  it('최신 검사 한 건의 서버 상세를 기본 표시하고 임의 지표를 표시하지 않는다', async () => {
+  it('최신 검사 한 건의 상세와 시선 집계를 표시하고 임의 지표는 표시하지 않는다', async () => {
     const { wrapper, store } = await mountHistory(new MockTestRepository())
 
     expect(store.currentTestId).toBe(1_011)
@@ -78,8 +75,26 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.find('[data-test="area-chart"]').exists()).toBe(true)
     expect(wrapper.find('input[type="date"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('검사 평균')
-    expect(wrapper.text()).not.toContain('시선 분석')
+    expect(wrapper.text()).toContain('검사 시선 분석')
+    expect(wrapper.text()).toContain('51.2초')
+    expect(wrapper.text()).toContain('82회')
+    expect(wrapper.text()).toContain('9회')
     expect(wrapper.text()).not.toContain('시선 고정')
+    expect(wrapper.text()).not.toContain('읽기 이탈')
+  })
+
+  it('검사 선택에 따라 NO_DATA와 FAILED를 요청 오류 없이 구분한다', async () => {
+    const { wrapper, store } = await mountHistory(new MockTestRepository())
+
+    await wrapper.get<HTMLSelectElement>('#current-test').setValue('1008')
+    await flushPromises()
+    expect(store.gazeStatus).toBe('success')
+    expect(wrapper.text()).toContain('시선 분석 데이터가 없습니다.')
+
+    await wrapper.get<HTMLSelectElement>('#current-test').setValue('1005')
+    await flushPromises()
+    expect(store.gazeStatus).toBe('success')
+    expect(wrapper.text()).toContain('시선 분석을 완료하지 못했습니다.')
   })
 
   it('실제 완료 검사에서 비교 두 건만 추가하고 세 번째 선택을 차단한다', async () => {
@@ -93,8 +108,7 @@ describe('StudentTestHistoryView', () => {
 
     expect(store.comparisonTestIds).toEqual([1_008, 1_005])
     expect(store.comparisonResult?.comparisonTests.map((test) => test.testId)).toEqual([
-      1_008,
-      1_005,
+      1_008, 1_005,
     ])
     expect(wrapper.get('#comparison-test').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('비교 2/2건')
@@ -148,9 +162,7 @@ describe('StudentTestHistoryView', () => {
   })
 
   it('403 오류에서 고정 검사 결과 대신 권한 안내를 표시한다', async () => {
-    const { wrapper } = await mountHistory(
-      new MockTestRepository({ forbiddenStudentIds: [1] }),
-    )
+    const { wrapper } = await mountHistory(new MockTestRepository({ forbiddenStudentIds: [1] }))
 
     expect(wrapper.text()).toContain('이 학습자의 검사 기록을 볼 권한이 없습니다.')
     expect(wrapper.text()).toContain('학습자 목록으로 이동')
