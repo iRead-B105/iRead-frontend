@@ -113,11 +113,18 @@ describe('resolveTeacherRedirect', () => {
     expect(resolveTeacherRedirect(router, '/teacher/students?tab=active')).toBe(
       '/teacher/students?tab=active',
     )
+    expect(resolveTeacherRedirect(router, '/teacher/students#recent')).toBe(
+      '/teacher/students#recent',
+    )
   })
 
   it.each([
     'https://example.com',
     '//example.com',
+    '///example.com',
+    '/\\example.com',
+    '/teacher/students/../../login',
+    ['/teacher/students'],
     '/login',
     '/signup',
     '/reset-password',

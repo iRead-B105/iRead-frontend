@@ -1,4 +1,5 @@
 import { ApiError } from '@/lib/api'
+import { mapCommonError } from '@/features/teacher/error'
 
 export function getLoginErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -82,8 +83,11 @@ export function getTeacherProfileErrorMessage(
     if (error.status >= 500) {
       return '서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
     }
+    if (error.status === 413 || error.status === 415) {
+      return mapCommonError(error)?.message ?? fallback
+    }
     return fallback
   }
 
-  return error instanceof Error ? error.message : fallback
+  return mapCommonError(error)?.message ?? fallback
 }

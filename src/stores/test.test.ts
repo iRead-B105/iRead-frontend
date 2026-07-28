@@ -32,6 +32,70 @@ beforeEach(() => {
 })
 
 describe('Test store', () => {
+  it('검사 목록 재조회 실패 시 이전 결과를 유지한다', async () => {
+    const mock = new MockTestRepository()
+    const getTests = vi
+      .fn()
+      .mockResolvedValueOnce(await mock.getTests(1))
+      .mockRejectedValueOnce(
+        new ApiError({
+          status: 500,
+          code: 'INTERNAL_ERROR',
+          message: 'internal details',
+        }),
+      )
+    const store = useTestStore()
+    store.setRepository(
+      repository({
+        getTests,
+        compareTests: vi
+          .fn()
+          .mockImplementation((studentId, currentTestId, ids) =>
+            mock.compareTests(studentId, currentTestId, ids),
+          ),
+      }),
+    )
+    await store.loadForStudent(1)
+    const previousIds = store.tests.map((test) => test.testId)
+    const previousComparison = store.comparisonResult
+
+    await store.retryList()
+
+    expect(store.listStatus).toBe('error')
+    expect(store.tests.map((test) => test.testId)).toEqual(previousIds)
+    expect(store.comparisonResult).toBe(previousComparison)
+    expect(store.listError).not.toContain('internal')
+  })
+
+  it('검사 목록 재조회가 빈 결과이면 이전 선택과 상세를 정리한다', async () => {
+    const mock = new MockTestRepository()
+    const getTests = vi
+      .fn()
+      .mockResolvedValueOnce(await mock.getTests(1))
+      .mockResolvedValueOnce([])
+    const store = useTestStore()
+    store.setRepository(
+      repository({
+        getTests,
+        compareTests: vi
+          .fn()
+          .mockImplementation((studentId, currentTestId, ids) =>
+            mock.compareTests(studentId, currentTestId, ids),
+          ),
+      }),
+    )
+    await store.loadForStudent(1)
+
+    await store.retryList()
+
+    expect(store.listStatus).toBe('success')
+    expect(store.tests).toEqual([])
+    expect(store.currentTestId).toBeNull()
+    expect(store.comparisonTestIds).toEqual([])
+    expect(store.comparisonResult).toBeNull()
+    expect(store.gazeAnalysis).toBeNull()
+  })
+
   it('최신 완료 검사를 기본 선택하고 비교 0건으로 단일 상세를 요청한다', async () => {
     const mock = new MockTestRepository()
     const compareTests = vi.spyOn(mock, 'compareTests')

@@ -203,7 +203,9 @@ async function loadOverview(nextStudentId: number): Promise<void> {
   if (!Number.isInteger(nextStudentId) || nextStudentId <= 0) return
 
   await Promise.all([
-    studentStore.loadDetail(nextStudentId),
+    studentStore.detailsById[nextStudentId] && studentStore.detailStaleById[nextStudentId] !== true
+      ? Promise.resolve(studentStore.detailsById[nextStudentId])
+      : studentStore.loadDetail(nextStudentId),
     studentStore.loadLearningSummary(nextStudentId),
     studentStore.loadLearningEvents(nextStudentId, 3),
     studentStore.loadAccuracyTrend(nextStudentId),

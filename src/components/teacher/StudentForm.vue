@@ -1,12 +1,5 @@
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  reactive,
-  ref,
-} from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import FormActions from '@/components/teacher/FormActions.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
@@ -42,6 +35,7 @@ import {
   type StudentDetail,
   type StudentFormErrors,
 } from '@/features/teacher/student'
+import { mapCommonError } from '@/features/teacher/error'
 import { ApiError } from '@/lib/api'
 import { useStudentStore } from '@/stores/students'
 
@@ -69,9 +63,7 @@ const deleting = ref(false)
 
 const title = computed(() => (props.mode === 'create' ? '새 아동 등록' : '아동 정보 관리'))
 const description = computed(() =>
-  props.mode === 'create'
-    ? '아동과 보호자 정보를 입력합니다.'
-    : '아동과 보호자 정보를 수정합니다.',
+  props.mode === 'create' ? '아동과 보호자 정보를 입력합니다.' : '아동과 보호자 정보를 수정합니다.',
 )
 const studentInitial = computed(() => form.name.trim().charAt(0) || '학')
 const formChanged = computed(
@@ -117,8 +109,8 @@ function markSaved(detail?: StudentDetail): void {
 }
 
 async function focusFirstError(errors: StudentFormErrors): Promise<void> {
-  const firstField = Object.keys(errors).find(
-    (field) => Boolean(errors[field as keyof StudentFormErrors]),
+  const firstField = Object.keys(errors).find((field) =>
+    Boolean(errors[field as keyof StudentFormErrors]),
   ) as keyof StudentFormErrors | undefined
   const elementId = firstField ? fieldElementIds[firstField] : undefined
   if (!elementId) return
@@ -138,11 +130,9 @@ function mutationErrorMessage(error: unknown, action: '저장' | '삭제'): stri
     if (error.status >= 500 || error.status === 0) {
       return `서버 문제로 아동 정보를 ${action}하지 못했습니다. 잠시 후 다시 시도해 주세요.`
     }
-    return error.message
+    return mapCommonError(error)?.message ?? `아동 정보를 ${action}하지 못했습니다.`
   }
-  return error instanceof Error
-    ? error.message
-    : `아동 정보를 ${action}하지 못했습니다.`
+  return mapCommonError(error)?.message ?? `아동 정보를 ${action}하지 못했습니다.`
 }
 
 async function submitForm(): Promise<void> {
@@ -165,8 +155,10 @@ async function submitForm(): Promise<void> {
         image: selectedImage.value ?? undefined,
       })
       markSaved()
-      showSaved()
-      await router.push({ name: 'teacher-students' })
+      await router.push({
+        name: 'teacher-students',
+        query: { studentSaved: 'created' },
+      })
       return
     }
 
@@ -200,7 +192,10 @@ async function confirmStudentDeletion(): Promise<void> {
     savedSnapshot.value = JSON.stringify(form)
     selectedImage.value = null
     deleteDialogOpen.value = false
-    await router.push({ name: 'teacher-students' })
+    await router.push({
+      name: 'teacher-students',
+      query: { studentSaved: 'deleted' },
+    })
   } catch (error) {
     deleteError.value = mutationErrorMessage(error, '삭제')
   } finally {
@@ -374,7 +369,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
         :saved="saved"
         :disabled="!canSubmit"
         :save-label="mode === 'create' ? '아동 등록' : '변경 사항 저장'"
-        :saved-message="mode === 'create' ? '아동이 등록되었습니다.' : '변경 사항이 저장되었습니다.'"
+        :saved-message="
+          mode === 'create' ? '아동이 등록되었습니다.' : '변경 사항이 저장되었습니다.'
+        "
         @cancel="router.push({ name: 'teacher-students' })"
       />
 
@@ -394,13 +391,13 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
         <AlertDialogHeader>
           <AlertDialogTitle>아동을 영구 삭제할까요?</AlertDialogTitle>
           <AlertDialogDescription>
-            {{ form.name }} 아동과 연결된 학습 기록이 모두 삭제됩니다. 이 작업은 되돌릴 수
-            없습니다.
+            {{ form.name }} 아동과 연결된 학습 기록이 모두 삭제됩니다. 이 작업은 되돌릴 수 없습니다.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div class="delete-dialog__confirmation">
           <Label for="delete-student-name">
-            확인하려면 <strong>{{ form.name }}</strong>을(를) 입력하세요.
+            확인하려면 <strong>{{ form.name }}</strong
+            >을(를) 입력하세요.
           </Label>
           <Input
             id="delete-student-name"
@@ -411,10 +408,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
           <p v-if="deleteError" class="student-form__error" role="alert">{{ deleteError }}</p>
         </div>
         <AlertDialogFooter>
-          <AlertDialogCancel
-            :disabled="deleting"
-            @click="deleteDialogOpen = false"
-          >
+          <AlertDialogCancel :disabled="deleting" @click="deleteDialogOpen = false">
             취소
           </AlertDialogCancel>
           <AlertDialogAction

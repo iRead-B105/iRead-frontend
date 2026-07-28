@@ -19,7 +19,12 @@ const detailError = computed(
 watch(
   studentId,
   async (nextStudentId) => {
-    if (Number.isInteger(nextStudentId) && nextStudentId > 0) {
+    if (
+      Number.isInteger(nextStudentId) &&
+      nextStudentId > 0 &&
+      (!studentStore.detailsById[nextStudentId] ||
+        studentStore.detailStaleById[nextStudentId] === true)
+    ) {
       await studentStore.loadDetail(nextStudentId)
     }
   },

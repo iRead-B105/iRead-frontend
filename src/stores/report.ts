@@ -14,19 +14,27 @@ import {
   type ReportRepository,
   type ReportRequestStatus,
 } from '@/features/teacher/report'
-import { isApiError } from '@/lib/api'
-
-function isAbortError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    error.name === 'AbortError'
-  )
-}
+import { mapCommonError, type UiError } from '@/features/teacher/error'
+import { isAbortError, isApiError } from '@/lib/api'
 
 function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback
+  if (!isApiError(error)) return fallback
+  return (
+    mapCommonError(error, {
+      overrides: {
+        REPORT_DATA_NOT_FOUND: {
+          message: '선택한 기간에 완료된 학습 기록이 없습니다.',
+          action: 'edit-input',
+          retryable: false,
+        },
+        REPORT_PERIOD_ALREADY_EXISTS: {
+          message: '같은 기간의 보고서가 이미 있습니다.',
+          action: 'open-existing',
+          retryable: false,
+        },
+      },
+    })?.message ?? fallback
+  )
 }
 
 function defaultPeriod(): { startDate: string; endDate: string } {
@@ -75,7 +83,9 @@ export const useReportStore = defineStore('report', () => {
   const memoStatus = ref<ReportMemoStatus>('idle')
   const gazeRefreshStatus = ref<ReportGazeRefreshStatus>('idle')
   const listError = ref<string | null>(null)
+  const listUiError = ref<UiError | null>(null)
   const detailError = ref<string | null>(null)
+  const detailUiError = ref<UiError | null>(null)
   const createError = ref<string | null>(null)
   const memoError = ref<string | null>(null)
   const gazeRefreshError = ref<string | null>(null)
@@ -105,6 +115,7 @@ export const useReportStore = defineStore('report', () => {
     selectedReport.value = null
     detailStatus.value = 'idle'
     detailError.value = null
+    detailUiError.value = null
     memoStatus.value = 'idle'
     memoError.value = null
     gazeRefreshStatus.value = 'idle'
@@ -126,6 +137,7 @@ export const useReportStore = defineStore('report', () => {
     listController = controller
     listStatus.value = 'loading'
     listError.value = null
+    listUiError.value = null
 
     try {
       const result = await repository.value.listByStudent(studentId, {
@@ -137,6 +149,7 @@ export const useReportStore = defineStore('report', () => {
     } catch (error) {
       if (isAbortError(error) || requestSequence !== listSequence) return
       listStatus.value = 'error'
+      listUiError.value = mapCommonError(error)
       listError.value = errorMessage(error, '저장된 보고서를 불러오지 못했습니다.')
     } finally {
       if (requestSequence === listSequence) listController = null
@@ -165,6 +178,7 @@ export const useReportStore = defineStore('report', () => {
     selectedReport.value = null
     detailStatus.value = 'loading'
     detailError.value = null
+    detailUiError.value = null
     memoStatus.value = 'idle'
     memoError.value = null
     gazeRefreshStatus.value = 'idle'
@@ -175,10 +189,7 @@ export const useReportStore = defineStore('report', () => {
       if (requestSequence !== detailSequence || selectedReportId.value !== reportId) {
         return false
       }
-      if (
-        activeStudentId.value !== null &&
-        detail.studentId !== activeStudentId.value
-      ) {
+      if (activeStudentId.value !== null && detail.studentId !== activeStudentId.value) {
         throw new Error('선택한 학습자의 보고서가 아닙니다.')
       }
       selectedReport.value = detail
@@ -188,6 +199,7 @@ export const useReportStore = defineStore('report', () => {
     } catch (error) {
       if (isAbortError(error) || requestSequence !== detailSequence) return false
       detailStatus.value = 'error'
+      detailUiError.value = mapCommonError(error)
       detailError.value = errorMessage(error, '보고서 상세를 불러오지 못했습니다.')
       return false
     } finally {
@@ -201,8 +213,7 @@ export const useReportStore = defineStore('report', () => {
     const memoValidationError = validateTeacherMemo(teacherMemoDraft.value)
     if (periodErrors.startDate || periodErrors.endDate || memoValidationError) {
       createStatus.value = 'error'
-      createError.value =
-        periodErrors.startDate ?? periodErrors.endDate ?? memoValidationError
+      createError.value = periodErrors.startDate ?? periodErrors.endDate ?? memoValidationError
       return false
     }
 
@@ -305,10 +316,7 @@ export const useReportStore = defineStore('report', () => {
       return true
     } catch (error) {
       gazeRefreshStatus.value = 'error'
-      gazeRefreshError.value = errorMessage(
-        error,
-        '시선 분석 결과를 갱신하지 못했습니다.',
-      )
+      gazeRefreshError.value = errorMessage(error, '시선 분석 결과를 갱신하지 못했습니다.')
       return false
     }
   }
@@ -333,7 +341,9 @@ export const useReportStore = defineStore('report', () => {
     memoStatus.value = 'idle'
     gazeRefreshStatus.value = 'idle'
     listError.value = null
+    listUiError.value = null
     detailError.value = null
+    detailUiError.value = null
     createError.value = null
     memoError.value = null
     gazeRefreshError.value = null
@@ -356,7 +366,9 @@ export const useReportStore = defineStore('report', () => {
     memoStatus,
     gazeRefreshStatus,
     listError,
+    listUiError,
     detailError,
+    detailUiError,
     createError,
     memoError,
     gazeRefreshError,

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
+import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import LearningReportDocument from '@/components/teacher/LearningReportDocument.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import ReportPreview from '@/components/teacher/ReportPreview.vue'
@@ -18,6 +19,7 @@ import {
   validateTeacherMemo,
   type ReportListItem,
 } from '@/features/teacher/report'
+import { asyncStateKind } from '@/features/teacher/error'
 import { useReportStore } from '@/stores/report'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
@@ -40,7 +42,9 @@ const {
   memoStatus,
   gazeRefreshStatus,
   listError,
+  listUiError,
   detailError,
+  detailUiError,
   createError,
   memoError,
   gazeRefreshError,
@@ -55,17 +59,15 @@ const reportQuery = ref('')
 const today = localDateString()
 const studentId = computed(() => parsePositiveReportId(route.params.id))
 const invalidStudentId = computed(() => studentId.value === null)
+const listErrorKind = computed(() => asyncStateKind(listUiError.value))
+const detailErrorKind = computed(() => asyncStateKind(detailUiError.value))
 const studentDetail = computed(() =>
   studentId.value === null ? null : (detailsById.value[studentId.value] ?? null),
 )
 const studentNavigation = computed(() =>
-  studentId.value === null
-    ? null
-    : (navigationItemsById.value[studentId.value] ?? null),
+  studentId.value === null ? null : (navigationItemsById.value[studentId.value] ?? null),
 )
-const studentName = computed(
-  () => studentDetail.value?.name ?? studentNavigation.value?.name ?? '',
-)
+const studentName = computed(() => studentDetail.value?.name ?? studentNavigation.value?.name ?? '')
 const studentSchool = computed(
   () => studentDetail.value?.school ?? studentNavigation.value?.school ?? null,
 )
@@ -75,17 +77,13 @@ const studentLoadStatus = computed(() =>
 const studentLoadError = computed(() =>
   studentId.value === null ? null : (detailErrorById.value[studentId.value] ?? null),
 )
-const periodErrors = computed(() =>
-  validateReportPeriod(startDate.value, endDate.value, today),
-)
+const periodErrors = computed(() => validateReportPeriod(startDate.value, endDate.value, today))
 const setupMemoError = computed(() => validateTeacherMemo(teacherMemoDraft.value))
 const filteredReports = computed(() => {
   const query = reportQuery.value.trim().toLowerCase()
   if (!query) return reports.value
   return reports.value.filter((report) =>
-    `${report.createdAt} ${report.startDate} ${report.endDate}`
-      .toLowerCase()
-      .includes(query),
+    `${report.createdAt} ${report.startDate} ${report.endDate}`.toLowerCase().includes(query),
   )
 })
 
@@ -98,7 +96,9 @@ watch(
       return
     }
     await Promise.all([
-      studentStore.loadDetail(id),
+      detailsById.value[id] && studentStore.detailStaleById[id] !== true
+        ? Promise.resolve(detailsById.value[id])
+        : studentStore.loadDetail(id),
       reportStore.loadForStudent(id),
     ])
   },
@@ -127,52 +127,46 @@ async function retryStudent(): Promise<void> {
       description="기간별 학습 결과와 훈련·검사 시선 추이를 저장하고 확인합니다."
     />
 
-    <Card v-if="invalidStudentId" class="state-card state-card--error">
-      <strong>올바른 학습자를 선택해 주세요.</strong>
-      <p>보고서를 확인하려면 학습자 목록에서 대상을 다시 선택해야 합니다.</p>
-      <Button type="button" @click="router.push({ name: 'teacher-students' })">
-        학습자 목록으로 이동
-      </Button>
-    </Card>
+    <AsyncStatePanel
+      v-if="invalidStudentId"
+      kind="not-found"
+      title="올바른 학습자를 선택해 주세요."
+      message="보고서를 확인하려면 학습자 목록에서 대상을 다시 선택해야 합니다."
+      action-label="학습자 목록으로 이동"
+      @action="router.push({ name: 'teacher-students' })"
+    />
 
     <template v-else>
-      <Card
+      <AsyncStatePanel
         v-if="!studentName && studentLoadStatus === 'loading'"
-        class="state-card"
-      >
-        학습자 정보를 불러오는 중입니다.
-      </Card>
-      <Card
+        kind="loading"
+        message="학습자 정보를 불러오는 중입니다."
+      />
+      <AsyncStatePanel
         v-else-if="!studentName && studentLoadStatus === 'error'"
-        class="state-card state-card--error"
-      >
-        <strong>학습자 정보를 불러오지 못했습니다.</strong>
-        <p>{{ studentLoadError }}</p>
-        <Button variant="outline" type="button" @click="retryStudent">
-          다시 불러오기
-        </Button>
-      </Card>
+        kind="error"
+        title="학습자 정보를 불러오지 못했습니다"
+        :message="studentLoadError ?? '잠시 후 다시 시도해 주세요.'"
+        retry-label="다시 불러오기"
+        @retry="retryStudent"
+      />
 
       <template v-else-if="selectedReportId !== null">
-        <Card v-if="detailStatus === 'loading'" class="state-card">
-          보고서 상세를 불러오는 중입니다.
-        </Card>
-        <Card v-else-if="detailStatus === 'error'" class="state-card state-card--error">
-          <strong>선택한 보고서를 불러오지 못했습니다.</strong>
-          <p>{{ detailError }}</p>
-          <div class="state-actions">
-            <Button
-              variant="outline"
-              type="button"
-              @click="reportStore.startNewReport()"
-            >
-              보고서 목록
-            </Button>
-            <Button type="button" @click="reportStore.selectReport(selectedReportId)">
-              다시 불러오기
-            </Button>
-          </div>
-        </Card>
+        <AsyncStatePanel
+          v-if="detailStatus === 'loading'"
+          kind="loading"
+          message="보고서 상세를 불러오는 중입니다."
+        />
+        <AsyncStatePanel
+          v-else-if="detailStatus === 'error'"
+          :kind="detailErrorKind"
+          title="선택한 보고서를 불러오지 못했습니다"
+          :message="detailError ?? '잠시 후 다시 시도해 주세요.'"
+          :retry-label="detailUiError?.retryable ? '다시 불러오기' : undefined"
+          action-label="보고서 목록"
+          @retry="reportStore.selectReport(selectedReportId)"
+          @action="reportStore.startNewReport()"
+        />
         <ReportPreview v-else-if="selectedReport">
           <LearningReportDocument
             :report="selectedReport"
@@ -213,45 +207,69 @@ async function retryStudent(): Promise<void> {
             />
           </div>
           <CardContent class="saved-reports__content">
-            <p v-if="listStatus === 'loading'" class="section-state">
-              저장된 보고서를 불러오는 중입니다.
-            </p>
-            <div v-else-if="listStatus === 'error'" class="section-state section-state--error">
-              <p>{{ listError }}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                @click="studentId && reportStore.loadList(studentId)"
-              >
-                다시 불러오기
-              </Button>
-            </div>
-            <p v-else-if="reports.length === 0" class="section-state">
-              저장된 보고서가 없습니다. 새 보고서를 생성해 주세요.
-            </p>
-            <p v-else-if="filteredReports.length === 0" class="section-state">
-              검색 조건에 맞는 보고서가 없습니다.
-            </p>
-            <ul v-else>
-              <li v-for="item in filteredReports" :key="item.reportId">
-                <Button
-                  variant="ghost"
-                  class="saved-report-row"
-                  type="button"
-                  @click="selectReport(item)"
-                >
-                  <span>
-                    <strong>{{ formatReportDateTime(item.createdAt) }} 생성</strong>
-                    <small>
-                      {{ formatReportDate(item.startDate) }} ~
-                      {{ formatReportDate(item.endDate) }}
-                    </small>
-                  </span>
-                  <b aria-hidden="true">›</b>
-                </Button>
-              </li>
-            </ul>
+            <AsyncStatePanel
+              v-if="listStatus === 'loading' && reports.length === 0"
+              kind="loading"
+              message="저장된 보고서를 불러오는 중입니다."
+              compact
+            />
+            <AsyncStatePanel
+              v-else-if="listStatus === 'error' && reports.length === 0"
+              :kind="listErrorKind"
+              title="저장된 보고서를 불러오지 못했습니다"
+              :message="listError ?? '잠시 후 다시 시도해 주세요.'"
+              :retry-label="listUiError?.retryable ? '다시 불러오기' : undefined"
+              compact
+              @retry="studentId && reportStore.loadList(studentId)"
+            />
+            <AsyncStatePanel
+              v-else-if="listStatus === 'ready' && reports.length === 0"
+              kind="empty"
+              message="저장된 보고서가 없습니다. 새 보고서를 생성해 주세요."
+              compact
+            />
+            <template v-else>
+              <AsyncStatePanel
+                v-if="listStatus === 'error'"
+                :kind="listErrorKind"
+                title="최신 보고서 목록을 불러오지 못했습니다"
+                :message="`${listError ?? '잠시 후 다시 시도해 주세요.'} 이전 목록을 계속 표시합니다.`"
+                :retry-label="listUiError?.retryable ? '다시 불러오기' : undefined"
+                compact
+                @retry="studentId && reportStore.loadList(studentId)"
+              />
+              <AsyncStatePanel
+                v-else-if="listStatus === 'loading'"
+                kind="loading"
+                message="최신 목록을 확인하는 동안 이전 보고서를 표시합니다."
+                compact
+              />
+              <AsyncStatePanel
+                v-if="filteredReports.length === 0"
+                kind="empty"
+                message="검색 조건에 맞는 보고서가 없습니다."
+                compact
+              />
+              <ul v-else>
+                <li v-for="item in filteredReports" :key="item.reportId">
+                  <Button
+                    variant="ghost"
+                    class="saved-report-row"
+                    type="button"
+                    @click="selectReport(item)"
+                  >
+                    <span>
+                      <strong>{{ formatReportDateTime(item.createdAt) }} 생성</strong>
+                      <small>
+                        {{ formatReportDate(item.startDate) }} ~
+                        {{ formatReportDate(item.endDate) }}
+                      </small>
+                    </span>
+                    <b aria-hidden="true">›</b>
+                  </Button>
+                </li>
+              </ul>
+            </template>
           </CardContent>
         </Card>
 

@@ -8,22 +8,15 @@ import {
   type TestRepository,
   type TestRequestStatus,
 } from '@/features/teacher/test'
-import { isApiError } from '@/lib/api'
-
-function isAbortError(error: unknown): boolean {
-  return (
-    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError'
-  )
-}
+import { mapCommonError, type UiError } from '@/features/teacher/error'
+import { isAbortError, isApiError } from '@/lib/api'
 
 function testErrorMessage(error: unknown, fallback: string): string {
   if (!isApiError(error)) return fallback
-  if (error.status === 0) return '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.'
   if (error.status === 400) return '검사 선택 조건이 올바르지 않습니다.'
   if (error.status === 403) return '이 학습자의 검사 기록을 볼 권한이 없습니다.'
   if (error.status === 404) return '요청한 완료 검사 기록을 찾을 수 없습니다.'
-  if (error.status >= 500) return '서버에서 검사 결과를 불러오지 못했습니다.'
-  return fallback
+  return mapCommonError(error)?.message ?? fallback
 }
 
 function sameIds(left: readonly number[], right: readonly number[]): boolean {
@@ -42,6 +35,7 @@ export const useTestStore = defineStore('test', () => {
   const comparisonStatus = ref<TestRequestStatus>('idle')
   const gazeStatus = ref<GazeAnalysisRequestStatus>('idle')
   const listError = ref<string | null>(null)
+  const listUiError = ref<UiError | null>(null)
   const comparisonError = ref<string | null>(null)
   const gazeError = ref<string | null>(null)
 
@@ -93,6 +87,7 @@ export const useTestStore = defineStore('test', () => {
     comparisonStatus.value = 'idle'
     gazeStatus.value = 'idle'
     listError.value = null
+    listUiError.value = null
     comparisonError.value = null
     gazeError.value = null
   }
@@ -109,7 +104,14 @@ export const useTestStore = defineStore('test', () => {
     const generation = ++listGeneration
     comparisonGeneration += 1
     gazeGeneration += 1
-    clearState(nextStudentId)
+    const isRefresh = studentId.value === nextStudentId
+    if (isRefresh) {
+      listStatus.value = 'loading'
+      listError.value = null
+      listUiError.value = null
+    } else {
+      clearState(nextStudentId)
+    }
 
     try {
       const items = await repository.value.getTests(nextStudentId, {
@@ -119,17 +121,32 @@ export const useTestStore = defineStore('test', () => {
       tests.value = [...items].sort(
         (left, right) => right.date.localeCompare(left.date) || right.testId - left.testId,
       )
-      currentTestId.value = tests.value[0]?.testId ?? null
+      const retainedCurrentTestId = tests.value.some((test) => test.testId === currentTestId.value)
+        ? currentTestId.value
+        : null
+      currentTestId.value = retainedCurrentTestId ?? tests.value[0]?.testId ?? null
+      comparisonTestIds.value = comparisonTestIds.value
+        .filter(
+          (testId) =>
+            testId !== currentTestId.value && tests.value.some((test) => test.testId === testId),
+        )
+        .slice(0, 2)
       listStatus.value = 'success'
       if (currentTestId.value !== null) {
         await Promise.all([
           loadComparison(nextStudentId),
           loadGazeAnalysis(nextStudentId, currentTestId.value),
         ])
+      } else {
+        comparisonResult.value = null
+        gazeAnalysis.value = null
+        comparisonStatus.value = 'idle'
+        gazeStatus.value = 'idle'
       }
     } catch (error) {
       if (isAbortError(error) || generation !== listGeneration) return
       listStatus.value = 'error'
+      listUiError.value = mapCommonError(error)
       listError.value = testErrorMessage(error, '완료된 검사 목록을 불러오지 못했습니다.')
     } finally {
       if (generation === listGeneration) listController = null
@@ -307,6 +324,7 @@ export const useTestStore = defineStore('test', () => {
     comparisonStatus,
     gazeStatus,
     listError,
+    listUiError,
     comparisonError,
     gazeError,
     setRepository,

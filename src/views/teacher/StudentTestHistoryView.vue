@@ -3,6 +3,7 @@ import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
+import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import ChartPanel from '@/components/common/ChartPanel.vue'
 import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
 import HistoryToolbar from '@/components/teacher/HistoryToolbar.vue'
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { chartColors } from '@/features/teacher/chartTheme'
+import { asyncStateKind } from '@/features/teacher/error'
 import {
   formatTestChange,
   formatTestDate,
@@ -38,9 +40,11 @@ const {
   comparisonStatus,
   gazeStatus,
   listError,
+  listUiError,
   comparisonError,
   gazeError,
 } = storeToRefs(testStore)
+const listErrorKind = computed(() => asyncStateKind(listUiError.value))
 
 const chartPalette = [chartColors.blue, chartColors.green, chartColors.amber] as const
 
@@ -161,41 +165,58 @@ function testOptionLabel(test: TestListItem): string {
       description="완료된 검사 한 건의 상세를 확인하고 이전 검사와 최대 두 건까지 비교합니다."
     />
 
-    <Card v-if="invalidStudentId" class="state-card state-card--error">
-      <strong>올바른 학습자를 선택해 주세요.</strong>
-      <p>검사 이력을 조회하려면 학습자 목록에서 대상을 다시 선택해야 합니다.</p>
-      <Button type="button" @click="router.push({ name: 'teacher-students' })">
-        학습자 목록으로 이동
-      </Button>
-    </Card>
+    <AsyncStatePanel
+      v-if="invalidStudentId"
+      kind="not-found"
+      title="올바른 학습자를 선택해 주세요."
+      message="검사 이력을 조회하려면 학습자 목록에서 대상을 다시 선택해야 합니다."
+      action-label="학습자 목록으로 이동"
+      @action="router.push({ name: 'teacher-students' })"
+    />
 
     <template v-else>
-      <Card v-if="listStatus === 'loading'" class="state-card" aria-live="polite">
-        <strong>완료된 검사 목록을 불러오는 중입니다.</strong>
-        <p>잠시만 기다려 주세요.</p>
-      </Card>
+      <AsyncStatePanel
+        v-if="listStatus === 'loading' && tests.length === 0"
+        kind="loading"
+        title="완료된 검사 목록을 불러오는 중입니다"
+        message="잠시만 기다려 주세요."
+      />
 
-      <Card v-else-if="listStatus === 'error'" class="state-card state-card--error">
-        <strong>{{ listError }}</strong>
-        <p>목록을 다시 요청하거나 학습자 목록으로 이동할 수 있습니다.</p>
-        <div class="state-actions">
-          <Button type="button" @click="testStore.retryList()">다시 시도</Button>
-          <Button
-            variant="outline"
-            type="button"
-            @click="router.push({ name: 'teacher-students' })"
-          >
-            학습자 목록으로 이동
-          </Button>
-        </div>
-      </Card>
+      <AsyncStatePanel
+        v-else-if="listStatus === 'error' && tests.length === 0"
+        :kind="listErrorKind"
+        title="완료된 검사 목록을 불러오지 못했습니다"
+        :message="listError ?? '잠시 후 다시 시도해 주세요.'"
+        :retry-label="listUiError?.retryable ? '다시 시도' : undefined"
+        action-label="학습자 목록으로 이동"
+        @retry="testStore.retryList()"
+        @action="router.push({ name: 'teacher-students' })"
+      />
 
-      <Card v-else-if="listStatus === 'success' && tests.length === 0" class="state-card">
-        <strong>완료된 검사가 없습니다.</strong>
-        <p>학습자가 검사를 완료하면 이 화면에서 상세 결과를 확인할 수 있습니다.</p>
-      </Card>
+      <AsyncStatePanel
+        v-else-if="listStatus === 'success' && tests.length === 0"
+        kind="empty"
+        title="완료된 검사가 없습니다."
+        message="학습자가 검사를 완료하면 이 화면에서 상세 결과를 확인할 수 있습니다."
+      />
 
-      <template v-else-if="listStatus === 'success'">
+      <template v-else-if="tests.length > 0">
+        <AsyncStatePanel
+          v-if="listStatus === 'error'"
+          :kind="listErrorKind"
+          title="최신 검사 목록을 불러오지 못했습니다"
+          :message="`${listError ?? '잠시 후 다시 시도해 주세요.'} 이전 검사 결과를 계속 표시합니다.`"
+          :retry-label="listUiError?.retryable ? '다시 시도' : undefined"
+          compact
+          @retry="testStore.retryList()"
+        />
+        <AsyncStatePanel
+          v-else-if="listStatus === 'loading'"
+          kind="loading"
+          title="최신 검사 목록을 확인하는 중입니다"
+          message="이전 검사 결과를 계속 표시합니다."
+          compact
+        />
         <Card class="toolbar-card">
           <HistoryToolbar>
             <div class="selection-field">
