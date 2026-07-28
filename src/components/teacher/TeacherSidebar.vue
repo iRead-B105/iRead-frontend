@@ -12,21 +12,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { StudentNavigationItem } from '@/features/teacher/student'
-import { useReportStore } from '@/stores/report'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
-import { useTestStore } from '@/stores/test'
-import { useTrainingStore } from '@/stores/training'
 import SidebarIcon from '@/components/teacher/SidebarIcon.vue'
 import StudentSwitcher from '@/components/teacher/StudentSwitcher.vue'
 
 const route = useRoute()
 const router = useRouter()
 const sessionStore = useSessionStore()
-const reportStore = useReportStore()
 const studentStore = useStudentStore()
-const testStore = useTestStore()
-const trainingStore = useTrainingStore()
 const { teacher, logoutPending } = storeToRefs(sessionStore)
 const { navigationItems, navigationItemsById, selectedStudentId } = storeToRefs(studentStore)
 const logoutError = ref('')
@@ -68,10 +62,6 @@ async function logout() {
   logoutError.value = ''
   try {
     await sessionStore.logout()
-    studentStore.reset()
-    reportStore.reset()
-    testStore.reset()
-    trainingStore.reset()
     await router.push('/login')
   } catch {
     logoutError.value = '로그아웃에 실패했습니다. 잠시 후 다시 시도해 주세요.'

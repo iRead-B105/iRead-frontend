@@ -9,6 +9,7 @@ import App from './App.vue'
 import { createSessionApiAuthHooks } from '@/features/teacher/auth'
 import { configureApiAuth } from '@/lib/api'
 import { useSessionStore } from '@/stores/session'
+import { installSessionScopedStoreReset } from '@/stores/sessionScopedStores'
 // router는 URL에 따라 어떤 Vue 화면을 보여 줄지 결정합니다.
 import router from './router'
 
@@ -20,6 +21,7 @@ const pinia = createPinia()
 app.use(pinia)
 
 const sessionStore = useSessionStore(pinia)
+installSessionScopedStoreReset(pinia)
 configureApiAuth(createSessionApiAuthHooks(sessionStore, router))
 
 // 앱 전체에서 RouterLink, RouterView 같은 페이지 이동 기능을 사용할 수 있게 합니다.

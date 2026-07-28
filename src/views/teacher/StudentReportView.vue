@@ -98,7 +98,9 @@ watch(
       return
     }
     await Promise.all([
-      studentStore.loadDetail(id),
+      detailsById.value[id] && studentStore.detailStaleById[id] !== true
+        ? Promise.resolve(detailsById.value[id])
+        : studentStore.loadDetail(id),
       reportStore.loadForStudent(id),
     ])
   },
