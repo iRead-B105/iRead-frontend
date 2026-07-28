@@ -1,4 +1,5 @@
 import { ApiError } from '@/lib/api'
+import { createMockDemoDate } from '@/features/teacher/demo'
 import {
   completedLearningDatesByStudentFixture,
   createMockReportSnapshot,
@@ -86,7 +87,7 @@ export class MockReportRepository implements ReportRepository {
     this.completedLearningDatesByStudent =
       options.completedLearningDatesByStudent ??
       completedLearningDatesByStudentFixture
-    this.now = options.now ?? (() => new Date())
+    this.now = options.now ?? createMockDemoDate
     this.delayMs = options.delayMs ?? 80
     this.nextReportId =
       Math.max(0, ...Array.from(this.reports.keys())) + 1

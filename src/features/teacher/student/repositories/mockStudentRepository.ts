@@ -1,6 +1,7 @@
 import { studentFixtures, type StudentFixtureRecord } from '../fixtures'
 import { createLearningInsightsFixture } from '../learningInsightsFixtures'
 import { normalizeStudentListQuery } from '../query'
+import { createMockDemoDate } from '@/features/teacher/demo'
 import { ApiError } from '@/lib/api'
 import type {
   StudentAccuracyPoint,
@@ -67,7 +68,7 @@ export class MockStudentRepository implements StudentRepository {
 
   constructor(
     students: readonly StudentFixtureRecord[] = studentFixtures,
-    private readonly now: () => Date = () => new Date(),
+    private readonly now: () => Date = createMockDemoDate,
   ) {
     this.students = students.map((student) => ({ ...student }))
     for (const student of this.students) {

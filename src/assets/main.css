@@ -84,15 +84,18 @@
 }
 
 html {
-  /* 이 목업은 데스크톱 관리 화면이므로 1180px 이하에서는 가로 스크롤을 사용합니다. */
-  min-width: 1180px;
+  min-width: 0;
+  max-width: 100%;
   background: var(--slate-50);
+  overflow-wrap: anywhere;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   /* 브라우저 기본 바깥 여백을 없애고 페이지가 최소 화면 높이를 채우게 합니다. */
   margin: 0;
-  min-width: 1180px;
+  min-width: 0;
+  max-width: 100%;
   min-height: 100vh;
   color: var(--slate-950);
   background: var(--slate-50);
@@ -111,6 +114,7 @@ input,
 select,
 textarea {
   /* 폼 요소가 운영체제 기본 글꼴 대신 body의 글꼴과 크기를 물려받게 합니다. */
+  max-width: 100%;
   font: inherit;
 }
 
@@ -126,10 +130,17 @@ button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+[tabindex]:focus-visible {
   /* 키보드로 이동했을 때 현재 초점 위치를 뚜렷하게 보여 주는 접근성 스타일입니다. */
-  outline: 3px solid color-mix(in oklch, var(--ring) 28%, transparent);
-  outline-offset: 2px;
+  outline: 3px solid var(--primary-700);
+  outline-offset: 3px;
+}
+
+main,
+h1,
+[data-route-focus] {
+  scroll-margin-top: 24px;
 }
 
 a {
@@ -194,9 +205,14 @@ th {
 .page-heading {
   /* 페이지 제목/설명은 왼쪽, 주요 버튼은 오른쪽에 배치합니다. */
   display: flex;
+  min-width: 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
+}
+
+.page-heading > * {
+  min-width: 0;
 }
 
 .page-heading h1 {
@@ -221,8 +237,10 @@ th {
 .surface-header {
   /* 카드 제목과 오른쪽 부가 정보 또는 버튼을 양 끝에 정렬합니다. */
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
   padding: 20px 24px;
   border-bottom: 1px solid var(--slate-200);
@@ -249,6 +267,7 @@ th {
   font-weight: 700;
   /* hover 등 상태 변화가 0.16초 동안 부드럽게 이어집니다. */
   transition: 160ms ease;
+  white-space: normal;
 }
 
 .button:hover {
@@ -322,19 +341,19 @@ th {
 }
 
 .field--short {
-  max-width: 240px;
+  width: min(100%, 240px);
 }
 
 .field--date {
-  max-width: 280px;
+  width: min(100%, 280px);
 }
 
 .field--phone {
-  max-width: 360px;
+  width: min(100%, 360px);
 }
 
 .field--medium {
-  max-width: 420px;
+  width: min(100%, 420px);
 }
 
 .input,
@@ -385,6 +404,53 @@ th {
 .muted {
   /* 중요도가 낮은 보조 문구를 공통 회색으로 표시하는 도우미 클래스입니다. */
   color: var(--slate-500);
+}
+
+@media (max-width: 640px) {
+  .page-stack {
+    gap: 18px;
+  }
+
+  .page-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .page-heading h1 {
+    font-size: 22px;
+  }
+
+  .surface-header {
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .button {
+    min-height: 44px;
+  }
+
+  [data-slot='button'] {
+    max-width: 100%;
+    height: auto;
+    min-height: 44px;
+    white-space: normal;
+  }
+
+  [data-slot='button'][data-size^='icon'] {
+    min-width: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @media print {

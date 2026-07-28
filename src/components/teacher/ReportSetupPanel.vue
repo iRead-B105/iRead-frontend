@@ -61,10 +61,13 @@ const reportSections = [
             <Input
               id="report-start-date"
               type="date"
+              required
               :value="startDate"
               :max="today"
               :aria-invalid="Boolean(periodErrors.startDate)"
-              aria-describedby="report-start-date-error"
+              :aria-describedby="
+                periodErrors.startDate ? 'report-start-date-error' : undefined
+              "
               :disabled="submitting"
               @input="emit('update:startDate', ($event.target as HTMLInputElement).value)"
             />
@@ -82,10 +85,11 @@ const reportSections = [
             <Input
               id="report-end-date"
               type="date"
+              required
               :value="endDate"
               :max="today"
               :aria-invalid="Boolean(periodErrors.endDate)"
-              aria-describedby="report-end-date-error"
+              :aria-describedby="periodErrors.endDate ? 'report-end-date-error' : undefined"
               :disabled="submitting"
               @input="emit('update:endDate', ($event.target as HTMLInputElement).value)"
             />
@@ -109,11 +113,14 @@ const reportSections = [
             :value="teacherMemo"
             :maxlength="REPORT_MEMO_MAX_LENGTH"
             :aria-invalid="Boolean(memoError)"
+            :aria-describedby="memoError ? 'report-initial-memo-error' : undefined"
             :disabled="submitting"
             placeholder="보고서에 함께 저장할 의견을 입력해 주세요."
             @input="emit('update:teacherMemo', ($event.target as HTMLTextAreaElement).value)"
           />
-          <p v-if="memoError" class="field-error">{{ memoError }}</p>
+          <p v-if="memoError" id="report-initial-memo-error" class="field-error">
+            {{ memoError }}
+          </p>
         </div>
       </div>
 
@@ -304,6 +311,21 @@ const reportSections = [
   }
   .report-period__fields > span {
     display: none;
+  }
+
+  .report-period,
+  .report-contents {
+    padding: 18px 16px 20px;
+  }
+
+  .memo-field__label,
+  .create-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .report-setup__actions :deep([data-slot='button']) {
+    width: 100%;
   }
 }
 </style>

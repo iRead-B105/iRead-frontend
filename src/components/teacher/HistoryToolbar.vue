@@ -24,6 +24,7 @@
   display: flex;
   min-width: 0;
   align-items: flex-end;
+  flex-wrap: wrap;
   gap: 12px;
 }
 

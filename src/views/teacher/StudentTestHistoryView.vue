@@ -68,6 +68,21 @@ const areaNames = computed(() => {
   return [...names]
 })
 const hasAreaScores = computed(() => areaNames.value.length > 0)
+const areaChartSummary = computed(
+  () =>
+    `검사별 영역 점수: ${displayedDetails.value
+      .map(
+        (detail, index) =>
+          `${seriesLabel(detail, index)} ${areaNames.value
+            .map((area) => {
+              const score =
+                detail.areaScores.find((areaScore) => areaScore.area === area)?.score ?? null
+              return `${area} ${score === null ? '기록 없음' : `${score}점`}`
+            })
+            .join(', ')}`,
+      )
+      .join('; ')}`,
+)
 const areaChart = computed<EChartsOption>(() => ({
   tooltip: {
     trigger: 'axis',
@@ -320,6 +335,7 @@ function testOptionLabel(test: TestListItem): string {
                 :option="areaChart"
                 height="330px"
                 aria-label="기준 검사와 선택한 비교 검사의 영역별 점수 차트"
+                :summary="areaChartSummary"
               />
               <div v-else class="inline-empty">표시할 영역별 점수가 없습니다.</div>
             </Card>
@@ -494,6 +510,7 @@ function testOptionLabel(test: TestListItem): string {
 
 .comparison-chip {
   display: inline-flex;
+  max-width: 100%;
   align-items: center;
   gap: 8px;
   padding: 7px 8px 7px 12px;
@@ -503,6 +520,7 @@ function testOptionLabel(test: TestListItem): string {
   color: var(--primary-700);
   font-size: 12px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .comparison-chip button {
@@ -819,6 +837,33 @@ function testOptionLabel(test: TestListItem): string {
   .detail-card dl,
   .question-list dl {
     grid-template-columns: 1fr;
+  }
+
+  .result-chart,
+  .result-summary,
+  .metric-section,
+  .question-section,
+  .gaze-card {
+    padding: 16px;
+  }
+}
+
+@container (max-width: 480px) {
+  .section-heading,
+  .detail-card header,
+  .question-list li > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .comparison-chips {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .comparison-chip {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 </style>

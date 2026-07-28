@@ -8,7 +8,7 @@ defineProps<{
 
 <template>
   <p v-if="dataSource === 'mock'" class="data-source-notice" role="status">
-    Backend와 연동 전 입니다.
+    Backend와 연동 전 입니다. 변경한 mock 데이터는 새로고침하면 초기화됩니다.
   </p>
 </template>
 

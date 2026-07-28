@@ -365,6 +365,7 @@ async function retryStudent(): Promise<void> {
 }
 .saved-report-row strong {
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .saved-report-row small {
   color: var(--muted-foreground);
@@ -406,6 +407,23 @@ async function retryStudent(): Promise<void> {
   }
   .saved-reports {
     max-height: 430px;
+  }
+}
+
+@container (max-width: 480px) {
+  .saved-reports__header,
+  .saved-report-row,
+  .state-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .saved-reports {
+    max-height: 380px;
+  }
+
+  .saved-report-row b {
+    align-self: flex-end;
   }
 }
 </style>

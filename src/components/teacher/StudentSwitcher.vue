@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +24,7 @@ const {
   recentStudents,
 } = storeToRefs(studentStore)
 const root = ref<HTMLElement>()
+const popover = ref<HTMLElement>()
 const isOpen = ref(false)
 const keyword = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | undefined
@@ -47,47 +48,92 @@ function studentInitial(name: string): string {
   return name.trim().charAt(0) || '?'
 }
 
-function toggle(): void {
-  isOpen.value = !isOpen.value
-  if (isOpen.value && studentStore.navigationStatus === 'idle') {
+async function open(): Promise<void> {
+  isOpen.value = true
+  if (studentStore.navigationStatus === 'idle') {
     void studentStore.loadNavigation({ reset: true })
   }
+  await nextTick()
+  popover.value?.querySelector<HTMLInputElement>('input')?.focus()
 }
 
-function close(): void {
+function focusTrigger(): void {
+  void nextTick(() => {
+    root.value?.querySelector<HTMLButtonElement>('.student-switcher__trigger')?.focus()
+  })
+}
+
+function close(restoreFocus = true): void {
+  if (!isOpen.value) return
   isOpen.value = false
+  if (restoreFocus) focusTrigger()
+}
+
+function toggle(): void {
+  if (isOpen.value) {
+    close()
+  } else {
+    void open()
+  }
 }
 
 function selectStudent(student: StudentNavigationItem): void {
   if (student.studentId === props.currentStudent.studentId) return
   studentStore.rememberStudent(student)
-  close()
+  close(false)
   emit('select', student)
 }
 
 function manageStudents(): void {
-  close()
+  close(false)
   emit('manage')
 }
 
 function closeOnOutsideClick(event: MouseEvent): void {
   if (!(event.target instanceof Node)) return
-  if (root.value && !root.value.contains(event.target)) close()
+  if (root.value && !root.value.contains(event.target)) close(false)
 }
 
-function closeOnEscape(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && isOpen.value) close()
+function handlePopoverKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    close()
+    return
+  }
+  if (event.key !== 'Tab' || !popover.value) return
+
+  const focusable = [
+    ...popover.value.querySelectorAll<HTMLElement>(
+      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    ),
+  ].filter((element) => !element.hasAttribute('hidden'))
+  const first =
+    popover.value.querySelector<HTMLElement>('#student-switcher-search') ?? focusable[0]
+  const last = popover.value.querySelector<HTMLElement>('.manage') ?? focusable.at(-1)
+  if (!first || !last) return
+  const eventTarget = event.target instanceof HTMLElement ? event.target : null
+
+  if (event.shiftKey && (document.activeElement === first || eventTarget === first)) {
+    event.preventDefault()
+    last.focus()
+  } else if (
+    !event.shiftKey &&
+    (document.activeElement === last ||
+      eventTarget === last ||
+      eventTarget?.classList.contains('manage'))
+  ) {
+    event.preventDefault()
+    first.focus()
+  }
 }
 
 onMounted(() => {
   document.addEventListener('click', closeOnOutsideClick)
-  document.addEventListener('keydown', closeOnEscape)
 })
 
 onBeforeUnmount(() => {
   if (searchTimer) clearTimeout(searchTimer)
   document.removeEventListener('click', closeOnOutsideClick)
-  document.removeEventListener('keydown', closeOnEscape)
 })
 </script>
 
@@ -99,6 +145,7 @@ onBeforeUnmount(() => {
       type="button"
       :aria-expanded="isOpen"
       aria-haspopup="dialog"
+      aria-controls="student-switcher-popover"
       aria-label="학습자 변경"
       @click="toggle"
     >
@@ -117,20 +164,32 @@ onBeforeUnmount(() => {
       <span aria-hidden="true">⌄</span>
     </Button>
 
-    <section v-if="isOpen" class="student-switcher__popover" role="dialog" aria-label="학습자 변경">
+    <section
+      v-if="isOpen"
+      id="student-switcher-popover"
+      ref="popover"
+      class="student-switcher__popover"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="student-switcher-title"
+      aria-describedby="student-switcher-count"
+      @keydown="handlePopoverKeydown"
+    >
       <header>
-        <strong>학습자 변경</strong>
-        <span>{{ navigationItems.length }}명 표시 중</span>
+        <strong id="student-switcher-title">학습자 변경</strong>
+        <span id="student-switcher-count" aria-live="polite">
+          {{ navigationItems.length }}명 표시 중
+        </span>
       </header>
 
-      <label class="student-switcher__search">
+      <label class="student-switcher__search" for="student-switcher-search">
         <span aria-hidden="true">⌕</span>
+        <span class="sr-only">이름 또는 학교 검색</span>
         <Input
+          id="student-switcher-search"
           v-model="keyword"
           type="search"
-          aria-label="이름 또는 학교 검색"
           placeholder="이름 또는 학교 검색"
-          autofocus
         />
       </label>
 
@@ -164,7 +223,9 @@ onBeforeUnmount(() => {
           <span v-if="student.studentId === currentStudent.studentId" aria-label="현재 학습자">✓</span>
         </Button>
 
-        <p v-if="navigationStatus === 'loading'" class="state-copy">불러오는 중...</p>
+        <p v-if="navigationStatus === 'loading'" class="state-copy" role="status">
+          학습자 목록을 불러오는 중입니다.
+        </p>
         <div v-else-if="navigationStatus === 'error'" class="state-copy" role="alert">
           <p>{{ navigationError }}</p>
           <Button type="button" size="sm" variant="outline" @click="studentStore.loadNavigation({ reset: true })">
@@ -174,6 +235,7 @@ onBeforeUnmount(() => {
         <p
           v-else-if="navigationItems.length === 0"
           class="state-copy"
+          role="status"
         >
           검색 결과가 없습니다.
         </p>
@@ -200,6 +262,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .student-switcher {
   position: relative;
+  min-width: 0;
+  max-width: 100%;
 }
 .student-switcher__trigger {
   display: grid;
@@ -332,6 +396,13 @@ onBeforeUnmount(() => {
     top: calc(100% + 8px);
     left: 0;
     width: min(300px, calc(100vw - 32px));
+    max-height: min(520px, calc(100dvh - 24px));
+  }
+}
+
+@media (max-width: 480px) {
+  .student-switcher__popover {
+    width: min(300px, calc(100vw - 24px));
   }
 }
 </style>

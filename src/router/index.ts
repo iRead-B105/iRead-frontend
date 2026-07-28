@@ -1,6 +1,7 @@
 // createRouter는 URL과 화면의 연결표를 만들고, createWebHistory는 일반적인 주소 형식을 사용하게 합니다.
 import { createRouter, createWebHistory } from 'vue-router'
 import type { Router } from 'vue-router'
+import { installRouteAccessibility } from './accessibility'
 import { useSessionStore } from '@/stores/session'
 
 const publicAuthenticationRoutes = new Set([
@@ -33,16 +34,19 @@ const router = createRouter({
       path: '/login',
       name: 'teacher-login',
       component: () => import('@/views/teacher/TeacherLoginView.vue'),
+      meta: { title: '로그인' },
     },
     {
       path: '/signup',
       name: 'teacher-signup',
       component: () => import('@/views/teacher/TeacherSignupView.vue'),
+      meta: { title: '회원가입' },
     },
     {
       path: '/reset-password',
       name: 'teacher-reset-password',
       component: () => import('@/views/teacher/TeacherResetPasswordView.vue'),
+      meta: { title: '비밀번호 재설정' },
     },
     {
       path: '/teacher',
@@ -68,7 +72,7 @@ const router = createRouter({
           path: 'students/new',
           name: 'student-create',
           component: () => import('@/views/teacher/StudentCreateView.vue'),
-          meta: { title: '아동 관리', section: 'students' },
+          meta: { title: '새 아동 등록', section: 'students' },
         },
         {
           path: 'students/:id',
@@ -80,31 +84,37 @@ const router = createRouter({
               path: '',
               name: 'student-overview',
               component: () => import('@/views/teacher/StudentOverviewView.vue'),
+              meta: { title: '학습 현황' },
             },
             {
               path: 'edit',
               name: 'student-edit',
               component: () => import('@/views/teacher/StudentEditView.vue'),
+              meta: { title: '아동 정보 관리' },
             },
             {
               path: 'curriculum',
               name: 'student-curriculum',
               component: () => import('@/views/teacher/StudentCurriculumView.vue'),
+              meta: { title: '커리큘럼' },
             },
             {
               path: 'training-history',
               name: 'student-training-history',
               component: () => import('@/views/teacher/StudentTrainingHistoryView.vue'),
+              meta: { title: '훈련 이력' },
             },
             {
               path: 'test-history',
               name: 'student-test-history',
               component: () => import('@/views/teacher/StudentTestHistoryView.vue'),
+              meta: { title: '검사 이력' },
             },
             {
               path: 'report',
               name: 'student-report',
               component: () => import('@/views/teacher/StudentReportView.vue'),
+              meta: { title: '보고서' },
             },
           ],
         },
@@ -142,6 +152,7 @@ export function installAuthenticationGuard(routerInstance: Router): void {
 }
 
 installAuthenticationGuard(router)
+installRouteAccessibility(router)
 
 // main.ts가 이 라우터를 앱 전체에 등록할 수 있도록 공개합니다.
 export default router

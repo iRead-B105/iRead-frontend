@@ -72,6 +72,12 @@ const selectedAccuracyComparison = computed(
     ) ?? null,
 )
 const readingSpeedPoints = computed(() => statistics.value?.readingSpeedTrend.points ?? [])
+const speedChartSummary = computed(
+  () =>
+    `날짜별 음성 읽기 속도: ${readingSpeedPoints.value
+      .map((point) => `${formatChartDate(point.date)} ${point.speed}단어/분`)
+      .join(', ')}`,
+)
 const speedChart = computed<EChartsOption>(() => ({
   tooltip: {
     trigger: 'axis',
@@ -394,6 +400,7 @@ function questionStatusClass(question: TrainingQuestionResult): string {
             :option="speedChart"
             height="240px"
             aria-label="음성 기준 읽기 속도 추이 차트"
+            :summary="speedChartSummary"
           />
 
           <section class="accuracy-comparison" aria-labelledby="accuracy-comparison-title">
@@ -563,7 +570,7 @@ function questionStatusClass(question: TrainingQuestionResult): string {
 
 .period-field {
   display: grid;
-  width: 180px;
+  width: min(100%, 180px);
   gap: 6px;
 }
 
@@ -646,6 +653,7 @@ function questionStatusClass(question: TrainingQuestionResult): string {
   display: grid;
   min-width: 0;
   gap: 3px;
+  overflow-wrap: anywhere;
 }
 
 .curriculum-row small,
@@ -893,6 +901,7 @@ dd {
 
 .download-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
 }
@@ -931,6 +940,30 @@ dd {
   .statistics-card,
   .detail-card {
     grid-column: auto;
+  }
+
+  .curriculum-card,
+  .training-list-card,
+  .statistics-card,
+  .detail-card {
+    padding: 16px;
+  }
+}
+
+@container (max-width: 480px) {
+  .section-heading,
+  .detail-heading,
+  .question-results > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .period-field {
+    width: 100%;
+  }
+
+  .download-actions :deep([data-slot='button']) {
+    flex: 1 1 120px;
   }
 }
 </style>
