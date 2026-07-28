@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { buttonVariants } from '@/components/ui/button'
-import { validateStudentImage } from '@/features/teacher/student'
+import { validateProfileImage } from '@/features/teacher/profileImageValidation'
 import { cn } from '@/lib/utils'
 
 const props = withDefaults(
@@ -13,12 +13,14 @@ const props = withDefaults(
     help?: string
     buttonLabel?: string
     previewVersion?: number
+    disabled?: boolean
   }>(),
   {
     imageUrl: '',
     help: 'JPG 또는 PNG, 최대 5MB',
     buttonLabel: '사진 변경',
     previewVersion: 0,
+    disabled: false,
   },
 )
 
@@ -51,7 +53,7 @@ function selectImage(event: Event) {
   const file = input.files?.[0]
   if (!file) return
 
-  const validationError = validateStudentImage(file)
+  const validationError = validateProfileImage(file)
   if (validationError) {
     input.value = ''
     emit('error', validationError)
@@ -79,10 +81,26 @@ onBeforeUnmount(() => {
       <strong>{{ label }}</strong>
       <small>{{ help }}</small>
     </div>
-    <label :class="cn(buttonVariants({ variant: 'outline', size: 'sm' }))" :for="inputId">
+    <label
+      :class="
+        cn(
+          buttonVariants({ variant: 'outline', size: 'sm' }),
+          disabled && 'pointer-events-none opacity-50',
+        )
+      "
+      :for="inputId"
+      :aria-disabled="disabled"
+    >
       {{ buttonLabel }}
     </label>
-    <input :id="inputId" hidden type="file" accept="image/jpeg,image/png" @change="selectImage" />
+    <input
+      :id="inputId"
+      hidden
+      type="file"
+      accept="image/jpeg,image/png"
+      :disabled="disabled"
+      @change="selectImage"
+    />
   </div>
 </template>
 

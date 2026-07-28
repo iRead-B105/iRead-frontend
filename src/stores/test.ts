@@ -1,5 +1,6 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
+import type { GazeAnalysisRequestStatus, GazeAnalysisState } from '@/features/teacher/gaze'
 import {
   testRepository,
   type TestComparison,
@@ -11,10 +12,7 @@ import { isApiError } from '@/lib/api'
 
 function isAbortError(error: unknown): boolean {
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    error.name === 'AbortError'
+    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError'
   )
 }
 
@@ -39,15 +37,20 @@ export const useTestStore = defineStore('test', () => {
   const currentTestId = ref<number | null>(null)
   const comparisonTestIds = ref<readonly number[]>([])
   const comparisonResult = ref<TestComparison | null>(null)
+  const gazeAnalysis = ref<GazeAnalysisState | null>(null)
   const listStatus = ref<TestRequestStatus>('idle')
   const comparisonStatus = ref<TestRequestStatus>('idle')
+  const gazeStatus = ref<GazeAnalysisRequestStatus>('idle')
   const listError = ref<string | null>(null)
   const comparisonError = ref<string | null>(null)
+  const gazeError = ref<string | null>(null)
 
   let listGeneration = 0
   let comparisonGeneration = 0
+  let gazeGeneration = 0
   let listController: AbortController | null = null
   let comparisonController: AbortController | null = null
+  let gazeController: AbortController | null = null
 
   const currentTest = computed(
     () => tests.value.find((test) => test.testId === currentTestId.value) ?? null,
@@ -60,8 +63,7 @@ export const useTestStore = defineStore('test', () => {
   const availableComparisonTests = computed(() =>
     tests.value.filter(
       (test) =>
-        test.testId !== currentTestId.value &&
-        !comparisonTestIds.value.includes(test.testId),
+        test.testId !== currentTestId.value && !comparisonTestIds.value.includes(test.testId),
     ),
   )
   const canAddComparison = computed(
@@ -74,8 +76,10 @@ export const useTestStore = defineStore('test', () => {
   function abortRequests(): void {
     listController?.abort()
     comparisonController?.abort()
+    gazeController?.abort()
     listController = null
     comparisonController = null
+    gazeController = null
   }
 
   function clearState(nextStudentId: number | null): void {
@@ -84,10 +88,13 @@ export const useTestStore = defineStore('test', () => {
     currentTestId.value = null
     comparisonTestIds.value = []
     comparisonResult.value = null
+    gazeAnalysis.value = null
     listStatus.value = nextStudentId === null ? 'idle' : 'loading'
     comparisonStatus.value = 'idle'
+    gazeStatus.value = 'idle'
     listError.value = null
     comparisonError.value = null
+    gazeError.value = null
   }
 
   function setRepository(nextRepository: TestRepository): void {
@@ -101,6 +108,7 @@ export const useTestStore = defineStore('test', () => {
     listController = controller
     const generation = ++listGeneration
     comparisonGeneration += 1
+    gazeGeneration += 1
     clearState(nextStudentId)
 
     try {
@@ -109,21 +117,20 @@ export const useTestStore = defineStore('test', () => {
       })
       if (generation !== listGeneration || studentId.value !== nextStudentId) return
       tests.value = [...items].sort(
-        (left, right) =>
-          right.date.localeCompare(left.date) || right.testId - left.testId,
+        (left, right) => right.date.localeCompare(left.date) || right.testId - left.testId,
       )
       currentTestId.value = tests.value[0]?.testId ?? null
       listStatus.value = 'success'
       if (currentTestId.value !== null) {
-        await loadComparison(nextStudentId)
+        await Promise.all([
+          loadComparison(nextStudentId),
+          loadGazeAnalysis(nextStudentId, currentTestId.value),
+        ])
       }
     } catch (error) {
       if (isAbortError(error) || generation !== listGeneration) return
       listStatus.value = 'error'
-      listError.value = testErrorMessage(
-        error,
-        '완료된 검사 목록을 불러오지 못했습니다.',
-      )
+      listError.value = testErrorMessage(error, '완료된 검사 목록을 불러오지 못했습니다.')
     } finally {
       if (generation === listGeneration) listController = null
     }
@@ -135,34 +142,26 @@ export const useTestStore = defineStore('test', () => {
     await loadForStudent(currentStudentId)
   }
 
-  async function selectCurrentTest(
-    currentStudentId: number,
-    nextTestId: number,
-  ): Promise<boolean> {
+  async function selectCurrentTest(currentStudentId: number, nextTestId: number): Promise<boolean> {
     if (
       currentStudentId !== studentId.value ||
       !tests.value.some((test) => test.testId === nextTestId)
     ) {
       return false
     }
-    if (
-      currentTestId.value === nextTestId &&
-      comparisonStatus.value === 'success'
-    ) {
+    if (currentTestId.value === nextTestId && comparisonStatus.value === 'success') {
       return true
     }
     currentTestId.value = nextTestId
-    comparisonTestIds.value = comparisonTestIds.value.filter(
-      (testId) => testId !== nextTestId,
-    )
-    await loadComparison(currentStudentId)
+    comparisonTestIds.value = comparisonTestIds.value.filter((testId) => testId !== nextTestId)
+    await Promise.all([
+      loadComparison(currentStudentId),
+      loadGazeAnalysis(currentStudentId, nextTestId),
+    ])
     return comparisonStatus.value === 'success'
   }
 
-  async function addComparisonTest(
-    currentStudentId: number,
-    testId: number,
-  ): Promise<boolean> {
+  async function addComparisonTest(currentStudentId: number, testId: number): Promise<boolean> {
     if (
       currentStudentId !== studentId.value ||
       currentTestId.value === testId ||
@@ -177,19 +176,11 @@ export const useTestStore = defineStore('test', () => {
     return comparisonStatus.value === 'success'
   }
 
-  async function removeComparisonTest(
-    currentStudentId: number,
-    testId: number,
-  ): Promise<boolean> {
-    if (
-      currentStudentId !== studentId.value ||
-      !comparisonTestIds.value.includes(testId)
-    ) {
+  async function removeComparisonTest(currentStudentId: number, testId: number): Promise<boolean> {
+    if (currentStudentId !== studentId.value || !comparisonTestIds.value.includes(testId)) {
       return false
     }
-    comparisonTestIds.value = comparisonTestIds.value.filter(
-      (candidate) => candidate !== testId,
-    )
+    comparisonTestIds.value = comparisonTestIds.value.filter((candidate) => candidate !== testId)
     await loadComparison(currentStudentId)
     return comparisonStatus.value === 'success'
   }
@@ -242,19 +233,62 @@ export const useTestStore = defineStore('test', () => {
     } catch (error) {
       if (isAbortError(error) || generation !== comparisonGeneration) return
       comparisonStatus.value = 'error'
-      comparisonError.value = testErrorMessage(
-        error,
-        '검사 상세 결과를 불러오지 못했습니다.',
-      )
+      comparisonError.value = testErrorMessage(error, '검사 상세 결과를 불러오지 못했습니다.')
     } finally {
       if (generation === comparisonGeneration) comparisonController = null
     }
+  }
+
+  async function loadGazeAnalysis(currentStudentId: number, testId: number): Promise<void> {
+    if (
+      currentStudentId !== studentId.value ||
+      currentTestId.value !== testId ||
+      !tests.value.some((test) => test.testId === testId)
+    ) {
+      return
+    }
+    gazeController?.abort()
+    const controller = new AbortController()
+    gazeController = controller
+    const generation = ++gazeGeneration
+    gazeAnalysis.value = null
+    gazeStatus.value = 'loading'
+    gazeError.value = null
+
+    try {
+      const state = await repository.value.getGazeAnalysis(currentStudentId, testId, {
+        signal: controller.signal,
+      })
+      if (
+        generation !== gazeGeneration ||
+        studentId.value !== currentStudentId ||
+        currentTestId.value !== testId
+      ) {
+        return
+      }
+      gazeAnalysis.value = state
+      gazeStatus.value = 'success'
+    } catch (error) {
+      if (isAbortError(error) || generation !== gazeGeneration) return
+      gazeStatus.value = 'error'
+      gazeError.value = testErrorMessage(error, '시선 분석 결과를 불러오지 못했습니다.')
+    } finally {
+      if (generation === gazeGeneration) gazeController = null
+    }
+  }
+
+  async function retryGazeAnalysis(): Promise<void> {
+    const currentStudentId = studentId.value
+    const testId = currentTestId.value
+    if (currentStudentId === null || testId === null) return
+    await loadGazeAnalysis(currentStudentId, testId)
   }
 
   function reset(): void {
     abortRequests()
     listGeneration += 1
     comparisonGeneration += 1
+    gazeGeneration += 1
     clearState(null)
   }
 
@@ -264,14 +298,17 @@ export const useTestStore = defineStore('test', () => {
     currentTestId,
     comparisonTestIds,
     comparisonResult,
+    gazeAnalysis,
     currentTest,
     comparisonTests,
     availableComparisonTests,
     canAddComparison,
     listStatus,
     comparisonStatus,
+    gazeStatus,
     listError,
     comparisonError,
+    gazeError,
     setRepository,
     loadForStudent,
     retryList,
@@ -280,6 +317,8 @@ export const useTestStore = defineStore('test', () => {
     removeComparisonTest,
     retryComparison,
     loadComparison,
+    loadGazeAnalysis,
+    retryGazeAnalysis,
     reset,
   }
 })

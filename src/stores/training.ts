@@ -1,6 +1,7 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 import { isApiError } from '@/lib/api'
+import type { GazeAnalysisRequestStatus, GazeAnalysisState } from '@/features/teacher/gaze'
 import {
   trainingRepository,
   type CurriculumLog,
@@ -20,10 +21,7 @@ import {
 
 function isAbortError(error: unknown): boolean {
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    error.name === 'AbortError'
+    typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError'
   )
 }
 
@@ -82,15 +80,18 @@ export const useTrainingStore = defineStore('training', () => {
   const statistics = ref<TrainingStatistics | null>(null)
   const selectedHistoryTrainingId = ref<number | null>(null)
   const historyTrainingDetail = ref<TrainingDetail | null>(null)
+  const historyGazeAnalysis = ref<GazeAnalysisState | null>(null)
   const curriculumLogsStatus = ref<TrainingRequestStatus>('idle')
   const trainingLogStatus = ref<TrainingRequestStatus>('idle')
   const statisticsStatus = ref<TrainingRequestStatus>('idle')
   const historyDetailStatus = ref<TrainingRequestStatus>('idle')
+  const historyGazeStatus = ref<GazeAnalysisRequestStatus>('idle')
   const exportingFormat = ref<TrainingExportFormat | null>(null)
   const curriculumLogsError = ref<string | null>(null)
   const trainingLogError = ref<string | null>(null)
   const statisticsError = ref<string | null>(null)
   const historyDetailError = ref<string | null>(null)
+  const historyGazeError = ref<string | null>(null)
   const exportError = ref<string | null>(null)
 
   let draftKeySequence = 0
@@ -101,13 +102,13 @@ export const useTrainingStore = defineStore('training', () => {
   let historyGeneration = 0
   let historyCurriculumGeneration = 0
   let historyDetailGeneration = 0
+  let historyGazeGeneration = 0
   let historyController: AbortController | null = null
   let historyCurriculumController: AbortController | null = null
   let historyDetailController: AbortController | null = null
+  let historyGazeController: AbortController | null = null
 
-  const draftTrainingIds = computed(() =>
-    draftItems.value.map((item) => item.trainingTemplateId),
-  )
+  const draftTrainingIds = computed(() => draftItems.value.map((item) => item.trainingTemplateId))
   const savedTrainingIds = computed(
     () => savedCurriculum.value?.trainings.map((item) => item.trainingTemplateId) ?? [],
   )
@@ -118,8 +119,7 @@ export const useTrainingStore = defineStore('training', () => {
   )
   const selectedTemplate = computed(
     () =>
-      catalog.value.find((item) => item.trainingTemplateId === selectedTemplateId.value) ??
-      null,
+      catalog.value.find((item) => item.trainingTemplateId === selectedTemplateId.value) ?? null,
   )
   const selectedDraftItem = computed(
     () => draftItems.value.find((item) => item.key === selectedDraftItemKey.value) ?? null,
@@ -229,10 +229,7 @@ export const useTrainingStore = defineStore('training', () => {
       .catch((error: unknown) => {
         if (isAbortError(error) || generation !== loadGeneration) return
         curriculumStatus.value = 'error'
-        curriculumError.value = errorMessage(
-          error,
-          '다음 회차 커리큘럼을 불러오지 못했습니다.',
-        )
+        curriculumError.value = errorMessage(error, '다음 회차 커리큘럼을 불러오지 못했습니다.')
       })
 
     await Promise.all([catalogRequest, curriculumRequest])
@@ -248,11 +245,7 @@ export const useTrainingStore = defineStore('training', () => {
   }
 
   function addSelectedTemplate(): void {
-    if (
-      selectedTemplateId.value === null ||
-      !canEditCurriculum.value ||
-      isSavingCurriculum.value
-    ) {
+    if (selectedTemplateId.value === null || !canEditCurriculum.value || isSavingCurriculum.value) {
       return
     }
     const item: CurriculumDraftItem = {
@@ -275,8 +268,7 @@ export const useTrainingStore = defineStore('training', () => {
       const { [removed.trainingId]: _removedWords, ...remainingWords } =
         expectedWordsByTrainingId.value
       expectedWordsByTrainingId.value = remainingWords
-      const { [removed.trainingId]: _removedDetail, ...remainingDetails } =
-        trainingDetailById.value
+      const { [removed.trainingId]: _removedDetail, ...remainingDetails } = trainingDetailById.value
       trainingDetailById.value = remainingDetails
     }
     const next = draftItems.value[Math.min(index, draftItems.value.length - 1)] ?? null
@@ -458,9 +450,11 @@ export const useTrainingStore = defineStore('training', () => {
     historyController?.abort()
     historyCurriculumController?.abort()
     historyDetailController?.abort()
+    historyGazeController?.abort()
     historyController = null
     historyCurriculumController = null
     historyDetailController = null
+    historyGazeController = null
   }
 
   function clearHistoryState(studentId: number, resetPeriod: boolean): void {
@@ -472,15 +466,18 @@ export const useTrainingStore = defineStore('training', () => {
     statistics.value = null
     selectedHistoryTrainingId.value = null
     historyTrainingDetail.value = null
+    historyGazeAnalysis.value = null
     curriculumLogsStatus.value = 'loading'
     trainingLogStatus.value = 'idle'
     statisticsStatus.value = 'idle'
     historyDetailStatus.value = 'idle'
+    historyGazeStatus.value = 'idle'
     exportingFormat.value = null
     curriculumLogsError.value = null
     trainingLogError.value = null
     statisticsError.value = null
     historyDetailError.value = null
+    historyGazeError.value = null
     exportError.value = null
   }
 
@@ -489,14 +486,12 @@ export const useTrainingStore = defineStore('training', () => {
     historyGeneration += 1
     historyCurriculumGeneration += 1
     historyDetailGeneration += 1
+    historyGazeGeneration += 1
     clearHistoryState(studentId, true)
     await loadCurriculumLogs(studentId)
   }
 
-  async function setHistoryPeriod(
-    studentId: number,
-    nextPeriod: TrainingPeriod,
-  ): Promise<void> {
+  async function setHistoryPeriod(studentId: number, nextPeriod: TrainingPeriod): Promise<void> {
     if (studentId !== historyStudentId.value) return
     if (nextPeriod !== '30d' && nextPeriod !== '3m') return
     if (period.value === nextPeriod && curriculumLogsStatus.value !== 'error') return
@@ -505,6 +500,7 @@ export const useTrainingStore = defineStore('training', () => {
     historyGeneration += 1
     historyCurriculumGeneration += 1
     historyDetailGeneration += 1
+    historyGazeGeneration += 1
     clearHistoryState(studentId, false)
     await loadCurriculumLogs(studentId)
   }
@@ -516,6 +512,7 @@ export const useTrainingStore = defineStore('training', () => {
     historyGeneration += 1
     historyCurriculumGeneration += 1
     historyDetailGeneration += 1
+    historyGazeGeneration += 1
     clearHistoryState(studentId, false)
     await loadCurriculumLogs(studentId)
   }
@@ -528,11 +525,9 @@ export const useTrainingStore = defineStore('training', () => {
     curriculumLogsStatus.value = 'loading'
     curriculumLogsError.value = null
     try {
-      const logs = await repository.value.getCurriculumLogs(
-        studentId,
-        requestedPeriod,
-        { signal: controller.signal },
-      )
+      const logs = await repository.value.getCurriculumLogs(studentId, requestedPeriod, {
+        signal: controller.signal,
+      })
       if (
         generation !== historyGeneration ||
         historyStudentId.value !== studentId ||
@@ -542,8 +537,7 @@ export const useTrainingStore = defineStore('training', () => {
       }
       curriculumLogs.value = [...logs].sort(
         (left, right) =>
-          right.date.localeCompare(left.date) ||
-          right.curriculumId - left.curriculumId,
+          right.date.localeCompare(left.date) || right.curriculumId - left.curriculumId,
       )
       selectedCurriculumId.value = curriculumLogs.value[0]?.curriculumId ?? null
       curriculumLogsStatus.value = 'success'
@@ -562,10 +556,7 @@ export const useTrainingStore = defineStore('training', () => {
     }
   }
 
-  async function selectHistoryCurriculum(
-    studentId: number,
-    curriculumId: number,
-  ): Promise<void> {
+  async function selectHistoryCurriculum(studentId: number, curriculumId: number): Promise<void> {
     if (studentId !== historyStudentId.value) return
     if (!curriculumLogs.value.some((item) => item.curriculumId === curriculumId)) return
     if (
@@ -578,27 +569,29 @@ export const useTrainingStore = defineStore('training', () => {
     await loadHistoryCurriculum(studentId, curriculumId)
   }
 
-  async function loadHistoryCurriculum(
-    studentId: number,
-    curriculumId: number,
-  ): Promise<void> {
+  async function loadHistoryCurriculum(studentId: number, curriculumId: number): Promise<void> {
     historyCurriculumController?.abort()
     historyDetailController?.abort()
+    historyGazeController?.abort()
     const controller = new AbortController()
     historyCurriculumController = controller
     const generation = ++historyCurriculumGeneration
     historyDetailGeneration += 1
+    historyGazeGeneration += 1
     selectedCurriculumId.value = curriculumId
     trainingLog.value = null
     statistics.value = null
     selectedHistoryTrainingId.value = null
     historyTrainingDetail.value = null
+    historyGazeAnalysis.value = null
     trainingLogStatus.value = 'loading'
     statisticsStatus.value = 'loading'
     historyDetailStatus.value = 'idle'
+    historyGazeStatus.value = 'idle'
     trainingLogError.value = null
     statisticsError.value = null
     historyDetailError.value = null
+    historyGazeError.value = null
     exportError.value = null
 
     const logRequest = repository.value
@@ -645,34 +638,31 @@ export const useTrainingStore = defineStore('training', () => {
       .catch((error: unknown) => {
         if (isAbortError(error) || generation !== historyCurriculumGeneration) return
         statisticsStatus.value = 'error'
-        statisticsError.value = historyErrorMessage(
-          error,
-          '훈련 통계를 불러오지 못했습니다.',
-        )
+        statisticsError.value = historyErrorMessage(error, '훈련 통계를 불러오지 못했습니다.')
       })
 
     await Promise.all([logRequest, statisticsRequest])
     if (generation !== historyCurriculumGeneration) return
     historyCurriculumController = null
     if (selectedHistoryTrainingId.value !== null) {
-      await loadHistoryTrainingDetail(studentId, selectedHistoryTrainingId.value)
+      await Promise.all([
+        loadHistoryTrainingDetail(studentId, selectedHistoryTrainingId.value),
+        loadHistoryTrainingGaze(studentId, selectedHistoryTrainingId.value),
+      ])
     }
   }
 
-  async function selectHistoryTraining(
-    studentId: number,
-    trainingId: number,
-  ): Promise<void> {
+  async function selectHistoryTraining(studentId: number, trainingId: number): Promise<void> {
     if (studentId !== historyStudentId.value) return
     if (!trainingLog.value?.trainings.some((item) => item.trainingId === trainingId)) return
     selectedHistoryTrainingId.value = trainingId
-    await loadHistoryTrainingDetail(studentId, trainingId)
+    await Promise.all([
+      loadHistoryTrainingDetail(studentId, trainingId),
+      loadHistoryTrainingGaze(studentId, trainingId),
+    ])
   }
 
-  async function loadHistoryTrainingDetail(
-    studentId: number,
-    trainingId: number,
-  ): Promise<void> {
+  async function loadHistoryTrainingDetail(studentId: number, trainingId: number): Promise<void> {
     historyDetailController?.abort()
     const controller = new AbortController()
     historyDetailController = controller
@@ -682,11 +672,9 @@ export const useTrainingStore = defineStore('training', () => {
     historyDetailError.value = null
     exportError.value = null
     try {
-      const detail = await repository.value.getTrainingDetail(
-        studentId,
-        trainingId,
-        { signal: controller.signal },
-      )
+      const detail = await repository.value.getTrainingDetail(studentId, trainingId, {
+        signal: controller.signal,
+      })
       if (
         generation !== historyDetailGeneration ||
         selectedHistoryTrainingId.value !== trainingId
@@ -707,6 +695,46 @@ export const useTrainingStore = defineStore('training', () => {
     }
   }
 
+  async function loadHistoryTrainingGaze(studentId: number, trainingId: number): Promise<void> {
+    if (studentId !== historyStudentId.value || selectedHistoryTrainingId.value !== trainingId) {
+      return
+    }
+    historyGazeController?.abort()
+    const controller = new AbortController()
+    historyGazeController = controller
+    const generation = ++historyGazeGeneration
+    historyGazeAnalysis.value = null
+    historyGazeStatus.value = 'loading'
+    historyGazeError.value = null
+    try {
+      const state = await repository.value.getGazeAnalysis(studentId, trainingId, {
+        signal: controller.signal,
+      })
+      if (
+        generation !== historyGazeGeneration ||
+        historyStudentId.value !== studentId ||
+        selectedHistoryTrainingId.value !== trainingId
+      ) {
+        return
+      }
+      historyGazeAnalysis.value = state
+      historyGazeStatus.value = 'success'
+    } catch (error) {
+      if (isAbortError(error) || generation !== historyGazeGeneration) return
+      historyGazeStatus.value = 'error'
+      historyGazeError.value = historyErrorMessage(error, '시선 분석 결과를 불러오지 못했습니다.')
+    } finally {
+      if (generation === historyGazeGeneration) historyGazeController = null
+    }
+  }
+
+  async function retryHistoryGaze(): Promise<void> {
+    const studentId = historyStudentId.value
+    const trainingId = selectedHistoryTrainingId.value
+    if (studentId === null || trainingId === null) return
+    await loadHistoryTrainingGaze(studentId, trainingId)
+  }
+
   async function exportSelectedTraining(
     studentId: number,
     format: TrainingExportFormat,
@@ -724,10 +752,7 @@ export const useTrainingStore = defineStore('training', () => {
     try {
       return await repository.value.exportTraining(studentId, trainingId, format)
     } catch (error) {
-      exportError.value = historyErrorMessage(
-        error,
-        `${format} 파일을 내려받지 못했습니다.`,
-      )
+      exportError.value = historyErrorMessage(error, `${format} 파일을 내려받지 못했습니다.`)
       return null
     } finally {
       exportingFormat.value = null
@@ -743,6 +768,7 @@ export const useTrainingStore = defineStore('training', () => {
     historyGeneration += 1
     historyCurriculumGeneration += 1
     historyDetailGeneration += 1
+    historyGazeGeneration += 1
     currentStudentId.value = null
     catalog.value = []
     savedCurriculum.value = null
@@ -770,15 +796,18 @@ export const useTrainingStore = defineStore('training', () => {
     statistics.value = null
     selectedHistoryTrainingId.value = null
     historyTrainingDetail.value = null
+    historyGazeAnalysis.value = null
     curriculumLogsStatus.value = 'idle'
     trainingLogStatus.value = 'idle'
     statisticsStatus.value = 'idle'
     historyDetailStatus.value = 'idle'
+    historyGazeStatus.value = 'idle'
     exportingFormat.value = null
     curriculumLogsError.value = null
     trainingLogError.value = null
     statisticsError.value = null
     historyDetailError.value = null
+    historyGazeError.value = null
     exportError.value = null
   }
 
@@ -820,15 +849,18 @@ export const useTrainingStore = defineStore('training', () => {
     selectedHistoryTrainingId,
     selectedHistoryTraining,
     historyTrainingDetail,
+    historyGazeAnalysis,
     curriculumLogsStatus,
     trainingLogStatus,
     statisticsStatus,
     historyDetailStatus,
+    historyGazeStatus,
     exportingFormat,
     curriculumLogsError,
     trainingLogError,
     statisticsError,
     historyDetailError,
+    historyGazeError,
     exportError,
     setRepository,
     loadForStudent,
@@ -848,6 +880,8 @@ export const useTrainingStore = defineStore('training', () => {
     selectHistoryCurriculum,
     selectHistoryTraining,
     loadHistoryTrainingDetail,
+    loadHistoryTrainingGaze,
+    retryHistoryGaze,
     exportSelectedTraining,
     reset,
   }

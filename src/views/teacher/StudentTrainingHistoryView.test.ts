@@ -75,7 +75,7 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('학습자 목록으로 이동')
   })
 
-  it('최신 커리큘럼의 첫 실제 훈련 상세와 음성 통계만 표시한다', async () => {
+  it('최신 커리큘럼의 첫 실제 훈련 상세·음성 통계·시선 집계를 표시한다', async () => {
     const { wrapper } = await mountHistory(new MockTrainingRepository())
 
     expect(wrapper.text()).toContain('2026.07.20')
@@ -84,8 +84,29 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('받침 소리를 안정적으로 구분했습니다.')
     expect(wrapper.text()).toContain('음성 기준 읽기 속도')
     expect(wrapper.text()).not.toContain('아이 트래킹 기준')
-    expect(wrapper.text()).not.toContain('시선 분석')
+    expect(wrapper.text()).toContain('훈련 시선 분석')
+    expect(wrapper.text()).toContain('42.4초')
+    expect(wrapper.text()).toContain('68회')
+    expect(wrapper.text()).toContain('7회')
+    expect(wrapper.text()).toContain('의학적·임상적 진단 결과가 아닙니다.')
+    expect(wrapper.text()).not.toContain('읽기 이탈')
+    expect(wrapper.text()).not.toContain('권장합니다')
     expect(wrapper.text()).not.toContain('generatedData')
+  })
+
+  it('훈련 선택에 따라 NO_DATA와 FAILED를 요청 오류 없이 구분한다', async () => {
+    const { wrapper, store } = await mountHistory(new MockTrainingRepository())
+    const rows = wrapper.findAll('.training-row')
+
+    await rows.find((row) => row.text().includes('짧은 문장 읽기'))?.trigger('click')
+    await flushPromises()
+    expect(store.historyGazeStatus).toBe('success')
+    expect(wrapper.text()).toContain('시선 분석 데이터가 없습니다.')
+
+    await rows.find((row) => row.text().includes('핵심 내용 찾기'))?.trigger('click')
+    await flushPromises()
+    expect(store.historyGazeStatus).toBe('success')
+    expect(wrapper.text()).toContain('시선 분석을 완료하지 못했습니다.')
   })
 
   it('기간 변경을 서버 query용 값으로 Repository에 전달한다', async () => {

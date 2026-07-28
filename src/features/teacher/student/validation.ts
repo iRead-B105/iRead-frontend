@@ -4,6 +4,10 @@ import type {
   StudentGender,
   StudentUpdateInput,
 } from './model'
+import {
+  PROFILE_IMAGE_MAX_BYTES,
+  validateProfileImage,
+} from '@/features/teacher/profileImageValidation'
 
 export const STUDENT_FIELD_MAX_LENGTH = {
   name: 10,
@@ -14,7 +18,7 @@ export const STUDENT_FIELD_MAX_LENGTH = {
   address: 100,
 } as const
 
-export const STUDENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+export const STUDENT_IMAGE_MAX_BYTES = PROFILE_IMAGE_MAX_BYTES
 export const STUDENT_MEMO_MAX_LENGTH = 1000
 
 export interface StudentFormDraft {
@@ -32,12 +36,6 @@ export type StudentFormField = keyof StudentFormDraft | 'image'
 export type StudentFormErrors = Partial<Record<StudentFormField, string>>
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const allowedImageTypesByExtension: Readonly<Record<string, string>> = {
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-}
-
 function isValidDate(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
   if (!match) return false
@@ -111,14 +109,7 @@ export function validateStudentForm(
 }
 
 export function validateStudentImage(file: File): string | null {
-  const extension = file.name.split('.').pop()?.toLocaleLowerCase()
-  if (!extension || allowedImageTypesByExtension[extension] !== file.type) {
-    return 'JPG 또는 PNG 파일만 선택할 수 있습니다.'
-  }
-  if (file.size > STUDENT_IMAGE_MAX_BYTES) {
-    return '이미지는 5MB 이하만 선택할 수 있습니다.'
-  }
-  return null
+  return validateProfileImage(file)
 }
 
 export function normalizeTeacherMemo(value: string): string | null {

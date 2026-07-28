@@ -2,10 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { createTestApi } from '../api'
 import { MockTestRepository } from './mockTestRepository'
-import {
-  assertTestComparisonSelection,
-  type TestRepository,
-} from './testRepository'
+import { assertTestComparisonSelection, type TestRepository } from './testRepository'
 
 describe('Test API', () => {
   it('비교 검사가 0건이면 comparisonTestIds query를 생략한다', async () => {
@@ -24,10 +21,7 @@ describe('Test API', () => {
 
     const result = await api.compareTests(1, 11, [])
 
-    expect(request).toHaveBeenCalledWith(
-      '/api/admin/test/1/compare?currentTestId=11',
-      {},
-    )
+    expect(request).toHaveBeenCalledWith('/api/admin/test/1/compare?currentTestId=11', {})
     expect(result.currentTest).toMatchObject({
       overallScore: null,
       readingTimeSeconds: 0,
@@ -78,9 +72,21 @@ describe('Test API', () => {
     })
     const api = createTestApi(request)
 
-    await expect(api.compareTests(1, 11, [])).rejects.toThrow(
-      '영역별 점수는 0~100이어야 합니다.',
-    )
+    await expect(api.compareTests(1, 11, [])).rejects.toThrow('영역별 점수는 0~100이어야 합니다.')
+  })
+
+  it('실제 studentId와 testId로 시선 분석 상태를 조회한다', async () => {
+    const request = vi.fn().mockResolvedValue({
+      status: 'NO_DATA',
+      analysis: null,
+    })
+    const api = createTestApi(request)
+
+    await expect(api.getGazeAnalysis(3, 1011)).resolves.toEqual({
+      status: 'NO_DATA',
+      analysis: null,
+    })
+    expect(request).toHaveBeenCalledWith('/api/admin/test/3/1011/gaze-analysis', {})
   })
 })
 
@@ -101,10 +107,7 @@ describe('Test Repository', () => {
 
     const comparison = await repository.compareTests(1, 1_011, [1_004, 1_005])
 
-    expect(comparison.comparisonTests.map((test) => test.testId)).toEqual([
-      1_004,
-      1_005,
-    ])
+    expect(comparison.comparisonTests.map((test) => test.testId)).toEqual([1_004, 1_005])
     expect(comparison.comparisonTests[0]).toMatchObject({
       overallScore: 0,
       changeFromPrevious: 0,
@@ -138,6 +141,25 @@ describe('Test Repository', () => {
     await expect(repository.compareTests(2, 1_011, [])).rejects.toMatchObject({
       status: 404,
       code: 'TEST_NOT_FOUND',
+    })
+  })
+
+  it('검사별 AVAILABLE·NO_DATA·FAILED 시선 상태를 그대로 반환한다', async () => {
+    const repository = new MockTestRepository()
+
+    await expect(repository.getGazeAnalysis(1, 1_011)).resolves.toMatchObject({
+      status: 'AVAILABLE',
+    })
+    await expect(repository.getGazeAnalysis(1, 1_008)).resolves.toEqual({
+      status: 'NO_DATA',
+      analysis: null,
+    })
+    await expect(repository.getGazeAnalysis(1, 1_005)).resolves.toEqual({
+      status: 'FAILED',
+      analysis: null,
+    })
+    await expect(repository.getGazeAnalysis(2, 1_011)).rejects.toMatchObject({
+      status: 404,
     })
   })
 })

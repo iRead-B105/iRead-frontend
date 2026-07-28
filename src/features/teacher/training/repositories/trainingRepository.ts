@@ -11,6 +11,7 @@ import type {
   TrainingPeriod,
   TrainingStatistics,
 } from '../model'
+import type { GazeAnalysisState } from '@/features/teacher/gaze'
 
 export interface TrainingRequestOptions {
   readonly signal?: AbortSignal
@@ -75,6 +76,11 @@ export interface TrainingRepository {
     period: TrainingPeriod,
     options?: TrainingRequestOptions,
   ) => Promise<TrainingStatistics>
+  readonly getGazeAnalysis: (
+    studentId: number,
+    trainingId: number,
+    options?: TrainingRequestOptions,
+  ) => Promise<GazeAnalysisState>
   readonly exportTraining: (
     studentId: number,
     trainingId: number,

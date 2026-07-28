@@ -7,4 +7,12 @@ export class ApiTeacherRepository implements TeacherRepository {
   getInfo() {
     return this.api.getInfo()
   }
+
+  updateProfile(input: Parameters<TeacherRepository['updateProfile']>[0]) {
+    return this.api.updateProfile(input)
+  }
+
+  updateProfileImage(image: File) {
+    return this.api.updateProfileImage(image)
+  }
 }

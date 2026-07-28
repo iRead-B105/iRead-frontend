@@ -19,6 +19,8 @@ function createAuthRepository(): AuthRepository {
 function createTeacherRepository(): TeacherRepository {
   return {
     getInfo: vi.fn(),
+    updateProfile: vi.fn(),
+    updateProfileImage: vi.fn(),
   }
 }
 
@@ -86,6 +88,8 @@ describe('auth repositories', () => {
     })
     const repository = new ApiTeacherRepository({
       getInfo: vi.fn().mockRejectedValue(apiError),
+      updateProfile: vi.fn(),
+      updateProfileImage: vi.fn(),
     })
 
     await expect(repository.getInfo()).rejects.toBe(apiError)

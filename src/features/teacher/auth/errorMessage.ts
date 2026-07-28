@@ -62,3 +62,28 @@ export function getResetPasswordErrorMessage(error: unknown): string {
 
   return error instanceof Error ? error.message : '비밀번호 재설정에 실패했습니다.'
 }
+
+export type TeacherProfileErrorAction = 'load' | 'save' | 'image'
+
+export function getTeacherProfileErrorMessage(
+  error: unknown,
+  action: TeacherProfileErrorAction,
+): string {
+  const fallback = {
+    load: '프로필 정보를 불러오지 못했습니다.',
+    save: '프로필 정보를 저장하지 못했습니다.',
+    image: '프로필 사진을 저장하지 못했습니다.',
+  }[action]
+
+  if (error instanceof ApiError) {
+    if (error.status === 0) {
+      return '서버에 연결할 수 없습니다. 네트워크 상태를 확인해 주세요.'
+    }
+    if (error.status >= 500) {
+      return '서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.'
+    }
+    return fallback
+  }
+
+  return error instanceof Error ? error.message : fallback
+}

@@ -19,6 +19,7 @@ function api(overrides: Partial<TrainingApi> = {}): TrainingApi {
     getCurriculumLogs: vi.fn().mockResolvedValue([]),
     getTrainingLog: vi.fn(),
     getStatistics: vi.fn(),
+    getGazeAnalysis: vi.fn().mockResolvedValue({ status: 'NO_DATA', analysis: null }),
     exportTraining: vi.fn(),
     ...overrides,
   }
@@ -117,10 +118,7 @@ describe('Training API target contract', () => {
       expect.objectContaining({ curriculumId: 12, achievement: null }),
       expect.objectContaining({ curriculumId: 10, achievement: 0 }),
     ])
-    expect(request).toHaveBeenCalledWith(
-      '/api/admin/training/7/curriculum-log?period=3m',
-      {},
-    )
+    expect(request).toHaveBeenCalledWith('/api/admin/training/7/curriculum-log?period=3m', {})
   })
 
   it('training log와 statistics를 목표 endpoint에서 조회한다', async () => {
@@ -143,20 +141,30 @@ describe('Training API target contract', () => {
     await trainingApi.getTrainingLog(7, 10)
     const statistics = await trainingApi.getStatistics(7, 10, '30d')
 
-    expect(request).toHaveBeenNthCalledWith(
-      1,
-      '/api/admin/training/7/10/training-log',
-      {},
-    )
-    expect(request).toHaveBeenNthCalledWith(
-      2,
-      '/api/admin/training/7/10/statistics?period=30d',
-      {},
-    )
-    expect(statistics.readingSpeedTrend.points.map((point) => point.trainingId)).toEqual([
-      1,
-      2,
-    ])
+    expect(request).toHaveBeenNthCalledWith(1, '/api/admin/training/7/10/training-log', {})
+    expect(request).toHaveBeenNthCalledWith(2, '/api/admin/training/7/10/statistics?period=30d', {})
+    expect(statistics.readingSpeedTrend.points.map((point) => point.trainingId)).toEqual([1, 2])
+  })
+
+  it('실제 studentId와 trainingId로 시선 분석 상태를 조회한다', async () => {
+    const request = vi.fn().mockResolvedValue({
+      status: 'AVAILABLE',
+      analysis: {
+        gazeSessionId: 61,
+        gazeAnalysisResultId: 71,
+        totalVisitedDurationMs: 1_500,
+        totalVisitedCount: 4,
+        reverseReadCount: 1,
+        avgVisitedDurationMs: null,
+      },
+    })
+    const trainingApi = createTrainingApi(request)
+
+    await expect(trainingApi.getGazeAnalysis(7, 901)).resolves.toMatchObject({
+      status: 'AVAILABLE',
+      analysis: { avgVisitedDurationMs: null },
+    })
+    expect(request).toHaveBeenCalledWith('/api/admin/training/7/901/gaze-analysis', {})
   })
 
   it('CSV와 JSON을 대문자 format의 공통 binary download로 요청한다', async () => {
@@ -171,16 +179,12 @@ describe('Training API target contract', () => {
     await trainingApi.exportTraining(7, 901, 'CSV')
     await trainingApi.exportTraining(7, 901, 'JSON')
 
-    expect(download).toHaveBeenNthCalledWith(
-      1,
-      '/api/admin/training/7/901/export?format=CSV',
-      { method: 'POST' },
-    )
-    expect(download).toHaveBeenNthCalledWith(
-      2,
-      '/api/admin/training/7/901/export?format=JSON',
-      { method: 'POST' },
-    )
+    expect(download).toHaveBeenNthCalledWith(1, '/api/admin/training/7/901/export?format=CSV', {
+      method: 'POST',
+    })
+    expect(download).toHaveBeenNthCalledWith(2, '/api/admin/training/7/901/export?format=JSON', {
+      method: 'POST',
+    })
   })
 })
 
@@ -192,12 +196,7 @@ describe('MockTrainingRepository', () => {
       trainingId: [13, 12, 12, 14],
     })
 
-    expect(updated.trainings.map((training) => training.trainingId)).toEqual([
-      103,
-      101,
-      102,
-      1_000,
-    ])
+    expect(updated.trainings.map((training) => training.trainingId)).toEqual([103, 101, 102, 1_000])
     await expect(repository.getExpectedWords(1, 101)).resolves.toEqual([
       { wordId: 1001, wordName: '꽃' },
       { wordId: 1002, wordName: '낮' },
@@ -234,9 +233,7 @@ describe('MockTrainingRepository', () => {
     await expect(repository.createCurriculum(2, { trainingId: [] })).rejects.toMatchObject({
       code: 'EMPTY_CURRICULUM',
     })
-    await expect(
-      repository.createCurriculum(1, { trainingId: [11] }),
-    ).rejects.toMatchObject({
+    await expect(repository.createCurriculum(1, { trainingId: [11] })).rejects.toMatchObject({
       status: 409,
       code: 'NEXT_CURRICULUM_ALREADY_EXISTS',
     })
@@ -257,6 +254,25 @@ describe('MockTrainingRepository', () => {
       trainingId: 901,
       status: 'COMPLETED',
       accuracy: 80,
+    })
+  })
+
+  it('훈련별 AVAILABLE·NO_DATA·FAILED 시선 상태를 그대로 반환한다', async () => {
+    const repository = new MockTrainingRepository()
+
+    await expect(repository.getGazeAnalysis(1, 901)).resolves.toMatchObject({
+      status: 'AVAILABLE',
+    })
+    await expect(repository.getGazeAnalysis(1, 902)).resolves.toEqual({
+      status: 'NO_DATA',
+      analysis: null,
+    })
+    await expect(repository.getGazeAnalysis(1, 903)).resolves.toEqual({
+      status: 'FAILED',
+      analysis: null,
+    })
+    await expect(repository.getGazeAnalysis(2, 901)).rejects.toMatchObject({
+      status: 404,
     })
   })
 
