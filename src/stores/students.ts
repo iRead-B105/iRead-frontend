@@ -9,6 +9,7 @@ import {
   type StudentDetail,
   type StudentLearningEvent,
   type StudentLearningEventDetail,
+  type StudentLearningEventType,
   type StudentLearningSummary,
   type StudentListItem,
   type StudentMutationCommand,
@@ -440,9 +441,10 @@ export const useStudentStore = defineStore('students', () => {
 
   async function loadLearningEvent(
     studentId: number,
+    eventType: StudentLearningEventType,
     eventId: number,
   ): Promise<StudentLearningEventDetail | null> {
-    const key = insightKey(studentId, eventId)
+    const key = insightKey(studentId, `${eventType}:${eventId}`)
     const requestSequence = (learningEventDetailSequences.get(key) ?? 0) + 1
     learningEventDetailSequences.set(key, requestSequence)
     learningEventDetailStatusByKey.value = {
@@ -459,7 +461,7 @@ export const useStudentStore = defineStore('students', () => {
     }
 
     try {
-      const event = await repository.value.getLearningEvent(studentId, eventId)
+      const event = await repository.value.getLearningEvent(studentId, eventType, eventId)
       if (learningEventDetailSequences.get(key) !== requestSequence) return null
       learningEventDetailsByKey.value = {
         ...learningEventDetailsByKey.value,

@@ -102,23 +102,30 @@ describe('Training API target contract', () => {
       {
         curriculumId: 10,
         date: '2026-07-01',
-        achievement: 0,
+        achievementRate: 0,
         trainings: [],
       },
       {
         curriculumId: 12,
         date: '2026-07-20',
-        achievement: null,
+        achievementRate: null,
         trainings: [],
       },
     ])
-    const trainingApi = createTrainingApi(request)
+    const trainingApi = createTrainingApi(
+      request,
+      undefined,
+      () => new Date('2026-07-29T12:00:00+09:00'),
+    )
 
     await expect(trainingApi.getCurriculumLogs(7, '3m')).resolves.toEqual([
       expect.objectContaining({ curriculumId: 12, achievement: null }),
       expect.objectContaining({ curriculumId: 10, achievement: 0 }),
     ])
-    expect(request).toHaveBeenCalledWith('/api/admin/training/7/curriculum-log?period=3m', {})
+    expect(request).toHaveBeenCalledWith(
+      '/api/admin/training/7/curriculum-log?from=2026-04-29&to=2026-07-29',
+      {},
+    )
   })
 
   it('training log와 statistics를 목표 endpoint에서 조회한다', async () => {

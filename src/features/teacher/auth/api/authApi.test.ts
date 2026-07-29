@@ -97,23 +97,41 @@ describe('Admin Auth API', () => {
     ])
   })
 
-  it('비밀번호 재설정 목표 필드만 관리자 endpoint로 보낸다', async () => {
+  it('비밀번호 재설정 링크를 이메일로 요청한다', async () => {
     const requestMock = vi.fn().mockResolvedValue(undefined)
     const api = createAdminAuthApi(requestMock as unknown as AuthRequest)
 
-    await api.resetPassword({
+    await api.requestPasswordReset({
       email: 'teacher@example.com',
-      verificationCode: 'verification-code',
-      newPassword: 'new-password',
     })
 
     expect(requestMock).toHaveBeenCalledWith(
-      '/api/auth/admin/password-reset',
+      '/api/auth/admin/password-reset/request',
       {
         method: 'POST',
         body: JSON.stringify({
           email: 'teacher@example.com',
-          verificationCode: 'verification-code',
+        }),
+      },
+      { retryOnUnauthorized: false },
+    )
+  })
+
+  it('일회용 토큰과 새 비밀번호로 재설정을 확정한다', async () => {
+    const requestMock = vi.fn().mockResolvedValue(undefined)
+    const api = createAdminAuthApi(requestMock as unknown as AuthRequest)
+
+    await api.confirmPasswordReset({
+      token: 'reset-token',
+      newPassword: 'new-password',
+    })
+
+    expect(requestMock).toHaveBeenCalledWith(
+      '/api/auth/admin/password-reset/confirm',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          token: 'reset-token',
           newPassword: 'new-password',
         }),
       },

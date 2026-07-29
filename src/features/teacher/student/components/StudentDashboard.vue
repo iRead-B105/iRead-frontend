@@ -304,7 +304,10 @@ onBeforeUnmount(() => {
                 <strong>{{ student.name }}</strong>
               </Button>
             </TableCell>
-            <TableCell>{{ student.school }} · 만 {{ student.age }}세</TableCell>
+            <TableCell>
+              {{ student.school ?? '학교 미입력' }} ·
+              {{ student.age === null ? '나이 미입력' : `만 ${student.age}세` }}
+            </TableCell>
             <TableCell>{{ student.recentTraining ?? '완료 훈련 없음' }}</TableCell>
             <TableCell>{{ formatLearningDate(student.recentLearningDate) }}</TableCell>
             <TableCell>

@@ -15,7 +15,7 @@ const teacher: TeacherProfile = {
   profileImageUrl: null,
 }
 
-async function mountResetPasswordView() {
+async function mountResetPasswordView(token?: string) {
   const pinia = createPinia()
   const router = createRouter({
     history: createMemoryHistory(),
@@ -28,7 +28,10 @@ async function mountResetPasswordView() {
       { path: '/login', name: 'teacher-login', component: { template: '<div />' } },
     ],
   })
-  await router.push('/reset-password')
+  await router.push({
+    name: 'teacher-reset-password',
+    query: token ? { token } : undefined,
+  })
   await router.isReady()
 
   return {
@@ -43,39 +46,44 @@ async function mountResetPasswordView() {
   }
 }
 
-async function moveToPasswordStep(wrapper: ReturnType<typeof mount>) {
-  await wrapper.find<HTMLInputElement>('#reset-email').setValue(' teacher@example.com ')
-  await wrapper.find('form').trigger('submit')
-  await flushPromises()
-}
-
 describe('TeacherResetPasswordView', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('검증 코드 발송 기능 없이 목표 필드만 전송하고 기존 세션을 제거한다', async () => {
-    const resetPassword = vi
-      .spyOn(authRepositories.auth, 'resetPassword')
+  it('가입 여부를 노출하지 않는 재설정 링크 요청 안내를 표시한다', async () => {
+    const requestPasswordReset = vi
+      .spyOn(authRepositories.auth, 'requestPasswordReset')
       .mockResolvedValue(undefined)
-    const { pinia, router, wrapper } = await mountResetPasswordView()
+    const { wrapper } = await mountResetPasswordView()
+
+    await wrapper.find<HTMLInputElement>('#reset-email').setValue(' teacher@example.com ')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(requestPasswordReset).toHaveBeenCalledWith({
+      email: 'teacher@example.com',
+    })
+    expect(wrapper.text()).toContain('가입된 이메일이라면')
+    expect(wrapper.text()).toContain('10분 동안 사용할 수 있는')
+    expect(wrapper.find('#reset-email').exists()).toBe(false)
+  })
+
+  it('URL의 일회용 토큰으로 비밀번호를 변경하고 기존 세션을 제거한다', async () => {
+    const confirmPasswordReset = vi
+      .spyOn(authRepositories.auth, 'confirmPasswordReset')
+      .mockResolvedValue(undefined)
+    const { pinia, router, wrapper } = await mountResetPasswordView('reset-token')
     const session = useSessionStore(pinia)
     session.initialize(teacher, 'access-token')
 
-    expect(wrapper.text()).not.toContain('인증 코드 발송')
-    expect(wrapper.text()).not.toContain('데모 코드')
-    await moveToPasswordStep(wrapper)
-    expect(resetPassword).not.toHaveBeenCalled()
-
-    await wrapper.find<HTMLInputElement>('#verification-code').setValue(' verification-code ')
     await wrapper.find<HTMLInputElement>('#new-password').setValue('new-password')
     await wrapper.find<HTMLInputElement>('#password-confirmation').setValue('new-password')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(resetPassword).toHaveBeenCalledWith({
-      email: 'teacher@example.com',
-      verificationCode: 'verification-code',
+    expect(confirmPasswordReset).toHaveBeenCalledWith({
+      token: 'reset-token',
       newPassword: 'new-password',
     })
     expect(session.status).toBe('anonymous')
@@ -85,40 +93,38 @@ describe('TeacherResetPasswordView', () => {
     expect(router.currentRoute.value.query.passwordReset).toBe('success')
   })
 
-  it('검증 코드 오류를 표시하고 비밀번호 입력 단계에 머문다', async () => {
-    vi.spyOn(authRepositories.auth, 'resetPassword').mockRejectedValue(
+  it('만료된 링크 오류를 표시하고 재설정 화면에 머문다', async () => {
+    vi.spyOn(authRepositories.auth, 'confirmPasswordReset').mockRejectedValue(
       new ApiError({
         status: 400,
-        code: 'INVALID_VERIFICATION_CODE',
+        code: 'PASSWORD_RESET_TOKEN_EXPIRED',
         message: '내부 오류',
       }),
     )
-    const { router, wrapper } = await mountResetPasswordView()
-    await moveToPasswordStep(wrapper)
+    const { router, wrapper } = await mountResetPasswordView('expired-token')
 
-    await wrapper.find<HTMLInputElement>('#verification-code').setValue('wrong-code')
     await wrapper.find<HTMLInputElement>('#new-password').setValue('new-password')
     await wrapper.find<HTMLInputElement>('#password-confirmation').setValue('new-password')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.get('[role="alert"]').text()).toBe('검증 코드가 올바르지 않습니다.')
+    expect(wrapper.get('[role="alert"]').text()).toBe(
+      '비밀번호 재설정 링크가 만료되었습니다. 새 링크를 요청해 주세요.',
+    )
     expect(router.currentRoute.value.name).toBe('teacher-reset-password')
   })
 
-  it('단계별 검증 실패 field와 heading으로 focus를 이동한다', async () => {
-    const { wrapper } = await mountResetPasswordView()
-
-    await wrapper.find('form').trigger('submit')
+  it('요청과 확인 입력 오류가 발생한 첫 필드로 focus를 이동한다', async () => {
+    const requestView = await mountResetPasswordView()
+    await requestView.wrapper.find('form').trigger('submit')
     await flushPromises()
-    expect(document.activeElement).toBe(wrapper.get('#reset-email').element)
+    expect(document.activeElement).toBe(requestView.wrapper.get('#reset-email').element)
 
-    await moveToPasswordStep(wrapper)
-    expect(document.activeElement).toBe(wrapper.get('#reset-password-title').element)
-
-    await wrapper.find('form').trigger('submit')
+    requestView.wrapper.unmount()
+    const confirmView = await mountResetPasswordView('reset-token')
+    await confirmView.wrapper.find('form').trigger('submit')
     await flushPromises()
-    expect(document.activeElement).toBe(wrapper.get('#verification-code').element)
-    expect(wrapper.get('#verification-code').attributes('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(confirmView.wrapper.get('#new-password').element)
+    expect(confirmView.wrapper.get('#new-password').attributes('aria-invalid')).toBe('true')
   })
 })

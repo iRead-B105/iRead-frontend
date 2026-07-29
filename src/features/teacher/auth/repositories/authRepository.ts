@@ -1,7 +1,8 @@
 import type {
   LoginInput,
   LoginResult,
-  ResetPasswordInput,
+  PasswordResetConfirmInput,
+  PasswordResetLinkRequestInput,
   SignUpInput,
   SignUpResult,
   TokenRefreshResult,
@@ -12,5 +13,6 @@ export interface AuthRepository {
   readonly signUp: (input: SignUpInput) => Promise<SignUpResult>
   readonly refresh: () => Promise<TokenRefreshResult>
   readonly logout: () => Promise<void>
-  readonly resetPassword: (input: ResetPasswordInput) => Promise<void>
+  readonly requestPasswordReset: (input: PasswordResetLinkRequestInput) => Promise<void>
+  readonly confirmPasswordReset: (input: PasswordResetConfirmInput) => Promise<void>
 }

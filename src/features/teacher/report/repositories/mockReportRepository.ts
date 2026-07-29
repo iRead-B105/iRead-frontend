@@ -186,7 +186,7 @@ export class MockReportRepository implements ReportRepository {
     if (!report) {
       throw new ApiError({
         status: 404,
-        code: 'REPORT_NOT_FOUND',
+        code: 'RESOURCE_NOT_FOUND',
         message: '보고서를 찾을 수 없습니다.',
       })
     }
@@ -199,7 +199,7 @@ export class MockReportRepository implements ReportRepository {
     if (!report) {
       throw new ApiError({
         status: 404,
-        code: 'REPORT_NOT_FOUND',
+        code: 'RESOURCE_NOT_FOUND',
         message: '보고서를 찾을 수 없습니다.',
       })
     }
@@ -226,7 +226,7 @@ export class MockReportRepository implements ReportRepository {
     if (!report) {
       throw new ApiError({
         status: 404,
-        code: 'REPORT_NOT_FOUND',
+        code: 'RESOURCE_NOT_FOUND',
         message: '보고서를 찾을 수 없습니다.',
       })
     }

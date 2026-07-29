@@ -47,7 +47,7 @@ describe('StudentLearningEvents', () => {
 
     await wrapper.findAll('button')[1]!.trigger('click')
 
-    expect(wrapper.emitted('select')).toEqual([[699]])
+    expect(wrapper.emitted('select')).toEqual([[events[1]]])
     expect(wrapper.text()).toContain('정확도 없음')
     expect(wrapper.text()).not.toContain('확인 완료')
   })
@@ -57,6 +57,7 @@ describe('StudentLearningEvents', () => {
       props: {
         events,
         selectedEventId: 701,
+        selectedEventType: 'TRAINING',
         detail,
         listStatus: 'success',
         detailStatus: 'success',
@@ -92,6 +93,7 @@ describe('StudentLearningEvents', () => {
       props: {
         events,
         selectedEventId: 699,
+        selectedEventType: 'GAZE',
         detail: noRecommendation,
         listStatus: 'success',
         detailStatus: 'success',

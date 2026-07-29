@@ -169,7 +169,7 @@ describe('교수자 mock 데모 시나리오', () => {
       new MockReportRepository({ delayMs: 0 }).get(createdReport.reportId),
     ).rejects.toMatchObject({
       status: 404,
-      code: 'REPORT_NOT_FOUND',
+      code: 'RESOURCE_NOT_FOUND',
     })
     await expect(
       new MockReportRepository({ delayMs: 0 }).get(report.primaryId),

@@ -6,6 +6,7 @@ import {
   studentLearningEventTypeLabels,
   type StudentLearningEvent,
   type StudentLearningEventDetail,
+  type StudentLearningEventType,
   type StudentRequestStatus,
 } from '@/features/teacher/student'
 
@@ -20,6 +21,7 @@ withDefaults(
   defineProps<{
     events: readonly StudentLearningEvent[]
     selectedEventId?: number | null
+    selectedEventType?: StudentLearningEventType | null
     detail?: StudentLearningEventDetail | null
     listStatus?: StudentRequestStatus
     listError?: string | null
@@ -28,6 +30,7 @@ withDefaults(
   }>(),
   {
     selectedEventId: null,
+    selectedEventType: null,
     detail: null,
     listStatus: 'idle',
     listError: null,
@@ -37,9 +40,9 @@ withDefaults(
 )
 
 const emit = defineEmits<{
-  select: [eventId: number]
+  select: [event: StudentLearningEvent]
   retryList: []
-  retryDetail: [eventId: number]
+  retryDetail: [event: StudentLearningEvent]
   addToMemo: [event: StudentLearningEventDetail]
 }>()
 </script>
@@ -74,12 +77,15 @@ const emit = defineEmits<{
     </p>
 
     <ol v-else class="learning-event-list">
-      <li v-for="event in events" :key="event.eventId">
+      <li v-for="event in events" :key="`${event.eventType}:${event.eventId}`">
         <button
           class="learning-event"
-          :class="{ 'is-selected': selectedEventId === event.eventId }"
+          :class="{
+            'is-selected':
+              selectedEventId === event.eventId && selectedEventType === event.eventType,
+          }"
           type="button"
-          @click="emit('select', event.eventId)"
+          @click="emit('select', event)"
         >
           <span class="learning-event__copy">
             <strong>{{ studentLearningEventTypeLabels[event.eventType] }}</strong>
@@ -112,7 +118,19 @@ const emit = defineEmits<{
         variant="outline"
         size="sm"
         type="button"
-        @click="emit('retryDetail', selectedEventId)"
+        @click="
+          events.find(
+            (event) =>
+              event.eventId === selectedEventId && event.eventType === selectedEventType,
+          ) &&
+          emit(
+            'retryDetail',
+            events.find(
+              (event) =>
+                event.eventId === selectedEventId && event.eventType === selectedEventType,
+            )!,
+          )
+        "
       >
         상세 다시 시도
       </Button>

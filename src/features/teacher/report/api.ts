@@ -26,7 +26,14 @@ interface ReportListItemDto {
 type ReportGazePointDto = ReportGazePoint
 type ReportGazeSeriesDto = ReportGazeSeries
 type ReportGazeTrendDto = ReportGazeTrend
-type ReportSnapshotDto = ReportSnapshot
+interface ReportSnapshotDto extends Omit<ReportSnapshot, 'gazeTrend'> {
+  /**
+   * Reports saved before gaze-trend aggregation can contain only the legacy
+   * single gazeAnalysis, so the new field remains nullable on reads.
+   */
+  readonly gazeTrend?: ReportGazeTrendDto | null
+  readonly gazeAnalysis?: unknown | null
+}
 
 interface ReportDetailDto extends ReportListItemDto {
   readonly snapshot: ReportSnapshotDto
@@ -86,9 +93,26 @@ function mapGazeTrend(dto: ReportGazeTrendDto): ReportGazeTrend {
   }
 }
 
-function mapSnapshot(dto: ReportSnapshotDto): ReportSnapshot {
+function emptyGazeSeries(): ReportGazeSeries {
   return {
-    ...dto,
+    status: 'NO_DATA',
+    comparisonAvailable: false,
+    points: [],
+    changes: null,
+    descriptions: [],
+    failedSessionCount: 0,
+  }
+}
+
+function mapSnapshot(dto: ReportSnapshotDto, generatedAt: string): ReportSnapshot {
+  const {
+    gazeAnalysis: _gazeAnalysis,
+    gazeTrend,
+    ...snapshot
+  } = dto
+
+  return {
+    ...snapshot,
     growthHistory: [...dto.growthHistory]
       .sort((left, right) => left.date.localeCompare(right.date))
       .map((point) => ({ ...point })),
@@ -96,7 +120,13 @@ function mapSnapshot(dto: ReportSnapshotDto): ReportSnapshot {
     frequentlyIncorrectWords: dto.frequentlyIncorrectWords.map((word) => ({ ...word })),
     improvedPatterns: [...dto.improvedPatterns],
     persistentDifficultyPatterns: [...dto.persistentDifficultyPatterns],
-    gazeTrend: mapGazeTrend(dto.gazeTrend),
+    gazeTrend: gazeTrend
+      ? mapGazeTrend(gazeTrend)
+      : {
+          generatedAt,
+          training: emptyGazeSeries(),
+          test: emptyGazeSeries(),
+        },
   }
 }
 
@@ -107,7 +137,7 @@ function mapListItem(dto: ReportListItemDto): ReportListItem {
 function mapReportDetail(dto: ReportDetailDto): ReportDetail {
   return {
     ...mapListItem(dto),
-    snapshot: mapSnapshot(dto.snapshot),
+    snapshot: mapSnapshot(dto.snapshot, dto.createdAt),
     teacherMemo: dto.teacherMemo,
   }
 }

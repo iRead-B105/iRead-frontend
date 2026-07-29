@@ -35,21 +35,21 @@ describe('account recovery error messages', () => {
     [409, 'EMAIL_ALREADY_EXISTS', getSignUpErrorMessage, '이미 가입된 이메일입니다.'],
     [
       400,
-      'INVALID_VERIFICATION_CODE',
+      'PASSWORD_RESET_TOKEN_INVALID',
       getResetPasswordErrorMessage,
-      '검증 코드가 올바르지 않습니다.',
+      '비밀번호 재설정 링크가 올바르지 않거나 이미 사용되었습니다.',
     ],
     [
       400,
-      'DEMO_VERIFICATION_NOT_CONFIGURED',
+      'PASSWORD_RESET_TOKEN_EXPIRED',
       getResetPasswordErrorMessage,
-      '비밀번호 재설정 검증 코드가 준비되지 않았습니다.',
+      '비밀번호 재설정 링크가 만료되었습니다. 새 링크를 요청해 주세요.',
     ],
     [
-      404,
-      'TEACHER_NOT_FOUND',
+      429,
+      'PASSWORD_RESET_RATE_LIMITED',
       getResetPasswordErrorMessage,
-      '입력한 이메일과 일치하는 계정을 찾을 수 없습니다.',
+      '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',
     ],
   ])('%i %s 오류를 화면 안내로 변환한다', (status, code, mapper, expected) => {
     expect(

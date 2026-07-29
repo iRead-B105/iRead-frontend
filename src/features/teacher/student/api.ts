@@ -1,11 +1,13 @@
 import { apiRequest, jsonBody } from '@/lib/api'
 import { serializeStudentListQuery } from './query'
+import { resolveTrainingHistoryDateRange } from './trainingHistoryPeriod'
 import type {
   StudentAccuracyTrend,
   StudentCreateInput,
   StudentDetail,
   StudentLearningEvent,
   StudentLearningEventDetail,
+  StudentLearningEventType,
   StudentLearningSummary,
   StudentListQuery,
   StudentListResult,
@@ -46,6 +48,7 @@ export interface StudentApi {
   ) => Promise<readonly StudentLearningEvent[]>
   readonly getLearningEvent: (
     studentId: number,
+    eventType: StudentLearningEventType,
     eventId: number,
     options?: StudentRequestOptions,
   ) => Promise<StudentLearningEventDetail>
@@ -76,7 +79,27 @@ function mutationBody<TInput>(command: StudentMutationCommand<TInput>): BodyInit
   return body
 }
 
-export function createStudentApi(request: StudentApiRequest = apiRequest): StudentApi {
+type LearningEventDto = Omit<StudentLearningEvent, 'eventType'> & {
+  readonly eventType: Lowercase<StudentLearningEventType>
+}
+
+type LearningEventDetailDto = Omit<StudentLearningEventDetail, 'eventType'> & {
+  readonly eventType: Lowercase<StudentLearningEventType>
+}
+
+function mapLearningEvent<T extends LearningEventDto | LearningEventDetailDto>(
+  event: T,
+): Omit<T, 'eventType'> & { eventType: StudentLearningEventType } {
+  return {
+    ...event,
+    eventType: event.eventType.toUpperCase() as StudentLearningEventType,
+  }
+}
+
+export function createStudentApi(
+  request: StudentApiRequest = apiRequest,
+  now: () => Date = () => new Date(),
+): StudentApi {
   return {
     list(query, options) {
       const search = serializeStudentListQuery(query)
@@ -122,17 +145,22 @@ export function createStudentApi(request: StudentApiRequest = apiRequest): Stude
       const search = new URLSearchParams()
       if (query.limit !== undefined) search.set('limit', String(query.limit))
       const suffix = search.size ? `?${search}` : ''
-      const result = await request<{ events: readonly StudentLearningEvent[] }>(
-        `/api/admin/student/${studentId}/learning-events${suffix}`,
+      const result = await request<{ events: readonly LearningEventDto[] }>(
+        `/api/admin/student/${studentId}/learning-events/recent${suffix}`,
         { signal: options?.signal },
       )
-      return result.events
+      return result.events.map(mapLearningEvent)
     },
-    getLearningEvent(studentId, eventId, options) {
-      return request<StudentLearningEventDetail>(
-        `/api/admin/student/${studentId}/learning-events/${eventId}`,
+    async getLearningEvent(studentId, eventType, eventId, options) {
+      const query = new URLSearchParams({
+        eventType: eventType.toLowerCase(),
+        eventId: String(eventId),
+      })
+      const result = await request<LearningEventDetailDto>(
+        `/api/admin/student/${studentId}/learning-events?${query}`,
         { signal: options?.signal },
       )
+      return mapLearningEvent(result)
     },
     getAccuracyTrend(studentId, options) {
       return request<StudentAccuracyTrend>(
@@ -141,8 +169,10 @@ export function createStudentApi(request: StudentApiRequest = apiRequest): Stude
       )
     },
     getTrainingHistory(studentId, period, options) {
+      const { from, to } = resolveTrainingHistoryDateRange(period, now())
+      const search = new URLSearchParams({ from, to })
       return request<StudentTrainingHistory>(
-        `/api/admin/student/${studentId}/training-history?period=${period}`,
+        `/api/admin/student/${studentId}/training-history?${search}`,
         { signal: options?.signal },
       )
     },

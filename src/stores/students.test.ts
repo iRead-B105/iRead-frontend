@@ -331,12 +331,12 @@ describe('Student store', () => {
       store.loadAccuracyTrend(1),
       store.loadTrainingHistory(1, '30d'),
     ])
-    await store.loadLearningEvent(1, 701)
+    await store.loadLearningEvent(1, 'TRAINING', 701)
 
     expect(repository.listLearningEvents).toHaveBeenCalledWith(1, { limit: 3 })
-    expect(repository.getLearningEvent).toHaveBeenCalledWith(1, 701)
+    expect(repository.getLearningEvent).toHaveBeenCalledWith(1, 'TRAINING', 701)
     expect(store.learningEventsById[1]).toEqual([learningEvent])
-    expect(store.learningEventDetailsByKey['1:701']).toEqual(learningEventDetail)
+    expect(store.learningEventDetailsByKey['1:TRAINING:701']).toEqual(learningEventDetail)
     expect(store.accuracyTrendById[1]?.dailyAccuracy).toHaveLength(1)
     expect(store.trainingHistoryByKey['1:30d']?.learningHistory).toHaveLength(1)
   })

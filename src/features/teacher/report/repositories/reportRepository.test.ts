@@ -30,22 +30,9 @@ describe('ReportRepository factory', () => {
 })
 
 describe('ApiReportRepository', () => {
-  it('OpenAPI 반영 전에는 Backend 전용 목록 endpoint를 호출하지 않는다', async () => {
-    const listByStudent = vi.fn()
-    const repository = new ApiReportRepository(api({ listByStudent }))
-
-    await expect(repository.listByStudent(1)).rejects.toMatchObject({
-      code: 'REPORT_LIST_CONTRACT_BLOCKED',
-    })
-    expect(listByStudent).not.toHaveBeenCalled()
-  })
-
-  it('목록 계약 반영 옵션이 켜지면 studentId와 AbortSignal을 전달한다', async () => {
+  it('목록 조회에 studentId와 AbortSignal을 전달한다', async () => {
     const listByStudent = vi.fn().mockResolvedValue([])
-    const repository = new ApiReportRepository(
-      api({ listByStudent }),
-      { listContractAvailable: true },
-    )
+    const repository = new ApiReportRepository(api({ listByStudent }))
     const controller = new AbortController()
 
     await repository.listByStudent(3, { signal: controller.signal })
@@ -150,6 +137,41 @@ describe('Report API target contract', () => {
         (point) => point.gazeAnalysisResultId,
       ),
     ).toEqual([7101, 7102, 7103])
+  })
+
+  it('Backend 저장 스냅샷에 gazeTrend가 없어도 상세 보고서를 연다', async () => {
+    const detail = reportFixtures[0]!
+    const { gazeTrend: _gazeTrend, ...storedSnapshot } = detail.snapshot
+    const request = vi.fn().mockResolvedValue({
+      ...detail,
+      snapshot: {
+        ...storedSnapshot,
+        gazeAnalysis: null,
+      },
+    })
+    const reportApi = createReportApi(request)
+
+    const result = await reportApi.get(detail.reportId)
+
+    expect(result.snapshot.gazeTrend).toEqual({
+      generatedAt: detail.createdAt,
+      training: {
+        status: 'NO_DATA',
+        comparisonAvailable: false,
+        points: [],
+        changes: null,
+        descriptions: [],
+        failedSessionCount: 0,
+      },
+      test: {
+        status: 'NO_DATA',
+        comparisonAvailable: false,
+        points: [],
+        changes: null,
+        descriptions: [],
+        failedSessionCount: 0,
+      },
+    })
   })
 })
 

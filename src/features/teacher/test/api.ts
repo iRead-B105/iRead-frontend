@@ -20,6 +20,10 @@ interface TestListItemDto {
   readonly date: string
 }
 
+interface TestListDataDto {
+  readonly testHistory: readonly TestListItemDto[]
+}
+
 interface TestAreaScoreDto {
   readonly area: string
   readonly score: number
@@ -119,11 +123,11 @@ export interface TestApi {
 export function createTestApi(request: TestApiRequest = apiRequest): TestApi {
   return {
     async getTests(studentId, options) {
-      const dto = await request<readonly TestListItemDto[]>(
+      const dto = await request<TestListDataDto>(
         `/api/admin/test/${studentId}/list`,
         requestInit(options),
       )
-      return [...dto]
+      return [...dto.testHistory]
         .sort((left, right) => right.date.localeCompare(left.date) || right.testId - left.testId)
         .map((item) => ({ ...item }))
     },

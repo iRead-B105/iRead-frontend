@@ -42,14 +42,17 @@ export function getSignUpErrorMessage(error: unknown): string {
 
 export function getResetPasswordErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 400 && error.code === 'INVALID_VERIFICATION_CODE') {
-      return '검증 코드가 올바르지 않습니다.'
+    if (error.status === 400 && error.code === 'PASSWORD_RESET_TOKEN_INVALID') {
+      return '비밀번호 재설정 링크가 올바르지 않거나 이미 사용되었습니다.'
     }
-    if (error.status === 400 && error.code === 'DEMO_VERIFICATION_NOT_CONFIGURED') {
-      return '비밀번호 재설정 검증 코드가 준비되지 않았습니다.'
+    if (error.status === 400 && error.code === 'PASSWORD_RESET_TOKEN_EXPIRED') {
+      return '비밀번호 재설정 링크가 만료되었습니다. 새 링크를 요청해 주세요.'
     }
-    if (error.status === 404 && error.code === 'TEACHER_NOT_FOUND') {
-      return '입력한 이메일과 일치하는 계정을 찾을 수 없습니다.'
+    if (error.status === 429 && error.code === 'PASSWORD_RESET_RATE_LIMITED') {
+      return '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.'
+    }
+    if (error.status === 502 && error.code === 'PASSWORD_RESET_EMAIL_FAILED') {
+      return '재설정 메일을 발송하지 못했습니다. 잠시 후 다시 시도해 주세요.'
     }
     if (error.status === 0) {
       return '서버에 연결할 수 없습니다. 네트워크 상태를 확인해 주세요.'

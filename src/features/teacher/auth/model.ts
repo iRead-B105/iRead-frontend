@@ -34,8 +34,11 @@ export interface SignUpResult {
   readonly signUpStatus: string
 }
 
-export interface ResetPasswordInput {
+export interface PasswordResetLinkRequestInput {
   readonly email: string
-  readonly verificationCode: string
+}
+
+export interface PasswordResetConfirmInput {
+  readonly token: string
   readonly newPassword: string
 }

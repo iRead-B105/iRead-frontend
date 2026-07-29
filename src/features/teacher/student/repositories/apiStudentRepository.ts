@@ -40,8 +40,13 @@ export class ApiStudentRepository implements StudentRepository {
     return this.api.listLearningEvents(studentId, query, options)
   }
 
-  getLearningEvent(studentId: number, eventId: number, options = {}) {
-    return this.api.getLearningEvent(studentId, eventId, options)
+  getLearningEvent(
+    studentId: number,
+    eventType: Parameters<StudentRepository['getLearningEvent']>[1],
+    eventId: number,
+    options = {},
+  ) {
+    return this.api.getLearningEvent(studentId, eventType, eventId, options)
   }
 
   getAccuracyTrend(studentId: number, options = {}) {
