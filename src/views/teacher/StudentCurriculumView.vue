@@ -38,6 +38,8 @@ const {
   expectedWordsStatus,
   detailStatus,
   isSavingCurriculum,
+  curriculumSaveConflict,
+  isRefreshingCurriculumConflict,
   isMutatingExpectedWord,
   catalogError,
   curriculumError,
@@ -71,6 +73,16 @@ const canSave = computed(
     curriculumStatus.value === 'success' &&
     !isSavingCurriculum.value,
 )
+const curriculumSizeGuidance = computed(() => {
+  const difference = CURRICULUM_TRAINING_COUNT - draftTrainingIds.value.length
+  if (difference > 0) {
+    return `저장하려면 훈련을 ${difference}개 더 추가해 총 ${CURRICULUM_TRAINING_COUNT}개로 구성해야 합니다.`
+  }
+  if (difference < 0) {
+    return `저장하려면 훈련을 ${Math.abs(difference)}개 삭제해 총 ${CURRICULUM_TRAINING_COUNT}개로 구성해야 합니다.`
+  }
+  return null
+})
 const selectedAttemptLabel = computed(() => {
   const item = draftItems.value.find((candidate) => candidate.key === selectedDraftItemKey.value)
   return item ? attemptLabel(item) : '선택한 시행'
@@ -231,6 +243,10 @@ async function retryCurriculumSynchronization(): Promise<void> {
   await trainingStore.retryCurriculumSynchronization()
 }
 
+async function refreshCurriculumAfterConflict(): Promise<void> {
+  await trainingStore.refreshCurriculumAfterConflict()
+}
+
 async function addExpectedWord(wordName: string): Promise<void> {
   await trainingStore.addExpectedWord(wordName)
 }
@@ -254,9 +270,7 @@ function deletionMessage(): string {
 
 <template>
   <div class="curriculum page-stack">
-    <PageHeader
-      title="커리큘럼 관리"
-    >
+    <PageHeader title="커리큘럼 관리">
       <template #actions>
         <SaveToast :visible="saved" inline message="커리큘럼 변경 사항이 저장되었습니다." />
         <Button type="button" :disabled="!canSave" @click="saveChanges">
@@ -325,6 +339,25 @@ function deletionMessage(): string {
         </div>
       </div>
 
+      <div
+        v-if="curriculumStatus === 'success' && curriculumSaveConflict"
+        class="load-errors"
+        role="alert"
+      >
+        <div>
+          <strong>커리큘럼 저장 요청이 서버 상태와 충돌했습니다.</strong>
+          <span>{{ curriculumError }}</span>
+        </div>
+        <Button
+          variant="outline"
+          type="button"
+          :disabled="isRefreshingCurriculumConflict"
+          @click="refreshCurriculumAfterConflict"
+        >
+          {{ isRefreshingCurriculumConflict ? '불러오는 중...' : '서버 최신 내용으로 되돌리기' }}
+        </Button>
+      </div>
+
       <div class="curriculum-workspace">
         <Card class="curriculum-library">
           <header class="section-heading">
@@ -345,7 +378,7 @@ function deletionMessage(): string {
               <span>순서</span><span>영역</span><span>훈련명</span><span>진행률</span>
             </div>
             <Button
-              v-for="item in catalog"
+              v-for="(item, catalogIndex) in catalog"
               :key="item.trainingTemplateId"
               class="curriculum-row"
               :class="{ active: item.trainingTemplateId === selectedTemplateId }"
@@ -353,7 +386,7 @@ function deletionMessage(): string {
               :aria-pressed="item.trainingTemplateId === selectedTemplateId"
               @click="trainingStore.selectTemplate(item.trainingTemplateId)"
             >
-              <b>{{ item.sequence }}</b>
+              <b>{{ catalogIndex + 1 }}</b>
               <span>{{ item.unitName }}</span>
               <strong>{{ item.trainingName }}</strong>
               <span class="achievement">
@@ -557,9 +590,17 @@ function deletionMessage(): string {
               </Button>
             </div>
             <p
+              v-if="hasChanges && curriculumSizeGuidance"
+              class="curriculum-count-guide"
+              role="status"
+            >
+              {{ curriculumSizeGuidance }}
+            </p>
+            <p
               v-if="
                 curriculumError &&
                 curriculumStatus !== 'error' &&
+                !curriculumSaveConflict &&
                 curriculumSynchronizationStatus === 'synced'
               "
               class="inline-error"
@@ -571,6 +612,7 @@ function deletionMessage(): string {
               v-if="
                 savedCurriculum &&
                 curriculumSynchronizationStatus === 'synced' &&
+                !curriculumSaveConflict &&
                 !canEditCurriculum
               "
               class="locked-state"
@@ -912,9 +954,14 @@ function deletionMessage(): string {
   font-weight: 700;
 }
 .inline-error,
-.locked-state {
+.locked-state,
+.curriculum-count-guide {
   margin: 12px 0 0;
   font-size: 12px;
+}
+.curriculum-count-guide {
+  color: var(--primary-800);
+  font-weight: 700;
 }
 .locked-state {
   color: var(--slate-500);

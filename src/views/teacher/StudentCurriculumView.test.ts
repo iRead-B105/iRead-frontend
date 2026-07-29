@@ -9,6 +9,8 @@ import {
   type DailyCurriculum,
   type TrainingRepository,
 } from '@/features/teacher/training'
+import { ApiError } from '@/lib/api'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { useTrainingStore } from '@/stores/training'
 import StudentCurriculumView from './StudentCurriculumView.vue'
 
@@ -100,10 +102,10 @@ describe('StudentCurriculumView', () => {
       status: 'NOT_STARTED',
       trainings: Array.from({ length: 5 }, (_, index) => ({
         trainingId: 1001 + index,
-        trainingTemplateId: 11,
+        trainingTemplateId: 1,
         sequence: index + 1,
-        unitName: '음운 인식',
-        trainingName: '첫소리 구별하기',
+        unitName: '글자 따라 보기',
+        trainingName: '모음 따라 보기',
         status: 'NOT_READY' as const,
       })),
     }
@@ -123,7 +125,7 @@ describe('StudentCurriculumView', () => {
     await flushPromises()
 
     expect(createCurriculum).toHaveBeenCalledWith(1, {
-      trainingTemplateIds: [11, 11, 11, 11, 11],
+      trainingTemplateIds: [1, 1, 1, 1, 1],
     })
     expect(wrapper.text()).toContain('5회 시행')
   })
@@ -144,7 +146,7 @@ describe('StudentCurriculumView', () => {
       102,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
-    expect(wrapper.text()).toContain('받침 소리 구분 2/2회차')
+    expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기 2/2회차')
     expect(wrapper.text()).toContain('읽기 전용')
     expect(wrapper.text()).not.toContain('자료 추가')
     expect(wrapper.text()).not.toContain('훈련 기본 정보')
@@ -153,8 +155,9 @@ describe('StudentCurriculumView', () => {
   it('진행률 null을 0%가 아니라 기록 없음으로 표시한다', async () => {
     const { wrapper } = await mountCurriculum(repository())
 
+    expect(wrapper.text()).toContain('34개 훈련')
     expect(wrapper.text()).toContain('기록 없음')
-    expect(wrapper.text()).not.toContain('첫소리 구별하기0%')
+    expect(wrapper.text()).not.toContain('모음 따라 보기0%')
   })
 
   it('재동기화 필요 상태에서는 편집을 잠그고 GET 재시도 action을 제공한다', async () => {
@@ -179,6 +182,39 @@ describe('StudentCurriculumView', () => {
     expect(wrapper.text()).not.toContain('최신 커리큘럼 확인이 필요합니다.')
   })
 
+  it('409 충돌을 저장 성공으로 표시하지 않고 서버 최신 상태 복구 action을 제공한다', async () => {
+    const getCurrentCurriculum = vi.fn().mockResolvedValue(currentCurriculumFixture)
+    const updateCurriculum = vi.fn().mockRejectedValue(
+      new ApiError({
+        status: 409,
+        code: 'CURRICULUM_ALREADY_STARTED',
+        message: 'conflict',
+      }),
+    )
+    const { wrapper, store } = await mountCurriculum(
+      repository({ getCurrentCurriculum, updateCurriculum }),
+    )
+    store.selectTemplate(14)
+    store.addSelectedTemplate()
+    store.selectTemplate(15)
+    store.addSelectedTemplate()
+    await flushPromises()
+
+    await buttonWithText(wrapper, '변경 사항 저장')?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('커리큘럼 저장 요청이 서버 상태와 충돌했습니다.')
+    expect(wrapper.text()).not.toContain('커리큘럼 변경 사항이 저장되었습니다.')
+    expect(buttonWithText(wrapper, '순서 편집')?.attributes('disabled')).toBeDefined()
+
+    await buttonWithText(wrapper, '서버 최신 내용으로 되돌리기')?.trigger('click')
+    await flushPromises()
+
+    expect(getCurrentCurriculum).toHaveBeenCalledTimes(2)
+    expect(store.curriculumSaveConflict).toBe(false)
+    expect(store.hasChanges).toBe(false)
+  })
+
   it('drag 없이 위로·아래로 순서를 바꾸고 이동한 항목 안에 focus를 유지한다', async () => {
     const { wrapper, store } = await mountCurriculum(repository())
     const firstItem = store.draftItems[0]!
@@ -198,5 +234,26 @@ describe('StudentCurriculumView', () => {
     expect(store.draftItems[1]?.key).toBe(firstItem.key)
     expect(wrapper.text()).toContain(`${firstTemplate.trainingName}을(를) 2번째로 이동했습니다.`)
     expect(document.activeElement?.closest('article')?.id).toBe(`curriculum-item-${firstItem.key}`)
+  })
+
+  it('삭제 확인 후 선택한 훈련을 draft에서 제거한다', async () => {
+    const { wrapper, store } = await mountCurriculum(repository())
+    const target = store.draftItems[0]!
+
+    await buttonWithText(wrapper, '순서 편집')?.trigger('click')
+    await flushPromises()
+    await wrapper.find('.remove-button').trigger('click')
+    await flushPromises()
+
+    const confirmDialog = wrapper.findComponent(ConfirmDialog)
+    expect(confirmDialog.props('open')).toBe(true)
+    expect(confirmDialog.props('title')).toBe('다음 회차에서 훈련을 삭제할까요?')
+    confirmDialog.vm.$emit('confirm')
+    await flushPromises()
+
+    expect(store.draftItems).toHaveLength(currentCurriculumFixture.trainings.length - 1)
+    expect(store.draftItems.some((item) => item.key === target.key)).toBe(false)
+    expect(wrapper.text()).toContain('2회 시행')
+    expect(wrapper.text()).toContain('훈련을 3개 더 추가해 총 5개로 구성해야 합니다.')
   })
 })

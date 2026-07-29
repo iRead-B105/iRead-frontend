@@ -83,6 +83,8 @@ export const useTrainingStore = defineStore('training', () => {
   const detailStatus = ref<TrainingRequestStatus>('idle')
   const curriculumSynchronizationStatus = ref<CurriculumSynchronizationStatus>('refreshing')
   const isSavingCurriculum = ref(false)
+  const curriculumSaveConflict = ref(false)
+  const isRefreshingCurriculumConflict = ref(false)
   const isMutatingExpectedWord = ref(false)
   const catalogError = ref<string | null>(null)
   const curriculumError = ref<string | null>(null)
@@ -143,12 +145,15 @@ export const useTrainingStore = defineStore('training', () => {
   const selectedDraftItem = computed(
     () => draftItems.value.find((item) => item.key === selectedDraftItemKey.value) ?? null,
   )
-  const selectedTraining = computed(
-    () =>
+  const selectedTraining = computed(() => {
+    const training =
       savedCurriculum.value?.trainings.find(
-        (training) => training.trainingId === selectedTrainingId.value,
-      ) ?? null,
-  )
+        (candidate) => candidate.trainingId === selectedTrainingId.value,
+      ) ?? null
+    if (!training) return null
+    const detail = trainingDetailById.value[training.trainingId]
+    return detail ? { ...training, status: detail.status } : training
+  })
   const selectedExpectedWords = computed(
     () =>
       (selectedTrainingId.value === null
@@ -164,7 +169,14 @@ export const useTrainingStore = defineStore('training', () => {
   const canEditCurriculum = computed(
     () =>
       curriculumSynchronizationStatus.value === 'synced' &&
+      !curriculumSaveConflict.value &&
       (savedCurriculum.value === null || savedCurriculum.value.status === 'NOT_STARTED'),
+  )
+  const canEditExpectedWords = computed(
+    () =>
+      curriculumSynchronizationStatus.value === 'synced' &&
+      (selectedTraining.value?.status === 'NOT_READY' ||
+        selectedTraining.value?.status === 'NOT_STARTED'),
   )
   const selectedCurriculumLog = computed(
     () =>
@@ -210,6 +222,8 @@ export const useTrainingStore = defineStore('training', () => {
     detailStatus.value = 'idle'
     curriculumSynchronizationStatus.value = 'refreshing'
     isSavingCurriculum.value = false
+    curriculumSaveConflict.value = false
+    isRefreshingCurriculumConflict.value = false
     isMutatingExpectedWord.value = false
     catalogError.value = null
     curriculumError.value = null
@@ -232,7 +246,7 @@ export const useTrainingStore = defineStore('training', () => {
       .getCatalog(studentId, { signal: controller.signal })
       .then((items) => {
         if (generation !== loadGeneration) return
-        catalog.value = [...items].sort((left, right) => left.sequence - right.sequence)
+        catalog.value = [...items]
         selectedTemplateId.value = catalog.value[0]?.trainingTemplateId ?? null
         catalogStatus.value = 'success'
       })
@@ -353,6 +367,7 @@ export const useTrainingStore = defineStore('training', () => {
     const generation = loadGeneration
     const preferredTrainingId = selectedTrainingId.value
     isSavingCurriculum.value = true
+    curriculumSaveConflict.value = false
     curriculumError.value = null
     try {
       const request = { trainingTemplateIds: [...draftTrainingIds.value] }
@@ -369,6 +384,7 @@ export const useTrainingStore = defineStore('training', () => {
       replaceDraftFromSaved(preferredTrainingId)
       curriculumStatus.value = 'success'
       curriculumSynchronizationStatus.value = 'synced'
+      curriculumSaveConflict.value = false
       return true
     } catch (error) {
       if (generation !== loadGeneration || currentStudentId.value !== studentId) return false
@@ -376,12 +392,66 @@ export const useTrainingStore = defineStore('training', () => {
         requireCurriculumSynchronization()
         curriculumError.value =
           '커리큘럼은 저장됐지만 최신 내용을 불러오지 못했습니다. 최신 내용을 다시 불러와 주세요.'
+      } else if (isApiError(error) && error.status === 409) {
+        curriculumSaveConflict.value = true
+        curriculumError.value =
+          '실제 훈련이 시작되지 않았더라도 자료가 준비된 훈련이 포함되어 있으면 현재 백엔드에서는 저장할 수 없습니다. 서버의 최신 내용을 다시 불러와 주세요.'
       } else {
         curriculumError.value = errorMessage(error, '커리큘럼을 저장하지 못했습니다.')
       }
       return false
     } finally {
       if (generation === loadGeneration) isSavingCurriculum.value = false
+    }
+  }
+
+  async function refreshCurriculumAfterConflict(): Promise<boolean> {
+    const studentId = currentStudentId.value
+    if (
+      studentId === null ||
+      !curriculumSaveConflict.value ||
+      isSavingCurriculum.value ||
+      isRefreshingCurriculumConflict.value
+    ) {
+      return false
+    }
+
+    synchronizationController?.abort()
+    const controller = new AbortController()
+    synchronizationController = controller
+    const generation = loadGeneration
+    isRefreshingCurriculumConflict.value = true
+    curriculumError.value = null
+    try {
+      const curriculum = await repository.value.getCurrentCurriculum(studentId, {
+        signal: controller.signal,
+      })
+      if (generation !== loadGeneration || currentStudentId.value !== studentId) return false
+      if (curriculum === null) {
+        throw new Error('저장된 현재 커리큘럼을 찾을 수 없습니다.')
+      }
+      clearSelectedTrainingResources()
+      savedCurriculum.value = curriculum
+      replaceDraftFromSaved()
+      curriculumStatus.value = 'success'
+      curriculumSynchronizationStatus.value = 'synced'
+      curriculumSaveConflict.value = false
+      return true
+    } catch (error) {
+      if (
+        isAbortError(error) ||
+        generation !== loadGeneration ||
+        currentStudentId.value !== studentId
+      ) {
+        return false
+      }
+      curriculumSaveConflict.value = true
+      curriculumError.value =
+        '서버의 최신 커리큘럼을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
+      return false
+    } finally {
+      if (synchronizationController === controller) synchronizationController = null
+      if (generation === loadGeneration) isRefreshingCurriculumConflict.value = false
     }
   }
 
@@ -516,7 +586,7 @@ export const useTrainingStore = defineStore('training', () => {
     if (
       studentId === null ||
       trainingId === null ||
-      curriculumSynchronizationStatus.value !== 'synced' ||
+      !canEditExpectedWords.value ||
       isMutatingExpectedWord.value
     ) {
       return false
@@ -551,7 +621,7 @@ export const useTrainingStore = defineStore('training', () => {
     if (
       studentId === null ||
       trainingId === null ||
-      curriculumSynchronizationStatus.value !== 'synced' ||
+      !canEditExpectedWords.value ||
       isMutatingExpectedWord.value
     ) {
       return false
@@ -924,6 +994,8 @@ export const useTrainingStore = defineStore('training', () => {
     detailStatus.value = 'idle'
     curriculumSynchronizationStatus.value = 'refreshing'
     isSavingCurriculum.value = false
+    curriculumSaveConflict.value = false
+    isRefreshingCurriculumConflict.value = false
     isMutatingExpectedWord.value = false
     catalogError.value = null
     curriculumError.value = null
@@ -974,6 +1046,8 @@ export const useTrainingStore = defineStore('training', () => {
     detailStatus,
     curriculumSynchronizationStatus,
     isSavingCurriculum,
+    curriculumSaveConflict,
+    isRefreshingCurriculumConflict,
     isMutatingExpectedWord,
     catalogError,
     curriculumError,
@@ -981,6 +1055,7 @@ export const useTrainingStore = defineStore('training', () => {
     detailError,
     hasChanges,
     canEditCurriculum,
+    canEditExpectedWords,
     historyStudentId,
     period,
     curriculumLogs,
@@ -1013,6 +1088,7 @@ export const useTrainingStore = defineStore('training', () => {
     moveDraftItem,
     discardDraft,
     saveCurriculum,
+    refreshCurriculumAfterConflict,
     retryCurriculumSynchronization,
     selectDraftItem,
     loadSelectedTrainingResources,

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { createTrainingApi, type TrainingApi } from '../api'
+import { trainingCatalogFixture } from '../fixtures'
 import { ApiTrainingRepository } from './apiTrainingRepository'
 import { MockTrainingRepository } from './mockTrainingRepository'
 import { createTrainingRepository } from '.'
@@ -119,6 +120,59 @@ describe('ApiTrainingRepository', () => {
 })
 
 describe('Training API target contract', () => {
+  it('훈련 목록의 백엔드 배열 순서와 template ID를 그대로 보존한다', async () => {
+    const request = vi.fn().mockResolvedValue({
+      trainingTypes: [
+        {
+          trainingId: 14,
+          category: '글자 만들기',
+          sequence: 1,
+          trainingName: '음소 합쳐 음절 만들기',
+          studentAchievementRate: null,
+        },
+        {
+          trainingId: 4,
+          category: '소리 듣고 고르기',
+          sequence: 1,
+          trainingName: '자음 소리 고르기',
+          studentAchievementRate: 50,
+        },
+      ],
+    })
+    const trainingApi = createTrainingApi(request)
+
+    await expect(trainingApi.getCatalog(7)).resolves.toEqual([
+      expect.objectContaining({
+        trainingTemplateId: 14,
+        unitName: '글자 만들기',
+        sequence: 1,
+      }),
+      expect.objectContaining({
+        trainingTemplateId: 4,
+        unitName: '소리 듣고 고르기',
+        sequence: 1,
+      }),
+    ])
+  })
+
+  it('훈련 상세의 소문자 상태 응답을 프론트 상태로 정규화한다', async () => {
+    const request = vi.fn().mockResolvedValue({
+      trainingId: 101,
+      trainingTemplateId: 12,
+      name: '서로 다른 받침 음절 비교하기',
+      form: null,
+      generatedData: null,
+      status: 'not_started',
+    })
+    const trainingApi = createTrainingApi(request)
+
+    await expect(trainingApi.getTrainingDetail(7, 101)).resolves.toMatchObject({
+      trainingId: 101,
+      trainingTemplateId: 12,
+      status: 'NOT_STARTED',
+    })
+  })
+
   it('저장 요청에 trainingTemplateIds 5개를 사용하고 PATCH 빈 응답을 허용한다', async () => {
     const response = {
       curriculumId: 10,
@@ -320,6 +374,22 @@ describe('Training API target contract', () => {
 })
 
 describe('MockTrainingRepository', () => {
+  it('백엔드 기준 34개 template ID와 배열 순서를 공통으로 사용한다', async () => {
+    const repository = new MockTrainingRepository()
+
+    await expect(repository.getCatalog(1)).resolves.toEqual(trainingCatalogFixture)
+    expect(trainingCatalogFixture).toHaveLength(34)
+    expect(trainingCatalogFixture.map((item) => item.trainingTemplateId)).toEqual(
+      Array.from({ length: 34 }, (_, index) => index + 1),
+    )
+    expect(trainingCatalogFixture[33]).toMatchObject({
+      trainingTemplateId: 34,
+      unitName: '유창하게 읽기',
+      sequence: 5,
+      trainingName: '짧은 이야기 읽기',
+    })
+  })
+
   it('순서 변경과 반복 증감에서 유지된 실제 training ID를 보존한다', async () => {
     const repository = new MockTrainingRepository()
 

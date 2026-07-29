@@ -3,12 +3,7 @@ import { computed, ref, watch } from 'vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
   trainingStatusLabel,
@@ -43,6 +38,10 @@ const submittedWord = ref<string | null>(null)
 const wordPendingDeletion = ref<ExpectedWord | null>(null)
 const preview = computed(() => toTrainingPreview(props.detail))
 const normalizedWord = computed(() => newWord.value.trim())
+const canEditExpectedWords = computed(
+  () => props.training.status === 'NOT_READY' || props.training.status === 'NOT_STARTED',
+)
+const requiresRegeneration = computed(() => props.training.status === 'NOT_STARTED')
 const wordValidationError = computed(() => {
   if (!newWord.value) return null
   if (!normalizedWord.value) return '공백만 입력할 수 없습니다.'
@@ -56,6 +55,7 @@ const canAddWord = computed(
   () =>
     Boolean(normalizedWord.value) &&
     !wordValidationError.value &&
+    canEditExpectedWords.value &&
     !props.isMutating,
 )
 
@@ -76,6 +76,13 @@ watch(
   { deep: true },
 )
 
+watch(
+  () => props.training.status,
+  () => {
+    if (!canEditExpectedWords.value) wordPendingDeletion.value = null
+  },
+)
+
 function addWord(): void {
   if (!canAddWord.value) return
   submittedWord.value = normalizedWord.value
@@ -83,7 +90,7 @@ function addWord(): void {
 }
 
 function confirmDeleteWord(): void {
-  if (!wordPendingDeletion.value || props.isMutating) return
+  if (!wordPendingDeletion.value || !canEditExpectedWords.value || props.isMutating) return
   emit('deleteWord', wordPendingDeletion.value.wordId)
 }
 </script>
@@ -123,7 +130,7 @@ function confirmDeleteWord(): void {
           <section class="word-panel" aria-labelledby="expected-word-title">
             <header>
               <div>
-                <p>편집 가능</p>
+                <p>{{ canEditExpectedWords ? '편집 가능' : '읽기 전용' }}</p>
                 <h3 id="expected-word-title">예상 단어</h3>
               </div>
               <span>{{ expectedWords.length }}개</span>
@@ -138,7 +145,7 @@ function confirmDeleteWord(): void {
                   maxlength="51"
                   autocomplete="off"
                   placeholder="최대 50자"
-                  :disabled="isMutating"
+                  :disabled="!canEditExpectedWords || isMutating"
                   :aria-invalid="Boolean(wordValidationError)"
                   aria-describedby="expected-word-help"
                 />
@@ -172,7 +179,7 @@ function confirmDeleteWord(): void {
                   size="icon-sm"
                   type="button"
                   :aria-label="`${word.wordName} 예상 단어 삭제`"
-                  :disabled="isMutating"
+                  :disabled="!canEditExpectedWords || isMutating"
                   @click="wordPendingDeletion = word"
                 >
                   ×
@@ -181,13 +188,21 @@ function confirmDeleteWord(): void {
             </ul>
             <p v-else class="section-state">등록된 예상 단어가 없습니다.</p>
 
-            <p v-if="expectedWordError && expectedWordsStatus !== 'error'" class="inline-error" role="alert">
+            <p
+              v-if="expectedWordError && expectedWordsStatus !== 'error'"
+              class="inline-error"
+              role="alert"
+            >
               {{ expectedWordError }}
             </p>
-            <p class="word-help">
-              예상 단어를 변경하면 생성된 자료가 무효화될 수 있습니다. 자료 생성은 학습자 훈련
-              흐름에서 진행됩니다.
+            <p v-if="!canEditExpectedWords" class="word-help word-help--locked">
+              진행 중이거나 완료된 훈련의 예상 단어는 변경할 수 없습니다.
             </p>
+            <p v-else-if="requiresRegeneration" class="word-help word-help--warning">
+              예상 단어를 변경하면 기존 훈련 자료가 무효화되며 재생성이 필요합니다. 자료 생성은
+              학습자 훈련 흐름에서 진행됩니다.
+            </p>
+            <p v-else class="word-help">변경한 예상 단어는 다음 훈련 자료 생성 시 반영됩니다.</p>
           </section>
 
           <section class="preview-panel" aria-labelledby="preview-title">
@@ -206,6 +221,7 @@ function confirmDeleteWord(): void {
                 }}
               </Badge>
             </header>
+            <p class="preview-help">훈련 자료와 템플릿 설정은 현재 백엔드에서 조회만 지원합니다.</p>
 
             <p v-if="detailStatus === 'loading'" class="section-state" role="status">
               미리보기를 불러오는 중입니다.
@@ -231,9 +247,7 @@ function confirmDeleteWord(): void {
                     <span v-if="item.answer">기준: {{ item.answer }}</span>
                   </li>
                 </ol>
-                <div v-else class="preview-empty">
-                  생성된 훈련 자료가 없습니다.
-                </div>
+                <div v-else class="preview-empty">생성된 훈련 자료가 없습니다.</div>
               </div>
             </div>
           </section>
@@ -408,6 +422,19 @@ function confirmDeleteWord(): void {
 }
 .word-help {
   margin: 18px 0 0;
+  color: var(--slate-500);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.word-help--warning {
+  color: var(--warning-700, #a16207);
+}
+.word-help--locked {
+  color: var(--slate-600);
+  font-weight: 700;
+}
+.preview-help {
+  margin: 12px 0 0;
   color: var(--slate-500);
   font-size: 11px;
   line-height: 1.6;
