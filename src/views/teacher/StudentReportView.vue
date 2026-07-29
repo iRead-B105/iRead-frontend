@@ -124,7 +124,6 @@ async function retryStudent(): Promise<void> {
   <div class="report page-stack">
     <PageHeader
       title="보고서"
-      description="기간별 학습 결과와 훈련·검사 시선 추이를 저장하고 확인합니다."
     />
 
     <AsyncStatePanel
@@ -194,7 +193,6 @@ async function retryStudent(): Promise<void> {
           <CardHeader class="saved-reports__header">
             <div>
               <CardTitle id="saved-reports-title">저장된 보고서</CardTitle>
-              <p>생성일이 최근인 순서입니다.</p>
             </div>
             <strong>{{ reports.length }}개</strong>
           </CardHeader>

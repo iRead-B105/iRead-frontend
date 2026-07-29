@@ -1,9 +1,7 @@
 <script setup lang="ts">
 // 교수자 화면을 좌측 사이드바와 우측 메인 영역으로 나누는 공통 레이아웃입니다.
 import { RouterView } from 'vue-router'
-import DataSourceNotice from '@/components/common/DataSourceNotice.vue'
 import TeacherSidebar from '@/components/teacher/TeacherSidebar.vue'
-import { dataSource } from '@/config/dataSource'
 </script>
 
 <template>
@@ -12,7 +10,6 @@ import { dataSource } from '@/config/dataSource'
     <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
     <TeacherSidebar />
     <main id="main-content" class="teacher-content" tabindex="-1">
-      <DataSourceNotice :data-source="dataSource" />
       <RouterView />
     </main>
   </div>

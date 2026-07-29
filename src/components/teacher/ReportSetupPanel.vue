@@ -35,12 +35,7 @@ const invalid = computed(
     Boolean(props.memoError),
 )
 
-const reportSections = [
-  { title: '학습 요약', description: '학습일, 시간, 완료 훈련과 평균 지표' },
-  { title: '기간별 분석', description: '성장 기록, 영역 성취도와 어려운 낱말' },
-  { title: '시선 추이', description: '훈련·검사별 네 가지 시선 집계 지표' },
-  { title: '교수자 의견', description: '최대 2,000자의 선택 입력' },
-]
+const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '교수자 의견']
 </script>
 
 <template>
@@ -48,7 +43,6 @@ const reportSections = [
     <CardHeader class="report-setup__header">
       <div>
         <h2 id="report-setup-title">새 보고서</h2>
-        <p>{{ studentName }} 학습자의 완료된 학습 기록을 기간별로 저장합니다.</p>
       </div>
     </CardHeader>
 
@@ -127,12 +121,9 @@ const reportSections = [
       <div class="report-contents">
         <h3>저장되는 내용</h3>
         <ul>
-          <li v-for="section in reportSections" :key="section.title">
+          <li v-for="section in reportSections" :key="section">
             <span aria-hidden="true">✓</span>
-            <div>
-              <strong>{{ section.title }}</strong>
-              <small>{{ section.description }}</small>
-            </div>
+            <strong>{{ section }}</strong>
           </li>
         </ul>
 
@@ -180,11 +171,6 @@ const reportSections = [
 }
 .report-setup__header h2 {
   font-size: 17px;
-}
-.report-setup__header p {
-  margin: 4px 0 0;
-  color: var(--muted-foreground);
-  font-size: 12px;
 }
 .report-setup__body {
   display: grid;
@@ -261,17 +247,8 @@ const reportSections = [
   font-size: 11px;
   font-weight: 800;
 }
-.report-contents li div {
-  display: grid;
-  gap: 2px;
-}
 .report-contents strong {
   font-size: 12px;
-}
-.report-contents small {
-  color: var(--muted-foreground);
-  font-size: 11px;
-  line-height: 1.45;
 }
 .create-error {
   display: flex;

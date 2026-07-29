@@ -256,7 +256,6 @@ function deletionMessage(): string {
   <div class="curriculum page-stack">
     <PageHeader
       title="커리큘럼 관리"
-      description="학습자의 다음 회차 훈련 순서와 반복 시행별 예상 단어를 관리합니다."
     >
       <template #actions>
         <SaveToast :visible="saved" inline message="커리큘럼 변경 사항이 저장되었습니다." />
@@ -331,7 +330,6 @@ function deletionMessage(): string {
           <header class="section-heading">
             <div>
               <h2>전체 훈련 목록</h2>
-              <p>진행률이 없는 훈련은 기록 없음으로 표시합니다.</p>
             </div>
             <span>{{ catalog.length }}개 훈련</span>
           </header>

@@ -161,7 +161,7 @@ onMounted(loadProfile)
 
 <template>
   <div class="settings page-stack" :aria-busy="loading || saving">
-    <PageHeader title="교수자 프로필" description="교수자 정보를 관리합니다." />
+    <PageHeader title="교수자 프로필" />
 
     <AsyncStatePanel
       v-if="loading"
@@ -184,7 +184,7 @@ onMounted(loadProfile)
       class="settings-form"
       @submit.prevent="saveProfile"
     >
-      <SettingsSection title="프로필 사진" description="사진을 확인하거나 변경합니다.">
+      <SettingsSection title="프로필 사진">
         <ProfileImageEditor
           input-id="teacher-photo"
           label="교수자 사진"
@@ -197,7 +197,7 @@ onMounted(loadProfile)
         />
       </SettingsSection>
 
-      <SettingsSection title="기본 정보" description="이름, 소속 기관과 성별을 관리합니다.">
+      <SettingsSection title="기본 정보">
         <div class="form-grid">
           <div class="field field--medium">
             <Label for="teacher-name">이름</Label>
@@ -256,7 +256,7 @@ onMounted(loadProfile)
         </div>
       </SettingsSection>
 
-      <SettingsSection title="계정 정보" description="로그인에 사용하는 계정 정보입니다.">
+      <SettingsSection title="계정 정보">
         <div class="form-grid">
           <div class="field">
             <Label for="teacher-email">이메일</Label>

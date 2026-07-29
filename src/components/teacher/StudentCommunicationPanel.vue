@@ -48,7 +48,6 @@ const saveLabel = computed(() =>
     <header class="communication-panel__heading">
       <div>
         <h2 id="communication-title">교수자 내부 메모</h2>
-        <p>교수자만 확인할 수 있는 단일 메모입니다. 자동으로 저장되지 않습니다.</p>
       </div>
       <SaveToast :visible="saved" message="교수자 내부 메모가 저장되었습니다." inline />
     </header>
@@ -71,7 +70,8 @@ const saveLabel = computed(() =>
         @update:model-value="emit('update:noteDraft', String($event))"
       />
       <p id="internal-note-help" class="note-editor__help">
-        빈 값으로 저장하면 기존 메모가 삭제됩니다.
+        교수자만 확인할 수 있으며 자동 저장되지 않습니다. 빈 값으로 저장하면 기존 메모가
+        삭제됩니다.
       </p>
       <p v-if="validationError" id="internal-note-error" class="note-editor__error" role="alert">
         {{ validationError }}
@@ -114,7 +114,6 @@ const saveLabel = computed(() =>
   font-size: 17px;
 }
 
-.communication-panel__heading p,
 .note-editor__help {
   margin: 4px 0 0;
   color: var(--muted-foreground);

@@ -271,7 +271,7 @@ watch(studentId, loadOverview, { immediate: true })
 <template>
   <div class="overview page-stack">
     <template v-if="!validStudentId || (detailStatus === 'error' && !detail)">
-      <PageHeader title="학습 현황" description="담당 아동의 학습 상태를 확인합니다." />
+      <PageHeader title="학습 현황" />
       <section class="overview-state" role="alert">
         <AlertCircle :size="32" aria-hidden="true" />
         <h2>{{ detailErrorCopy.title }}</h2>
@@ -293,7 +293,7 @@ watch(studentId, loadOverview, { immediate: true })
     </template>
 
     <template v-else-if="!detail">
-      <PageHeader title="학습 현황" description="아동 정보를 불러오는 중입니다." />
+      <PageHeader title="학습 현황" />
       <section class="overview-state" aria-live="polite">
         <span class="overview-state__spinner" aria-hidden="true" />
         <h2>아동 정보를 불러오고 있습니다.</h2>
@@ -303,7 +303,6 @@ watch(studentId, loadOverview, { immediate: true })
     <template v-else>
       <PageHeader
         :title="`${detail.name} 학습 현황`"
-        description="현재 학습 단계와 교수자 확인 항목을 살펴봅니다."
       >
         <template #actions>
           <Button
@@ -354,7 +353,6 @@ watch(studentId, loadOverview, { immediate: true })
         <header>
           <div>
             <h2 id="learning-summary-title">학습 상태 요약</h2>
-            <p>Backend에서 집계한 현재 단계와 공식 확인 신호입니다.</p>
           </div>
           <Button
             v-if="learningSummaryStatus === 'error'"
@@ -440,7 +438,6 @@ watch(studentId, loadOverview, { immediate: true })
           <header>
             <div>
               <h2 id="accuracy-title">최근 6주 읽기 정확도</h2>
-              <p>Backend에서 최근 6주로 제한한 날짜별 정확도입니다.</p>
             </div>
             <Button
               v-if="accuracyTrendStatus === 'error'"
@@ -495,7 +492,6 @@ watch(studentId, loadOverview, { immediate: true })
         <header>
           <div>
             <h2 id="recent-training-title">최근 훈련 기록</h2>
-            <p>최근 30일 기록 중 최신 3건만 표시합니다.</p>
           </div>
           <Button
             v-if="trainingHistoryStatus === 'error'"
@@ -531,9 +527,6 @@ watch(studentId, loadOverview, { immediate: true })
             <b>{{ item.achievement === null ? '달성도 없음' : `${item.achievement}%` }}</b>
           </li>
         </ol>
-        <p class="training-history-boundary">
-          전체 훈련 이력·문항 결과·통계는 훈련 이력 화면(FE-004)에서 제공합니다.
-        </p>
       </section>
 
       <StudentCommunicationPanel
@@ -892,14 +885,9 @@ watch(studentId, loadOverview, { immediate: true })
   font-size: 13px;
 }
 
-.training-history-list span,
-.training-history-boundary {
+.training-history-list span {
   color: var(--slate-500);
   font-size: 11px;
-}
-
-.training-history-boundary {
-  line-height: 1.5;
 }
 
 @keyframes spin {

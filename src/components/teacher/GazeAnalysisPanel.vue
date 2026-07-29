@@ -58,7 +58,6 @@ const metrics = computed(() => {
       <div>
         <span>시선트래킹</span>
         <h2>{{ title }}</h2>
-        <p>학습 중 수집된 시선 데이터의 집계 결과입니다.</p>
       </div>
       <strong v-if="status === 'success' && state?.status === 'AVAILABLE'" class="analysis-status">
         분석 완료

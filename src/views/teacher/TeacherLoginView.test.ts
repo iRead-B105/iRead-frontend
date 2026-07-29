@@ -12,9 +12,9 @@ async function mountLoginView(initialPath = '/login') {
     routes: [
       { path: '/login', name: 'teacher-login', component: TeacherLoginView },
       {
-        path: '/teacher/dashboard',
-        name: 'teacher-dashboard',
-        component: { template: '<div>대시보드</div>' },
+        path: '/teacher/students',
+        name: 'teacher-students',
+        component: { template: '<div>아동 목록</div>' },
         meta: { requiresAuth: true },
       },
       {
@@ -58,7 +58,7 @@ describe('TeacherLoginView mock authentication', () => {
     expect(wrapper.find<HTMLInputElement>('#login-password').element.value).toBe('')
   })
 
-  it('목업 진입 시 token 없이 교수자 세션을 만들고 대시보드로 이동한다', async () => {
+  it('목업 진입 시 token 없이 교수자 세션을 만들고 아동 목록으로 이동한다', async () => {
     const { pinia, router, wrapper } = await mountLoginView()
     const session = useSessionStore(pinia)
     await vi.dynamicImportSettled()
@@ -73,7 +73,7 @@ describe('TeacherLoginView mock authentication', () => {
     expect(session.authenticated).toBe(true)
     expect(session.accessToken).toBeNull()
     expect(session.teacher?.email).toBe('teacher@example.com')
-    expect(router.currentRoute.value.name).toBe('teacher-dashboard')
+    expect(router.currentRoute.value.name).toBe('teacher-students')
   })
 
   it('비밀번호 재설정 성공 안내를 표시하고 URL query에서는 제거한다', async () => {

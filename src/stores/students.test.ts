@@ -188,6 +188,21 @@ describe('Student store', () => {
     expect(store.selectedStudentId).toBe(selectedBeforeNextPage)
   })
 
+  it('Sidebar 목록을 불러와도 첫 학습자를 자동 선택하지 않는다', async () => {
+    const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
+      list: vi.fn().mockResolvedValue(result([firstStudent])),
+      getSummary: vi.fn().mockResolvedValue({ totalStudents: 1, scheduledTodayCount: 0 }),
+    }
+    const store = useStudentStore()
+    store.setRepository(repository)
+
+    await store.loadNavigation({ reset: true })
+
+    expect(store.navigationItems).toHaveLength(1)
+    expect(store.selectedStudentId).toBeNull()
+  })
+
   it('Sidebar 검색 결과가 바뀌어도 선택한 학습자를 보존한다', async () => {
     const secondStudent = { ...firstStudent, studentId: 2, name: '둘째 학습자' }
     const repository: StudentRepository = {

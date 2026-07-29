@@ -8,7 +8,6 @@ describe('TeacherLayout accessibility', () => {
       global: {
         stubs: {
           TeacherSidebar: { template: '<aside />' },
-          DataSourceNotice: { template: '<div />' },
           RouterView: { template: '<div />' },
         },
       },

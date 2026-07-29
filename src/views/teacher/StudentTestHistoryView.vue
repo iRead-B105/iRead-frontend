@@ -177,7 +177,6 @@ function testOptionLabel(test: TestListItem): string {
   <div class="test-history page-stack">
     <PageHeader
       title="검사 이력"
-      description="완료된 검사 한 건의 상세를 확인하고 이전 검사와 최대 두 건까지 비교합니다."
     />
 
     <AsyncStatePanel
@@ -313,7 +312,6 @@ function testOptionLabel(test: TestListItem): string {
 
         <Card v-if="comparisonStatus === 'loading'" class="state-card" aria-live="polite">
           <strong>선택한 검사 결과를 불러오는 중입니다.</strong>
-          <p>최신 선택의 응답만 화면에 반영합니다.</p>
         </Card>
 
         <Card v-else-if="comparisonStatus === 'error'" class="state-card state-card--error">
@@ -327,7 +325,6 @@ function testOptionLabel(test: TestListItem): string {
               <header class="section-heading">
                 <div>
                   <h2>영역별 검사 점수</h2>
-                  <p>서버가 제공한 영역명과 0~100점 점수만 표시합니다.</p>
                 </div>
               </header>
               <ChartPanel
@@ -375,7 +372,6 @@ function testOptionLabel(test: TestListItem): string {
             <header class="section-heading">
               <div>
                 <h2>검사별 주요 기록</h2>
-                <p>응답에 없는 값은 추정하지 않고 ‘-’로 표시합니다.</p>
               </div>
             </header>
             <div class="detail-cards">
@@ -414,7 +410,6 @@ function testOptionLabel(test: TestListItem): string {
             <header class="section-heading">
               <div>
                 <h2>기준 검사 문항 결과</h2>
-                <p>{{ formatTestDate(comparisonResult.currentTest.date) }} 검사 응답입니다.</p>
               </div>
             </header>
             <div v-if="comparisonResult.currentTest.questions.length === 0" class="inline-empty">

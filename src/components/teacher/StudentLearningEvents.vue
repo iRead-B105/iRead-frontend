@@ -52,7 +52,6 @@ const emit = defineEmits<{
     <header class="learning-events__heading">
       <div>
         <h2 id="recent-learning-title">최근 학습 이벤트</h2>
-        <p>Backend에서 제공한 최신 이벤트 3건입니다.</p>
       </div>
       <Button
         v-if="listStatus === 'error'"

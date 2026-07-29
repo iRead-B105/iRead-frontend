@@ -151,7 +151,6 @@ onBeforeUnmount(() => {
     <header class="page-heading">
       <div>
         <h1>학습자 목록</h1>
-        <p>담당 학습자를 검색하고 학습 현황을 확인합니다.</p>
       </div>
       <Button type="button" @click="router.push({ name: 'student-create' })">
         ＋ 학습자 등록
@@ -402,7 +401,6 @@ onBeforeUnmount(() => {
 .page-heading h1 {
   font-size: 26px;
 }
-.page-heading p,
 .state-card p {
   margin: 5px 0 0;
   color: var(--slate-500);

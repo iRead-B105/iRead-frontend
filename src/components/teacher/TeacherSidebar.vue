@@ -3,14 +3,6 @@ import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import type { StudentNavigationItem } from '@/features/teacher/student'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
@@ -22,7 +14,7 @@ const router = useRouter()
 const sessionStore = useSessionStore()
 const studentStore = useStudentStore()
 const { teacher, logoutPending } = storeToRefs(sessionStore)
-const { navigationItems, navigationItemsById, selectedStudentId } = storeToRefs(studentStore)
+const { navigationItemsById, selectedStudentId } = storeToRefs(studentStore)
 const logoutError = ref('')
 const currentStudent = computed(
   () =>
@@ -30,7 +22,6 @@ const currentStudent = computed(
     (selectedStudentId.value === null
       ? null
       : navigationItemsById.value[selectedStudentId.value]) ??
-    navigationItems.value[0] ??
     null,
 )
 const profileImageUrl = computed(
@@ -77,7 +68,7 @@ onMounted(() => {
 
 <template>
   <aside class="teacher-sidebar">
-    <RouterLink class="sidebar-brand" to="/teacher/dashboard" aria-label="iRead 대시보드">
+    <RouterLink class="sidebar-brand" to="/teacher/students" aria-label="iRead 아동 목록">
       <img :src="'/images/iread-logo.png'" alt="iRead" />
     </RouterLink>
 
@@ -90,19 +81,22 @@ onMounted(() => {
       />
       <Button
         v-else
-        class="student-list-link"
+        class="student-profile-placeholder"
         variant="outline"
         type="button"
+        aria-label="아동 목록에서 학습자 선택"
         @click="router.push('/teacher/students')"
       >
-        등록된 아동이 없습니다
+        <span class="student-profile-placeholder__avatar" aria-hidden="true">
+          <SidebarIcon name="users" />
+        </span>
+        <span>
+          <strong>아동을 선택해 주세요</strong>
+          <small>아동 목록에서 선택</small>
+        </span>
       </Button>
 
       <nav class="sidebar-nav" aria-label="교수자 아동 관리 메뉴">
-        <RouterLink to="/teacher/dashboard">
-          <span class="sidebar-nav__icon"><SidebarIcon name="home" /></span>
-          <strong>대시보드</strong>
-        </RouterLink>
         <RouterLink to="/teacher/students">
           <span class="sidebar-nav__icon"><SidebarIcon name="users" /></span>
           <strong>아동 목록</strong>
@@ -135,43 +129,66 @@ onMounted(() => {
             ><strong>아동 정보 관리</strong>
           </RouterLink>
         </template>
-        <RouterLink to="/teacher/settings">
-          <span class="sidebar-nav__icon"><SidebarIcon name="settings" /></span>
-          <strong>설정</strong>
-        </RouterLink>
+        <template v-else>
+          <span class="sidebar-nav__item sidebar-nav__item--disabled" aria-disabled="true">
+            <span class="sidebar-nav__icon"><SidebarIcon name="home" /></span>
+            <strong>학습 현황</strong>
+          </span>
+          <span class="sidebar-nav__item sidebar-nav__item--disabled" aria-disabled="true">
+            <span class="sidebar-nav__icon"><SidebarIcon name="book" /></span>
+            <strong>커리큘럼 관리</strong>
+          </span>
+          <span class="sidebar-nav__item sidebar-nav__item--disabled" aria-disabled="true">
+            <span class="sidebar-nav__icon"><SidebarIcon name="chart" /></span>
+            <strong>훈련 이력</strong>
+          </span>
+          <span class="sidebar-nav__item sidebar-nav__item--disabled" aria-disabled="true">
+            <span class="sidebar-nav__icon"><SidebarIcon name="clipboard" /></span>
+            <strong>검사 이력</strong>
+          </span>
+          <span class="sidebar-nav__item sidebar-nav__item--disabled" aria-disabled="true">
+            <span class="sidebar-nav__icon"><SidebarIcon name="report" /></span>
+            <strong>보고서</strong>
+          </span>
+          <span class="sidebar-nav__item sidebar-nav__item--disabled" aria-disabled="true">
+            <span class="sidebar-nav__icon"><SidebarIcon name="edit" /></span>
+            <strong>아동 정보 관리</strong>
+          </span>
+        </template>
       </nav>
     </div>
 
     <div class="sidebar-footer">
-      <DropdownMenu>
-        <DropdownMenuTrigger as-child>
-          <Button
-            class="sidebar-account__trigger"
-            variant="ghost"
-            type="button"
-            aria-label="계정 메뉴 열기"
-          >
-            <img :src="profileImageUrl" :alt="`${teacher?.name ?? '교수자'} 프로필`" />
-            <span>
-              <strong>{{ teacher?.name ?? '교수자' }}</strong>
-              <small>{{ teacher?.organization ?? '' }}</small>
-            </span>
-            <span class="sidebar-account__chevron" aria-hidden="true">⌃</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent class="sidebar-account__menu" side="right" align="end">
-          <DropdownMenuLabel>계정 메뉴</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem @select="openProfileSettings">프로필 설정</DropdownMenuItem>
-          <DropdownMenuItem
-            variant="destructive"
-            :disabled="logoutPending"
-            @select="logout"
-          >
-            {{ logoutPending ? '로그아웃 중...' : '로그아웃' }}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div class="sidebar-account">
+        <Button
+          class="sidebar-account__trigger"
+          variant="ghost"
+          type="button"
+          aria-label="프로필 설정으로 이동"
+          @click="openProfileSettings"
+        >
+          <img :src="profileImageUrl" :alt="`${teacher?.name ?? '교수자'} 프로필`" />
+          <span>
+            <strong>{{ teacher?.name ?? '교수자' }}</strong>
+            <small>{{ teacher?.organization ?? '' }}</small>
+          </span>
+        </Button>
+        <Button
+          class="sidebar-account__logout"
+          variant="ghost"
+          size="icon"
+          type="button"
+          aria-label="로그아웃"
+          title="로그아웃"
+          :disabled="logoutPending"
+          @click="logout"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19H10" />
+            <path d="m15 8 4 4-4 4M19 12H9" />
+          </svg>
+        </Button>
+      </div>
       <p v-if="logoutPending" class="sidebar-account__status" role="status">
         로그아웃 중...
       </p>
@@ -224,11 +241,43 @@ onMounted(() => {
   gap: 16px;
 }
 
-.student-list-link {
+.student-profile-placeholder {
+  display: grid;
   width: 100%;
   min-height: 58px;
+  align-items: center;
+  justify-content: stretch;
+  gap: 9px;
+  padding: 8px 9px;
   color: var(--slate-600);
-  font-size: 11px;
+  text-align: left;
+  grid-template-columns: 38px minmax(0, 1fr);
+}
+
+.student-profile-placeholder__avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--slate-100);
+  color: var(--slate-400);
+  place-items: center;
+}
+
+.student-profile-placeholder > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.student-profile-placeholder strong {
+  color: var(--slate-700);
+  font-size: 12px;
+}
+
+.student-profile-placeholder small {
+  color: var(--slate-500);
+  font-size: 10px;
 }
 
 .sidebar-nav {
@@ -236,7 +285,8 @@ onMounted(() => {
   gap: 2px;
 }
 
-.sidebar-nav a {
+.sidebar-nav a,
+.sidebar-nav__item {
   display: grid;
   min-height: 44px;
   align-items: center;
@@ -245,6 +295,12 @@ onMounted(() => {
   border-radius: var(--radius-sm);
   color: var(--sidebar-foreground);
   grid-template-columns: 26px 1fr;
+}
+
+.sidebar-nav__item--disabled {
+  color: var(--slate-400);
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .sidebar-nav a:hover {
@@ -270,7 +326,8 @@ onMounted(() => {
   color: var(--primary-700);
 }
 
-.sidebar-nav strong {
+.sidebar-nav strong,
+.sidebar-nav__item strong {
   font-size: 12px;
 }
 
@@ -284,6 +341,12 @@ onMounted(() => {
   background: var(--sidebar);
 }
 
+.sidebar-account {
+  position: relative;
+  width: 100%;
+  min-height: 64px;
+}
+
 .sidebar-account__trigger {
   display: grid;
   width: 100%;
@@ -291,14 +354,14 @@ onMounted(() => {
   min-height: 64px;
   align-items: center;
   gap: 7px;
-  padding: 8px 16px;
+  padding: 8px 54px 8px 16px;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: var(--slate-700);
   box-shadow: none;
   text-align: left;
-  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  grid-template-columns: 34px minmax(0, 1fr);
 }
 
 .sidebar-account__trigger:hover {
@@ -339,10 +402,33 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.sidebar-account__chevron {
-  color: var(--slate-400);
-  font-size: 14px;
-  text-align: center;
+.sidebar-account__logout {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid color-mix(in oklch, var(--destructive) 32%, var(--sidebar-border));
+  border-radius: 50%;
+  background: var(--sidebar);
+  color: var(--danger-600);
+  transform: translateY(-50%);
+}
+
+.sidebar-account__logout:hover {
+  border-color: color-mix(in oklch, var(--destructive) 56%, var(--sidebar-border));
+  background: color-mix(in oklch, var(--destructive) 8%, var(--sidebar));
+  color: var(--danger-600);
+}
+
+.sidebar-account__logout svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .sidebar-account__status,
@@ -391,7 +477,8 @@ onMounted(() => {
     scroll-padding-inline: 8px;
   }
 
-  .sidebar-nav a {
+  .sidebar-nav a,
+  .sidebar-nav__item {
     flex: 0 0 auto;
     min-width: max-content;
     scroll-snap-align: start;
@@ -414,8 +501,12 @@ onMounted(() => {
   }
 
   .sidebar-account__trigger {
-    padding-right: 12px;
+    padding-right: 50px;
     padding-left: 12px;
+  }
+
+  .sidebar-account__logout {
+    right: 12px;
   }
 }
 </style>

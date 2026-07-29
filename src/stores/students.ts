@@ -236,9 +236,6 @@ export const useStudentStore = defineStore('students', () => {
 
     navigationItemsById.value = nextById
     navigationOrder.value = nextOrder
-    if (selectedStudentId.value === null && items[0]) {
-      selectedStudentId.value = items[0].studentId
-    }
   }
 
   async function loadNavigation(options: { reset?: boolean } = {}): Promise<void> {
