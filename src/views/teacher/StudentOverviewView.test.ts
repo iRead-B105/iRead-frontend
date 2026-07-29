@@ -67,6 +67,11 @@ function repository(overrides: Partial<StudentRepository> = {}): StudentReposito
     listLearningEvents: vi.fn().mockResolvedValue([]),
     getLearningEvent: vi.fn(),
     getAccuracyTrend: vi.fn().mockResolvedValue({ dailyAccuracy: [] }),
+    getReadingSpeedTrend: vi.fn().mockResolvedValue({
+      unit: 'CORRECT_WORDS_PER_MINUTE',
+      changeRate: null,
+      points: [],
+    }),
     getTrainingHistory: vi.fn().mockResolvedValue({ learningHistory: [] }),
     updateTeacherMemo: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -98,6 +103,11 @@ async function mountOverview(
         name: 'student-edit',
         component: { template: '<div>아동 수정</div>' },
       },
+      {
+        path: '/teacher/students/:id/training-history',
+        name: 'student-training-history',
+        component: { template: '<div>훈련 이력</div>' },
+      },
     ],
   })
   await router.push(initialPath)
@@ -117,19 +127,21 @@ async function mountOverview(
 }
 
 describe('StudentOverviewView', () => {
-  it('상세와 Backend 공식 학습 summary만 표시한다', async () => {
+  it('Backend 공식 학습 summary를 유지하고 프로필 정보는 중복 표시하지 않는다', async () => {
     const { wrapper } = await mountOverview(repository())
 
-    expect(wrapper.text()).toContain('김하늘 학습 현황')
+    expect(wrapper.text()).toContain('학습 현황')
     expect(wrapper.text()).toContain('문장 이해력 향상')
     expect(wrapper.text()).toContain('최근 읽기 정확도 확인 필요')
     expect(wrapper.text()).toContain('교수자 확인 신호')
+    expect(wrapper.find('.student-profile-card').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('김하늘')
     expect(wrapper.text()).not.toContain('확인 완료')
     expect(wrapper.text()).not.toContain('다음 권장 훈련')
     expect(wrapper.text()).not.toContain('목표 80%')
   })
 
-  it('nullable 학생 정보는 성별을 오판하지 않고 대체 문자로 표시한다', async () => {
+  it('nullable 학생 상세도 프로필 facts 없이 학습 상태만 표시한다', async () => {
     const nullableDetail: StudentDetail = {
       ...detail(1),
       birthday: null,
@@ -144,9 +156,9 @@ describe('StudentOverviewView', () => {
       }),
     )
 
-    const profile = wrapper.get('.student-profile-card')
-    expect(profile.text()).not.toContain('여자')
-    expect(profile.findAll('dd').map((item) => item.text())).toEqual(['-', '-', '-', '-'])
+    expect(wrapper.find('.student-profile-card').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('여자')
+    expect(wrapper.text()).toContain('학습 상태 요약')
   })
 
   it('NO_HISTORY를 주의 건수와 분리해 표시한다', async () => {
@@ -167,8 +179,15 @@ describe('StudentOverviewView', () => {
     expect(wrapper.text()).toContain('아직 학습 기록이 없습니다.')
     expect(wrapper.text()).toContain('표시할 읽기 정확도 데이터가 없습니다.')
     expect(wrapper.text()).toContain('아직 표시할 학습 이벤트가 없습니다.')
-    expect(wrapper.text()).toContain('최근 30일 동안 완료한 훈련 기록이 없습니다.')
+    expect(wrapper.text()).toContain('전체 훈련 이력 보기')
     expect(wrapper.text()).not.toContain('최근 읽기 정확도 확인 필요')
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().trim() === '읽기 속도')!
+      .trigger('click')
+
+    expect(wrapper.text()).toContain('표시할 읽기 속도 데이터가 없습니다.')
   })
 
   it('정확도 데이터가 1건이면 변화폭을 계산하지 않는다', async () => {
@@ -180,8 +199,8 @@ describe('StudentOverviewView', () => {
       }),
     )
 
-    expect(wrapper.text()).toContain('첫 정확도 기록')
-    expect(wrapper.text()).toContain('변화폭은 다음 기록부터 계산합니다.')
+    expect(wrapper.text()).toContain('82% → 82%')
+    expect(wrapper.text()).toContain('1개 날짜 기록')
     expect(wrapper.text()).not.toContain('%p')
   })
 
@@ -197,14 +216,15 @@ describe('StudentOverviewView', () => {
         .fn()
         .mockImplementation((studentId: number) => Promise.resolve(learningSummary(studentId))),
     })
-    const { wrapper, router } = await mountOverview(studentRepository)
+    const { wrapper, router, studentStore } = await mountOverview(studentRepository)
 
     await router.push('/teacher/students/2')
     await flushPromises()
 
     expect(getDetail).toHaveBeenCalledWith(2)
-    expect(wrapper.text()).toContain('둘째 아동 학습 현황')
-    expect(wrapper.text()).not.toContain('첫째 아동 학습 현황')
+    expect(studentStore.detailsById[2]?.name).toBe('둘째 아동')
+    expect(wrapper.text()).toContain('학습 현황')
+    expect(wrapper.text()).not.toContain('첫째 아동')
   })
 
   it('403 접근 오류를 mock 학습자로 대체하지 않는다', async () => {
@@ -322,40 +342,12 @@ describe('StudentOverviewView', () => {
           { date: '2026-07-27', accuracy: 72 },
         ],
       }),
-      getTrainingHistory: vi.fn().mockResolvedValue({
-        learningHistory: [
-          {
-            trainingId: 4,
-            date: '2026-07-27',
-            learningType: '첫 번째 훈련',
-            startedAt: null,
-            finishedAt: null,
-            achievement: 80,
-          },
-          {
-            trainingId: 3,
-            date: '2026-07-26',
-            learningType: '두 번째 훈련',
-            startedAt: null,
-            finishedAt: null,
-            achievement: 75,
-          },
-          {
-            trainingId: 2,
-            date: '2026-07-25',
-            learningType: '세 번째 훈련',
-            startedAt: null,
-            finishedAt: null,
-            achievement: null,
-          },
-          {
-            trainingId: 1,
-            date: '2026-07-24',
-            learningType: '표시하면 안 되는 네 번째 훈련',
-            startedAt: null,
-            finishedAt: null,
-            achievement: 70,
-          },
+      getReadingSpeedTrend: vi.fn().mockResolvedValue({
+        unit: 'CORRECT_WORDS_PER_MINUTE',
+        changeRate: 12.5,
+        points: [
+          { date: '2026-07-20', speed: 84 },
+          { date: '2026-07-27', speed: 96 },
         ],
       }),
       updateTeacherMemo,
@@ -364,9 +356,9 @@ describe('StudentOverviewView', () => {
 
     expect(wrapper.text()).toContain('첫 기록 대비 +12%p')
     expect(wrapper.find('[data-test="accuracy-chart"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('첫 번째 훈련')
-    expect(wrapper.text()).toContain('세 번째 훈련')
-    expect(wrapper.text()).not.toContain('표시하면 안 되는 네 번째 훈련')
+    expect(wrapper.text()).toContain('기간 변화 +12.5%')
+    expect(wrapper.text()).toContain('84 → 96 단어/분')
+    expect(wrapper.text()).toContain('전체 훈련 이력 보기')
 
     await wrapper
       .findAll('button')
@@ -394,13 +386,19 @@ describe('StudentOverviewView', () => {
       repository({
         listLearningEvents: vi.fn().mockRejectedValue(new Error('이벤트 연결 실패')),
         getAccuracyTrend: vi.fn().mockRejectedValue(new Error('정확도 연결 실패')),
-        getTrainingHistory: vi.fn().mockRejectedValue(new Error('훈련 연결 실패')),
+        getReadingSpeedTrend: vi.fn().mockRejectedValue(new Error('읽기 속도 연결 실패')),
       }),
     )
 
     expect(wrapper.text()).toContain('최근 학습 이벤트를 불러오지 못했습니다.')
     expect(wrapper.text()).toContain('정확도 추이를 불러오지 못했습니다.')
-    expect(wrapper.text()).toContain('최근 훈련 기록을 불러오지 못했습니다.')
     expect(wrapper.text()).not.toContain('받침이 있는 문장 읽기')
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().trim() === '읽기 속도')!
+      .trigger('click')
+
+    expect(wrapper.text()).toContain('읽기 속도 추이를 불러오지 못했습니다.')
   })
 })

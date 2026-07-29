@@ -65,10 +65,8 @@ describe('TeacherSettingsView', () => {
 
     expect(authRepositories.teacher.getInfo).toHaveBeenCalledOnce()
     expect(wrapper.get<HTMLInputElement>('#teacher-name').element.value).toBe('이선생')
-    expect(wrapper.get<HTMLInputElement>('#teacher-email').element.value).toBe(
-      'teacher@example.com',
-    )
-    expect(wrapper.get('#teacher-email').attributes('readonly')).toBeDefined()
+    expect(wrapper.get('#teacher-email').text()).toBe('teacher@example.com')
+    expect(wrapper.find('input#teacher-email').exists()).toBe(false)
     expect(session.teacher).toEqual(profile)
     expect(session.status).toBe('authenticated')
     expect(session.accessToken).toBe('access-token')

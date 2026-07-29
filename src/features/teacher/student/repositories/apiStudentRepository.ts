@@ -53,6 +53,10 @@ export class ApiStudentRepository implements StudentRepository {
     return this.api.getAccuracyTrend(studentId, options)
   }
 
+  getReadingSpeedTrend(studentId: number, options = {}) {
+    return this.api.getReadingSpeedTrend(studentId, options)
+  }
+
   getTrainingHistory(
     studentId: number,
     period: Parameters<StudentRepository['getTrainingHistory']>[1],

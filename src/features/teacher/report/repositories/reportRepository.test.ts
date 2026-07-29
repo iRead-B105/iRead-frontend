@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createReportApi, type ReportApi } from '../api'
-import {
-  refreshedReportGazeTrendFixture,
-  reportFixtures,
-} from '../fixtures'
+import { refreshedReportGazeTrendFixture, reportFixtures } from '../fixtures'
 import { ApiReportRepository } from './apiReportRepository'
 import { MockReportRepository } from './mockReportRepository'
 import { createReportRepository } from '.'
@@ -71,24 +68,20 @@ describe('Report API target contract', () => {
       studentId: 1,
       startDate: '2026-07-01',
       endDate: '2026-07-27',
-      teacherMemo: null,
     })
     await reportApi.get(detail.reportId)
     await reportApi.updateTeacherMemo(detail.reportId, null)
     await reportApi.refreshGazeTrend(detail.reportId)
 
-    expect(request).toHaveBeenNthCalledWith(
-      1,
-      '/api/admin/report?studentId=1',
-      { signal: controller.signal },
-    )
+    expect(request).toHaveBeenNthCalledWith(1, '/api/admin/report?studentId=1', {
+      signal: controller.signal,
+    })
     expect(request).toHaveBeenNthCalledWith(2, '/api/admin/report', {
       method: 'POST',
       body: JSON.stringify({
         studentId: 1,
         startDate: '2026-07-01',
         endDate: '2026-07-27',
-        teacherMemo: null,
       }),
     })
     expect(request).toHaveBeenNthCalledWith(3, `/api/admin/report/${detail.reportId}`, {})
@@ -133,9 +126,7 @@ describe('Report API target contract', () => {
       '2026-07-24',
     ])
     expect(
-      result.snapshot.gazeTrend.training.points.map(
-        (point) => point.gazeAnalysisResultId,
-      ),
+      result.snapshot.gazeTrend.training.points.map((point) => point.gazeAnalysisResultId),
     ).toEqual([7101, 7102, 7103])
   })
 
@@ -213,14 +204,13 @@ describe('MockReportRepository', () => {
     })
   })
 
-  it('생성 결과와 상세을 분리하고 목록에 새 보고서를 반영한다', async () => {
+  it('생성 결과와 상세을 분리하고 초기 의견 없이 목록에 새 보고서를 반영한다', async () => {
     const repository = new MockReportRepository(options)
 
     const created = await repository.create({
       studentId: 1,
       startDate: '2026-07-03',
       endDate: '2026-07-24',
-      teacherMemo: '  새 의견  ',
     })
     const detail = await repository.get(created.reportId)
     const list = await repository.listByStudent(1)
@@ -231,7 +221,7 @@ describe('MockReportRepository', () => {
     })
     expect(detail).toMatchObject({
       reportId: created.reportId,
-      teacherMemo: '새 의견',
+      teacherMemo: null,
     })
     expect(list[0]?.reportId).toBe(created.reportId)
   })

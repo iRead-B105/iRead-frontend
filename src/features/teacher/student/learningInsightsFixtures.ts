@@ -2,6 +2,7 @@ import type {
   StudentAccuracyPoint,
   StudentLearningEvent,
   StudentLearningEventDetail,
+  StudentReadingSpeedPoint,
   StudentTrainingHistoryItem,
 } from './model'
 import type { StudentFixtureRecord } from './fixtures'
@@ -10,6 +11,7 @@ export interface StudentLearningInsightsFixture {
   readonly events: readonly StudentLearningEvent[]
   readonly eventDetails: readonly StudentLearningEventDetail[]
   readonly accuracy: readonly StudentAccuracyPoint[]
+  readonly readingSpeed: readonly StudentReadingSpeedPoint[]
   readonly trainingHistory: readonly StudentTrainingHistoryItem[]
 }
 
@@ -17,6 +19,7 @@ const emptyFixture: StudentLearningInsightsFixture = {
   events: [],
   eventDetails: [],
   accuracy: [],
+  readingSpeed: [],
   trainingHistory: [],
 }
 
@@ -158,6 +161,12 @@ function studentOneFixture(): StudentLearningInsightsFixture {
       { date: '2026-07-16', accuracy: 71 },
       { date: '2026-07-23', accuracy: 74 },
     ],
+    readingSpeed: [
+      { date: '2026-07-02', speed: 82 },
+      { date: '2026-07-09', speed: 86 },
+      { date: '2026-07-16', speed: 89 },
+      { date: '2026-07-23', speed: 94 },
+    ],
     trainingHistory: studentOneTrainingHistory,
   }
 }
@@ -195,6 +204,12 @@ function genericFixture(student: StudentFixtureRecord): StudentLearningInsightsF
             { date: '2026-07-10', accuracy: Math.max(0, accuracy - 3) },
             { date: student.recentLearningDate, accuracy },
           ],
+    readingSpeed: [
+      {
+        date: student.recentLearningDate,
+        speed: 72 + student.studentId * 2,
+      },
+    ],
     trainingHistory: [
       {
         trainingId: student.studentId * 10_000 + 2,

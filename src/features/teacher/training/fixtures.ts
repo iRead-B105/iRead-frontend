@@ -9,52 +9,59 @@ import type {
   TrainingStatistics,
 } from './model'
 
-export const trainingCatalogFixture: readonly TrainingCatalogItem[] = [
-  {
-    trainingTemplateId: 11,
-    unitName: '음운 인식',
-    sequence: 1,
-    trainingName: '첫소리 구별하기',
-    studentAchievementRate: null,
-    form: {
-      objective: '낱말의 첫소리를 듣고 같은 소리로 시작하는 낱말을 찾습니다.',
-      questionType: '낱말 선택',
-    },
-  },
-  {
-    trainingTemplateId: 12,
-    unitName: '파닉스',
-    sequence: 2,
-    trainingName: '받침 소리 구분',
-    studentAchievementRate: 72,
-    form: {
-      objective: '받침이 있는 낱말을 정확하게 소리 내어 읽습니다.',
-      questionType: '낱말 읽기',
-    },
-  },
-  {
-    trainingTemplateId: 13,
-    unitName: '유창성',
-    sequence: 3,
-    trainingName: '짧은 문장 읽기',
-    studentAchievementRate: 61,
-    form: {
-      objective: '짧은 문장을 의미 단위로 끊어 자연스럽게 읽습니다.',
-      questionType: '문장 낭독',
-    },
-  },
-  {
-    trainingTemplateId: 14,
-    unitName: '이해력',
-    sequence: 4,
-    trainingName: '핵심 내용 찾기',
-    studentAchievementRate: 48,
-    form: {
-      objective: '짧은 글에서 중심 내용을 나타내는 문장을 찾습니다.',
-      questionType: '선택형',
-    },
-  },
-]
+const trainingCatalogMetadata = [
+  [1, '글자 따라 보기', 1, '모음 따라 보기'],
+  [2, '글자 따라 보기', 2, '자음 따라 보기'],
+  [3, '글자 따라 보기', 3, '음절 따라 보기'],
+  [4, '소리 듣고 고르기', 1, '자음 소리 고르기'],
+  [5, '소리 듣고 고르기', 2, '모음 소리 고르기'],
+  [6, '소리 듣고 고르기', 3, '자음·모음 구별하기'],
+  [7, '소리 듣고 고르기', 4, '음절의 첫소리 찾기'],
+  [8, '소리 듣고 고르기', 5, '낱말의 첫소리 찾기'],
+  [9, '소리 듣고 고르기', 6, '같은 첫소리 낱말 찾기'],
+  [10, '소리 듣고 고르기', 7, '받침 소리 고르기'],
+  [11, '소리 듣고 고르기', 8, '낱말의 끝소리 고르기'],
+  [12, '소리 듣고 고르기', 9, '서로 다른 받침 음절 비교하기'],
+  [13, '소리 듣고 고르기', 10, '비슷한 소리 고르기'],
+  [14, '글자 만들기', 1, '음소 합쳐 음절 만들기'],
+  [15, '글자 만들기', 2, '음절 합쳐 낱말 만들기'],
+  [16, '글자 만들기', 3, '기본 글자 만들기'],
+  [17, '글자 만들기', 4, '받침 글자 만들기'],
+  [18, '글자 만들기', 5, '겹받침 글자 만들기'],
+  [19, '글자 자르기', 1, '받침 빼기'],
+  [20, '글자 자르기', 2, '음절 빼기'],
+  [21, '글자 대치', 1, '음절 바꾸기'],
+  [22, '글 해독', 1, '낱말 읽기'],
+  [23, '글 해독', 2, '새 낱말 읽기'],
+  [24, '글 해독', 3, '어려운 단어 먼저 읽기'],
+  [25, '글 해독', 4, '문장 읽기'],
+  [26, '글 해독', 5, '짧은 글 읽기'],
+  [27, '문장 완성 및 이해', 1, '문장 전체 조립'],
+  [28, '문장 완성 및 이해', 2, '빈칸에 알맞은 단어 넣기'],
+  [29, '문장 완성 및 이해', 3, '그림과 문장 연결하기'],
+  [30, '유창하게 읽기', 1, '문장 따라 읽기'],
+  [31, '유창하게 읽기', 2, '단어 이어 읽기'],
+  [32, '유창하게 읽기', 3, '끊어 읽기'],
+  [33, '유창하게 읽기', 4, '같은 문장 다시 읽기'],
+  [34, '유창하게 읽기', 5, '짧은 이야기 읽기'],
+] as const
+
+const mockAchievementByTemplateId: Readonly<Record<number, number>> = {
+  12: 72,
+  13: 61,
+  14: 48,
+}
+
+export const trainingCatalogFixture: readonly TrainingCatalogItem[] = trainingCatalogMetadata.map(
+  ([trainingTemplateId, unitName, sequence, trainingName]) => ({
+    trainingTemplateId,
+    unitName,
+    sequence,
+    trainingName,
+    studentAchievementRate: mockAchievementByTemplateId[trainingTemplateId] ?? null,
+    form: null,
+  }),
+)
 
 export const currentCurriculumFixture: DailyCurriculum = {
   curriculumId: 201,
@@ -64,24 +71,24 @@ export const currentCurriculumFixture: DailyCurriculum = {
       trainingId: 101,
       trainingTemplateId: 12,
       sequence: 1,
-      unitName: '파닉스',
-      trainingName: '받침 소리 구분',
+      unitName: '소리 듣고 고르기',
+      trainingName: '서로 다른 받침 음절 비교하기',
       status: 'NOT_STARTED',
     },
     {
       trainingId: 102,
       trainingTemplateId: 12,
       sequence: 2,
-      unitName: '파닉스',
-      trainingName: '받침 소리 구분',
+      unitName: '소리 듣고 고르기',
+      trainingName: '서로 다른 받침 음절 비교하기',
       status: 'NOT_READY',
     },
     {
       trainingId: 103,
       trainingTemplateId: 13,
       sequence: 3,
-      unitName: '유창성',
-      trainingName: '짧은 문장 읽기',
+      unitName: '소리 듣고 고르기',
+      trainingName: '비슷한 소리 고르기',
       status: 'NOT_STARTED',
     },
   ],
@@ -91,8 +98,8 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
   {
     trainingId: 101,
     trainingTemplateId: 12,
-    name: '받침 소리 구분',
-    form: trainingCatalogFixture[1]?.form ?? null,
+    name: '서로 다른 받침 음절 비교하기',
+    form: trainingCatalogFixture[11]?.form ?? null,
     generatedData: {
       questions: [
         {
@@ -116,8 +123,8 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
   {
     trainingId: 102,
     trainingTemplateId: 12,
-    name: '받침 소리 구분',
-    form: trainingCatalogFixture[1]?.form ?? null,
+    name: '서로 다른 받침 음절 비교하기',
+    form: trainingCatalogFixture[11]?.form ?? null,
     generatedData: null,
     status: 'NOT_READY',
     startedAt: null,
@@ -128,8 +135,8 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
   {
     trainingId: 103,
     trainingTemplateId: 13,
-    name: '짧은 문장 읽기',
-    form: trainingCatalogFixture[2]?.form ?? null,
+    name: '비슷한 소리 고르기',
+    form: trainingCatalogFixture[12]?.form ?? null,
     generatedData: {
       questions: [
         {
@@ -148,8 +155,8 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
   {
     trainingId: 901,
     trainingTemplateId: 12,
-    name: '받침 소리 구분',
-    form: trainingCatalogFixture[1]?.form ?? null,
+    name: '서로 다른 받침 음절 비교하기',
+    form: trainingCatalogFixture[11]?.form ?? null,
     generatedData: null,
     status: 'COMPLETED',
     startedAt: '2026-07-20T09:00:00+09:00',
@@ -178,8 +185,8 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
   {
     trainingId: 902,
     trainingTemplateId: 13,
-    name: '짧은 문장 읽기',
-    form: trainingCatalogFixture[2]?.form ?? null,
+    name: '비슷한 소리 고르기',
+    form: trainingCatalogFixture[12]?.form ?? null,
     generatedData: null,
     status: 'COMPLETED',
     startedAt: '2026-07-20T09:10:00+09:00',
@@ -200,8 +207,8 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
   {
     trainingId: 903,
     trainingTemplateId: 14,
-    name: '핵심 내용 찾기',
-    form: trainingCatalogFixture[3]?.form ?? null,
+    name: '음소 합쳐 음절 만들기',
+    form: trainingCatalogFixture[13]?.form ?? null,
     generatedData: null,
     status: 'COMPLETED',
     startedAt: '2026-07-20T09:16:00+09:00',
@@ -212,8 +219,8 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
   {
     trainingId: 891,
     trainingTemplateId: 11,
-    name: '첫소리 구별하기',
-    form: trainingCatalogFixture[0]?.form ?? null,
+    name: '낱말의 끝소리 고르기',
+    form: trainingCatalogFixture[10]?.form ?? null,
     generatedData: null,
     status: 'COMPLETED',
     startedAt: '2026-07-05T10:00:00+09:00',
@@ -234,8 +241,8 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
   {
     trainingId: 801,
     trainingTemplateId: 11,
-    name: '첫소리 구별하기',
-    form: trainingCatalogFixture[0]?.form ?? null,
+    name: '낱말의 끝소리 고르기',
+    form: trainingCatalogFixture[10]?.form ?? null,
     generatedData: null,
     status: 'COMPLETED',
     startedAt: '2026-05-18T14:00:00+09:00',
@@ -260,9 +267,13 @@ const thirtyDayCurriculumLogs: readonly CurriculumLog[] = [
     date: '2026-07-20',
     achievement: 88.5,
     trainings: [
-      { trainingId: 901, unitName: '파닉스', trainingName: '받침 소리 구분' },
-      { trainingId: 902, unitName: '유창성', trainingName: '짧은 문장 읽기' },
-      { trainingId: 903, unitName: '이해력', trainingName: '핵심 내용 찾기' },
+      {
+        trainingId: 901,
+        unitName: '소리 듣고 고르기',
+        trainingName: '서로 다른 받침 음절 비교하기',
+      },
+      { trainingId: 902, unitName: '소리 듣고 고르기', trainingName: '비슷한 소리 고르기' },
+      { trainingId: 903, unitName: '글자 만들기', trainingName: '음소 합쳐 음절 만들기' },
     ],
   },
   {
@@ -270,7 +281,11 @@ const thirtyDayCurriculumLogs: readonly CurriculumLog[] = [
     date: '2026-07-05',
     achievement: 0,
     trainings: [
-      { trainingId: 891, unitName: '음운 인식', trainingName: '첫소리 구별하기' },
+      {
+        trainingId: 891,
+        unitName: '소리 듣고 고르기',
+        trainingName: '낱말의 끝소리 고르기',
+      },
     ],
   },
 ]
@@ -287,7 +302,11 @@ export const curriculumLogFixtures: Readonly<
         date: '2026-05-18',
         achievement: null,
         trainings: [
-          { trainingId: 801, unitName: '음운 인식', trainingName: '첫소리 구별하기' },
+          {
+            trainingId: 801,
+            unitName: '소리 듣고 고르기',
+            trainingName: '낱말의 끝소리 고르기',
+          },
         ],
       },
     ],
@@ -304,7 +323,7 @@ export const trainingLogFixtures: Readonly<Record<number, CurriculumTrainingLog>
     trainings: [
       {
         trainingId: 901,
-        trainingName: '받침 소리 구분',
+        trainingName: '서로 다른 받침 음절 비교하기',
         startedAt: '2026-07-20T09:00:00+09:00',
         finishedAt: '2026-07-20T09:08:30+09:00',
         accuracy: 80,
@@ -312,7 +331,7 @@ export const trainingLogFixtures: Readonly<Record<number, CurriculumTrainingLog>
       },
       {
         trainingId: 902,
-        trainingName: '짧은 문장 읽기',
+        trainingName: '비슷한 소리 고르기',
         startedAt: '2026-07-20T09:10:00+09:00',
         finishedAt: '2026-07-20T09:14:00+09:00',
         accuracy: 100,
@@ -320,7 +339,7 @@ export const trainingLogFixtures: Readonly<Record<number, CurriculumTrainingLog>
       },
       {
         trainingId: 903,
-        trainingName: '핵심 내용 찾기',
+        trainingName: '음소 합쳐 음절 만들기',
         startedAt: '2026-07-20T09:16:00+09:00',
         finishedAt: '2026-07-20T09:20:00+09:00',
         accuracy: null,
@@ -333,7 +352,7 @@ export const trainingLogFixtures: Readonly<Record<number, CurriculumTrainingLog>
     trainings: [
       {
         trainingId: 891,
-        trainingName: '첫소리 구별하기',
+        trainingName: '낱말의 끝소리 고르기',
         startedAt: '2026-07-05T10:00:00+09:00',
         finishedAt: '2026-07-05T10:05:00+09:00',
         accuracy: 0,
@@ -346,7 +365,7 @@ export const trainingLogFixtures: Readonly<Record<number, CurriculumTrainingLog>
     trainings: [
       {
         trainingId: 801,
-        trainingName: '첫소리 구별하기',
+        trainingName: '낱말의 끝소리 고르기',
         startedAt: '2026-05-18T14:00:00+09:00',
         finishedAt: null,
         accuracy: null,
@@ -361,7 +380,7 @@ export const trainingStatisticsFixtures: Readonly<Record<string, TrainingStatist
     accuracyComparisons: [
       {
         trainingId: 901,
-        trainingName: '받침 소리 구분',
+        trainingName: '서로 다른 받침 음절 비교하기',
         date: '2026-07-20',
         accuracy: 80,
         previousTrainingDate: '2026-07-05',
@@ -369,7 +388,7 @@ export const trainingStatisticsFixtures: Readonly<Record<string, TrainingStatist
       },
       {
         trainingId: 902,
-        trainingName: '짧은 문장 읽기',
+        trainingName: '비슷한 소리 고르기',
         date: '2026-07-20',
         accuracy: 100,
         previousTrainingDate: null,
@@ -377,7 +396,7 @@ export const trainingStatisticsFixtures: Readonly<Record<string, TrainingStatist
       },
       {
         trainingId: 903,
-        trainingName: '핵심 내용 찾기',
+        trainingName: '음소 합쳐 음절 만들기',
         date: '2026-07-20',
         accuracy: null,
         previousTrainingDate: null,
@@ -397,7 +416,7 @@ export const trainingStatisticsFixtures: Readonly<Record<string, TrainingStatist
     accuracyComparisons: [
       {
         trainingId: 901,
-        trainingName: '받침 소리 구분',
+        trainingName: '서로 다른 받침 음절 비교하기',
         date: '2026-07-20',
         accuracy: 80,
         previousTrainingDate: '2026-05-18',
@@ -418,7 +437,7 @@ export const trainingStatisticsFixtures: Readonly<Record<string, TrainingStatist
     accuracyComparisons: [
       {
         trainingId: 891,
-        trainingName: '첫소리 구별하기',
+        trainingName: '낱말의 끝소리 고르기',
         date: '2026-07-05',
         accuracy: 0,
         previousTrainingDate: null,

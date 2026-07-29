@@ -47,8 +47,7 @@ const saveLabel = computed(() =>
   <section class="communication-panel" aria-labelledby="communication-title">
     <header class="communication-panel__heading">
       <div>
-        <h2 id="communication-title">교수자 내부 메모</h2>
-        <p>교수자만 확인할 수 있는 단일 메모입니다. 자동으로 저장되지 않습니다.</p>
+        <h2 id="communication-title">기록과 소통</h2>
       </div>
       <SaveToast :visible="saved" message="교수자 내부 메모가 저장되었습니다." inline />
     </header>
@@ -66,17 +65,16 @@ const saveLabel = computed(() =>
         class="textarea"
         :model-value="noteDraft"
         :aria-invalid="Boolean(validationError)"
-        aria-describedby="internal-note-help internal-note-error"
+        :aria-describedby="validationError || error ? 'internal-note-error' : undefined"
         placeholder="학습 지도와 상담에 필요한 내부 메모를 작성합니다."
         @update:model-value="emit('update:noteDraft', String($event))"
       />
-      <p id="internal-note-help" class="note-editor__help">
-        빈 값으로 저장하면 기존 메모가 삭제됩니다.
-      </p>
       <p v-if="validationError" id="internal-note-error" class="note-editor__error" role="alert">
         {{ validationError }}
       </p>
-      <p v-else-if="error" class="note-editor__error" role="alert">{{ error }}</p>
+      <p v-else-if="error" id="internal-note-error" class="note-editor__error" role="alert">
+        {{ error }}
+      </p>
       <div class="note-editor__actions">
         <Button
           size="sm"
@@ -114,13 +112,6 @@ const saveLabel = computed(() =>
   font-size: 17px;
 }
 
-.communication-panel__heading p,
-.note-editor__help {
-  margin: 4px 0 0;
-  color: var(--muted-foreground);
-  font-size: 12px;
-}
-
 .note-editor {
   display: grid;
   gap: 8px;
@@ -152,7 +143,6 @@ const saveLabel = computed(() =>
   min-height: 120px;
 }
 
-.note-editor__help,
 .note-editor__error {
   margin: 0;
   font-size: 12px;

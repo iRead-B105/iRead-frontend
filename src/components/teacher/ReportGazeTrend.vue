@@ -115,7 +115,6 @@ function statusLabel(status: ReportGazeSeries['status']): string {
     <header class="gaze-trend__heading">
       <div>
         <h2 id="report-gaze-title">시선 분석 추이</h2>
-        <p>훈련과 검사를 분리해 보고서 기간 내 저장된 결과만 표시합니다.</p>
       </div>
       <span>집계 {{ formatReportDateTime(trend.generatedAt) }}</span>
     </header>

@@ -50,9 +50,6 @@ const {
   listStatus,
   listError,
   listUiError,
-  summary,
-  summaryStatus,
-  summaryError,
   hasActiveFilters,
 } = storeToRefs(studentStore)
 
@@ -132,13 +129,13 @@ onMounted(() => {
     : route.query.studentSaved
   if (mutation === 'created' || mutation === 'deleted') {
     mutationNoticeMessage.value =
-      mutation === 'created' ? '학습자가 등록되었습니다.' : '학습자가 삭제되었습니다.'
+      mutation === 'created' ? '아동이 등록되었습니다.' : '아동이 삭제되었습니다.'
     showMutationNotice()
     const query = { ...route.query }
     delete query.studentSaved
     void router.replace({ query })
   }
-  void Promise.all([studentStore.loadList(), studentStore.loadSummary()])
+  void studentStore.loadList()
 })
 
 onBeforeUnmount(() => {
@@ -150,11 +147,10 @@ onBeforeUnmount(() => {
   <section class="student-dashboard">
     <header class="page-heading">
       <div>
-        <h1>학습자 목록</h1>
-        <p>담당 학습자를 검색하고 학습 현황을 확인합니다.</p>
+        <h1>아동 목록</h1>
       </div>
       <Button type="button" @click="router.push({ name: 'student-create' })">
-        ＋ 학습자 등록
+        ＋ 아동 등록
       </Button>
     </header>
 
@@ -194,44 +190,17 @@ onBeforeUnmount(() => {
       </Select>
     </Card>
 
-    <div class="summary" aria-label="담당 학습자 요약">
-      <Card>
-        <span>전체 학습자</span>
-        <strong v-if="summary">{{ summary.totalStudents }}명</strong>
-        <strong v-else>—</strong>
-      </Card>
-      <Card>
-        <span>오늘 학습 예정</span>
-        <strong v-if="summary">{{ summary.scheduledTodayCount }}명</strong>
-        <strong v-else>—</strong>
-      </Card>
-      <Card v-if="hasActiveFilters">
-        <span>검색 결과</span>
-        <strong>{{ totalElements }}명</strong>
-      </Card>
-    </div>
-
-    <AsyncStatePanel
-      v-if="summaryStatus === 'error'"
-      kind="error"
-      title="학습자 요약을 불러오지 못했습니다"
-      :message="summaryError ?? '잠시 후 다시 시도해 주세요.'"
-      retry-label="요약 다시 불러오기"
-      compact
-      @retry="studentStore.loadSummary()"
-    />
-
     <AsyncStatePanel
       v-if="isInitialLoading"
       kind="loading"
-      title="학습자 목록을 불러오는 중입니다"
+      title="아동 목록을 불러오는 중입니다"
       message="잠시만 기다려 주세요."
     />
 
     <AsyncStatePanel
       v-else-if="listStatus === 'error' && !hasRetainedStudents"
       :kind="listErrorKind"
-      title="학습자 목록을 불러오지 못했습니다"
+      title="아동 목록을 불러오지 못했습니다"
       :message="listError ?? '잠시 후 다시 시도해 주세요.'"
       :retry-label="listUiError?.retryable ? '다시 시도' : undefined"
       :action-label="hasActiveFilters ? '검색 조건 초기화' : undefined"
@@ -242,16 +211,16 @@ onBeforeUnmount(() => {
     <AsyncStatePanel
       v-else-if="isEmptyAccount"
       kind="empty"
-      title="등록된 학습자가 없습니다"
-      message="첫 학습자를 등록하면 학습 현황을 확인할 수 있습니다."
-      action-label="학습자 등록"
+      title="등록된 아동이 없습니다"
+      message="첫 아동을 등록하면 학습 현황을 확인할 수 있습니다."
+      action-label="아동 등록"
       @action="router.push({ name: 'student-create' })"
     />
 
     <AsyncStatePanel
       v-else-if="isEmptySearch"
       kind="empty"
-      title="검색 조건에 맞는 학습자가 없습니다"
+      title="검색 조건에 맞는 아동이 없습니다"
       message="검색어나 필터를 변경해 주세요."
       action-label="검색 조건 초기화"
       @action="clearFilters"
@@ -276,14 +245,13 @@ onBeforeUnmount(() => {
       "
       class="table-card"
     >
-      <Table caption="담당 학습자 목록">
+      <Table caption="담당 아동 목록">
         <TableHeader>
           <TableRow>
-            <TableHead>학습자</TableHead>
-            <TableHead>학교·만 나이</TableHead>
-            <TableHead>최근 훈련</TableHead>
+            <TableHead>아동</TableHead>
+            <TableHead>현재 학습</TableHead>
             <TableHead>최근 학습</TableHead>
-            <TableHead>이번 주 참여</TableHead>
+            <TableHead>이번 주 상태</TableHead>
             <TableHead>누적 학습</TableHead>
             <TableHead><span class="sr-only">관리 메뉴</span></TableHead>
           </TableRow>
@@ -301,12 +269,14 @@ onBeforeUnmount(() => {
                 <span v-else class="avatar" aria-hidden="true">{{
                   studentInitial(student.name)
                 }}</span>
-                <strong>{{ student.name }}</strong>
+                <span class="student-identity">
+                  <strong>{{ student.name }}</strong>
+                  <small>
+                    {{ student.school ?? '학교 미입력' }} ·
+                    {{ student.age === null ? '나이 미입력' : `만 ${student.age}세` }}
+                  </small>
+                </span>
               </Button>
-            </TableCell>
-            <TableCell>
-              {{ student.school ?? '학교 미입력' }} ·
-              {{ student.age === null ? '나이 미입력' : `만 ${student.age}세` }}
             </TableCell>
             <TableCell>{{ student.recentTraining ?? '완료 훈련 없음' }}</TableCell>
             <TableCell>{{ formatLearningDate(student.recentLearningDate) }}</TableCell>
@@ -333,7 +303,7 @@ onBeforeUnmount(() => {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem @select="openStudent(student)">학습자 상세</DropdownMenuItem>
+                  <DropdownMenuItem @select="openStudent(student)">아동 상세</DropdownMenuItem>
                   <DropdownMenuItem @select="editStudent(student)">정보 수정</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -343,7 +313,7 @@ onBeforeUnmount(() => {
       </Table>
     </Card>
 
-    <nav v-if="totalPages > 1" class="pagination" aria-label="학습자 목록 페이지 이동">
+    <nav v-if="totalPages > 1" class="pagination" aria-label="아동 목록 페이지 이동">
       <Button
         type="button"
         variant="outline"
@@ -402,7 +372,6 @@ onBeforeUnmount(() => {
 .page-heading h1 {
   font-size: 26px;
 }
-.page-heading p,
 .state-card p {
   margin: 5px 0 0;
   color: var(--slate-500);
@@ -424,29 +393,6 @@ onBeforeUnmount(() => {
   color: var(--slate-400);
   font-size: 20px;
 }
-.summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-.summary > * {
-  display: grid;
-  min-height: 88px;
-  align-content: center;
-  gap: 6px;
-  padding: 16px 18px;
-}
-.summary span {
-  color: var(--slate-500);
-  font-size: 12px;
-}
-.summary strong {
-  color: var(--slate-900);
-  font-size: 22px;
-}
-.summary small {
-  color: var(--danger-600);
-}
 .state-card {
   display: grid;
   min-height: 240px;
@@ -463,9 +409,20 @@ onBeforeUnmount(() => {
 }
 .student-link {
   display: inline-flex;
+  min-width: 190px;
   justify-content: flex-start;
   gap: 10px;
   padding: 0;
+}
+.student-identity {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
+.student-identity small {
+  color: var(--slate-500);
+  font-size: 11px;
+  font-weight: 500;
 }
 .student-link img,
 .avatar {
@@ -505,8 +462,7 @@ onBeforeUnmount(() => {
     flex-direction: column;
     min-height: 0;
   }
-  .filters,
-  .summary {
+  .filters {
     grid-template-columns: 1fr;
   }
 

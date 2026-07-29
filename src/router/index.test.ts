@@ -21,8 +21,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       {
         path: 'dashboard',
-        name: 'teacher-dashboard',
-        component: { template: '<div />' },
+        redirect: { name: 'teacher-students' },
       },
       {
         path: 'students',
@@ -78,6 +77,17 @@ describe('authentication route guard', () => {
     expect(session.restoreSession).toHaveBeenCalledOnce()
   })
 
+  it('기존 대시보드 주소를 아동 목록으로 이동시킨다', async () => {
+    const router = createTestRouter()
+    const session = useSessionStore()
+    session.restoreSession = vi.fn().mockResolvedValue(true)
+
+    await router.push('/teacher/dashboard')
+
+    expect(router.currentRoute.value.name).toBe('teacher-students')
+    expect(router.currentRoute.value.fullPath).toBe('/teacher/students')
+  })
+
   it('비인증 사용자를 redirect query와 함께 로그인으로 이동시킨다', async () => {
     const router = createTestRouter()
     const session = useSessionStore()
@@ -89,14 +99,14 @@ describe('authentication route guard', () => {
     expect(router.currentRoute.value.query.redirect).toBe('/teacher/students')
   })
 
-  it('인증 사용자가 공개 인증 route에 접근하면 대시보드로 이동시킨다', async () => {
+  it('인증 사용자가 공개 인증 route에 접근하면 아동 목록으로 이동시킨다', async () => {
     const router = createTestRouter()
     const session = useSessionStore()
     session.initialize(teacher, 'access-token')
 
     await router.push('/signup')
 
-    expect(router.currentRoute.value.name).toBe('teacher-dashboard')
+    expect(router.currentRoute.value.name).toBe('teacher-students')
   })
 
   it('/find-id route를 제공하지 않는다', () => {
@@ -130,9 +140,9 @@ describe('resolveTeacherRedirect', () => {
     '/reset-password',
     '/unknown',
     undefined,
-  ])('외부·공개·존재하지 않는 redirect를 대시보드로 대체한다: %s', (redirect) => {
+  ])('외부·공개·존재하지 않는 redirect를 아동 목록으로 대체한다: %s', (redirect) => {
     const router = createTestRouter()
 
-    expect(resolveTeacherRedirect(router, redirect)).toBe('/teacher/dashboard')
+    expect(resolveTeacherRedirect(router, redirect)).toBe('/teacher/students')
   })
 })

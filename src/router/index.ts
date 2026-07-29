@@ -12,7 +12,7 @@ const publicAuthenticationRoutes = new Set([
 
 export function resolveTeacherRedirect(routerInstance: Router, redirect: unknown): string {
   if (typeof redirect !== 'string' || !redirect.startsWith('/') || redirect.startsWith('//')) {
-    return '/teacher/dashboard'
+    return '/teacher/students'
   }
 
   const resolved = routerInstance.resolve(redirect)
@@ -20,7 +20,7 @@ export function resolveTeacherRedirect(routerInstance: Router, redirect: unknown
     (record) => record.meta.requiresAuth === true,
   )
 
-  return isProtectedTeacherRoute ? resolved.fullPath : '/teacher/dashboard'
+  return isProtectedTeacherRoute ? resolved.fullPath : '/teacher/students'
 }
 
 // 앱 전체의 '페이지 이동 규칙표'입니다.
@@ -57,15 +57,12 @@ const router = createRouter({
       children: [
         {
           path: 'dashboard',
-          name: 'teacher-dashboard',
-          component: () => import('@/views/teacher/TeacherDashboardView.vue'),
-          // meta는 화면 제목과 현재 활성 메뉴를 알려 주는 부가 정보입니다.
-          meta: { title: '대시보드', section: 'dashboard' },
+          redirect: { name: 'teacher-students' },
         },
         {
           path: 'students',
           name: 'teacher-students',
-          component: () => import('@/views/teacher/TeacherDashboardView.vue'),
+          component: () => import('@/views/teacher/TeacherStudentsView.vue'),
           meta: { title: '아동 목록', section: 'students' },
         },
         {
@@ -144,7 +141,7 @@ export function installAuthenticationGuard(routerInstance: Router): void {
     }
 
     if (publicAuthenticationRoutes.has(String(to.name)) && sessionStore.authenticated) {
-      return { name: 'teacher-dashboard' }
+      return { name: 'teacher-students' }
     }
 
     return true

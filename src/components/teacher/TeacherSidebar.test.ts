@@ -53,6 +53,7 @@ function createRepository(
     listLearningEvents: vi.fn(),
     getLearningEvent: vi.fn(),
     getAccuracyTrend: vi.fn(),
+    getReadingSpeedTrend: vi.fn(),
     getTrainingHistory: vi.fn(),
     updateTeacherMemo: vi.fn(),
   }
@@ -63,7 +64,6 @@ function createTestRouter(): Router {
     history: createMemoryHistory(),
     routes: [
       { path: '/login', name: 'teacher-login', component: { template: '<div />' } },
-      { path: '/teacher/dashboard', name: 'teacher-dashboard', component: { template: '<div />' } },
       { path: '/teacher/students', name: 'teacher-students', component: { template: '<div />' } },
       { path: '/teacher/settings', name: 'teacher-settings', component: { template: '<div />' } },
       { path: '/teacher/students/:id', name: 'student-overview', component: { template: '<div />' } },
@@ -78,7 +78,7 @@ function createTestRouter(): Router {
 
 async function mountSidebar(
   repository: StudentRepository,
-  initialPath = '/teacher/dashboard',
+  initialPath = '/teacher/students',
 ): Promise<{
   wrapper: VueWrapper
   router: Router
@@ -108,14 +108,8 @@ async function mountSidebar(
   return { wrapper, router, pinia }
 }
 
-async function selectAccountMenuItem(wrapper: VueWrapper, label: string): Promise<void> {
-  await wrapper.get('[aria-label="계정 메뉴 열기"]').trigger('click')
-  await nextTick()
-  const item = Array.from(
-    document.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-item"]'),
-  ).find((element) => element.textContent?.trim() === label)
-  expect(item).toBeDefined()
-  item?.click()
+async function clickLogout(wrapper: VueWrapper): Promise<void> {
+  await wrapper.get('[aria-label="로그아웃"]').trigger('click')
   await flushPromises()
 }
 
@@ -140,18 +134,46 @@ describe('TeacherSidebar', () => {
     expect(wrapper.text()).toContain('새 학습센터')
   })
 
-  it('목록 Repository의 studentId로 하위 route를 만든다', async () => {
-    const { wrapper } = await mountSidebar(createRepository(), '/teacher/students')
+  it('교수자 profile 영역을 누르면 프로필 관리로 이동한다', async () => {
+    const { wrapper, router } = await mountSidebar(createRepository())
 
-    expect(wrapper.html()).toContain('/teacher/students/7')
+    await wrapper.get('[aria-label="프로필 설정으로 이동"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('teacher-settings')
+  })
+
+  it('목록을 불러온 직후에는 프로필을 비워 두고 학생 종속 메뉴를 비활성화한다', async () => {
+    const { wrapper, pinia } = await mountSidebar(createRepository())
+
+    expect(useStudentStore(pinia).selectedStudentId).toBeNull()
+    expect(wrapper.text()).toContain('아동을 선택해 주세요')
+    expect(wrapper.findAll('[aria-disabled="true"]')).toHaveLength(6)
+    expect(wrapper.html()).not.toContain('/teacher/students/7')
     expect(wrapper.html()).not.toContain('/teacher/students/0')
   })
 
-  it('목록이 비어 있으면 임시 하위 route를 만들지 않는다', async () => {
+  it('학생을 선택하면 실제 studentId로 하위 route를 만든다', async () => {
+    const { wrapper, pinia } = await mountSidebar(createRepository())
+    useStudentStore(pinia).rememberStudent({
+      studentId: 7,
+      name: '김하늘',
+      school: '새봄초등학교',
+      imageUrl: null,
+    })
+    await nextTick()
+
+    expect(wrapper.html()).toContain('/teacher/students/7')
+    expect(wrapper.html()).not.toContain('/teacher/students/0')
+    expect(wrapper.findAll('[aria-disabled="true"]')).toHaveLength(0)
+  })
+
+  it('목록이 비어 있어도 학생 종속 메뉴 위치를 유지한다', async () => {
     const { wrapper } = await mountSidebar(createRepository([]))
 
-    expect(wrapper.text()).toContain('등록된 아동이 없습니다')
-    expect(wrapper.text()).not.toContain('학습 현황')
+    expect(wrapper.text()).toContain('아동을 선택해 주세요')
+    expect(wrapper.text()).toContain('학습 현황')
+    expect(wrapper.findAll('[aria-disabled="true"]')).toHaveLength(6)
     expect(wrapper.html()).not.toContain('/teacher/students/0')
   })
 
@@ -164,7 +186,7 @@ describe('TeacherSidebar', () => {
     await reports.loadForStudent(1)
     expect(reports.reports.length).toBeGreaterThan(0)
 
-    await selectAccountMenuItem(wrapper, '로그아웃')
+    await clickLogout(wrapper)
 
     expect(session.authenticated).toBe(false)
     expect(students.navigationItems).toEqual([])
@@ -178,10 +200,10 @@ describe('TeacherSidebar', () => {
     const session = useSessionStore(pinia)
     vi.spyOn(session, 'logout').mockRejectedValueOnce(new Error('network error'))
 
-    await selectAccountMenuItem(wrapper, '로그아웃')
+    await clickLogout(wrapper)
 
     expect(session.authenticated).toBe(true)
-    expect(router.currentRoute.value.name).toBe('teacher-dashboard')
+    expect(router.currentRoute.value.name).toBe('teacher-students')
     expect(wrapper.get('[role="alert"]').text()).toContain('로그아웃에 실패했습니다')
   })
 })

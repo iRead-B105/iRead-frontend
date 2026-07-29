@@ -43,6 +43,36 @@ beforeEach(() => {
 })
 
 describe('Training store', () => {
+  it('훈련 목록을 sequence로 재정렬하지 않고 백엔드 배열 순서를 유지한다', async () => {
+    const store = useTrainingStore()
+    store.setRepository(
+      repository({
+        getCatalog: vi.fn().mockResolvedValue([
+          {
+            trainingTemplateId: 14,
+            unitName: '글자 만들기',
+            sequence: 1,
+            trainingName: '음소 합쳐 음절 만들기',
+            studentAchievementRate: null,
+            form: null,
+          },
+          {
+            trainingTemplateId: 4,
+            unitName: '소리 듣고 고르기',
+            sequence: 1,
+            trainingName: '자음 소리 고르기',
+            studentAchievementRate: null,
+            form: null,
+          },
+        ]),
+      }),
+    )
+
+    await store.loadForStudent(1)
+
+    expect(store.catalog.map((item) => item.trainingTemplateId)).toEqual([14, 4])
+  })
+
   it('훈련 이력 재조회 실패 시 이전 커리큘럼을 유지한다', async () => {
     const mock = new MockTrainingRepository()
     const getCurriculumLogs = vi.spyOn(mock, 'getCurriculumLogs')
@@ -242,6 +272,40 @@ describe('Training store', () => {
     expect(store.hasChanges).toBe(false)
   })
 
+  it('409 저장 충돌 시 draft를 유지하고 명시적 최신 상태 복구 후에만 편집을 푼다', async () => {
+    const mock = new MockTrainingRepository()
+    const getCurrentCurriculum = vi.spyOn(mock, 'getCurrentCurriculum')
+    const updateCurriculum = vi.spyOn(mock, 'updateCurriculum').mockRejectedValueOnce(
+      new ApiError({
+        status: 409,
+        code: 'CURRICULUM_ALREADY_STARTED',
+        message: 'conflict',
+      }),
+    )
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadForStudent(1)
+    store.selectTemplate(14)
+    store.addSelectedTemplate()
+    store.selectTemplate(11)
+    store.addSelectedTemplate()
+
+    await expect(store.saveCurriculum()).resolves.toBe(false)
+
+    expect(updateCurriculum).toHaveBeenCalledTimes(1)
+    expect(store.curriculumSaveConflict).toBe(true)
+    expect(store.canEditCurriculum).toBe(false)
+    expect(store.hasChanges).toBe(true)
+    expect(store.curriculumError).toContain('서버의 최신 내용을 다시 불러와 주세요')
+
+    await expect(store.refreshCurriculumAfterConflict()).resolves.toBe(true)
+
+    expect(getCurrentCurriculum).toHaveBeenCalledTimes(2)
+    expect(store.curriculumSaveConflict).toBe(false)
+    expect(store.canEditCurriculum).toBe(true)
+    expect(store.hasChanges).toBe(false)
+  })
+
   it('학생 이동 후 도착한 이전 커리큘럼 재동기화 응답을 무시한다', async () => {
     const oldSynchronization = deferred<DailyCurriculum | null>()
     const first: DailyCurriculum = {
@@ -322,6 +386,35 @@ describe('Training store', () => {
 
     expect(store.selectedExpectedWords).toEqual(previousWords)
     expect(store.expectedWordError).toContain('이미 추가된')
+  })
+
+  it('예상 단어는 준비 전·시작 전만 수정하고 진행 중 상태에서는 repository 호출을 막는다', async () => {
+    const mock = new MockTrainingRepository()
+    const addExpectedWord = vi.spyOn(mock, 'addExpectedWord')
+    const deleteExpectedWord = vi.spyOn(mock, 'deleteExpectedWord')
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadForStudent(1)
+    await store.selectDraftItem(1, 'training-101')
+
+    expect(store.selectedTraining?.status).toBe('NOT_STARTED')
+    expect(store.canEditExpectedWords).toBe(true)
+    await expect(store.addExpectedWord('별')).resolves.toBe(true)
+    expect(addExpectedWord).toHaveBeenCalledTimes(1)
+
+    const detail = store.selectedTrainingDetail
+    expect(detail).not.toBeNull()
+    store.trainingDetailById = {
+      ...store.trainingDetailById,
+      101: { ...detail!, status: 'IN_PROGRESS' },
+    }
+
+    expect(store.selectedTraining?.status).toBe('IN_PROGRESS')
+    expect(store.canEditExpectedWords).toBe(false)
+    await expect(store.addExpectedWord('달')).resolves.toBe(false)
+    await expect(store.deleteExpectedWord(1001)).resolves.toBe(false)
+    expect(addExpectedWord).toHaveBeenCalledTimes(1)
+    expect(deleteExpectedWord).not.toHaveBeenCalled()
   })
 
   it('reset이 커리큘럼·예상 단어·선택 상태를 모두 비운다', async () => {

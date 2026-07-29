@@ -103,6 +103,17 @@ export interface StudentAccuracyTrend {
   readonly dailyAccuracy: readonly StudentAccuracyPoint[]
 }
 
+export interface StudentReadingSpeedPoint {
+  readonly date: string
+  readonly speed: number
+}
+
+export interface StudentReadingSpeedTrend {
+  readonly unit: 'CORRECT_WORDS_PER_MINUTE'
+  readonly changeRate: number | null
+  readonly points: readonly StudentReadingSpeedPoint[]
+}
+
 export type StudentTrainingHistoryPeriod = '30d' | '3m'
 
 export interface StudentTrainingHistoryItem {

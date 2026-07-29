@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 
 defineProps<{
   title: string
-  description?: string
 }>()
 </script>
 
@@ -12,7 +11,6 @@ defineProps<{
     <CardHeader class="settings-section__header">
       <div>
         <h2>{{ title }}</h2>
-        <CardDescription v-if="description">{{ description }}</CardDescription>
       </div>
       <slot name="actions" />
     </CardHeader>
@@ -47,12 +45,6 @@ defineProps<{
   margin: 0;
   color: var(--slate-950);
   font-size: 17px;
-}
-
-.settings-section__header :deep([data-slot='card-description']) {
-  margin: 3px 0 0;
-  color: var(--slate-500);
-  font-size: 12px;
 }
 
 .settings-section__content {

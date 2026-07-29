@@ -6,21 +6,9 @@ import {
   refreshedReportGazeTrendFixture,
   reportFixtures,
 } from '../fixtures'
-import type {
-  CreateReportInput,
-  ReportDetail,
-  ReportListItem,
-} from '../model'
-import {
-  localDateString,
-  normalizeCreateReportInput,
-  REPORT_MEMO_MAX_LENGTH,
-  validateReportPeriod,
-} from '../validation'
-import type {
-  ReportRepository,
-  ReportRequestOptions,
-} from './reportRepository'
+import type { CreateReportInput, ReportDetail, ReportListItem } from '../model'
+import { localDateString, REPORT_MEMO_MAX_LENGTH, validateReportPeriod } from '../validation'
+import type { ReportRepository, ReportRequestOptions } from './reportRepository'
 
 export interface MockReportRepositoryOptions {
   readonly reports?: readonly ReportDetail[]
@@ -73,9 +61,7 @@ function toListItem(report: ReportDetail): ReportListItem {
 
 export class MockReportRepository implements ReportRepository {
   private readonly reports = new Map<number, ReportDetail>()
-  private readonly completedLearningDatesByStudent: Readonly<
-    Record<number, readonly string[]>
-  >
+  private readonly completedLearningDatesByStudent: Readonly<Record<number, readonly string[]>>
   private readonly now: () => Date
   private readonly delayMs: number
   private nextReportId: number
@@ -85,12 +71,10 @@ export class MockReportRepository implements ReportRepository {
       this.reports.set(report.reportId, clone(report))
     }
     this.completedLearningDatesByStudent =
-      options.completedLearningDatesByStudent ??
-      completedLearningDatesByStudentFixture
+      options.completedLearningDatesByStudent ?? completedLearningDatesByStudentFixture
     this.now = options.now ?? createMockDemoDate
     this.delayMs = options.delayMs ?? 80
-    this.nextReportId =
-      Math.max(0, ...Array.from(this.reports.keys())) + 1
+    this.nextReportId = Math.max(0, ...Array.from(this.reports.keys())) + 1
   }
 
   async listByStudent(
@@ -103,40 +87,31 @@ export class MockReportRepository implements ReportRepository {
       .filter((report) => report.studentId === studentId)
       .sort(
         (left, right) =>
-          right.createdAt.localeCompare(left.createdAt) ||
-          right.reportId - left.reportId,
+          right.createdAt.localeCompare(left.createdAt) || right.reportId - left.reportId,
       )
       .map((report) => clone(toListItem(report)))
   }
 
   async create(input: CreateReportInput) {
     assertPositiveId(input.studentId, 'studentId')
-    const normalized = normalizeCreateReportInput(input)
     const periodErrors = validateReportPeriod(
-      normalized.startDate,
-      normalized.endDate,
+      input.startDate,
+      input.endDate,
       localDateString(this.now()),
     )
     if (periodErrors.startDate || periodErrors.endDate) {
       throw new ApiError({
         status: 400,
         code: 'VALIDATION_ERROR',
-        message: periodErrors.startDate ?? periodErrors.endDate ?? '보고서 기간이 올바르지 않습니다.',
+        message:
+          periodErrors.startDate ?? periodErrors.endDate ?? '보고서 기간이 올바르지 않습니다.',
       })
     }
-    if ((normalized.teacherMemo?.length ?? 0) > REPORT_MEMO_MAX_LENGTH) {
-      throw new ApiError({
-        status: 400,
-        code: 'VALIDATION_ERROR',
-        message: '교수자 의견은 2,000자 이하여야 합니다.',
-      })
-    }
-
     const duplicate = Array.from(this.reports.values()).find(
       (report) =>
-        report.studentId === normalized.studentId &&
-        report.startDate === normalized.startDate &&
-        report.endDate === normalized.endDate,
+        report.studentId === input.studentId &&
+        report.startDate === input.startDate &&
+        report.endDate === input.endDate,
     )
     if (duplicate) {
       throw new ApiError({
@@ -153,9 +128,9 @@ export class MockReportRepository implements ReportRepository {
       })
     }
 
-    const hasCompletedLearning = (
-      this.completedLearningDatesByStudent[normalized.studentId] ?? []
-    ).some((date) => date >= normalized.startDate && date <= normalized.endDate)
+    const hasCompletedLearning = (this.completedLearningDatesByStudent[input.studentId] ?? []).some(
+      (date) => date >= input.startDate && date <= input.endDate,
+    )
     if (!hasCompletedLearning) {
       throw new ApiError({
         status: 400,
@@ -169,12 +144,12 @@ export class MockReportRepository implements ReportRepository {
     const createdAt = this.now().toISOString()
     this.reports.set(reportId, {
       reportId,
-      studentId: normalized.studentId,
-      startDate: normalized.startDate,
-      endDate: normalized.endDate,
+      studentId: input.studentId,
+      startDate: input.startDate,
+      endDate: input.endDate,
       createdAt,
-      snapshot: createMockReportSnapshot(normalized.startDate, normalized.endDate),
-      teacherMemo: normalized.teacherMemo ?? null,
+      snapshot: createMockReportSnapshot(input.startDate, input.endDate),
+      teacherMemo: null,
     })
     return { reportId, createdAt }
   }

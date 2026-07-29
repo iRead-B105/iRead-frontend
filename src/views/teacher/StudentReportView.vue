@@ -16,7 +16,6 @@ import {
   localDateString,
   parsePositiveReportId,
   validateReportPeriod,
-  validateTeacherMemo,
   type ReportListItem,
 } from '@/features/teacher/report'
 import { asyncStateKind } from '@/features/teacher/error'
@@ -78,7 +77,6 @@ const studentLoadError = computed(() =>
   studentId.value === null ? null : (detailErrorById.value[studentId.value] ?? null),
 )
 const periodErrors = computed(() => validateReportPeriod(startDate.value, endDate.value, today))
-const setupMemoError = computed(() => validateTeacherMemo(teacherMemoDraft.value))
 const filteredReports = computed(() => {
   const query = reportQuery.value.trim().toLowerCase()
   if (!query) return reports.value
@@ -122,10 +120,7 @@ async function retryStudent(): Promise<void> {
 
 <template>
   <div class="report page-stack">
-    <PageHeader
-      title="보고서"
-      description="기간별 학습 결과와 훈련·검사 시선 추이를 저장하고 확인합니다."
-    />
+    <PageHeader title="보고서" />
 
     <AsyncStatePanel
       v-if="invalidStudentId"
@@ -194,7 +189,6 @@ async function retryStudent(): Promise<void> {
           <CardHeader class="saved-reports__header">
             <div>
               <CardTitle id="saved-reports-title">저장된 보고서</CardTitle>
-              <p>생성일이 최근인 순서입니다.</p>
             </div>
             <strong>{{ reports.length }}개</strong>
           </CardHeader>
@@ -276,15 +270,11 @@ async function retryStudent(): Promise<void> {
         <ReportSetupPanel
           v-model:start-date="startDate"
           v-model:end-date="endDate"
-          :teacher-memo="teacherMemoDraft"
-          :student-name="studentName"
           :today="today"
           :period-errors="periodErrors"
-          :memo-error="setupMemoError"
           :create-error="createError"
           :duplicate-report-id="duplicateReportId"
           :submitting="createStatus === 'submitting'"
-          @update:teacher-memo="reportStore.setTeacherMemoDraft"
           @generate="generateReport"
           @open-duplicate="reportStore.openDuplicateReport()"
         />

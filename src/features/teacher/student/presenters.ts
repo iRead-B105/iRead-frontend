@@ -21,7 +21,7 @@ export function formatWeeklyParticipation(
   scheduled: number,
 ): string {
   if (scheduled === 0 || rate === null) return '일정 없음'
-  return `${rate}% · ${completed}/${scheduled}`
+  return `${rate}% (${completed}일/${scheduled}일)`
 }
 
 export function formatStudentDateTime(value: string | null): string {

@@ -150,12 +150,14 @@ describe('Test store', () => {
   it('빠른 선택 변경에서 늦게 끝난 이전 비교 응답을 무시한다', async () => {
     const oldResult = deferred<TestComparison>()
     const mock = new MockTestRepository()
-    const latest = await mock.compareTests(1, 1_005, [])
-    const compareTests = vi
-      .fn()
-      .mockResolvedValueOnce(await mock.compareTests(1, 1_011, []))
-      .mockReturnValueOnce(oldResult.promise)
-      .mockResolvedValueOnce(latest)
+    let delayNext1008 = false
+    const compareTests = vi.fn().mockImplementation((studentId, currentTestId, ids) => {
+      if (delayNext1008 && currentTestId === 1_008) {
+        delayNext1008 = false
+        return oldResult.promise
+      }
+      return mock.compareTests(studentId, currentTestId, ids)
+    })
     const store = useTestStore()
     store.setRepository(
       repository({
@@ -165,6 +167,7 @@ describe('Test store', () => {
     )
     await store.loadForStudent(1)
 
+    delayNext1008 = true
     const oldRequest = store.selectCurrentTest(1, 1_008)
     await store.selectCurrentTest(1, 1_005)
     oldResult.resolve(await mock.compareTests(1, 1_008, []))
@@ -172,6 +175,35 @@ describe('Test store', () => {
 
     expect(store.currentTestId).toBe(1_005)
     expect(store.comparisonResult?.currentTest.testId).toBe(1_005)
+  })
+
+  it('전체 검사 상세를 최대 세 건씩 조회하고 일부 실패 시 성공 결과를 유지한다', async () => {
+    const mock = new MockTestRepository()
+    let activeRequests = 0
+    let maximumActiveRequests = 0
+    const compareTests = vi.fn().mockImplementation(async (studentId, currentTestId, ids) => {
+      activeRequests += 1
+      maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests)
+      await Promise.resolve()
+      activeRequests -= 1
+      if (currentTestId === 1_005) throw new Error('temporary failure')
+      return mock.compareTests(studentId, currentTestId, ids)
+    })
+    const store = useTestStore()
+    store.setRepository(
+      repository({
+        getTests: vi.fn().mockResolvedValue(await mock.getTests(1)),
+        compareTests,
+      }),
+    )
+
+    await store.loadForStudent(1)
+
+    expect(maximumActiveRequests).toBeLessThanOrEqual(3)
+    expect(store.trendStatus).toBe('success')
+    expect(store.trendFailedCount).toBe(1)
+    expect(store.trendDetails.map((detail) => detail.testId)).toEqual([1_004, 1_008, 1_011])
+    expect(store.trendError).toContain('일부 검사 1건')
   })
 
   it('빠른 기준 검사 변경에서 늦게 끝난 이전 시선 응답을 무시한다', async () => {

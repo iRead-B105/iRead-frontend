@@ -14,6 +14,7 @@ import {
   type StudentListItem,
   type StudentMutationCommand,
   type StudentNavigationItem,
+  type StudentReadingSpeedTrend,
   type StudentRepository,
   type StudentRequestStatus,
   type StudentSummary,
@@ -92,6 +93,9 @@ export const useStudentStore = defineStore('students', () => {
   const accuracyTrendById = ref<Record<number, StudentAccuracyTrend>>({})
   const accuracyTrendStatusById = ref<Record<number, StudentRequestStatus>>({})
   const accuracyTrendErrorById = ref<Record<number, string | null>>({})
+  const readingSpeedTrendById = ref<Record<number, StudentReadingSpeedTrend>>({})
+  const readingSpeedTrendStatusById = ref<Record<number, StudentRequestStatus>>({})
+  const readingSpeedTrendErrorById = ref<Record<number, string | null>>({})
   const trainingHistoryByKey = ref<Record<string, StudentTrainingHistory>>({})
   const trainingHistoryStatusByKey = ref<Record<string, StudentRequestStatus>>({})
   const trainingHistoryErrorByKey = ref<Record<string, string | null>>({})
@@ -119,6 +123,7 @@ export const useStudentStore = defineStore('students', () => {
   const learningEventsSequences = new Map<number, number>()
   const learningEventDetailSequences = new Map<string, number>()
   const accuracyTrendSequences = new Map<number, number>()
+  const readingSpeedTrendSequences = new Map<number, number>()
   const trainingHistorySequences = new Map<string, number>()
 
   const navigationItems = computed(() =>
@@ -236,9 +241,6 @@ export const useStudentStore = defineStore('students', () => {
 
     navigationItemsById.value = nextById
     navigationOrder.value = nextOrder
-    if (selectedStudentId.value === null && items[0]) {
-      selectedStudentId.value = items[0].studentId
-    }
   }
 
   async function loadNavigation(options: { reset?: boolean } = {}): Promise<void> {
@@ -532,6 +534,48 @@ export const useStudentStore = defineStore('students', () => {
     }
   }
 
+  async function loadReadingSpeedTrend(
+    studentId: number,
+  ): Promise<StudentReadingSpeedTrend | null> {
+    const requestSequence = (readingSpeedTrendSequences.get(studentId) ?? 0) + 1
+    readingSpeedTrendSequences.set(studentId, requestSequence)
+    readingSpeedTrendStatusById.value = {
+      ...readingSpeedTrendStatusById.value,
+      [studentId]: 'loading',
+    }
+    readingSpeedTrendErrorById.value = {
+      ...readingSpeedTrendErrorById.value,
+      [studentId]: null,
+    }
+
+    try {
+      const trend = await repository.value.getReadingSpeedTrend(studentId)
+      if (readingSpeedTrendSequences.get(studentId) !== requestSequence) return null
+      readingSpeedTrendById.value = {
+        ...readingSpeedTrendById.value,
+        [studentId]: trend,
+      }
+      readingSpeedTrendStatusById.value = {
+        ...readingSpeedTrendStatusById.value,
+        [studentId]: 'success',
+      }
+      return trend
+    } catch (error) {
+      if (isAbortError(error) || readingSpeedTrendSequences.get(studentId) !== requestSequence) {
+        return null
+      }
+      readingSpeedTrendStatusById.value = {
+        ...readingSpeedTrendStatusById.value,
+        [studentId]: 'error',
+      }
+      readingSpeedTrendErrorById.value = {
+        ...readingSpeedTrendErrorById.value,
+        [studentId]: errorMessage(error),
+      }
+      return null
+    }
+  }
+
   async function loadTrainingHistory(
     studentId: number,
     period: StudentTrainingHistoryPeriod,
@@ -652,6 +696,9 @@ export const useStudentStore = defineStore('students', () => {
     const nextAccuracyTrends = { ...accuracyTrendById.value }
     const nextAccuracyTrendStatuses = { ...accuracyTrendStatusById.value }
     const nextAccuracyTrendErrors = { ...accuracyTrendErrorById.value }
+    const nextReadingSpeedTrends = { ...readingSpeedTrendById.value }
+    const nextReadingSpeedTrendStatuses = { ...readingSpeedTrendStatusById.value }
+    const nextReadingSpeedTrendErrors = { ...readingSpeedTrendErrorById.value }
     delete nextDetails[studentId]
     delete nextDetailStale[studentId]
     delete nextNavigationItems[studentId]
@@ -668,6 +715,9 @@ export const useStudentStore = defineStore('students', () => {
     delete nextAccuracyTrends[studentId]
     delete nextAccuracyTrendStatuses[studentId]
     delete nextAccuracyTrendErrors[studentId]
+    delete nextReadingSpeedTrends[studentId]
+    delete nextReadingSpeedTrendStatuses[studentId]
+    delete nextReadingSpeedTrendErrors[studentId]
     detailsById.value = nextDetails
     detailStaleById.value = nextDetailStale
     navigationItemsById.value = nextNavigationItems
@@ -700,6 +750,9 @@ export const useStudentStore = defineStore('students', () => {
     accuracyTrendById.value = nextAccuracyTrends
     accuracyTrendStatusById.value = nextAccuracyTrendStatuses
     accuracyTrendErrorById.value = nextAccuracyTrendErrors
+    readingSpeedTrendById.value = nextReadingSpeedTrends
+    readingSpeedTrendStatusById.value = nextReadingSpeedTrendStatuses
+    readingSpeedTrendErrorById.value = nextReadingSpeedTrendErrors
     trainingHistoryByKey.value = withoutStudentInsightKeys(trainingHistoryByKey.value, studentId)
     trainingHistoryStatusByKey.value = withoutStudentInsightKeys(
       trainingHistoryStatusByKey.value,
@@ -759,6 +812,9 @@ export const useStudentStore = defineStore('students', () => {
     accuracyTrendById.value = {}
     accuracyTrendStatusById.value = {}
     accuracyTrendErrorById.value = {}
+    readingSpeedTrendById.value = {}
+    readingSpeedTrendStatusById.value = {}
+    readingSpeedTrendErrorById.value = {}
     trainingHistoryByKey.value = {}
     trainingHistoryStatusByKey.value = {}
     trainingHistoryErrorByKey.value = {}
@@ -767,6 +823,7 @@ export const useStudentStore = defineStore('students', () => {
     learningEventsSequences.clear()
     learningEventDetailSequences.clear()
     accuracyTrendSequences.clear()
+    readingSpeedTrendSequences.clear()
     trainingHistorySequences.clear()
 
     navigationQuery.keyword = ''
@@ -815,6 +872,9 @@ export const useStudentStore = defineStore('students', () => {
     accuracyTrendById,
     accuracyTrendStatusById,
     accuracyTrendErrorById,
+    readingSpeedTrendById,
+    readingSpeedTrendStatusById,
+    readingSpeedTrendErrorById,
     trainingHistoryByKey,
     trainingHistoryStatusByKey,
     trainingHistoryErrorByKey,
@@ -843,6 +903,7 @@ export const useStudentStore = defineStore('students', () => {
     loadLearningEvents,
     loadLearningEvent,
     loadAccuracyTrend,
+    loadReadingSpeedTrend,
     loadTrainingHistory,
     saveTeacherMemo,
     createStudent,

@@ -73,7 +73,7 @@ interface TrainingDetailDto {
   readonly name: string
   readonly form: TrainingForm | null
   readonly generatedData?: Readonly<Record<string, unknown>> | null
-  readonly status: TrainingStatus
+  readonly status: TrainingStatus | Lowercase<TrainingStatus>
   readonly startedAt?: string | null
   readonly finishedAt?: string | null
   readonly result?: TrainingResult | null
@@ -163,6 +163,21 @@ function mapExpectedWord(dto: ExpectedWordDto): ExpectedWord {
   }
 }
 
+function normalizeTrainingStatus(
+  status: TrainingStatus | Lowercase<TrainingStatus>,
+): TrainingStatus {
+  const normalized = status.toUpperCase()
+  if (
+    normalized === 'NOT_READY' ||
+    normalized === 'NOT_STARTED' ||
+    normalized === 'IN_PROGRESS' ||
+    normalized === 'COMPLETED'
+  ) {
+    return normalized
+  }
+  throw new Error(`지원하지 않는 훈련 상태입니다: ${status}`)
+}
+
 function mapTrainingDetail(dto: TrainingDetailDto): TrainingDetail {
   return {
     trainingId: dto.trainingId,
@@ -170,7 +185,7 @@ function mapTrainingDetail(dto: TrainingDetailDto): TrainingDetail {
     name: dto.name,
     form: dto.form,
     generatedData: dto.generatedData ?? null,
-    status: dto.status,
+    status: normalizeTrainingStatus(dto.status),
     startedAt: dto.startedAt ?? null,
     finishedAt: dto.finishedAt ?? null,
     result: dto.result ?? null,

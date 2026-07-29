@@ -107,7 +107,6 @@ const growthChartSummary = computed(
   <section class="snapshot-section" aria-labelledby="report-summary-title">
     <header class="section-heading">
       <h2 id="report-summary-title">학습 요약</h2>
-      <p>보고서 생성 시점에 저장된 기간 내 학습 결과입니다.</p>
     </header>
     <dl class="summary-grid">
       <div v-for="item in summaryItems" :key="item.label">
@@ -120,7 +119,6 @@ const growthChartSummary = computed(
   <section class="snapshot-section" aria-labelledby="growth-history-title">
     <header class="section-heading">
       <h2 id="growth-history-title">기간별 성장 기록</h2>
-      <p>자료가 없는 지점은 임의 값으로 연결하지 않습니다.</p>
     </header>
     <p v-if="snapshot.growthHistory.length === 0" class="empty-state">
       표시할 성장 기록이 없습니다.

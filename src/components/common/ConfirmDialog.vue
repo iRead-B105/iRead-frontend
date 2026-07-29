@@ -26,8 +26,8 @@ const emit = defineEmits<{ cancel: []; confirm: [] }>()
 </script>
 
 <template>
-  <AlertDialog :open="open" @update:open="(nextOpen) => !nextOpen && emit('cancel')">
-    <AlertDialogContent class="confirm-dialog">
+  <AlertDialog :open="open">
+    <AlertDialogContent class="confirm-dialog" @escape-key-down="emit('cancel')">
       <AlertDialogHeader>
         <span class="confirm-dialog__icon" :class="`is-${tone}`" aria-hidden="true">
           <CircleAlert :size="24" />
@@ -36,10 +36,10 @@ const emit = defineEmits<{ cancel: []; confirm: [] }>()
         <AlertDialogDescription>{{ message }}</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel @click="$emit('cancel')">취소</AlertDialogCancel>
+        <AlertDialogCancel @click="emit('cancel')">취소</AlertDialogCancel>
         <AlertDialogAction
           :variant="tone === 'danger' ? 'destructive' : 'default'"
-          @click="$emit('confirm')"
+          @click.prevent="emit('confirm')"
         >
           {{ confirmLabel }}
         </AlertDialogAction>
@@ -66,5 +66,8 @@ const emit = defineEmits<{ cancel: []; confirm: [] }>()
   color: var(--danger-600);
   place-items: center;
 }
-.confirm-dialog__icon.is-primary { background: var(--primary-50); color: var(--primary-700); }
+.confirm-dialog__icon.is-primary {
+  background: var(--primary-50);
+  color: var(--primary-700);
+}
 </style>

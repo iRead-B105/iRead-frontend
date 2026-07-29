@@ -210,7 +210,6 @@ function questionStatusClass(question: TrainingQuestionResult): string {
   <div class="training-history page-stack">
     <PageHeader
       title="훈련 이력"
-      description="완료된 커리큘럼의 훈련 결과와 음성 기준 읽기 속도를 확인합니다."
     />
 
     <AsyncStatePanel
@@ -246,7 +245,6 @@ function questionStatusClass(question: TrainingQuestionResult): string {
           <header class="section-heading">
             <div>
               <h2>완료 커리큘럼</h2>
-              <p>완료일이 최근인 순서로 표시합니다.</p>
             </div>
           </header>
 
@@ -366,7 +364,6 @@ function questionStatusClass(question: TrainingQuestionResult): string {
           <header class="section-heading statistics-heading">
             <div>
               <h2>음성 읽기 속도 추이</h2>
-              <p>분당 정확하게 읽은 단어 수를 표시합니다.</p>
             </div>
             <div class="change-rate">
               <strong>{{ formatChangeRate(statistics?.readingSpeedTrend.changeRate) }}</strong>

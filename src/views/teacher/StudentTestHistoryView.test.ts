@@ -37,8 +37,13 @@ async function mountHistory(
         plugins: [pinia, router],
         stubs: {
           ChartPanel: {
-            props: ['ariaLabel'],
-            template: '<div data-test="area-chart">{{ ariaLabel }}</div>',
+            props: ['ariaLabel', 'option'],
+            computed: {
+              seriesNames() {
+                return this.option.series.map((series: { name: string }) => series.name).join(', ')
+              },
+            },
+            template: '<div data-test="area-chart">{{ ariaLabel }} {{ seriesNames }}</div>',
           },
         },
       },
@@ -72,15 +77,41 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('문장 의미 연결 2단계')
     expect(wrapper.text()).toContain('1분 32초')
     expect(wrapper.text()).toContain('친구를 배려하는 마음')
-    expect(wrapper.find('[data-test="area-chart"]').exists()).toBe(true)
+    expect(wrapper.findAll('[data-test="area-chart"]')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('전체 검사 추이')
+    expect(wrapper.text()).toContain('검사 평균')
     expect(wrapper.find('input[type="date"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('검사 평균')
     expect(wrapper.text()).toContain('검사 시선 분석')
+    expect(wrapper.text().indexOf('검사별 주요 기록')).toBeLessThan(
+      wrapper.text().indexOf('검사 시선 분석'),
+    )
     expect(wrapper.text()).toContain('51.2초')
     expect(wrapper.text()).toContain('82회')
     expect(wrapper.text()).toContain('9회')
     expect(wrapper.text()).not.toContain('시선 고정')
     expect(wrapper.text()).not.toContain('읽기 이탈')
+  })
+
+  it('전체 검사 상세 일부가 실패하면 성공한 평균을 유지하고 재시도를 제공한다', async () => {
+    const mock = new MockTestRepository()
+    const compareTests = vi
+      .spyOn(mock, 'compareTests')
+      .mockImplementation(async (studentId, currentTestId, comparisonTestIds, options) => {
+        if (currentTestId === 1_005) throw new Error('temporary failure')
+        return new MockTestRepository().compareTests(
+          studentId,
+          currentTestId,
+          comparisonTestIds,
+          options,
+        )
+      })
+    const { wrapper, store } = await mountHistory(mock)
+
+    expect(compareTests).toHaveBeenCalled()
+    expect(store.trendStatus).toBe('success')
+    expect(store.trendDetails.map((detail) => detail.testId)).toEqual([1_004, 1_008, 1_011])
+    expect(wrapper.text()).toContain('일부 검사 1건을 불러오지 못해')
+    expect(wrapper.text()).toContain('다시 확인')
   })
 
   it('검사 선택에 따라 NO_DATA와 FAILED를 요청 오류 없이 구분한다', async () => {

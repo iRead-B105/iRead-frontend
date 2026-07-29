@@ -29,6 +29,7 @@ import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import {
   buildStudentUpdateInput,
   createStudentFormDraft,
+  getStudentBirthdayMax,
   normalizeStudentCreateInput,
   STUDENT_FIELD_MAX_LENGTH,
   validateStudentForm,
@@ -62,9 +63,7 @@ const deleteError = ref('')
 const deleting = ref(false)
 
 const title = computed(() => (props.mode === 'create' ? '새 아동 등록' : '아동 정보 관리'))
-const description = computed(() =>
-  props.mode === 'create' ? '아동과 보호자 정보를 입력합니다.' : '아동과 보호자 정보를 수정합니다.',
-)
+const birthdayMax = getStudentBirthdayMax()
 const studentInitial = computed(() => form.name.trim().charAt(0) || '학')
 const formChanged = computed(
   () => JSON.stringify(form) !== savedSnapshot.value || selectedImage.value !== null,
@@ -224,9 +223,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
 
 <template>
   <form class="student-form page-stack" novalidate @submit.prevent="submitForm">
-    <PageHeader :title="title" :description="description" />
+    <PageHeader :title="title" />
 
-    <SettingsSection title="아동 정보" description="학습 관리에 사용하는 정보입니다.">
+    <SettingsSection title="아동 정보">
       <ProfileImageEditor
         input-id="student-photo"
         label="프로필 사진"
@@ -261,6 +260,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
             id="student-birthday"
             v-model="form.birthday"
             required
+            :max="birthdayMax"
             :aria-invalid="Boolean(fieldErrors.birthday)"
             :aria-describedby="fieldErrors.birthday ? 'student-birthday-error' : undefined"
             type="date"
@@ -308,7 +308,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
       </div>
     </SettingsSection>
 
-    <SettingsSection title="보호자 정보" description="상담에 사용할 보호자 연락처입니다.">
+    <SettingsSection title="보호자 정보">
       <div class="form-grid">
         <div class="field">
           <Label for="guardian-name">보호자명 <span aria-hidden="true">*</span></Label>

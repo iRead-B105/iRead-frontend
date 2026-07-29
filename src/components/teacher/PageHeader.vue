@@ -1,7 +1,6 @@
 <script setup lang="ts">
 defineProps<{
   title: string
-  description?: string
 }>()
 </script>
 
@@ -9,7 +8,6 @@ defineProps<{
   <header class="page-header">
     <div class="page-header__copy">
       <h1>{{ title }}</h1>
-      <p v-if="description" class="page-header__description">{{ description }}</p>
     </div>
 
     <div v-if="$slots.actions" class="page-header__actions">
@@ -40,14 +38,6 @@ defineProps<{
   color: var(--slate-950);
   font-size: 26px;
   line-height: 1.25;
-}
-
-.page-header__description {
-  max-width: 680px;
-  margin: 0;
-  color: var(--slate-500);
-  font-size: 12px;
-  line-height: 1.55;
 }
 
 .page-header__actions {

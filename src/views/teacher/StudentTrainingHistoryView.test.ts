@@ -79,7 +79,7 @@ describe('StudentTrainingHistoryView', () => {
     const { wrapper } = await mountHistory(new MockTrainingRepository())
 
     expect(wrapper.text()).toContain('2026.07.20')
-    expect(wrapper.text()).toContain('받침 소리 구분')
+    expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기')
     expect(wrapper.text()).toContain('8분 30초')
     expect(wrapper.text()).toContain('받침 소리를 안정적으로 구분했습니다.')
     expect(wrapper.text()).toContain('음성 기준 읽기 속도')
@@ -98,12 +98,12 @@ describe('StudentTrainingHistoryView', () => {
     const { wrapper, store } = await mountHistory(new MockTrainingRepository())
     const rows = wrapper.findAll('.training-row')
 
-    await rows.find((row) => row.text().includes('짧은 문장 읽기'))?.trigger('click')
+    await rows.find((row) => row.text().includes('비슷한 소리 고르기'))?.trigger('click')
     await flushPromises()
     expect(store.historyGazeStatus).toBe('success')
     expect(wrapper.text()).toContain('시선 분석 데이터가 없습니다.')
 
-    await rows.find((row) => row.text().includes('핵심 내용 찾기'))?.trigger('click')
+    await rows.find((row) => row.text().includes('음소 합쳐 음절 만들기'))?.trigger('click')
     await flushPromises()
     expect(store.historyGazeStatus).toBe('success')
     expect(wrapper.text()).toContain('시선 분석을 완료하지 못했습니다.')
