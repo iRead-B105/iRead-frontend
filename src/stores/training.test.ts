@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  CurriculumSynchronizationError,
   MockTrainingRepository,
   type DailyCurriculum,
   type TrainingRepository,
@@ -91,14 +92,16 @@ describe('Training store', () => {
     await store.loadForStudent(1)
     store.selectTemplate(14)
     store.addSelectedTemplate()
+    store.selectTemplate(11)
+    store.addSelectedTemplate()
 
     expect(store.savedCurriculum?.trainings.map((item) => item.trainingId)).toEqual([101, 102, 103])
-    expect(store.draftTrainingIds).toEqual([12, 12, 13, 14])
+    expect(store.draftTrainingIds).toEqual([12, 12, 13, 14, 11])
     expect(store.hasChanges).toBe(true)
 
     await expect(store.saveCurriculum()).resolves.toBe(true)
     expect(store.savedCurriculum?.trainings.map((item) => item.trainingId)).toEqual([
-      101, 102, 103, 1_000,
+      101, 102, 103, 1_000, 1_001,
     ])
     expect(store.hasChanges).toBe(false)
   })
@@ -114,13 +117,165 @@ describe('Training store', () => {
     await expect(store.saveCurriculum()).resolves.toBe(false)
 
     store.selectTemplate(11)
-    store.addSelectedTemplate()
+    Array.from({ length: 5 }).forEach(() => store.addSelectedTemplate())
 
     await expect(store.saveCurriculum()).resolves.toBe(true)
     expect(store.savedCurriculum).toMatchObject({
       status: 'NOT_STARTED',
-      trainings: [expect.objectContaining({ trainingTemplateId: 11 })],
+      trainings: Array.from({ length: 5 }, () =>
+        expect.objectContaining({ trainingTemplateId: 11 }),
+      ),
     })
+  })
+
+  it('PATCH 후 재조회 실패 시 ID 기반 기능을 잠그고 GET만 다시 시도한다', async () => {
+    const current: DailyCurriculum = {
+      curriculumId: 20,
+      status: 'NOT_STARTED',
+      trainings: [
+        {
+          trainingId: 101,
+          trainingTemplateId: 11,
+          sequence: 1,
+          unitName: '음운',
+          trainingName: '첫소리',
+          status: 'NOT_STARTED',
+        },
+        {
+          trainingId: 102,
+          trainingTemplateId: 12,
+          sequence: 2,
+          unitName: '파닉스',
+          trainingName: '받침',
+          status: 'NOT_STARTED',
+        },
+        {
+          trainingId: 103,
+          trainingTemplateId: 13,
+          sequence: 3,
+          unitName: '유창성',
+          trainingName: '문장',
+          status: 'NOT_STARTED',
+        },
+      ],
+    }
+    const refreshed: DailyCurriculum = {
+      ...current,
+      trainings: [
+        ...current.trainings,
+        {
+          trainingId: 204,
+          trainingTemplateId: 14,
+          sequence: 4,
+          unitName: '이해력',
+          trainingName: '핵심',
+          status: 'NOT_STARTED',
+        },
+        {
+          trainingId: 205,
+          trainingTemplateId: 15,
+          sequence: 5,
+          unitName: '어휘',
+          trainingName: '낱말',
+          status: 'NOT_STARTED',
+        },
+      ],
+    }
+    const getCurrentCurriculum = vi
+      .fn()
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce(refreshed)
+    const updateCurriculum = vi
+      .fn()
+      .mockRejectedValueOnce(new CurriculumSynchronizationError(new Error('network')))
+    const addExpectedWord = vi.fn().mockResolvedValue(undefined)
+    const store = useTrainingStore()
+    store.setRepository(
+      repository({
+        getCatalog: vi.fn().mockResolvedValue([
+          { trainingTemplateId: 11, unitName: '음운', sequence: 1, trainingName: '첫소리' },
+          { trainingTemplateId: 12, unitName: '파닉스', sequence: 2, trainingName: '받침' },
+          { trainingTemplateId: 13, unitName: '유창성', sequence: 3, trainingName: '문장' },
+          { trainingTemplateId: 14, unitName: '이해력', sequence: 4, trainingName: '핵심' },
+          { trainingTemplateId: 15, unitName: '어휘', sequence: 5, trainingName: '낱말' },
+        ]),
+        getCurrentCurriculum,
+        updateCurriculum,
+        addExpectedWord,
+        getTrainingDetail: vi.fn().mockResolvedValue({
+          trainingId: 101,
+          trainingTemplateId: 11,
+          name: '첫소리',
+          form: null,
+          generatedData: null,
+          status: 'NOT_STARTED',
+          startedAt: null,
+          finishedAt: null,
+          result: null,
+          accuracy: null,
+        }),
+      }),
+    )
+
+    await store.loadForStudent(1)
+    store.selectTemplate(14)
+    store.addSelectedTemplate()
+    store.selectTemplate(15)
+    store.addSelectedTemplate()
+
+    await expect(store.saveCurriculum()).resolves.toBe(false)
+    expect(store.curriculumSynchronizationStatus).toBe('required')
+    expect(store.canEditCurriculum).toBe(false)
+    expect(store.selectedTrainingId).toBeNull()
+    await expect(store.addExpectedWord('가')).resolves.toBe(false)
+    expect(addExpectedWord).not.toHaveBeenCalled()
+    await expect(store.saveCurriculum()).resolves.toBe(false)
+    expect(updateCurriculum).toHaveBeenCalledTimes(1)
+
+    await expect(store.retryCurriculumSynchronization()).resolves.toBe(true)
+    expect(updateCurriculum).toHaveBeenCalledTimes(1)
+    expect(getCurrentCurriculum).toHaveBeenCalledTimes(2)
+    expect(store.curriculumSynchronizationStatus).toBe('synced')
+    expect(store.savedCurriculum?.trainings.map((item) => item.trainingId)).toEqual([
+      101, 102, 103, 204, 205,
+    ])
+    expect(store.hasChanges).toBe(false)
+  })
+
+  it('학생 이동 후 도착한 이전 커리큘럼 재동기화 응답을 무시한다', async () => {
+    const oldSynchronization = deferred<DailyCurriculum | null>()
+    const first: DailyCurriculum = {
+      curriculumId: 10,
+      status: 'NOT_STARTED',
+      trainings: [],
+    }
+    const second: DailyCurriculum = {
+      curriculumId: 20,
+      status: 'NOT_STARTED',
+      trainings: [],
+    }
+    const getCurrentCurriculum = vi
+      .fn()
+      .mockResolvedValueOnce(first)
+      .mockReturnValueOnce(oldSynchronization.promise)
+      .mockResolvedValueOnce(second)
+    const store = useTrainingStore()
+    store.setRepository(repository({ getCurrentCurriculum }))
+
+    await store.loadForStudent(1)
+    store.curriculumSynchronizationStatus = 'required'
+    const oldRequest = store.retryCurriculumSynchronization()
+    await store.loadForStudent(2)
+    oldSynchronization.resolve({
+      curriculumId: 11,
+      status: 'NOT_STARTED',
+      trainings: [],
+    })
+    await oldRequest
+
+    expect(store.currentStudentId).toBe(2)
+    expect(store.savedCurriculum?.curriculumId).toBe(20)
+    expect(store.curriculumSynchronizationStatus).toBe('synced')
   })
 
   it('느린 이전 학습자 응답이 새 학습자의 draft를 덮지 않는다', async () => {

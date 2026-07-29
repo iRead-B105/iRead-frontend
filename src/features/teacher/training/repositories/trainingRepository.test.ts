@@ -62,7 +62,7 @@ describe('ApiTrainingRepository', () => {
     await expect(repository.getCurrentCurriculum(1)).rejects.toBe(forbidden)
   })
 
-  it('시선 분석 404를 분석 데이터 없음 상태로 변환한다', async () => {
+  it('시선 분석 결과 없음 404만 NO_DATA 상태로 변환한다', async () => {
     const notFound = new ApiError({
       status: 404,
       code: 'RESOURCE_NOT_FOUND',
@@ -76,11 +76,50 @@ describe('ApiTrainingRepository', () => {
       status: 'NO_DATA',
       analysis: null,
     })
+
+    const trainingNotFound = new ApiError({
+      status: 404,
+      code: 'RESOURCE_NOT_FOUND',
+      message: '훈련을 찾을 수 없습니다.',
+    })
+    const invalidRepository = new ApiTrainingRepository(
+      api({ getGazeAnalysis: vi.fn().mockRejectedValue(trainingNotFound) }),
+    )
+    await expect(invalidRepository.getGazeAnalysis(1, 10)).rejects.toBe(trainingNotFound)
+  })
+
+  it('PATCH 성공 후 현재 커리큘럼을 재조회하고 재조회 실패를 구분한다', async () => {
+    const updated = {
+      curriculumId: 10,
+      status: 'NOT_STARTED' as const,
+      trainings: [],
+    }
+    const updateCurriculum = vi.fn().mockResolvedValue(undefined)
+    const getCurrentCurriculum = vi.fn().mockResolvedValue(updated)
+    const repository = new ApiTrainingRepository(api({ updateCurriculum, getCurrentCurriculum }))
+    const request = { trainingTemplateIds: [11, 12, 13, 14, 11] }
+
+    await expect(repository.updateCurriculum(1, 10, request)).resolves.toBe(updated)
+    expect(updateCurriculum).toHaveBeenCalledWith(1, 10, request)
+    expect(getCurrentCurriculum).toHaveBeenCalledWith(1, {})
+
+    const refreshError = new Error('refresh failed')
+    const failedRepository = new ApiTrainingRepository(
+      api({
+        updateCurriculum,
+        getCurrentCurriculum: vi.fn().mockRejectedValue(refreshError),
+      }),
+    )
+    await expect(failedRepository.updateCurriculum(1, 10, request)).rejects.toMatchObject({
+      name: 'CurriculumSynchronizationError',
+      saved: true,
+      originalError: refreshError,
+    })
   })
 })
 
 describe('Training API target contract', () => {
-  it('저장 요청에 trainingId 배열을 사용하고 POST와 PATCH 응답을 반환한다', async () => {
+  it('저장 요청에 trainingTemplateIds 5개를 사용하고 PATCH 빈 응답을 허용한다', async () => {
     const response = {
       curriculumId: 10,
       status: 'NOT_STARTED' as const,
@@ -89,16 +128,20 @@ describe('Training API target contract', () => {
     const request = vi.fn().mockResolvedValue(response)
     const trainingApi = createTrainingApi(request)
 
-    await trainingApi.createCurriculum(1, { trainingId: [12, 12, 7] })
-    await trainingApi.updateCurriculum(1, 10, { trainingId: [7, 12] })
+    await trainingApi.createCurriculum(1, {
+      trainingTemplateIds: [12, 12, 13, 14, 11],
+    })
+    await trainingApi.updateCurriculum(1, 10, {
+      trainingTemplateIds: [14, 13, 12, 11, 11],
+    })
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/admin/training/1/curriculum', {
       method: 'POST',
-      body: JSON.stringify({ trainingId: [12, 12, 7] }),
+      body: JSON.stringify({ trainingTemplateIds: [12, 12, 13, 14, 11] }),
     })
     expect(request).toHaveBeenNthCalledWith(2, '/api/admin/training/1/10', {
       method: 'PATCH',
-      body: JSON.stringify({ trainingId: [7, 12] }),
+      body: JSON.stringify({ trainingTemplateIds: [14, 13, 12, 11, 11] }),
     })
   })
 
@@ -281,10 +324,12 @@ describe('MockTrainingRepository', () => {
     const repository = new MockTrainingRepository()
 
     const updated = await repository.updateCurriculum(1, 201, {
-      trainingId: [13, 12, 12, 14],
+      trainingTemplateIds: [13, 12, 12, 14, 11],
     })
 
-    expect(updated.trainings.map((training) => training.trainingId)).toEqual([103, 101, 102, 1_000])
+    expect(updated.trainings.map((training) => training.trainingId)).toEqual([
+      103, 101, 102, 1_000, 1_001,
+    ])
     await expect(repository.getExpectedWords(1, 101)).resolves.toEqual([
       { wordId: 1001, wordName: '꽃' },
       { wordId: 1002, wordName: '낮' },
@@ -315,13 +360,19 @@ describe('MockTrainingRepository', () => {
     })
   })
 
-  it('빈 draft는 저장하지 않고 기존 차회가 있으면 중복 생성을 거부한다', async () => {
+  it('정확히 5개가 아닌 draft를 거부하고 기존 차회가 있으면 중복 생성을 거부한다', async () => {
     const repository = new MockTrainingRepository()
 
-    await expect(repository.createCurriculum(2, { trainingId: [] })).rejects.toMatchObject({
-      code: 'EMPTY_CURRICULUM',
-    })
-    await expect(repository.createCurriculum(1, { trainingId: [11] })).rejects.toMatchObject({
+    await expect(repository.createCurriculum(2, { trainingTemplateIds: [] })).rejects.toMatchObject(
+      {
+        code: 'INVALID_CURRICULUM_SIZE',
+      },
+    )
+    await expect(
+      repository.createCurriculum(1, {
+        trainingTemplateIds: [11, 12, 13, 14, 11],
+      }),
+    ).rejects.toMatchObject({
       status: 409,
       code: 'NEXT_CURRICULUM_ALREADY_EXISTS',
     })

@@ -37,10 +37,9 @@ export interface DailyCurriculum {
 
 export interface SaveCurriculumRequest {
   /**
-   * The API field is named trainingId, but every value is a template identifier.
    * Array order is execution order and duplicate values represent repeated attempts.
    */
-  readonly trainingId: readonly TrainingTemplateId[]
+  readonly trainingTemplateIds: readonly TrainingTemplateId[]
 }
 
 export interface ExpectedWord {

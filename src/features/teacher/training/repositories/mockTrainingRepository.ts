@@ -22,7 +22,11 @@ import type {
   TrainingPeriod,
   TrainingStatistics,
 } from '../model'
-import type { TrainingRepository, TrainingRequestOptions } from './trainingRepository'
+import {
+  assertSaveCurriculumRequest,
+  type TrainingRepository,
+  type TrainingRequestOptions,
+} from './trainingRepository'
 
 export interface MockTrainingRepositoryFixtures {
   readonly catalog?: readonly TrainingCatalogItem[]
@@ -136,7 +140,7 @@ export class MockTrainingRepository implements TrainingRepository {
     const curriculum: DailyCurriculum = {
       curriculumId: this.nextCurriculumId++,
       status: 'NOT_STARTED',
-      trainings: this.materializeTrainings([], request.trainingId),
+      trainings: this.materializeTrainings([], request.trainingTemplateIds),
     }
     this.curricula.set(studentId, curriculum)
     return clone(curriculum)
@@ -168,7 +172,7 @@ export class MockTrainingRepository implements TrainingRepository {
       })
     }
 
-    const trainings = this.materializeTrainings(current.trainings, request.trainingId)
+    const trainings = this.materializeTrainings(current.trainings, request.trainingTemplateIds)
     const retainedIds = new Set(trainings.map((training) => training.trainingId))
     for (const training of current.trainings) {
       if (!retainedIds.has(training.trainingId)) {
@@ -339,22 +343,10 @@ export class MockTrainingRepository implements TrainingRepository {
   }
 
   private assertSaveRequest(request: SaveCurriculumRequest): void {
-    if (request.trainingId.length === 0) {
-      throw new ApiError({
-        status: 400,
-        code: 'EMPTY_CURRICULUM',
-        message: '한 개 이상의 훈련을 추가해 주세요.',
-      })
-    }
-    for (const templateId of request.trainingId) {
-      if (!this.catalog.some((item) => item.trainingTemplateId === templateId)) {
-        throw new ApiError({
-          status: 400,
-          code: 'TRAINING_TEMPLATE_NOT_FOUND',
-          message: '존재하지 않는 훈련 템플릿입니다.',
-        })
-      }
-    }
+    assertSaveCurriculumRequest(
+      request,
+      new Set(this.catalog.map((item) => item.trainingTemplateId)),
+    )
   }
 
   private assertTrainingBelongsToStudent(studentId: number, trainingId: number): void {

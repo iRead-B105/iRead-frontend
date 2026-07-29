@@ -44,9 +44,7 @@ function learningSummary(
   }
 }
 
-function repository(
-  overrides: Partial<StudentRepository> = {},
-): StudentRepository {
+function repository(overrides: Partial<StudentRepository> = {}): StudentRepository {
   return {
     list: vi.fn().mockResolvedValue({
       students: [],
@@ -63,9 +61,9 @@ function repository(
     create: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
-    getLearningSummary: vi.fn().mockImplementation((studentId) =>
-      Promise.resolve(learningSummary(studentId)),
-    ),
+    getLearningSummary: vi
+      .fn()
+      .mockImplementation((studentId) => Promise.resolve(learningSummary(studentId))),
     listLearningEvents: vi.fn().mockResolvedValue([]),
     getLearningEvent: vi.fn(),
     getAccuracyTrend: vi.fn().mockResolvedValue({ dailyAccuracy: [] }),
@@ -131,6 +129,26 @@ describe('StudentOverviewView', () => {
     expect(wrapper.text()).not.toContain('목표 80%')
   })
 
+  it('nullable 학생 정보는 성별을 오판하지 않고 대체 문자로 표시한다', async () => {
+    const nullableDetail: StudentDetail = {
+      ...detail(1),
+      birthday: null,
+      gender: null,
+      school: null,
+      guardian: null,
+      guardianContact: null,
+    }
+    const { wrapper } = await mountOverview(
+      repository({
+        getDetail: vi.fn().mockResolvedValue(nullableDetail),
+      }),
+    )
+
+    const profile = wrapper.get('.student-profile-card')
+    expect(profile.text()).not.toContain('여자')
+    expect(profile.findAll('dd').map((item) => item.text())).toEqual(['-', '-', '-', '-'])
+  })
+
   it('NO_HISTORY를 주의 건수와 분리해 표시한다', async () => {
     const studentRepository = repository({
       getLearningSummary: vi.fn().mockResolvedValue(
@@ -168,14 +186,16 @@ describe('StudentOverviewView', () => {
   })
 
   it('route의 studentId가 바뀌면 새 상세를 조회하고 이전 아동을 표시하지 않는다', async () => {
-    const getDetail = vi.fn().mockImplementation((studentId: number) =>
-      Promise.resolve(detail(studentId, studentId === 1 ? '첫째 아동' : '둘째 아동')),
-    )
+    const getDetail = vi
+      .fn()
+      .mockImplementation((studentId: number) =>
+        Promise.resolve(detail(studentId, studentId === 1 ? '첫째 아동' : '둘째 아동')),
+      )
     const studentRepository = repository({
       getDetail,
-      getLearningSummary: vi.fn().mockImplementation((studentId: number) =>
-        Promise.resolve(learningSummary(studentId)),
-      ),
+      getLearningSummary: vi
+        .fn()
+        .mockImplementation((studentId: number) => Promise.resolve(learningSummary(studentId))),
     })
     const { wrapper, router } = await mountOverview(studentRepository)
 
@@ -256,9 +276,7 @@ describe('StudentOverviewView', () => {
     const { wrapper } = await mountOverview(repository({ updateTeacherMemo }))
     const textarea = wrapper.get<HTMLTextAreaElement>('#internal-note')
     await textarea.setValue('저장 실패 메모')
-    const saveButton = wrapper
-      .findAll('button')
-      .find((button) => button.text() === '메모 저장')!
+    const saveButton = wrapper.findAll('button').find((button) => button.text() === '메모 저장')!
 
     await saveButton.trigger('click')
     await saveButton.trigger('click')

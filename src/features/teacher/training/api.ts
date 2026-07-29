@@ -267,7 +267,7 @@ export interface TrainingApi {
     studentId: number,
     curriculumId: number,
     request: SaveCurriculumRequest,
-  ) => Promise<DailyCurriculum>
+  ) => Promise<void>
   readonly getExpectedWords: (
     studentId: number,
     trainingId: number,
@@ -351,14 +351,10 @@ export function createTrainingApi(
       return mapCurriculum(dto)
     },
     async updateCurriculum(studentId, curriculumId, command) {
-      const dto = await request<DailyCurriculumDto>(
-        `/api/admin/training/${studentId}/${curriculumId}`,
-        {
-          method: 'PATCH',
-          body: jsonBody(command),
-        },
-      )
-      return mapCurriculum(dto)
+      await request<void>(`/api/admin/training/${studentId}/${curriculumId}`, {
+        method: 'PATCH',
+        body: jsonBody(command),
+      })
     },
     async getExpectedWords(studentId, trainingId, options) {
       const dto = await request<ExpectedWordsDto>(

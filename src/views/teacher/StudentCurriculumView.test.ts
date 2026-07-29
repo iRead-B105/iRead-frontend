@@ -98,16 +98,14 @@ describe('StudentCurriculumView', () => {
     const created: DailyCurriculum = {
       curriculumId: 301,
       status: 'NOT_STARTED',
-      trainings: [
-        {
-          trainingId: 1001,
-          trainingTemplateId: 11,
-          sequence: 1,
-          unitName: '음운 인식',
-          trainingName: '첫소리 구별하기',
-          status: 'NOT_READY',
-        },
-      ],
+      trainings: Array.from({ length: 5 }, (_, index) => ({
+        trainingId: 1001 + index,
+        trainingTemplateId: 11,
+        sequence: index + 1,
+        unitName: '음운 인식',
+        trainingName: '첫소리 구별하기',
+        status: 'NOT_READY' as const,
+      })),
     }
     const createCurriculum = vi.fn().mockResolvedValue(created)
     const trainingRepository = repository({
@@ -117,13 +115,17 @@ describe('StudentCurriculumView', () => {
     const { wrapper } = await mountCurriculum(trainingRepository)
 
     expect(wrapper.text()).toContain('저장된 다음 회차가 없습니다.')
-    await buttonWithText(wrapper, '다음 회차에 1회 추가')?.trigger('click')
-    await flushPromises()
+    for (let index = 0; index < 5; index += 1) {
+      await buttonWithText(wrapper, '다음 회차에 1회 추가')?.trigger('click')
+      await flushPromises()
+    }
     await buttonWithText(wrapper, '커리큘럼 생성')?.trigger('click')
     await flushPromises()
 
-    expect(createCurriculum).toHaveBeenCalledWith(1, { trainingId: [11] })
-    expect(wrapper.text()).toContain('1회 시행')
+    expect(createCurriculum).toHaveBeenCalledWith(1, {
+      trainingTemplateIds: [11, 11, 11, 11, 11],
+    })
+    expect(wrapper.text()).toContain('5회 시행')
   })
 
   it('실제 training ID가 있는 반복 시행에서만 예상 단어·미리보기를 연다', async () => {
@@ -155,6 +157,28 @@ describe('StudentCurriculumView', () => {
     expect(wrapper.text()).not.toContain('첫소리 구별하기0%')
   })
 
+  it('재동기화 필요 상태에서는 편집을 잠그고 GET 재시도 action을 제공한다', async () => {
+    const getCurrentCurriculum = vi.fn().mockResolvedValue(currentCurriculumFixture)
+    const trainingRepository = repository({ getCurrentCurriculum })
+    const { wrapper, store } = await mountCurriculum(trainingRepository)
+
+    store.curriculumSynchronizationStatus = 'required'
+    store.curriculumError =
+      '커리큘럼은 저장됐지만 최신 내용을 불러오지 못했습니다. 최신 내용을 다시 불러와 주세요.'
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('저장은 완료됐지만 최신 커리큘럼 확인이 필요합니다.')
+    expect(buttonWithText(wrapper, '순서 편집')?.attributes('disabled')).toBeDefined()
+    expect(buttonWithText(wrapper, '예상 단어·미리보기')?.attributes('disabled')).toBeDefined()
+
+    await buttonWithText(wrapper, '최신 내용 다시 불러오기')?.trigger('click')
+    await flushPromises()
+
+    expect(getCurrentCurriculum).toHaveBeenCalledTimes(2)
+    expect(store.curriculumSynchronizationStatus).toBe('synced')
+    expect(wrapper.text()).not.toContain('최신 커리큘럼 확인이 필요합니다.')
+  })
+
   it('drag 없이 위로·아래로 순서를 바꾸고 이동한 항목 안에 focus를 유지한다', async () => {
     const { wrapper, store } = await mountCurriculum(repository())
     const firstItem = store.draftItems[0]!
@@ -166,16 +190,13 @@ describe('StudentCurriculumView', () => {
     const moveDown = wrapper
       .findAll('button')
       .find(
-        (button) =>
-          button.attributes('aria-label') === `${firstTemplate.trainingName} 아래로 이동`,
+        (button) => button.attributes('aria-label') === `${firstTemplate.trainingName} 아래로 이동`,
       )
     await moveDown?.trigger('click')
     await flushPromises()
 
     expect(store.draftItems[1]?.key).toBe(firstItem.key)
     expect(wrapper.text()).toContain(`${firstTemplate.trainingName}을(를) 2번째로 이동했습니다.`)
-    expect(document.activeElement?.closest('article')?.id).toBe(
-      `curriculum-item-${firstItem.key}`,
-    )
+    expect(document.activeElement?.closest('article')?.id).toBe(`curriculum-item-${firstItem.key}`)
   })
 })
