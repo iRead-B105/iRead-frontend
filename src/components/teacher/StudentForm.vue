@@ -29,6 +29,7 @@ import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import {
   buildStudentUpdateInput,
   createStudentFormDraft,
+  getStudentBirthdayMax,
   normalizeStudentCreateInput,
   STUDENT_FIELD_MAX_LENGTH,
   validateStudentForm,
@@ -62,6 +63,7 @@ const deleteError = ref('')
 const deleting = ref(false)
 
 const title = computed(() => (props.mode === 'create' ? '새 아동 등록' : '아동 정보 관리'))
+const birthdayMax = getStudentBirthdayMax()
 const studentInitial = computed(() => form.name.trim().charAt(0) || '학')
 const formChanged = computed(
   () => JSON.stringify(form) !== savedSnapshot.value || selectedImage.value !== null,
@@ -258,6 +260,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
             id="student-birthday"
             v-model="form.birthday"
             required
+            :max="birthdayMax"
             :aria-invalid="Boolean(fieldErrors.birthday)"
             :aria-describedby="fieldErrors.birthday ? 'student-birthday-error' : undefined"
             type="date"

@@ -259,17 +259,9 @@ onMounted(loadProfile)
       <SettingsSection title="계정 정보">
         <div class="form-grid">
           <div class="field">
-            <Label for="teacher-email">이메일</Label>
-            <Input
-              id="teacher-email"
-              :model-value="serverProfile.email"
-              class="input"
-              type="email"
-              readonly
-              aria-describedby="teacher-email-help"
-            />
-            <p id="teacher-email-help" class="field-help">
-              이메일은 이 화면에서 변경할 수 없습니다.
+            <span id="teacher-email-label" class="readonly-label">이메일</span>
+            <p id="teacher-email" class="readonly-value" aria-labelledby="teacher-email-label">
+              {{ serverProfile.email }}
             </p>
           </div>
         </div>
@@ -329,19 +321,33 @@ onMounted(loadProfile)
   grid-template-columns: minmax(0, 1fr);
 }
 
-.field-help,
 .field-error {
   margin: -2px 0 0;
   font-size: 11px;
 }
 
-.field-help {
-  color: var(--slate-500);
-}
-
 .field-error,
 .settings-error {
   color: var(--danger-600);
+}
+
+.readonly-label {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.readonly-value {
+  min-height: 36px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--slate-50);
+  color: var(--slate-600);
+  font-size: 14px;
+  line-height: 18px;
+  user-select: text;
 }
 
 .settings-error {

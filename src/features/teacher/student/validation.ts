@@ -57,6 +57,12 @@ function localDateString(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+export function getStudentBirthdayMax(today = new Date()): string {
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  return localDateString(yesterday)
+}
+
 function validateRequired(
   errors: StudentFormErrors,
   field: keyof typeof STUDENT_FIELD_MAX_LENGTH,
@@ -86,8 +92,8 @@ export function validateStudentForm(
     errors.birthday = '생년월일을 입력해 주세요.'
   } else if (!isValidDate(draft.birthday)) {
     errors.birthday = '올바른 생년월일을 입력해 주세요.'
-  } else if (draft.birthday > localDateString(today)) {
-    errors.birthday = '생년월일은 오늘 이후일 수 없습니다.'
+  } else if (draft.birthday >= localDateString(today)) {
+    errors.birthday = '생년월일은 오늘 이전 날짜여야 합니다.'
   }
 
   if (draft.gender !== 'Boy' && draft.gender !== 'Girl') {

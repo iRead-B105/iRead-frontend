@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { StudentDetail } from './model'
 import {
   buildStudentUpdateInput,
+  getStudentBirthdayMax,
   normalizeStudentCreateInput,
   STUDENT_IMAGE_MAX_BYTES,
   STUDENT_MEMO_MAX_LENGTH,
@@ -39,7 +40,7 @@ const detail: StudentDetail = {
 }
 
 describe('Student form validation', () => {
-  it('필수값 trim, 날짜 실재 여부·미래 날짜, enum을 검증한다', () => {
+  it('필수값 trim, 날짜 실재 여부·오늘 및 미래 날짜, enum을 검증한다', () => {
     const errors = validateStudentForm(
       {
         ...validDraft,
@@ -55,12 +56,17 @@ describe('Student form validation', () => {
       birthday: expect.any(String),
       gender: expect.any(String),
     })
+    const today = new Date('2026-07-27T12:00:00')
+    expect(validateStudentForm({ ...validDraft, birthday: '2026-07-27' }, today).birthday).toContain(
+      '오늘 이전',
+    )
+    expect(validateStudentForm({ ...validDraft, birthday: '2026-07-28' }, today).birthday).toContain(
+      '오늘 이전',
+    )
     expect(
-      validateStudentForm(
-        { ...validDraft, birthday: '2026-07-28' },
-        new Date('2026-07-27T12:00:00'),
-      ).birthday,
-    ).toContain('오늘 이후')
+      validateStudentForm({ ...validDraft, birthday: '2026-07-26' }, today).birthday,
+    ).toBeUndefined()
+    expect(getStudentBirthdayMax(today)).toBe('2026-07-26')
   })
 
   it('선택 이메일은 비어 있을 수 있지만 형식과 DB 길이를 검증한다', () => {
