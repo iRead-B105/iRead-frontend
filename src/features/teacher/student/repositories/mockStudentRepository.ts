@@ -13,6 +13,7 @@ import type {
   StudentLearningSummary,
   StudentListItem,
   StudentMutationCommand,
+  StudentReadingSpeedPoint,
   StudentTrainingHistoryItem,
   StudentTrainingHistoryPeriod,
   StudentUpdateInput,
@@ -57,6 +58,7 @@ export class MockStudentRepository implements StudentRepository {
   private readonly learningEvents = new Map<number, StudentLearningEvent[]>()
   private readonly learningEventDetails = new Map<number, Map<number, StudentLearningEventDetail>>()
   private readonly accuracyTrends = new Map<number, StudentAccuracyPoint[]>()
+  private readonly readingSpeedTrends = new Map<number, StudentReadingSpeedPoint[]>()
   private readonly trainingHistories = new Map<number, StudentTrainingHistoryItem[]>()
 
   constructor(
@@ -92,6 +94,10 @@ export class MockStudentRepository implements StudentRepository {
       this.accuracyTrends.set(
         student.studentId,
         insights.accuracy.map((point) => ({ ...point })),
+      )
+      this.readingSpeedTrends.set(
+        student.studentId,
+        insights.readingSpeed.map((point) => ({ ...point })),
       )
       this.trainingHistories.set(
         student.studentId,
@@ -160,6 +166,7 @@ export class MockStudentRepository implements StudentRepository {
     this.learningEvents.set(studentId, [])
     this.learningEventDetails.set(studentId, new Map())
     this.accuracyTrends.set(studentId, [])
+    this.readingSpeedTrends.set(studentId, [])
     this.trainingHistories.set(studentId, [])
     this.students.push({
       studentId,
@@ -216,6 +223,7 @@ export class MockStudentRepository implements StudentRepository {
     this.learningEvents.delete(studentId)
     this.learningEventDetails.delete(studentId)
     this.accuracyTrends.delete(studentId)
+    this.readingSpeedTrends.delete(studentId)
     this.trainingHistories.delete(studentId)
     const index = this.students.findIndex((student) => student.studentId === studentId)
     if (index >= 0) this.students.splice(index, 1)
@@ -277,6 +285,27 @@ export class MockStudentRepository implements StudentRepository {
       dailyAccuracy: [...(this.accuracyTrends.get(studentId) ?? [])]
         .sort((left, right) => left.date.localeCompare(right.date))
         .map((point) => ({ ...point })),
+    }
+  }
+
+  async getReadingSpeedTrend(studentId: number, options?: StudentRequestOptions) {
+    throwIfAborted(options)
+    await this.getDetail(studentId, options)
+    const { from, to } = resolveTrainingHistoryDateRange('30d', this.now())
+    const points = [...(this.readingSpeedTrends.get(studentId) ?? [])]
+      .filter((point) => point.date >= from && point.date <= to)
+      .sort((left, right) => left.date.localeCompare(right.date))
+      .map((point) => ({ ...point }))
+    const first = points[0]?.speed
+    const last = points.at(-1)?.speed
+    const changeRate =
+      first === undefined || last === undefined || first === 0
+        ? null
+        : Math.round(((last - first) / first) * 10_000) / 100
+    return {
+      unit: 'CORRECT_WORDS_PER_MINUTE' as const,
+      changeRate,
+      points,
     }
   }
 

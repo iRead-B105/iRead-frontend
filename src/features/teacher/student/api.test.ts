@@ -252,7 +252,30 @@ describe('Student API', () => {
     })
   })
 
-  it('학습 이벤트·정확도·기간별 훈련 이력은 목표 계약 경로를 사용한다', async () => {
+  it('읽기 속도 응답에서 음성 속도만 화면 모델로 정규화한다', async () => {
+    const request = vi.fn().mockResolvedValue({
+      unit: 'WORDS_PER_MINUTE',
+      voiceChangeRate: 12.5,
+      gazeChangeRate: 4.2,
+      points: [
+        { date: '2026-07-28', voiceSpeed: 96, gazeSpeed: 88 },
+        { date: '2026-07-27', voiceSpeed: null, gazeSpeed: 82 },
+        { date: '2026-07-20', voiceSpeed: 84, gazeSpeed: null },
+      ],
+    })
+    const api = createStudentApi(request, () => new Date('2026-07-29T12:00:00+09:00'))
+
+    await expect(api.getReadingSpeedTrend(7)).resolves.toEqual({
+      unit: 'CORRECT_WORDS_PER_MINUTE',
+      changeRate: 12.5,
+      points: [
+        { date: '2026-07-20', speed: 84 },
+        { date: '2026-07-28', speed: 96 },
+      ],
+    })
+  })
+
+  it('학습 이벤트·정확도·읽기 속도·기간별 훈련 이력은 목표 계약 경로를 사용한다', async () => {
     const request = vi
       .fn()
       .mockResolvedValueOnce({ events: [] })
@@ -274,12 +297,14 @@ describe('Student API', () => {
         recommendedRepeatCount: null,
       })
       .mockResolvedValueOnce({ dailyAccuracy: [] })
+      .mockResolvedValueOnce({ unit: 'WORDS_PER_MINUTE', voiceChangeRate: null, points: [] })
       .mockResolvedValueOnce({ learningHistory: [] })
     const api = createStudentApi(request, () => new Date('2026-07-29T12:00:00+09:00'))
 
     await api.listLearningEvents(7, { limit: 3 })
     await api.getLearningEvent(7, 'TRAINING', 701)
     await api.getAccuracyTrend(7)
+    await api.getReadingSpeedTrend(7)
     await api.getTrainingHistory(7, '3m')
 
     expect(request).toHaveBeenNthCalledWith(
@@ -297,6 +322,11 @@ describe('Student API', () => {
     })
     expect(request).toHaveBeenNthCalledWith(
       4,
+      '/api/admin/student/7/reading-speed-trend?from=2026-06-30&to=2026-07-29',
+      { signal: undefined },
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      5,
       '/api/admin/student/7/training-history?from=2026-04-29&to=2026-07-29',
       { signal: undefined },
     )

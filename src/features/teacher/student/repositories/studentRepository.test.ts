@@ -149,6 +149,22 @@ describe('MockStudentRepository', () => {
     )
   })
 
+  it('Mock 읽기 속도도 API와 같은 화면 모델과 날짜 오름차순으로 반환한다', async () => {
+    const empty = await repository.getReadingSpeedTrend(3)
+    const multiple = await repository.getReadingSpeedTrend(1)
+
+    expect(empty).toEqual({
+      unit: 'CORRECT_WORDS_PER_MINUTE',
+      changeRate: null,
+      points: [],
+    })
+    expect(multiple.unit).toBe('CORRECT_WORDS_PER_MINUTE')
+    expect(multiple.points).toHaveLength(4)
+    expect(multiple.points.map((point) => point.date)).toEqual(
+      [...multiple.points].map((point) => point.date).sort(),
+    )
+  })
+
   it('훈련 이력의 30일·3개월 기간을 구분하고 최신순으로 반환한다', async () => {
     const recent = await repository.getTrainingHistory(1, '30d')
     const quarter = await repository.getTrainingHistory(1, '3m')

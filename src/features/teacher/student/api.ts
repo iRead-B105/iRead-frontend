@@ -12,6 +12,7 @@ import type {
   StudentListQuery,
   StudentListResult,
   StudentMutationCommand,
+  StudentReadingSpeedTrend,
   StudentGender,
   StudentSummary,
   StudentTrainingHistory,
@@ -54,6 +55,10 @@ export interface StudentApi {
     studentId: number,
     options?: StudentRequestOptions,
   ) => Promise<StudentAccuracyTrend>
+  readonly getReadingSpeedTrend: (
+    studentId: number,
+    options?: StudentRequestOptions,
+  ) => Promise<StudentReadingSpeedTrend>
   readonly getTrainingHistory: (
     studentId: number,
     period: StudentTrainingHistoryPeriod,
@@ -134,6 +139,15 @@ interface StudentAccuracyTrendDto {
   readonly dailyAccuracy: readonly {
     readonly date: string
     readonly accuracyRate: number
+  }[]
+}
+
+interface StudentReadingSpeedTrendDto {
+  readonly unit: string
+  readonly voiceChangeRate: number | null
+  readonly points: readonly {
+    readonly date: string
+    readonly voiceSpeed: number | null
   }[]
 }
 
@@ -263,6 +277,25 @@ export function createStudentApi(
           date,
           accuracy: accuracyRate,
         })),
+      }
+    },
+    async getReadingSpeedTrend(studentId, options) {
+      const { from, to } = resolveTrainingHistoryDateRange('30d', now())
+      const search = new URLSearchParams({ from, to })
+      const result = await request<StudentReadingSpeedTrendDto>(
+        `/api/admin/student/${studentId}/reading-speed-trend?${search}`,
+        { signal: options?.signal },
+      )
+      return {
+        unit: 'CORRECT_WORDS_PER_MINUTE',
+        changeRate: result.voiceChangeRate,
+        points: result.points
+          .filter(
+            (point): point is typeof point & { readonly voiceSpeed: number } =>
+              point.voiceSpeed !== null,
+          )
+          .map(({ date, voiceSpeed }) => ({ date, speed: voiceSpeed }))
+          .sort((left, right) => left.date.localeCompare(right.date)),
       }
     },
     async getTrainingHistory(studentId, period, options) {

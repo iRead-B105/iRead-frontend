@@ -9,6 +9,7 @@ import type {
   StudentListQuery,
   StudentListResult,
   StudentMutationCommand,
+  StudentReadingSpeedTrend,
   StudentSummary,
   StudentTrainingHistory,
   StudentTrainingHistoryPeriod,
@@ -54,6 +55,10 @@ export interface StudentRepository {
     studentId: number,
     options?: StudentRequestOptions,
   ) => Promise<StudentAccuracyTrend>
+  readonly getReadingSpeedTrend: (
+    studentId: number,
+    options?: StudentRequestOptions,
+  ) => Promise<StudentReadingSpeedTrend>
   readonly getTrainingHistory: (
     studentId: number,
     period: StudentTrainingHistoryPeriod,

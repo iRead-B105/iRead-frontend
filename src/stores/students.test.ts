@@ -79,6 +79,7 @@ const mutationRepositoryMethods = {
   listLearningEvents: vi.fn(),
   getLearningEvent: vi.fn(),
   getAccuracyTrend: vi.fn(),
+  getReadingSpeedTrend: vi.fn(),
   getTrainingHistory: vi.fn(),
   updateTeacherMemo: vi.fn(),
 }
@@ -292,7 +293,7 @@ describe('Student store', () => {
     expect(store.detailsById[99]).toBeUndefined()
   })
 
-  it('이벤트·정확도·기간별 훈련 이력을 독립된 studentId 상태로 저장한다', async () => {
+  it('이벤트·정확도·읽기 속도·기간별 훈련 이력을 독립된 studentId 상태로 저장한다', async () => {
     const learningEvent = {
       eventId: 701,
       eventType: 'TRAINING' as const,
@@ -325,6 +326,11 @@ describe('Student store', () => {
       getAccuracyTrend: vi.fn().mockResolvedValue({
         dailyAccuracy: [{ date: '2026-07-27', accuracy: 68 }],
       }),
+      getReadingSpeedTrend: vi.fn().mockResolvedValue({
+        unit: 'CORRECT_WORDS_PER_MINUTE',
+        changeRate: 8.5,
+        points: [{ date: '2026-07-27', speed: 89 }],
+      }),
       getTrainingHistory: vi.fn().mockResolvedValue({
         learningHistory: [
           {
@@ -344,6 +350,7 @@ describe('Student store', () => {
     await Promise.all([
       store.loadLearningEvents(1, 3),
       store.loadAccuracyTrend(1),
+      store.loadReadingSpeedTrend(1),
       store.loadTrainingHistory(1, '30d'),
     ])
     await store.loadLearningEvent(1, 'TRAINING', 701)
@@ -353,6 +360,55 @@ describe('Student store', () => {
     expect(store.learningEventsById[1]).toEqual([learningEvent])
     expect(store.learningEventDetailsByKey['1:TRAINING:701']).toEqual(learningEventDetail)
     expect(store.accuracyTrendById[1]?.dailyAccuracy).toHaveLength(1)
+    expect(store.readingSpeedTrendById[1]?.points).toHaveLength(1)
     expect(store.trainingHistoryByKey['1:30d']?.learningHistory).toHaveLength(1)
+  })
+
+  it('느린 이전 읽기 속도 응답이 같은 아동의 최신 응답을 덮지 못한다', async () => {
+    const first = deferred<{
+      unit: 'CORRECT_WORDS_PER_MINUTE'
+      changeRate: number | null
+      points: readonly { date: string; speed: number }[]
+    }>()
+    const second = deferred<{
+      unit: 'CORRECT_WORDS_PER_MINUTE'
+      changeRate: number | null
+      points: readonly { date: string; speed: number }[]
+    }>()
+    const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
+      list: vi.fn().mockResolvedValue(result([])),
+      getSummary: vi.fn().mockResolvedValue({
+        totalStudents: 0,
+        scheduledTodayCount: 0,
+      }),
+      getReadingSpeedTrend: vi
+        .fn()
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise),
+    }
+    const store = useStudentStore()
+    store.setRepository(repository)
+
+    const oldRequest = store.loadReadingSpeedTrend(1)
+    const newRequest = store.loadReadingSpeedTrend(1)
+    second.resolve({
+      unit: 'CORRECT_WORDS_PER_MINUTE',
+      changeRate: 12,
+      points: [{ date: '2026-07-27', speed: 96 }],
+    })
+    await newRequest
+    first.resolve({
+      unit: 'CORRECT_WORDS_PER_MINUTE',
+      changeRate: -5,
+      points: [{ date: '2026-07-20', speed: 70 }],
+    })
+    await oldRequest
+
+    expect(store.readingSpeedTrendById[1]).toEqual({
+      unit: 'CORRECT_WORDS_PER_MINUTE',
+      changeRate: 12,
+      points: [{ date: '2026-07-27', speed: 96 }],
+    })
   })
 })

@@ -51,7 +51,7 @@ const emit = defineEmits<{
   <section class="learning-events" aria-labelledby="recent-learning-title">
     <header class="learning-events__heading">
       <div>
-        <h2 id="recent-learning-title">최근 학습 이벤트</h2>
+        <h2 id="recent-learning-title">최근 학습 기록</h2>
       </div>
       <Button
         v-if="listStatus === 'error'"
@@ -98,19 +98,19 @@ const emit = defineEmits<{
       </li>
     </ol>
 
-    <p v-if="selectedEventId === null" class="detail-placeholder">
-      이벤트를 선택하면 문제 구간과 Backend 권장 훈련을 확인할 수 있습니다.
-    </p>
-
     <div
-      v-else-if="detailStatus === 'loading'"
+      v-if="selectedEventId !== null && detailStatus === 'loading'"
       class="detail-placeholder"
       aria-live="polite"
     >
       학습 이벤트 상세를 불러오는 중입니다.
     </div>
 
-    <div v-else-if="detailStatus === 'error'" class="detail-placeholder is-error" role="alert">
+    <div
+      v-else-if="selectedEventId !== null && detailStatus === 'error'"
+      class="detail-placeholder is-error"
+      role="alert"
+    >
       <strong>학습 이벤트 상세를 불러오지 못했습니다.</strong>
       <span>{{ detailError ?? '잠시 후 다시 시도해 주세요.' }}</span>
       <Button
@@ -227,7 +227,7 @@ const emit = defineEmits<{
 }
 
 .learning-events__heading h2 {
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .learning-events__heading p {
@@ -238,7 +238,7 @@ const emit = defineEmits<{
 
 .learning-event-list {
   display: grid;
-  gap: 8px;
+  gap: 7px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -247,12 +247,12 @@ const emit = defineEmits<{
 .learning-event {
   display: grid;
   width: 100%;
-  min-height: 72px;
+  min-height: 66px;
   align-items: center;
-  gap: 16px;
-  padding: 12px 14px;
+  gap: 14px;
+  padding: 11px 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--card);
   color: inherit;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { AlertCircle, BookOpen, Clock3, UserRound } from '@lucide/vue'
 import type { EChartsOption } from 'echarts'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import ChartPanel from '@/components/common/ChartPanel.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import StudentCommunicationPanel from '@/components/teacher/StudentCommunicationPanel.vue'
@@ -16,11 +16,9 @@ import {
   appendSummaryToTeacherMemo,
   formatLearningEventMemoSummary,
   formatStudentDateTime,
-  formatTrainingDuration,
   normalizeTeacherMemo,
   validateTeacherMemo,
   type StudentAttentionReason,
-  type StudentGender,
   type StudentLearningEventDetail,
   type StudentLearningEvent,
   type StudentLearningEventType,
@@ -33,12 +31,6 @@ const attentionReasonLabels: Readonly<Record<StudentAttentionReason, string>> = 
   GAZE_ANALYSIS_FAILED: '최근 시선 분석 확인 필요',
   INACTIVE: '장기간 학습 기록 없음',
   NO_HISTORY: '아직 학습 기록 없음',
-}
-
-function genderLabel(gender: StudentGender | null): string {
-  if (gender === 'Boy') return '남자'
-  if (gender === 'Girl') return '여자'
-  return '-'
 }
 
 const route = useRoute()
@@ -97,23 +89,29 @@ const accuracyTrendStatus = computed(
 const accuracyTrendError = computed(
   () => studentStore.accuracyTrendErrorById[studentId.value] ?? null,
 )
-const trainingHistoryKey = computed(() => studentStore.insightKey(studentId.value, '30d'))
-const trainingHistory = computed(
-  () => studentStore.trainingHistoryByKey[trainingHistoryKey.value]?.learningHistory ?? [],
+const readingSpeedTrend = computed(
+  () => studentStore.readingSpeedTrendById[studentId.value]?.points ?? [],
 )
-const recentTrainingHistory = computed(() => trainingHistory.value.slice(0, 3))
-const trainingHistoryStatus = computed(
-  () => studentStore.trainingHistoryStatusByKey[trainingHistoryKey.value] ?? 'idle',
+const readingSpeedChangeRate = computed(
+  () => studentStore.readingSpeedTrendById[studentId.value]?.changeRate ?? null,
 )
-const trainingHistoryError = computed(
-  () => studentStore.trainingHistoryErrorByKey[trainingHistoryKey.value] ?? null,
+const readingSpeedTrendStatus = computed(
+  () => studentStore.readingSpeedTrendStatusById[studentId.value] ?? 'idle',
 )
+const readingSpeedTrendError = computed(
+  () => studentStore.readingSpeedTrendErrorById[studentId.value] ?? null,
+)
+const selectedTrend = ref<'accuracy' | 'reading-speed'>('accuracy')
 const accuracyDelta = computed(() => {
   if (accuracyTrend.value.length < 2) return null
   const delta =
     accuracyTrend.value[accuracyTrend.value.length - 1]!.accuracy - accuracyTrend.value[0]!.accuracy
   return Math.round(delta * 100) / 100
 })
+const firstAccuracy = computed(() => accuracyTrend.value[0]?.accuracy ?? null)
+const latestAccuracy = computed(() => accuracyTrend.value.at(-1)?.accuracy ?? null)
+const firstReadingSpeed = computed(() => readingSpeedTrend.value[0]?.speed ?? null)
+const latestReadingSpeed = computed(() => readingSpeedTrend.value.at(-1)?.speed ?? null)
 const accuracyChartSummary = computed(
   () =>
     `날짜별 읽기 정확도: ${accuracyTrend.value
@@ -149,6 +147,82 @@ const accuracyChartOption = computed<EChartsOption>(() => ({
     },
   ],
 }))
+const readingSpeedChartSummary = computed(
+  () =>
+    `날짜별 읽기 속도: ${readingSpeedTrend.value
+      .map((point) => `${point.date} 분당 ${point.speed}개 정답 단어`)
+      .join(', ')}`,
+)
+const readingSpeedChartOption = computed<EChartsOption>(() => ({
+  grid: { left: 52, right: 18, top: 24, bottom: 34 },
+  tooltip: {
+    trigger: 'axis',
+    valueFormatter: (value) => `${value} 단어/분`,
+  },
+  xAxis: {
+    type: 'category',
+    data: readingSpeedTrend.value.map((point) => point.date.slice(5).replace('-', '.')),
+    boundaryGap: false,
+  },
+  yAxis: {
+    type: 'value',
+    min: 0,
+    axisLabel: { formatter: '{value}' },
+  },
+  series: [
+    {
+      type: 'line',
+      name: '읽기 속도',
+      data: readingSpeedTrend.value.map((point) => point.speed),
+      smooth: true,
+      symbolSize: 8,
+      lineStyle: { width: 3 },
+      areaStyle: { opacity: 0.08 },
+    },
+  ],
+}))
+const selectedTrendStatus = computed(() =>
+  selectedTrend.value === 'accuracy' ? accuracyTrendStatus.value : readingSpeedTrendStatus.value,
+)
+const selectedTrendError = computed(() =>
+  selectedTrend.value === 'accuracy' ? accuracyTrendError.value : readingSpeedTrendError.value,
+)
+const selectedTrendHasData = computed(() =>
+  selectedTrend.value === 'accuracy'
+    ? accuracyTrend.value.length > 0
+    : readingSpeedTrend.value.length > 0,
+)
+const selectedTrendTitle = computed(() =>
+  selectedTrend.value === 'accuracy' ? '읽기 정확도' : '읽기 속도',
+)
+const selectedTrendLoadingLabel = computed(() =>
+  selectedTrend.value === 'accuracy'
+    ? '정확도 추이를 불러오는 중입니다.'
+    : '읽기 속도 추이를 불러오는 중입니다.',
+)
+const selectedTrendErrorLabel = computed(() =>
+  selectedTrend.value === 'accuracy'
+    ? '정확도 추이를 불러오지 못했습니다.'
+    : '읽기 속도 추이를 불러오지 못했습니다.',
+)
+const selectedTrendEmptyLabel = computed(() =>
+  selectedTrend.value === 'accuracy'
+    ? '표시할 읽기 정확도 데이터가 없습니다.'
+    : '표시할 읽기 속도 데이터가 없습니다.',
+)
+const selectedTrendOption = computed(() =>
+  selectedTrend.value === 'accuracy' ? accuracyChartOption.value : readingSpeedChartOption.value,
+)
+const selectedTrendSummary = computed(() =>
+  selectedTrend.value === 'accuracy'
+    ? accuracyChartSummary.value
+    : readingSpeedChartSummary.value,
+)
+const selectedTrendAriaLabel = computed(() =>
+  selectedTrend.value === 'accuracy'
+    ? '최근 6주 날짜별 읽기 정확도 추이 차트'
+    : '최근 30일 날짜별 읽기 속도 추이 차트',
+)
 const hasNoHistory = computed(
   () => learningSummary.value?.attentionReasons.includes('NO_HISTORY') ?? false,
 )
@@ -214,7 +288,7 @@ async function loadOverview(nextStudentId: number): Promise<void> {
     studentStore.loadLearningSummary(nextStudentId),
     studentStore.loadLearningEvents(nextStudentId, 3),
     studentStore.loadAccuracyTrend(nextStudentId),
-    studentStore.loadTrainingHistory(nextStudentId, '30d'),
+    studentStore.loadReadingSpeedTrend(nextStudentId),
   ])
   if (studentId.value !== nextStudentId) return
   noteDraft.value = studentStore.detailsById[nextStudentId]?.teacherMemo ?? ''
@@ -242,6 +316,15 @@ async function retryDetail(): Promise<void> {
   if (!validStudentId.value) return
   await studentStore.loadDetail(studentId.value)
   noteDraft.value = studentStore.detailsById[studentId.value]?.teacherMemo ?? noteDraft.value
+}
+
+function retrySelectedTrend(): void {
+  if (!detail.value) return
+  if (selectedTrend.value === 'accuracy') {
+    void studentStore.loadAccuracyTrend(detail.value.studentId)
+    return
+  }
+  void studentStore.loadReadingSpeedTrend(detail.value.studentId)
 }
 
 async function saveMemo(value: string): Promise<void> {
@@ -301,53 +384,7 @@ watch(studentId, loadOverview, { immediate: true })
     </template>
 
     <template v-else>
-      <PageHeader
-        :title="`${detail.name} 학습 현황`"
-      >
-        <template #actions>
-          <Button
-            variant="outline"
-            type="button"
-            @click="
-              router.push({
-                name: 'student-edit',
-                params: { id: detail.studentId },
-              })
-            "
-          >
-            아동 정보 수정
-          </Button>
-        </template>
-      </PageHeader>
-
-      <Card class="student-profile-card">
-        <div class="student-profile-card__avatar">
-          <img v-if="detail.imageUrl" :src="detail.imageUrl" :alt="`${detail.name} 프로필`" />
-          <span v-else aria-hidden="true">{{ detail.name.charAt(0) }}</span>
-        </div>
-        <div class="student-profile-card__identity">
-          <strong>{{ detail.name }}</strong>
-          <span>{{ detail.school ?? '-' }}</span>
-        </div>
-        <dl>
-          <div>
-            <dt>생년월일</dt>
-            <dd>{{ detail.birthday ?? '-' }}</dd>
-          </div>
-          <div>
-            <dt>성별</dt>
-            <dd>{{ genderLabel(detail.gender) }}</dd>
-          </div>
-          <div>
-            <dt>보호자</dt>
-            <dd>{{ detail.guardian ?? '-' }}</dd>
-          </div>
-          <div>
-            <dt>보호자 연락처</dt>
-            <dd>{{ detail.guardianContact ?? '-' }}</dd>
-          </div>
-        </dl>
-      </Card>
+      <PageHeader title="학습 현황" />
 
       <section class="learning-summary-section" aria-labelledby="learning-summary-title">
         <header>
@@ -418,116 +455,128 @@ watch(studentId, loadOverview, { immediate: true })
         </div>
       </section>
 
-      <div class="learning-insights-grid">
-        <StudentLearningEvents
-          :events="learningEvents"
-          :selected-event-id="selectedEventId"
-          :selected-event-type="selectedEventType"
-          :detail="selectedEventDetail"
-          :list-status="learningEventsStatus"
-          :list-error="learningEventsError"
-          :detail-status="selectedEventDetailStatus"
-          :detail-error="selectedEventDetailError"
-          @select="selectLearningEvent"
-          @retry-list="studentStore.loadLearningEvents(detail.studentId, 3)"
-          @retry-detail="selectLearningEvent"
-          @add-to-memo="addLearningEventToMemo"
-        />
-
-        <section class="accuracy-panel" aria-labelledby="accuracy-title">
-          <header>
+      <div class="learning-analysis">
+        <Card class="trend-panel" :aria-labelledby="`${selectedTrend}-title`">
+          <header class="section-heading">
             <div>
-              <h2 id="accuracy-title">최근 6주 읽기 정확도</h2>
+              <h2 :id="`${selectedTrend}-title`">{{ selectedTrendTitle }}</h2>
             </div>
-            <Button
-              v-if="accuracyTrendStatus === 'error'"
-              variant="outline"
-              size="sm"
-              type="button"
-              @click="studentStore.loadAccuracyTrend(detail.studentId)"
-            >
-              다시 시도
-            </Button>
+            <div class="trend-heading-actions">
+              <div class="trend-switch" aria-label="학습 변화 지표 선택">
+                <Button
+                  size="sm"
+                  type="button"
+                  :variant="selectedTrend === 'accuracy' ? 'default' : 'outline'"
+                  :aria-pressed="selectedTrend === 'accuracy'"
+                  @click="selectedTrend = 'accuracy'"
+                >
+                  읽기 정확도
+                </Button>
+                <Button
+                  size="sm"
+                  type="button"
+                  :variant="selectedTrend === 'reading-speed' ? 'default' : 'outline'"
+                  :aria-pressed="selectedTrend === 'reading-speed'"
+                  @click="selectedTrend = 'reading-speed'"
+                >
+                  읽기 속도
+                </Button>
+              </div>
+              <Button
+                v-if="selectedTrendStatus === 'error'"
+                variant="outline"
+                size="sm"
+                type="button"
+                @click="retrySelectedTrend"
+              >
+                다시 시도
+              </Button>
+            </div>
           </header>
 
-          <div v-if="accuracyTrendStatus === 'loading'" class="insight-state" aria-live="polite">
-            정확도 추이를 불러오는 중입니다.
+          <div v-if="selectedTrendStatus === 'loading'" class="insight-state" aria-live="polite">
+            {{ selectedTrendLoadingLabel }}
           </div>
           <div
-            v-else-if="accuracyTrendStatus === 'error'"
+            v-else-if="selectedTrendStatus === 'error'"
             class="insight-state is-error"
             role="alert"
           >
-            <strong>정확도 추이를 불러오지 못했습니다.</strong>
-            <span>{{ accuracyTrendError ?? '잠시 후 다시 시도해 주세요.' }}</span>
+            <strong>{{ selectedTrendErrorLabel }}</strong>
+            <span>{{ selectedTrendError ?? '잠시 후 다시 시도해 주세요.' }}</span>
           </div>
-          <div v-else-if="accuracyTrend.length === 0" class="insight-state">
-            표시할 읽기 정확도 데이터가 없습니다.
+          <div v-else-if="!selectedTrendHasData" class="insight-state">
+            {{ selectedTrendEmptyLabel }}
           </div>
-          <template v-else>
-            <div class="accuracy-summary">
-              <strong v-if="accuracyDelta === null">첫 정확도 기록</strong>
-              <strong v-else :class="{ 'is-negative': accuracyDelta < 0 }">
-                첫 기록 대비 {{ accuracyDelta >= 0 ? '+' : '' }}{{ accuracyDelta }}%p
-              </strong>
-              <span>
-                {{
-                  accuracyTrend.length === 1
-                    ? '변화폭은 다음 기록부터 계산합니다.'
-                    : `${accuracyTrend.length}개 날짜 기록`
-                }}
-              </span>
-            </div>
-            <ChartPanel
-              :option="accuracyChartOption"
-              height="260px"
-              aria-label="최근 6주 날짜별 읽기 정확도 추이 차트"
-              :summary="accuracyChartSummary"
-            />
-          </template>
-        </section>
-      </div>
+          <ChartPanel
+            v-else
+            :option="selectedTrendOption"
+            height="220px"
+            :aria-label="selectedTrendAriaLabel"
+            :summary="selectedTrendSummary"
+          />
 
-      <section class="training-history-panel" aria-labelledby="recent-training-title">
-        <header>
-          <div>
-            <h2 id="recent-training-title">최근 훈련 기록</h2>
-          </div>
-          <Button
-            v-if="trainingHistoryStatus === 'error'"
-            variant="outline"
-            size="sm"
-            type="button"
-            @click="studentStore.loadTrainingHistory(detail.studentId, '30d')"
-          >
-            다시 시도
-          </Button>
-        </header>
-
-        <div v-if="trainingHistoryStatus === 'loading'" class="insight-state" aria-live="polite">
-          최근 훈련 기록을 불러오는 중입니다.
-        </div>
-        <div
-          v-else-if="trainingHistoryStatus === 'error'"
-          class="insight-state is-error"
-          role="alert"
-        >
-          <strong>최근 훈련 기록을 불러오지 못했습니다.</strong>
-          <span>{{ trainingHistoryError ?? '잠시 후 다시 시도해 주세요.' }}</span>
-        </div>
-        <div v-else-if="recentTrainingHistory.length === 0" class="insight-state">
-          최근 30일 동안 완료한 훈련 기록이 없습니다.
-        </div>
-        <ol v-else class="training-history-list">
-          <li v-for="item in recentTrainingHistory" :key="item.trainingId">
+          <div class="analysis-followup">
             <div>
-              <strong>{{ item.learningType }}</strong>
-              <span>{{ item.date }} · {{ formatTrainingDuration(item) }}</span>
+              <span class="followup-label">읽기 정확도 기록</span>
+              <strong>
+                {{
+                  latestAccuracy === null
+                    ? '기록 없음'
+                    : `${firstAccuracy}% → ${latestAccuracy}%`
+                }}
+              </strong>
+              <p>
+                {{
+                  accuracyDelta === null
+                    ? `${accuracyTrend.length}개 날짜 기록`
+                    : `첫 기록 대비 ${accuracyDelta >= 0 ? '+' : ''}${accuracyDelta}%p`
+                }}
+              </p>
             </div>
-            <b>{{ item.achievement === null ? '달성도 없음' : `${item.achievement}%` }}</b>
-          </li>
-        </ol>
-      </section>
+            <div>
+              <span class="followup-label">읽기 속도 기록</span>
+              <strong>
+                {{
+                  latestReadingSpeed === null
+                    ? '기록 없음'
+                    : `${firstReadingSpeed} → ${latestReadingSpeed} 단어/분`
+                }}
+              </strong>
+              <p>
+                {{
+                  readingSpeedChangeRate === null
+                    ? `${readingSpeedTrend.length}개 날짜 기록`
+                    : `기간 변화 ${readingSpeedChangeRate >= 0 ? '+' : ''}${readingSpeedChangeRate}%`
+                }}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <aside class="recent-panel" aria-label="최근 학습 기록">
+          <StudentLearningEvents
+            :events="learningEvents"
+            :selected-event-id="selectedEventId"
+            :selected-event-type="selectedEventType"
+            :detail="selectedEventDetail"
+            :list-status="learningEventsStatus"
+            :list-error="learningEventsError"
+            :detail-status="selectedEventDetailStatus"
+            :detail-error="selectedEventDetailError"
+            @select="selectLearningEvent"
+            @retry-list="studentStore.loadLearningEvents(detail.studentId, 3)"
+            @retry-detail="selectLearningEvent"
+            @add-to-memo="addLearningEventToMemo"
+          />
+          <RouterLink
+            class="history-link"
+            :to="{ name: 'student-training-history', params: { id: detail.studentId } }"
+          >
+            전체 훈련 이력 보기
+          </RouterLink>
+        </aside>
+      </div>
 
       <StudentCommunicationPanel
         v-model:note-draft="noteDraft"
@@ -548,6 +597,7 @@ watch(studentId, loadOverview, { immediate: true })
   max-width: 1120px;
   margin: 0 auto;
   gap: 20px;
+  container-type: inline-size;
 }
 
 .overview-state {
@@ -592,71 +642,9 @@ watch(studentId, loadOverview, { immediate: true })
   animation: spin 0.8s linear infinite;
 }
 
-.student-profile-card {
-  display: grid;
-  align-items: center;
-  gap: 18px;
-  padding: 20px 22px;
-  grid-template-columns: 64px minmax(150px, 0.7fr) minmax(0, 2fr);
-}
-
-.student-profile-card__avatar img,
-.student-profile-card__avatar span {
-  display: grid;
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  object-fit: cover;
-  place-items: center;
-}
-
-.student-profile-card__avatar span {
-  background: var(--primary-50);
-  color: var(--primary-700);
-  font-size: 20px;
-  font-weight: 800;
-}
-
-.student-profile-card__identity {
-  display: grid;
-  min-width: 0;
-  gap: 4px;
-}
-
-.student-profile-card__identity strong {
-  color: var(--slate-900);
-  font-size: 18px;
-}
-
-.student-profile-card__identity span,
 .learning-summary-section header p {
   color: var(--slate-500);
   font-size: 12px;
-}
-
-.student-profile-card dl {
-  display: grid;
-  margin: 0;
-  gap: 16px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.student-profile-card dl > div {
-  display: grid;
-  gap: 3px;
-}
-
-.student-profile-card dt {
-  color: var(--slate-500);
-  font-size: 11px;
-}
-
-.student-profile-card dd {
-  margin: 0;
-  color: var(--slate-800);
-  font-size: 13px;
-  font-weight: 650;
-  overflow-wrap: anywhere;
 }
 
 .learning-summary-section {
@@ -761,53 +749,59 @@ watch(studentId, loadOverview, { immediate: true })
   color: var(--success-700, #15803d);
 }
 
-.learning-insights-grid {
+.learning-analysis {
   display: grid;
-  align-items: start;
-  gap: 20px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.75fr);
 }
 
-.learning-insights-grid > *,
-.training-history-panel {
+.trend-panel {
+  display: grid;
+  min-width: 0;
+  gap: 0;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.section-heading h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.trend-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trend-switch {
+  display: flex;
+  gap: 6px;
+}
+
+.trend-panel :deep(.chart-panel) {
+  padding-top: 2px;
+}
+
+.recent-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
   padding: 20px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--card);
   box-shadow: var(--shadow-sm);
-}
-
-.accuracy-panel,
-.training-history-panel {
-  display: grid;
-  gap: 14px;
-}
-
-.accuracy-panel > header,
-.training-history-panel > header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.accuracy-panel h2,
-.accuracy-panel p,
-.training-history-panel h2,
-.training-history-panel p {
-  margin: 0;
-}
-
-.accuracy-panel h2,
-.training-history-panel h2 {
-  font-size: 18px;
-}
-
-.accuracy-panel header p,
-.training-history-panel header p {
-  margin-top: 4px;
-  color: var(--slate-500);
-  font-size: 12px;
 }
 
 .insight-state {
@@ -830,64 +824,58 @@ watch(studentId, loadOverview, { immediate: true })
   color: var(--danger-600);
 }
 
-.accuracy-summary {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: var(--radius-md);
-  background: var(--slate-50);
-}
-
-.accuracy-summary strong {
-  color: var(--success-700, #15803d);
-  font-size: 14px;
-}
-
-.accuracy-summary strong.is-negative {
-  color: var(--danger-600);
-}
-
-.accuracy-summary span {
-  color: var(--slate-500);
-  font-size: 11px;
-}
-
-.training-history-list {
+.analysis-followup {
   display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: 24px;
+  margin-top: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.training-history-list li {
-  display: flex;
-  min-height: 64px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+.analysis-followup > div {
   padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--muted) 28%, transparent);
 }
 
-.training-history-list li > div {
-  display: grid;
-  min-width: 0;
-  gap: 5px;
-}
-
-.training-history-list strong,
-.training-history-list b {
-  color: var(--slate-800);
-  font-size: 13px;
-}
-
-.training-history-list span {
+.followup-label {
   color: var(--slate-500);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.analysis-followup strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--slate-900);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.analysis-followup p {
+  margin: 4px 0 0;
+  color: var(--slate-600);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.history-link {
+  display: inline-flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  color: var(--primary-700);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.history-link:hover {
+  text-decoration: underline;
 }
 
 @keyframes spin {
@@ -896,40 +884,33 @@ watch(studentId, loadOverview, { immediate: true })
   }
 }
 
-@media (max-width: 820px) {
-  .student-profile-card {
-    grid-template-columns: 58px 1fr;
-  }
-
-  .student-profile-card dl {
-    grid-column: 1 / -1;
-  }
-
-  .summary-grid {
+@container (max-width: 940px) {
+  .learning-analysis {
     grid-template-columns: 1fr;
   }
+}
 
-  .learning-insights-grid {
+@media (max-width: 820px) {
+  .summary-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 560px) {
-  .student-profile-card {
-    gap: 14px;
-    padding: 16px;
-  }
-
-  .student-profile-card dl {
+  .learning-summary-section > header,
+  .section-heading,
+  .analysis-followup {
+    align-items: flex-start;
     grid-template-columns: 1fr;
   }
 
-  .learning-summary-section > header,
-  .accuracy-panel > header,
-  .training-history-panel > header,
-  .training-history-list li {
-    align-items: flex-start;
+  .section-heading {
     flex-direction: column;
+  }
+
+  .trend-heading-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .overview-state {
@@ -941,8 +922,7 @@ watch(studentId, loadOverview, { immediate: true })
     justify-content: center;
   }
 
-  .learning-insights-grid > *,
-  .training-history-panel {
+  .trend-panel {
     padding: 16px;
   }
 }
