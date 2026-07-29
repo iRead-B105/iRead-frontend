@@ -210,10 +210,9 @@ export const useReportStore = defineStore('report', () => {
   async function createReport(studentId: number): Promise<boolean> {
     if (createStatus.value === 'submitting') return false
     const periodErrors = validateReportPeriod(startDate.value, endDate.value)
-    const memoValidationError = validateTeacherMemo(teacherMemoDraft.value)
-    if (periodErrors.startDate || periodErrors.endDate || memoValidationError) {
+    if (periodErrors.startDate || periodErrors.endDate) {
       createStatus.value = 'error'
-      createError.value = periodErrors.startDate ?? periodErrors.endDate ?? memoValidationError
+      createError.value = periodErrors.startDate ?? periodErrors.endDate ?? null
       return false
     }
 
@@ -227,7 +226,6 @@ export const useReportStore = defineStore('report', () => {
         studentId,
         startDate: startDate.value,
         endDate: endDate.value,
-        teacherMemo: normalizeTeacherMemo(teacherMemoDraft.value),
       })
       if (requestSequence !== createSequence || activeStudentId.value !== studentId) {
         return false

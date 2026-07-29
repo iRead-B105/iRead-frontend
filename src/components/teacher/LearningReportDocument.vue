@@ -43,20 +43,37 @@ const emit = defineEmits<{
       </div>
       <div class="learning-report__title">
         <h1>{{ studentName }} 학습 보고서</h1>
-        <span>{{ formatReportDate(report.startDate) }} – {{ formatReportDate(report.endDate) }}</span>
+        <span
+          >{{ formatReportDate(report.startDate) }} – {{ formatReportDate(report.endDate) }}</span
+        >
       </div>
     </header>
 
     <dl class="report-profile">
-      <div><dt>학습자</dt><dd>{{ studentName }}</dd></div>
-      <div><dt>학교</dt><dd>{{ studentSchool || '-' }}</dd></div>
+      <div>
+        <dt>학습자</dt>
+        <dd>{{ studentName }}</dd>
+      </div>
+      <div>
+        <dt>학교</dt>
+        <dd>{{ studentSchool || '-' }}</dd>
+      </div>
       <div>
         <dt>보고서 기간</dt>
         <dd>{{ formatReportDate(report.startDate) }} – {{ formatReportDate(report.endDate) }}</dd>
       </div>
-      <div><dt>생성일</dt><dd>{{ formatReportDateTime(report.createdAt) }}</dd></div>
-      <div><dt>담당 교수자</dt><dd>{{ teacherName || '-' }}</dd></div>
-      <div><dt>소속</dt><dd>{{ teacherOrganization || '-' }}</dd></div>
+      <div>
+        <dt>생성일</dt>
+        <dd>{{ formatReportDateTime(report.createdAt) }}</dd>
+      </div>
+      <div>
+        <dt>담당 교수자</dt>
+        <dd>{{ teacherName || '-' }}</dd>
+      </div>
+      <div>
+        <dt>소속</dt>
+        <dd>{{ teacherOrganization || '-' }}</dd>
+      </div>
     </dl>
 
     <ReportLearningSnapshot :snapshot="report.snapshot" />
@@ -66,9 +83,12 @@ const emit = defineEmits<{
       <header>
         <div>
           <h2 id="opinion-title">교수자 의견</h2>
-          <p>보고서 생성일은 의견을 수정해도 변경되지 않습니다.</p>
         </div>
-        <span>{{ teacherMemoDraft.length.toLocaleString('ko-KR') }}/{{ REPORT_MEMO_MAX_LENGTH.toLocaleString('ko-KR') }}</span>
+        <span
+          >{{ teacherMemoDraft.length.toLocaleString('ko-KR') }}/{{
+            REPORT_MEMO_MAX_LENGTH.toLocaleString('ko-KR')
+          }}</span
+        >
       </header>
       <Textarea
         :value="teacherMemoDraft"
@@ -184,11 +204,6 @@ const emit = defineEmits<{
 .report-opinion h2 {
   margin: 0;
   font-size: 17px;
-}
-.report-opinion header p {
-  margin: 4px 0 0;
-  color: var(--muted-foreground);
-  font-size: 11px;
 }
 .report-opinion header > span {
   color: var(--muted-foreground);

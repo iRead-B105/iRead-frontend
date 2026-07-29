@@ -136,8 +136,8 @@ describe('교수자 mock 데모 시나리오', () => {
       studentId: student.primaryId,
       startDate: '2026-07-03',
       endDate: '2026-07-24',
-      teacherMemo: '새로고침 전 임시 의견',
     })
+    await mutableReportRepository.updateTeacherMemo(createdReport.reportId, '새로고침 전 임시 의견')
     expect(createdReport.createdAt).toBe(createMockDemoDate().toISOString())
 
     await expect(mutableTeacherRepository.getInfo()).resolves.toMatchObject({

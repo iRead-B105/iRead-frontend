@@ -4,17 +4,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { REPORT_MEMO_MAX_LENGTH, type ReportPeriodErrors } from '@/features/teacher/report'
+import type { ReportPeriodErrors } from '@/features/teacher/report'
 
 const props = defineProps<{
-  studentName: string
   startDate: string
   endDate: string
-  teacherMemo: string
   today: string
   periodErrors: ReportPeriodErrors
-  memoError: string | null
   createError: string | null
   duplicateReportId: number | null
   submitting: boolean
@@ -23,16 +19,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:startDate': [value: string]
   'update:endDate': [value: string]
-  'update:teacherMemo': [value: string]
   generate: []
   openDuplicate: []
 }>()
 
 const invalid = computed(
-  () =>
-    Boolean(props.periodErrors.startDate) ||
-    Boolean(props.periodErrors.endDate) ||
-    Boolean(props.memoError),
+  () => Boolean(props.periodErrors.startDate) || Boolean(props.periodErrors.endDate),
 )
 
 const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '교수자 의견']
@@ -42,13 +34,13 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
   <Card class="report-setup" role="region" aria-labelledby="report-setup-title">
     <CardHeader class="report-setup__header">
       <div>
-        <h2 id="report-setup-title">새 보고서</h2>
+        <h2 id="report-setup-title">보고서 설정</h2>
       </div>
     </CardHeader>
 
     <CardContent class="report-setup__body">
       <div class="report-period">
-        <h3>보고서 기간</h3>
+        <h3>조회 기간</h3>
         <div class="report-period__fields">
           <div class="field">
             <Label for="report-start-date">시작일</Label>
@@ -59,17 +51,11 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
               :value="startDate"
               :max="today"
               :aria-invalid="Boolean(periodErrors.startDate)"
-              :aria-describedby="
-                periodErrors.startDate ? 'report-start-date-error' : undefined
-              "
+              :aria-describedby="periodErrors.startDate ? 'report-start-date-error' : undefined"
               :disabled="submitting"
               @input="emit('update:startDate', ($event.target as HTMLInputElement).value)"
             />
-            <p
-              v-if="periodErrors.startDate"
-              id="report-start-date-error"
-              class="field-error"
-            >
+            <p v-if="periodErrors.startDate" id="report-start-date-error" class="field-error">
               {{ periodErrors.startDate }}
             </p>
           </div>
@@ -87,39 +73,15 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
               :disabled="submitting"
               @input="emit('update:endDate', ($event.target as HTMLInputElement).value)"
             />
-            <p
-              v-if="periodErrors.endDate"
-              id="report-end-date-error"
-              class="field-error"
-            >
+            <p v-if="periodErrors.endDate" id="report-end-date-error" class="field-error">
               {{ periodErrors.endDate }}
             </p>
           </div>
         </div>
-
-        <div class="memo-field">
-          <div class="memo-field__label">
-            <Label for="report-initial-memo">교수자 의견 (선택)</Label>
-            <span>{{ teacherMemo.length.toLocaleString('ko-KR') }}/{{ REPORT_MEMO_MAX_LENGTH.toLocaleString('ko-KR') }}</span>
-          </div>
-          <Textarea
-            id="report-initial-memo"
-            :value="teacherMemo"
-            :maxlength="REPORT_MEMO_MAX_LENGTH"
-            :aria-invalid="Boolean(memoError)"
-            :aria-describedby="memoError ? 'report-initial-memo-error' : undefined"
-            :disabled="submitting"
-            placeholder="보고서에 함께 저장할 의견을 입력해 주세요."
-            @input="emit('update:teacherMemo', ($event.target as HTMLTextAreaElement).value)"
-          />
-          <p v-if="memoError" id="report-initial-memo-error" class="field-error">
-            {{ memoError }}
-          </p>
-        </div>
       </div>
 
       <div class="report-contents">
-        <h3>저장되는 내용</h3>
+        <h3>포함되는 내용</h3>
         <ul>
           <li v-for="section in reportSections" :key="section">
             <span aria-hidden="true">✓</span>
@@ -141,11 +103,7 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
         </div>
 
         <div class="report-setup__actions">
-          <Button
-            type="button"
-            :disabled="invalid || submitting"
-            @click="emit('generate')"
-          >
+          <Button type="button" :disabled="invalid || submitting" @click="emit('generate')">
             {{ submitting ? '보고서 생성 중…' : '보고서 생성' }}
           </Button>
         </div>
@@ -156,6 +114,7 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
 
 <style scoped>
 .report-setup {
+  container-type: inline-size;
   gap: 0;
   overflow: hidden;
   padding: 0;
@@ -175,14 +134,14 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
 .report-setup__body {
   display: grid;
   padding: 0;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: 1fr;
 }
 .report-period,
 .report-contents {
   padding: 22px 20px 24px;
 }
 .report-period {
-  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 .report-setup__body h3 {
   margin-bottom: 15px;
@@ -198,8 +157,7 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
   padding-top: 34px;
   color: var(--slate-400);
 }
-.field,
-.memo-field {
+.field {
   display: grid;
   gap: 7px;
 }
@@ -207,23 +165,6 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
   margin: 0;
   color: var(--destructive);
   font-size: 11px;
-}
-.memo-field {
-  margin-top: 18px;
-}
-.memo-field__label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.memo-field__label span {
-  color: var(--muted-foreground);
-  font-size: 10px;
-}
-.memo-field :deep(textarea) {
-  min-height: 116px;
-  line-height: 1.6;
 }
 .report-contents ul {
   display: grid;
@@ -272,13 +213,14 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
   padding-top: 16px;
   border-top: 1px solid var(--border);
 }
-@container (max-width: 800px) {
+@container (min-width: 760px) {
   .report-setup__body {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
   }
+
   .report-period {
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
   }
 }
 @container (max-width: 520px) {
@@ -295,7 +237,6 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
     padding: 18px 16px 20px;
   }
 
-  .memo-field__label,
   .create-error {
     align-items: flex-start;
     flex-direction: column;

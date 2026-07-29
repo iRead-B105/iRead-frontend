@@ -16,7 +16,6 @@ import {
   localDateString,
   parsePositiveReportId,
   validateReportPeriod,
-  validateTeacherMemo,
   type ReportListItem,
 } from '@/features/teacher/report'
 import { asyncStateKind } from '@/features/teacher/error'
@@ -78,7 +77,6 @@ const studentLoadError = computed(() =>
   studentId.value === null ? null : (detailErrorById.value[studentId.value] ?? null),
 )
 const periodErrors = computed(() => validateReportPeriod(startDate.value, endDate.value, today))
-const setupMemoError = computed(() => validateTeacherMemo(teacherMemoDraft.value))
 const filteredReports = computed(() => {
   const query = reportQuery.value.trim().toLowerCase()
   if (!query) return reports.value
@@ -122,9 +120,7 @@ async function retryStudent(): Promise<void> {
 
 <template>
   <div class="report page-stack">
-    <PageHeader
-      title="보고서"
-    />
+    <PageHeader title="보고서" />
 
     <AsyncStatePanel
       v-if="invalidStudentId"
@@ -274,15 +270,11 @@ async function retryStudent(): Promise<void> {
         <ReportSetupPanel
           v-model:start-date="startDate"
           v-model:end-date="endDate"
-          :teacher-memo="teacherMemoDraft"
-          :student-name="studentName"
           :today="today"
           :period-errors="periodErrors"
-          :memo-error="setupMemoError"
           :create-error="createError"
           :duplicate-report-id="duplicateReportId"
           :submitting="createStatus === 'submitting'"
-          @update:teacher-memo="reportStore.setTeacherMemoDraft"
           @generate="generateReport"
           @open-duplicate="reportStore.openDuplicateReport()"
         />

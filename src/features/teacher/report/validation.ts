@@ -1,5 +1,3 @@
-import type { CreateReportInput } from './model'
-
 export const REPORT_MEMO_MAX_LENGTH = 2_000
 
 export interface ReportPeriodErrors {
@@ -63,12 +61,4 @@ export function validateTeacherMemo(value: string): string | null {
   return value.length > REPORT_MEMO_MAX_LENGTH
     ? `교수자 의견은 ${REPORT_MEMO_MAX_LENGTH.toLocaleString('ko-KR')}자 이하로 입력해 주세요.`
     : null
-}
-
-export function normalizeCreateReportInput(input: CreateReportInput): CreateReportInput {
-  return {
-    ...input,
-    teacherMemo:
-      input.teacherMemo === undefined ? undefined : normalizeTeacherMemo(input.teacherMemo ?? ''),
-  }
 }

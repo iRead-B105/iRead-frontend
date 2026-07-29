@@ -94,7 +94,6 @@ describe('Report store', () => {
     await store.loadForStudent(1)
     store.startDate = '2026-07-03'
     store.endDate = '2026-07-24'
-    store.setTeacherMemoDraft('  생성 의견  ')
 
     await expect(store.createReport(1)).resolves.toBe(true)
 
@@ -102,7 +101,6 @@ describe('Report store', () => {
       studentId: 1,
       startDate: '2026-07-03',
       endDate: '2026-07-24',
-      teacherMemo: '생성 의견',
     })
     expect(get).toHaveBeenCalledWith(
       created.reportId,
@@ -112,7 +110,7 @@ describe('Report store', () => {
     expect(store.reports[0]?.reportId).toBe(created.reportId)
   })
 
-  it('POST 성공 후 상세 GET 실패 시 reportId와 입력을 유지한다', async () => {
+  it('POST 성공 후 상세 GET 실패 시 reportId와 기간 입력을 유지한다', async () => {
     const store = useReportStore()
     store.setRepository(
       repository({
@@ -127,13 +125,13 @@ describe('Report store', () => {
     await store.loadForStudent(1)
     store.startDate = '2026-07-03'
     store.endDate = '2026-07-24'
-    store.setTeacherMemoDraft('입력 유지')
 
     await expect(store.createReport(1)).resolves.toBe(false)
 
     expect(store.selectedReportId).toBe(3002)
     expect(store.detailStatus).toBe('error')
-    expect(store.teacherMemoDraft).toBe('입력 유지')
+    expect(store.startDate).toBe('2026-07-03')
+    expect(store.endDate).toBe('2026-07-24')
     expect(store.createError).toContain('생성됐지만')
   })
 

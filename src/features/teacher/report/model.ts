@@ -92,7 +92,6 @@ export interface CreateReportInput {
   readonly studentId: number
   readonly startDate: string
   readonly endDate: string
-  readonly teacherMemo?: string | null
 }
 
 export interface CreateReportResult {
