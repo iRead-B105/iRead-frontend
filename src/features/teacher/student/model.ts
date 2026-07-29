@@ -45,11 +45,11 @@ export type StudentGender = 'Boy' | 'Girl'
 export interface StudentDetail {
   readonly studentId: number
   readonly name: string
-  readonly birthday: string
-  readonly gender: StudentGender
-  readonly school: string
-  readonly guardian: string
-  readonly guardianContact: string
+  readonly birthday: string | null
+  readonly gender: StudentGender | null
+  readonly school: string | null
+  readonly guardian: string | null
+  readonly guardianContact: string | null
   readonly guardianEmail: string | null
   readonly address: string | null
   readonly createdAt: string

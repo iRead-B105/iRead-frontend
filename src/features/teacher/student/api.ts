@@ -12,6 +12,7 @@ import type {
   StudentListQuery,
   StudentListResult,
   StudentMutationCommand,
+  StudentGender,
   StudentSummary,
   StudentTrainingHistory,
   StudentTrainingHistoryPeriod,
@@ -27,10 +28,7 @@ export interface StudentApi {
     options?: StudentRequestOptions,
   ) => Promise<StudentListResult>
   readonly getSummary: (options?: StudentRequestOptions) => Promise<StudentSummary>
-  readonly getDetail: (
-    studentId: number,
-    options?: StudentRequestOptions,
-  ) => Promise<StudentDetail>
+  readonly getDetail: (studentId: number, options?: StudentRequestOptions) => Promise<StudentDetail>
   readonly create: (command: StudentMutationCommand<StudentCreateInput>) => Promise<number>
   readonly update: (
     studentId: number,
@@ -61,22 +59,33 @@ export interface StudentApi {
     period: StudentTrainingHistoryPeriod,
     options?: StudentRequestOptions,
   ) => Promise<StudentTrainingHistory>
-  readonly updateTeacherMemo: (
-    studentId: number,
-    teacherMemo: string | null,
-  ) => Promise<void>
+  readonly updateTeacherMemo: (studentId: number, teacherMemo: string | null) => Promise<void>
 }
 
-function mutationBody<TInput>(command: StudentMutationCommand<TInput>): BodyInit {
-  if (!command.image) return jsonBody(command.input)
+function mutationBody<TInput>(
+  command: StudentMutationCommand<TInput>,
+  input: unknown = command.input,
+): BodyInit {
+  if (!command.image) return jsonBody(input)
 
   const body = new FormData()
-  body.append(
-    'request',
-    new Blob([JSON.stringify(command.input)], { type: 'application/json' }),
-  )
+  body.append('request', new Blob([JSON.stringify(input)], { type: 'application/json' }))
   body.append('image', command.image)
   return body
+}
+
+function mapStudentUpdateInput(input: StudentUpdateInput): Readonly<Record<string, unknown>> {
+  const request: Record<string, unknown> = { ...input }
+  if (
+    Object.prototype.hasOwnProperty.call(input, 'guardianEmail') &&
+    input.guardianEmail === null
+  ) {
+    request.guardianEmail = ''
+  }
+  if (Object.prototype.hasOwnProperty.call(input, 'address') && input.address === null) {
+    request.address = []
+  }
+  return request
 }
 
 type LearningEventDto = Omit<StudentLearningEvent, 'eventType'> & {
@@ -92,10 +101,33 @@ interface StudentTrainingHistoryDto {
     readonly trainingId: number
     readonly date: string
     readonly learningType: string
+    readonly learningCategory: string
     readonly startedAt: string | null
     readonly finishedAt: string | null
     readonly accuracyRate: number | null
+    readonly questions: readonly {
+      readonly questionNumber: number
+      readonly question: string | null
+      readonly correct: boolean
+      readonly selectedAnswer: string | null
+      readonly correctAnswer: string | null
+    }[]
   }[]
+}
+
+interface StudentDetailDto {
+  readonly id: number
+  readonly name: string
+  readonly birthday: string | null
+  readonly gender: StudentGender | null
+  readonly school: string | null
+  readonly guardian: string | null
+  readonly guardianContact: string | null
+  readonly guardianEmail: string | null
+  readonly address: unknown
+  readonly imageUrl: string | null
+  readonly teacherMemo: string | null
+  readonly createdAt: string
 }
 
 interface StudentAccuracyTrendDto {
@@ -111,6 +143,47 @@ function mapLearningEvent<T extends LearningEventDto | LearningEventDetailDto>(
   return {
     ...event,
     eventType: event.eventType.toUpperCase() as StudentLearningEventType,
+  }
+}
+
+function addressPart(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim() || null
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  if (!Object.prototype.hasOwnProperty.call(value, 'value')) return null
+  const part = (value as { readonly value?: unknown }).value
+  return typeof part === 'string' ? part.trim() || null : null
+}
+
+function mapStudentAddress(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string') return value.trim() || null
+  if (Array.isArray(value)) {
+    const parts = value.map(addressPart).filter((part): part is string => part !== null)
+    return parts.length > 0 ? parts.join(' ') : null
+  }
+  const part = addressPart(value)
+  if (part !== null) return part
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return null
+  }
+}
+
+function mapStudentDetail(dto: StudentDetailDto): StudentDetail {
+  return {
+    studentId: dto.id,
+    name: dto.name,
+    birthday: dto.birthday,
+    gender: dto.gender,
+    school: dto.school,
+    guardian: dto.guardian,
+    guardianContact: dto.guardianContact,
+    guardianEmail: dto.guardianEmail?.trim() || null,
+    address: mapStudentAddress(dto.address),
+    createdAt: dto.createdAt,
+    imageUrl: dto.imageUrl,
+    teacherMemo: dto.teacherMemo,
   }
 }
 
@@ -130,10 +203,11 @@ export function createStudentApi(
         signal: options?.signal,
       })
     },
-    getDetail(studentId, options) {
-      return request<StudentDetail>(`/api/admin/student/${studentId}`, {
+    async getDetail(studentId, options) {
+      const detail = await request<StudentDetailDto>(`/api/admin/student/${studentId}`, {
         signal: options?.signal,
       })
+      return mapStudentDetail(detail)
     },
     async create(command) {
       const result = await request<{ studentId: number }>('/api/admin/student', {
@@ -145,7 +219,7 @@ export function createStudentApi(
     update(studentId, command) {
       return request<void>(`/api/admin/student/${studentId}`, {
         method: 'PATCH',
-        body: mutationBody(command),
+        body: mutationBody(command, mapStudentUpdateInput(command.input)),
       })
     },
     remove(studentId) {
@@ -154,10 +228,9 @@ export function createStudentApi(
       })
     },
     getLearningSummary(studentId, options) {
-      return request<StudentLearningSummary>(
-        `/api/admin/student/${studentId}/learning-summary`,
-        { signal: options?.signal },
-      )
+      return request<StudentLearningSummary>(`/api/admin/student/${studentId}/learning-summary`, {
+        signal: options?.signal,
+      })
     },
     async listLearningEvents(studentId, query = {}, options) {
       const search = new URLSearchParams()
@@ -200,16 +273,23 @@ export function createStudentApi(
         { signal: options?.signal },
       )
       return {
-        learningHistory: result.learningHistory.map(({ accuracyRate, ...item }) => ({
-          ...item,
-          achievement: accuracyRate,
-        })),
+        learningHistory: result.learningHistory.map(
+          ({
+            accuracyRate,
+            learningCategory: _learningCategory,
+            questions: _questions,
+            ...item
+          }) => ({
+            ...item,
+            achievement: accuracyRate,
+          }),
+        ),
       }
     },
     updateTeacherMemo(studentId, teacherMemo) {
       return request<void>(`/api/admin/student/${studentId}`, {
         method: 'PATCH',
-        body: jsonBody({ teacherMemo }),
+        body: jsonBody({ teacherMemo: teacherMemo ?? '' }),
       })
     },
   }

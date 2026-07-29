@@ -1,4 +1,5 @@
 import { createTestApi, type TestApi } from '../api'
+import { isGazeAnalysisNotFoundError } from '@/features/teacher/gaze'
 import {
   assertPositiveId,
   assertTestComparisonSelection,
@@ -22,13 +23,20 @@ export class ApiTestRepository implements TestRepository {
     return this.api.compareTests(studentId, currentTestId, comparisonTestIds, options)
   }
 
-  getGazeAnalysis(
+  async getGazeAnalysis(
     studentId: number,
     testId: number,
     options: Parameters<TestRepository['getGazeAnalysis']>[2] = {},
   ) {
     assertPositiveId(studentId, 'studentId')
     assertPositiveId(testId, 'testId')
-    return this.api.getGazeAnalysis(studentId, testId, options)
+    try {
+      return await this.api.getGazeAnalysis(studentId, testId, options)
+    } catch (error) {
+      if (isGazeAnalysisNotFoundError(error)) {
+        return { status: 'NO_DATA' as const, analysis: null }
+      }
+      throw error
+    }
   }
 }

@@ -17,10 +17,7 @@ import type {
   StudentTrainingHistoryPeriod,
   StudentUpdateInput,
 } from '../model'
-import type {
-  StudentRepository,
-  StudentRequestOptions,
-} from './studentRepository'
+import type { StudentRepository, StudentRequestOptions } from './studentRepository'
 
 function startOfDay(value: Date): Date {
   const result = new Date(value)
@@ -31,9 +28,7 @@ function startOfDay(value: Date): Date {
 function isWithinRecentDays(date: string | null, days: 7 | 30, today: Date): boolean {
   if (!date) return false
   const learnedAt = new Date(`${date}T00:00:00`)
-  const elapsedDays = Math.floor(
-    (startOfDay(today).getTime() - learnedAt.getTime()) / 86_400_000,
-  )
+  const elapsedDays = Math.floor((startOfDay(today).getTime() - learnedAt.getTime()) / 86_400_000)
   return elapsedDays >= 0 && elapsedDays < days
 }
 
@@ -60,10 +55,7 @@ export class MockStudentRepository implements StudentRepository {
   private readonly details = new Map<number, StudentDetail>()
   private readonly learningSummaries = new Map<number, StudentLearningSummary>()
   private readonly learningEvents = new Map<number, StudentLearningEvent[]>()
-  private readonly learningEventDetails = new Map<
-    number,
-    Map<number, StudentLearningEventDetail>
-  >()
+  private readonly learningEventDetails = new Map<number, Map<number, StudentLearningEventDetail>>()
   private readonly accuracyTrends = new Map<number, StudentAccuracyPoint[]>()
   private readonly trainingHistories = new Map<number, StudentTrainingHistoryItem[]>()
 
@@ -79,7 +71,7 @@ export class MockStudentRepository implements StudentRepository {
         name: student.name,
         birthday: `${birthdayYear}-03-15`,
         gender: student.studentId % 2 === 0 ? 'Girl' : 'Boy',
-        school: student.school ?? '',
+        school: student.school,
         guardian: `${student.name.slice(0, 1)}보호자`,
         guardianContact: `010-0000-${String(student.studentId).padStart(4, '0')}`,
         guardianEmail: null,
@@ -94,10 +86,7 @@ export class MockStudentRepository implements StudentRepository {
       this.learningEventDetails.set(
         student.studentId,
         new Map(
-          insights.eventDetails.map((event) => [
-            event.eventId,
-            this.cloneEventDetail(event),
-          ]),
+          insights.eventDetails.map((event) => [event.eventId, this.cloneEventDetail(event)]),
         ),
       )
       this.accuracyTrends.set(
@@ -194,9 +183,7 @@ export class MockStudentRepository implements StudentRepository {
     command: StudentMutationCommand<StudentUpdateInput>,
   ): Promise<void> {
     const current = await this.getDetail(studentId)
-    const imageUrl = command.image
-      ? this.mockImageUrl(studentId, command.image)
-      : current.imageUrl
+    const imageUrl = command.image ? this.mockImageUrl(studentId, command.image) : current.imageUrl
     const detail: StudentDetail = {
       ...current,
       ...command.input,
@@ -258,11 +245,9 @@ export class MockStudentRepository implements StudentRepository {
     throwIfAborted(options)
     await this.getDetail(studentId, options)
     const events = [...(this.learningEvents.get(studentId) ?? [])].sort(
-      (left, right) =>
-        new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime(),
+      (left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime(),
     )
-    const limit =
-      query.limit === undefined ? events.length : Math.max(0, Math.trunc(query.limit))
+    const limit = query.limit === undefined ? events.length : Math.max(0, Math.trunc(query.limit))
     return events.slice(0, limit).map(this.cloneEvent)
   }
 
@@ -319,11 +304,7 @@ export class MockStudentRepository implements StudentRepository {
     })
   }
 
-  private createDetail(
-    studentId: number,
-    input: StudentCreateInput,
-    image?: File,
-  ): StudentDetail {
+  private createDetail(studentId: number, input: StudentCreateInput, image?: File): StudentDetail {
     return {
       studentId,
       ...input,
@@ -385,7 +366,8 @@ export class MockStudentRepository implements StudentRepository {
     }
   }
 
-  private ageFromBirthday(birthday: string): number {
+  private ageFromBirthday(birthday: string | null): number | null {
+    if (!birthday) return null
     const today = this.now()
     const [year, month, day] = birthday.split('-').map(Number)
     let age = today.getFullYear() - (year ?? today.getFullYear())

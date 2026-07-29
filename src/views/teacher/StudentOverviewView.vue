@@ -20,6 +20,7 @@ import {
   normalizeTeacherMemo,
   validateTeacherMemo,
   type StudentAttentionReason,
+  type StudentGender,
   type StudentLearningEventDetail,
   type StudentLearningEvent,
   type StudentLearningEventType,
@@ -34,32 +35,28 @@ const attentionReasonLabels: Readonly<Record<StudentAttentionReason, string>> = 
   NO_HISTORY: '아직 학습 기록 없음',
 }
 
+function genderLabel(gender: StudentGender | null): string {
+  if (gender === 'Boy') return '남자'
+  if (gender === 'Girl') return '여자'
+  return '-'
+}
+
 const route = useRoute()
 const router = useRouter()
 const studentStore = useStudentStore()
 const studentId = computed(() => Number(route.params.id))
-const validStudentId = computed(
-  () => Number.isInteger(studentId.value) && studentId.value > 0,
-)
+const validStudentId = computed(() => Number.isInteger(studentId.value) && studentId.value > 0)
 const detail = computed(() => studentStore.detailsById[studentId.value])
-const learningSummary = computed(
-  () => studentStore.learningSummaryById[studentId.value],
-)
-const detailStatus = computed(
-  () => studentStore.detailStatusById[studentId.value] ?? 'idle',
-)
+const learningSummary = computed(() => studentStore.learningSummaryById[studentId.value])
+const detailStatus = computed(() => studentStore.detailStatusById[studentId.value] ?? 'idle')
 const detailErrorStatus = computed(
   () => studentStore.detailErrorStatusById[studentId.value] ?? null,
 )
 const learningSummaryStatus = computed(
   () => studentStore.learningSummaryStatusById[studentId.value] ?? 'idle',
 )
-const learningSummaryError = computed(
-  () => studentStore.learningSummaryErrorById[studentId.value],
-)
-const learningEvents = computed(
-  () => studentStore.learningEventsById[studentId.value] ?? [],
-)
+const learningSummaryError = computed(() => studentStore.learningSummaryErrorById[studentId.value])
+const learningEvents = computed(() => studentStore.learningEventsById[studentId.value] ?? [])
 const learningEventsStatus = computed(
   () => studentStore.learningEventsStatusById[studentId.value] ?? 'idle',
 )
@@ -78,17 +75,17 @@ const selectedEventKey = computed(() =>
 )
 const selectedEventDetail = computed(() =>
   selectedEventKey.value
-    ? studentStore.learningEventDetailsByKey[selectedEventKey.value] ?? null
+    ? (studentStore.learningEventDetailsByKey[selectedEventKey.value] ?? null)
     : null,
 )
 const selectedEventDetailStatus = computed(() =>
   selectedEventKey.value
-    ? studentStore.learningEventDetailStatusByKey[selectedEventKey.value] ?? 'idle'
+    ? (studentStore.learningEventDetailStatusByKey[selectedEventKey.value] ?? 'idle')
     : 'idle',
 )
 const selectedEventDetailError = computed(() =>
   selectedEventKey.value
-    ? studentStore.learningEventDetailErrorByKey[selectedEventKey.value] ?? null
+    ? (studentStore.learningEventDetailErrorByKey[selectedEventKey.value] ?? null)
     : null,
 )
 const accuracyTrend = computed(
@@ -100,9 +97,7 @@ const accuracyTrendStatus = computed(
 const accuracyTrendError = computed(
   () => studentStore.accuracyTrendErrorById[studentId.value] ?? null,
 )
-const trainingHistoryKey = computed(() =>
-  studentStore.insightKey(studentId.value, '30d'),
-)
+const trainingHistoryKey = computed(() => studentStore.insightKey(studentId.value, '30d'))
 const trainingHistory = computed(
   () => studentStore.trainingHistoryByKey[trainingHistoryKey.value]?.learningHistory ?? [],
 )
@@ -116,8 +111,7 @@ const trainingHistoryError = computed(
 const accuracyDelta = computed(() => {
   if (accuracyTrend.value.length < 2) return null
   const delta =
-    accuracyTrend.value[accuracyTrend.value.length - 1]!.accuracy -
-    accuracyTrend.value[0]!.accuracy
+    accuracyTrend.value[accuracyTrend.value.length - 1]!.accuracy - accuracyTrend.value[0]!.accuracy
   return Math.round(delta * 100) / 100
 })
 const accuracyChartSummary = computed(
@@ -159,8 +153,7 @@ const hasNoHistory = computed(
   () => learningSummary.value?.attentionReasons.includes('NO_HISTORY') ?? false,
 )
 const visibleAttentionReasons = computed(
-  () =>
-    learningSummary.value?.attentionReasons.filter((reason) => reason !== 'NO_HISTORY') ?? [],
+  () => learningSummary.value?.attentionReasons.filter((reason) => reason !== 'NO_HISTORY') ?? [],
 )
 
 const noteDraft = ref('')
@@ -190,8 +183,7 @@ const detailErrorCopy = computed(() => {
   return {
     title: '아동 정보를 불러오지 못했습니다.',
     description:
-      studentStore.detailErrorById[studentId.value] ??
-      '연결 상태를 확인한 뒤 다시 시도해 주세요.',
+      studentStore.detailErrorById[studentId.value] ?? '연결 상태를 확인한 뒤 다시 시도해 주세요.',
   }
 })
 
@@ -331,33 +323,29 @@ watch(studentId, loadOverview, { immediate: true })
 
       <Card class="student-profile-card">
         <div class="student-profile-card__avatar">
-          <img
-            v-if="detail.imageUrl"
-            :src="detail.imageUrl"
-            :alt="`${detail.name} 프로필`"
-          />
+          <img v-if="detail.imageUrl" :src="detail.imageUrl" :alt="`${detail.name} 프로필`" />
           <span v-else aria-hidden="true">{{ detail.name.charAt(0) }}</span>
         </div>
         <div class="student-profile-card__identity">
           <strong>{{ detail.name }}</strong>
-          <span>{{ detail.school }}</span>
+          <span>{{ detail.school ?? '-' }}</span>
         </div>
         <dl>
           <div>
             <dt>생년월일</dt>
-            <dd>{{ detail.birthday }}</dd>
+            <dd>{{ detail.birthday ?? '-' }}</dd>
           </div>
           <div>
             <dt>성별</dt>
-            <dd>{{ detail.gender === 'Boy' ? '남자' : '여자' }}</dd>
+            <dd>{{ genderLabel(detail.gender) }}</dd>
           </div>
           <div>
             <dt>보호자</dt>
-            <dd>{{ detail.guardian }}</dd>
+            <dd>{{ detail.guardian ?? '-' }}</dd>
           </div>
           <div>
             <dt>보호자 연락처</dt>
-            <dd>{{ detail.guardianContact }}</dd>
+            <dd>{{ detail.guardianContact ?? '-' }}</dd>
           </div>
         </dl>
       </Card>
@@ -428,9 +416,7 @@ watch(studentId, loadOverview, { immediate: true })
               </li>
             </ul>
           </template>
-          <p v-else class="attention-state__clear">
-            현재 확인이 필요한 공식 학습 신호가 없습니다.
-          </p>
+          <p v-else class="attention-state__clear">현재 확인이 필요한 공식 학습 신호가 없습니다.</p>
         </div>
       </section>
 
@@ -467,11 +453,7 @@ watch(studentId, loadOverview, { immediate: true })
             </Button>
           </header>
 
-          <div
-            v-if="accuracyTrendStatus === 'loading'"
-            class="insight-state"
-            aria-live="polite"
-          >
+          <div v-if="accuracyTrendStatus === 'loading'" class="insight-state" aria-live="polite">
             정확도 추이를 불러오는 중입니다.
           </div>
           <div
@@ -492,7 +474,11 @@ watch(studentId, loadOverview, { immediate: true })
                 첫 기록 대비 {{ accuracyDelta >= 0 ? '+' : '' }}{{ accuracyDelta }}%p
               </strong>
               <span>
-                {{ accuracyTrend.length === 1 ? '변화폭은 다음 기록부터 계산합니다.' : `${accuracyTrend.length}개 날짜 기록` }}
+                {{
+                  accuracyTrend.length === 1
+                    ? '변화폭은 다음 기록부터 계산합니다.'
+                    : `${accuracyTrend.length}개 날짜 기록`
+                }}
               </span>
             </div>
             <ChartPanel
@@ -522,11 +508,7 @@ watch(studentId, loadOverview, { immediate: true })
           </Button>
         </header>
 
-        <div
-          v-if="trainingHistoryStatus === 'loading'"
-          class="insight-state"
-          aria-live="polite"
-        >
+        <div v-if="trainingHistoryStatus === 'loading'" class="insight-state" aria-live="polite">
           최근 훈련 기록을 불러오는 중입니다.
         </div>
         <div

@@ -16,7 +16,8 @@ describe('StudentRepository factory', () => {
 
 describe('ApiStudentRepository', () => {
   it('목표 목록 query와 summary endpoint를 공통 client에 전달한다', async () => {
-    const request = vi.fn()
+    const request = vi
+      .fn()
       .mockResolvedValueOnce({
         students: [],
         page: 0,
@@ -42,7 +43,10 @@ describe('ApiStudentRepository', () => {
 })
 
 describe('MockStudentRepository', () => {
-  const repository = new MockStudentRepository(studentFixtures, () => new Date('2026-07-27T12:00:00'))
+  const repository = new MockStudentRepository(
+    studentFixtures,
+    () => new Date('2026-07-27T12:00:00'),
+  )
 
   it('이름·학교 검색과 metadata를 같은 계약으로 반환한다', async () => {
     const byName = await repository.list({ keyword: '하늘' })
@@ -86,11 +90,12 @@ describe('MockStudentRepository', () => {
 
     await expect(mutableRepository.getSummary()).resolves.toMatchObject({ totalStudents: 1 })
     await mutableRepository.update(studentId, {
-      input: { school: '푸른초등학교', guardianEmail: null },
+      input: { school: '푸른초등학교', guardianEmail: null, address: null },
     })
     await expect(mutableRepository.getDetail(studentId)).resolves.toMatchObject({
       school: '푸른초등학교',
       guardianEmail: null,
+      address: null,
     })
 
     await mutableRepository.remove(studentId)
@@ -148,17 +153,8 @@ describe('MockStudentRepository', () => {
     const recent = await repository.getTrainingHistory(1, '30d')
     const quarter = await repository.getTrainingHistory(1, '3m')
 
-    expect(recent.learningHistory.map((item) => item.trainingId)).toEqual([
-      9105,
-      9104,
-      9103,
-    ])
-    expect(quarter.learningHistory.map((item) => item.trainingId)).toEqual([
-      9105,
-      9104,
-      9103,
-      9102,
-    ])
+    expect(recent.learningHistory.map((item) => item.trainingId)).toEqual([9105, 9104, 9103])
+    expect(quarter.learningHistory.map((item) => item.trainingId)).toEqual([9105, 9104, 9103, 9102])
   })
 
   it('단일 교수자 메모를 저장하고 null로 삭제한다', async () => {

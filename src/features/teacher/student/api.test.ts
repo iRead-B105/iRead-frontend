@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { createStudentApi } from './api'
 
 describe('Student API', () => {
-  it('상세 조회는 목표 studentId·createdAt 계약을 그대로 사용한다', async () => {
+  it('상세 조회의 id와 객체형 주소를 화면 모델로 변환한다', async () => {
     const request = vi.fn().mockResolvedValue({
-      studentId: 7,
+      id: 7,
       name: '김하늘',
       birthday: '2018-03-15',
       gender: 'Boy',
@@ -12,7 +12,7 @@ describe('Student API', () => {
       guardian: '김보호',
       guardianContact: '010-0000-0000',
       guardianEmail: null,
-      address: null,
+      address: [{ value: '서울시 강남구' }, { value: '테헤란로 1' }],
       createdAt: '2026-03-01T09:00:00+09:00',
       imageUrl: null,
       teacherMemo: null,
@@ -21,10 +21,44 @@ describe('Student API', () => {
 
     await expect(api.getDetail(7)).resolves.toMatchObject({
       studentId: 7,
+      address: '서울시 강남구 테헤란로 1',
       createdAt: '2026-03-01T09:00:00+09:00',
     })
     expect(request).toHaveBeenCalledWith('/api/admin/student/7', {
       signal: undefined,
+    })
+  })
+
+  it('상세 조회의 nullable 필드와 빈 선택 문자열을 화면의 null로 정규화한다', async () => {
+    const request = vi.fn().mockResolvedValue({
+      id: 8,
+      name: '이바다',
+      birthday: null,
+      gender: null,
+      school: null,
+      guardian: null,
+      guardianContact: null,
+      guardianEmail: '',
+      address: [],
+      createdAt: '2026-03-01T09:00:00+09:00',
+      imageUrl: null,
+      teacherMemo: null,
+    })
+    const api = createStudentApi(request)
+
+    await expect(api.getDetail(8)).resolves.toEqual({
+      studentId: 8,
+      name: '이바다',
+      birthday: null,
+      gender: null,
+      school: null,
+      guardian: null,
+      guardianContact: null,
+      guardianEmail: null,
+      address: null,
+      createdAt: '2026-03-01T09:00:00+09:00',
+      imageUrl: null,
+      teacherMemo: null,
     })
   })
 
@@ -73,7 +107,7 @@ describe('Student API', () => {
     expect(body.get('image')).toBe(image)
   })
 
-  it('수정은 변경 필드만 JSON으로 PATCH하고 null 초기화를 보존한다', async () => {
+  it('수정은 변경 필드만 PATCH하고 선택 필드 삭제를 백엔드용 값으로 변환한다', async () => {
     const request = vi.fn().mockResolvedValue(undefined)
     const api = createStudentApi(request)
 
@@ -81,6 +115,7 @@ describe('Student API', () => {
       input: {
         school: '푸른초등학교',
         guardianEmail: null,
+        address: null,
       },
     })
 
@@ -88,9 +123,29 @@ describe('Student API', () => {
       method: 'PATCH',
       body: JSON.stringify({
         school: '푸른초등학교',
-        guardianEmail: null,
+        guardianEmail: '',
+        address: [],
       }),
     })
+  })
+
+  it('이미지와 함께 수정할 때도 삭제 Adapter를 multipart request에 적용한다', async () => {
+    const request = vi.fn().mockResolvedValue(undefined)
+    const api = createStudentApi(request)
+    const image = new File(['image'], 'profile.png', { type: 'image/png' })
+
+    await api.update(7, {
+      input: { guardianEmail: null, address: null },
+      image,
+    })
+
+    const init = request.mock.calls[0]?.[1] as RequestInit
+    const body = init.body as FormData
+    expect(init.method).toBe('PATCH')
+    expect(await (body.get('request') as Blob).text()).toBe(
+      JSON.stringify({ guardianEmail: '', address: [] }),
+    )
+    expect(body.get('image')).toBe(image)
   })
 
   it('삭제는 대상 id의 DELETE endpoint를 사용한다', async () => {
@@ -105,7 +160,8 @@ describe('Student API', () => {
   })
 
   it('학습 summary와 단일 메모 저장은 목표 endpoint를 사용한다', async () => {
-    const request = vi.fn()
+    const request = vi
+      .fn()
       .mockResolvedValueOnce({
         studentId: 7,
         currentStage: '문장 이해력 향상',
@@ -119,14 +175,12 @@ describe('Student API', () => {
     await api.getLearningSummary(7)
     await api.updateTeacherMemo(7, null)
 
-    expect(request).toHaveBeenNthCalledWith(
-      1,
-      '/api/admin/student/7/learning-summary',
-      { signal: undefined },
-    )
+    expect(request).toHaveBeenNthCalledWith(1, '/api/admin/student/7/learning-summary', {
+      signal: undefined,
+    })
     expect(request).toHaveBeenNthCalledWith(2, '/api/admin/student/7', {
       method: 'PATCH',
-      body: JSON.stringify({ teacherMemo: null }),
+      body: JSON.stringify({ teacherMemo: '' }),
     })
   })
 
@@ -149,16 +203,23 @@ describe('Student API', () => {
           trainingId: 91,
           date: '2026-07-28',
           learningType: '음절 합쳐 낱말 만들기',
+          learningCategory: '글자 만들기',
           startedAt: '2026-07-28T10:00:00',
           finishedAt: '2026-07-28T10:08:00',
           accuracyRate: 82.5,
+          questions: [
+            {
+              questionNumber: 1,
+              question: '가와 나를 합치면?',
+              correct: true,
+              selectedAnswer: '가나',
+              correctAnswer: '가나',
+            },
+          ],
         },
       ],
     })
-    const api = createStudentApi(
-      request,
-      () => new Date('2026-07-29T12:00:00+09:00'),
-    )
+    const api = createStudentApi(request, () => new Date('2026-07-29T12:00:00+09:00'))
 
     await expect(api.getTrainingHistory(7, '30d')).resolves.toEqual({
       learningHistory: [
@@ -192,7 +253,8 @@ describe('Student API', () => {
   })
 
   it('학습 이벤트·정확도·기간별 훈련 이력은 목표 계약 경로를 사용한다', async () => {
-    const request = vi.fn()
+    const request = vi
+      .fn()
       .mockResolvedValueOnce({ events: [] })
       .mockResolvedValueOnce({
         eventId: 701,
@@ -213,10 +275,7 @@ describe('Student API', () => {
       })
       .mockResolvedValueOnce({ dailyAccuracy: [] })
       .mockResolvedValueOnce({ learningHistory: [] })
-    const api = createStudentApi(
-      request,
-      () => new Date('2026-07-29T12:00:00+09:00'),
-    )
+    const api = createStudentApi(request, () => new Date('2026-07-29T12:00:00+09:00'))
 
     await api.listLearningEvents(7, { limit: 3 })
     await api.getLearningEvent(7, 'TRAINING', 701)
@@ -233,11 +292,9 @@ describe('Student API', () => {
       '/api/admin/student/7/learning-events?eventType=training&eventId=701',
       { signal: undefined },
     )
-    expect(request).toHaveBeenNthCalledWith(
-      3,
-      '/api/admin/student/7/accuracy-trend',
-      { signal: undefined },
-    )
+    expect(request).toHaveBeenNthCalledWith(3, '/api/admin/student/7/accuracy-trend', {
+      signal: undefined,
+    })
     expect(request).toHaveBeenNthCalledWith(
       4,
       '/api/admin/student/7/training-history?from=2026-04-29&to=2026-07-29',

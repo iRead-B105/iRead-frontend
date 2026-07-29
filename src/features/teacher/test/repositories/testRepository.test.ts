@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
-import { createTestApi } from '../api'
+import { createTestApi, type TestApi } from '../api'
+import { ApiTestRepository } from './apiTestRepository'
 import { MockTestRepository } from './mockTestRepository'
 import { assertTestComparisonSelection, type TestRepository } from './testRepository'
 
@@ -104,6 +105,33 @@ describe('Test API', () => {
 })
 
 describe('Test Repository', () => {
+  it('시선 분석 결과 없음 404만 NO_DATA로 변환한다', async () => {
+    const testApi = (error: ApiError): TestApi => ({
+      getTests: vi.fn().mockResolvedValue([]),
+      compareTests: vi.fn(),
+      getGazeAnalysis: vi.fn().mockRejectedValue(error),
+    })
+    const noAnalysis = new ApiError({
+      status: 404,
+      code: 'RESOURCE_NOT_FOUND',
+      message: '시선 분석 결과를 찾을 수 없습니다.',
+    })
+    const noAnalysisRepository = new ApiTestRepository(testApi(noAnalysis))
+
+    await expect(noAnalysisRepository.getGazeAnalysis(1, 11)).resolves.toEqual({
+      status: 'NO_DATA',
+      analysis: null,
+    })
+
+    const testNotFound = new ApiError({
+      status: 404,
+      code: 'RESOURCE_NOT_FOUND',
+      message: '테스트를 찾을 수 없습니다.',
+    })
+    const invalidRepository = new ApiTestRepository(testApi(testNotFound))
+    await expect(invalidRepository.getGazeAnalysis(1, 11)).rejects.toBe(testNotFound)
+  })
+
   it('Mock에서 최신 검사를 기본 목록 첫 항목으로 제공하고 단일 상세를 반환한다', async () => {
     const repository = new MockTestRepository()
 

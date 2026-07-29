@@ -1,6 +1,11 @@
 import { isApiError } from '@/lib/api'
+import { isGazeAnalysisNotFoundError } from '@/features/teacher/gaze'
 import { createTrainingApi, type TrainingApi } from '../api'
-import type { TrainingRepository } from './trainingRepository'
+import {
+  assertSaveCurriculumRequest,
+  CurriculumSynchronizationError,
+  type TrainingRepository,
+} from './trainingRepository'
 
 export class ApiTrainingRepository implements TrainingRepository {
   constructor(private readonly api: TrainingApi = createTrainingApi()) {}
@@ -27,6 +32,7 @@ export class ApiTrainingRepository implements TrainingRepository {
     studentId: number,
     request: Parameters<TrainingRepository['createCurriculum']>[1],
   ) {
+    assertSaveCurriculumRequest(request)
     return this.api.createCurriculum(studentId, request)
   }
 
@@ -38,12 +44,22 @@ export class ApiTrainingRepository implements TrainingRepository {
     return this.api.getCurriculum(studentId, curriculumId, options)
   }
 
-  updateCurriculum(
+  async updateCurriculum(
     studentId: number,
     curriculumId: number,
     request: Parameters<TrainingRepository['updateCurriculum']>[2],
   ) {
-    return this.api.updateCurriculum(studentId, curriculumId, request)
+    assertSaveCurriculumRequest(request)
+    await this.api.updateCurriculum(studentId, curriculumId, request)
+    try {
+      const curriculum = await this.getCurrentCurriculum(studentId)
+      if (curriculum === null) {
+        throw new Error('저장된 현재 커리큘럼을 찾을 수 없습니다.')
+      }
+      return curriculum
+    } catch (error) {
+      throw new CurriculumSynchronizationError(error)
+    }
   }
 
   getExpectedWords(
@@ -103,7 +119,7 @@ export class ApiTrainingRepository implements TrainingRepository {
     try {
       return await this.api.getGazeAnalysis(studentId, trainingId, options)
     } catch (error) {
-      if (isApiError(error) && error.status === 404) {
+      if (isGazeAnalysisNotFoundError(error)) {
         return { status: 'NO_DATA' as const, analysis: null }
       }
       throw error
