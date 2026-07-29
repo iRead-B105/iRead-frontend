@@ -4,6 +4,7 @@ import type { GazeAnalysisRequestStatus, GazeAnalysisState } from '@/features/te
 import {
   testRepository,
   type TestComparison,
+  type TestDetail,
   type TestListItem,
   type TestRepository,
   type TestRequestStatus,
@@ -30,21 +31,38 @@ export const useTestStore = defineStore('test', () => {
   const currentTestId = ref<number | null>(null)
   const comparisonTestIds = ref<readonly number[]>([])
   const comparisonResult = ref<TestComparison | null>(null)
+  const trendDetails = ref<readonly TestDetail[]>([])
   const gazeAnalysis = ref<GazeAnalysisState | null>(null)
   const listStatus = ref<TestRequestStatus>('idle')
   const comparisonStatus = ref<TestRequestStatus>('idle')
+  const trendStatus = ref<TestRequestStatus>('idle')
   const gazeStatus = ref<GazeAnalysisRequestStatus>('idle')
   const listError = ref<string | null>(null)
   const listUiError = ref<UiError | null>(null)
   const comparisonError = ref<string | null>(null)
+  const trendError = ref<string | null>(null)
+  const trendFailedCount = ref(0)
   const gazeError = ref<string | null>(null)
 
   let listGeneration = 0
   let comparisonGeneration = 0
+  let trendGeneration = 0
   let gazeGeneration = 0
   let listController: AbortController | null = null
   let comparisonController: AbortController | null = null
+  let trendController: AbortController | null = null
   let gazeController: AbortController | null = null
+  const detailCache = new Map<string, TestDetail>()
+
+  function detailCacheKey(currentStudentId: number, testId: number): string {
+    return `${currentStudentId}:${testId}`
+  }
+
+  function cacheComparison(currentStudentId: number, result: TestComparison): void {
+    for (const detail of [result.currentTest, ...result.comparisonTests]) {
+      detailCache.set(detailCacheKey(currentStudentId, detail.testId), detail)
+    }
+  }
 
   const currentTest = computed(
     () => tests.value.find((test) => test.testId === currentTestId.value) ?? null,
@@ -70,9 +88,11 @@ export const useTestStore = defineStore('test', () => {
   function abortRequests(): void {
     listController?.abort()
     comparisonController?.abort()
+    trendController?.abort()
     gazeController?.abort()
     listController = null
     comparisonController = null
+    trendController = null
     gazeController = null
   }
 
@@ -82,13 +102,17 @@ export const useTestStore = defineStore('test', () => {
     currentTestId.value = null
     comparisonTestIds.value = []
     comparisonResult.value = null
+    trendDetails.value = []
     gazeAnalysis.value = null
     listStatus.value = nextStudentId === null ? 'idle' : 'loading'
     comparisonStatus.value = 'idle'
+    trendStatus.value = 'idle'
     gazeStatus.value = 'idle'
     listError.value = null
     listUiError.value = null
     comparisonError.value = null
+    trendError.value = null
+    trendFailedCount.value = 0
     gazeError.value = null
   }
 
@@ -103,6 +127,7 @@ export const useTestStore = defineStore('test', () => {
     listController = controller
     const generation = ++listGeneration
     comparisonGeneration += 1
+    trendGeneration += 1
     gazeGeneration += 1
     const isRefresh = studentId.value === nextStudentId
     if (isRefresh) {
@@ -133,14 +158,18 @@ export const useTestStore = defineStore('test', () => {
         .slice(0, 2)
       listStatus.value = 'success'
       if (currentTestId.value !== null) {
+        await loadComparison(nextStudentId)
+        if (generation !== listGeneration || studentId.value !== nextStudentId) return
         await Promise.all([
-          loadComparison(nextStudentId),
+          loadTrend(nextStudentId),
           loadGazeAnalysis(nextStudentId, currentTestId.value),
         ])
       } else {
         comparisonResult.value = null
+        trendDetails.value = []
         gazeAnalysis.value = null
         comparisonStatus.value = 'idle'
+        trendStatus.value = 'idle'
         gazeStatus.value = 'idle'
       }
     } catch (error) {
@@ -246,6 +275,7 @@ export const useTestStore = defineStore('test', () => {
         return
       }
       comparisonResult.value = result
+      cacheComparison(currentStudentId, result)
       comparisonStatus.value = 'success'
     } catch (error) {
       if (isAbortError(error) || generation !== comparisonGeneration) return
@@ -254,6 +284,81 @@ export const useTestStore = defineStore('test', () => {
     } finally {
       if (generation === comparisonGeneration) comparisonController = null
     }
+  }
+
+  async function loadTrend(currentStudentId: number): Promise<void> {
+    if (currentStudentId !== studentId.value || tests.value.length === 0) return
+
+    trendController?.abort()
+    const controller = new AbortController()
+    trendController = controller
+    const generation = ++trendGeneration
+    const requestedTests = [...tests.value]
+    trendStatus.value = 'loading'
+    trendError.value = null
+    trendFailedCount.value = 0
+
+    const missingTests = requestedTests.filter(
+      (test) => !detailCache.has(detailCacheKey(currentStudentId, test.testId)),
+    )
+    let cursor = 0
+    let failedCount = 0
+
+    async function worker(): Promise<void> {
+      while (cursor < missingTests.length) {
+        controller.signal.throwIfAborted()
+        const test = missingTests[cursor]
+        cursor += 1
+        if (!test) return
+        try {
+          const result = await repository.value.compareTests(currentStudentId, test.testId, [], {
+            signal: controller.signal,
+          })
+          detailCache.set(
+            detailCacheKey(currentStudentId, result.currentTest.testId),
+            result.currentTest,
+          )
+        } catch (error) {
+          if (isAbortError(error)) throw error
+          failedCount += 1
+        }
+      }
+    }
+
+    try {
+      const workerCount = Math.min(3, missingTests.length)
+      await Promise.all(Array.from({ length: workerCount }, () => worker()))
+      if (generation !== trendGeneration || studentId.value !== currentStudentId) return
+
+      trendDetails.value = requestedTests
+        .map((test) => detailCache.get(detailCacheKey(currentStudentId, test.testId)))
+        .filter((detail): detail is TestDetail => detail !== undefined)
+        .sort((left, right) => left.date.localeCompare(right.date) || left.testId - right.testId)
+      trendFailedCount.value = failedCount
+
+      if (trendDetails.value.length === 0) {
+        trendStatus.value = 'error'
+        trendError.value = '검사 평균을 계산할 결과를 불러오지 못했습니다.'
+      } else {
+        trendStatus.value = 'success'
+        trendError.value =
+          failedCount > 0
+            ? `일부 검사 ${failedCount}건을 불러오지 못해 확인 가능한 결과만 표시합니다.`
+            : null
+      }
+    } catch (error) {
+      if (isAbortError(error) || generation !== trendGeneration) return
+      trendStatus.value = 'error'
+      trendError.value = testErrorMessage(error, '검사 평균을 계산할 결과를 불러오지 못했습니다.')
+    } finally {
+      if (generation === trendGeneration) trendController = null
+    }
+  }
+
+  async function retryTrend(): Promise<void> {
+    const currentStudentId = studentId.value
+    if (currentStudentId === null) return
+    await loadTrend(currentStudentId)
   }
 
   async function loadGazeAnalysis(currentStudentId: number, testId: number): Promise<void> {
@@ -305,7 +410,9 @@ export const useTestStore = defineStore('test', () => {
     abortRequests()
     listGeneration += 1
     comparisonGeneration += 1
+    trendGeneration += 1
     gazeGeneration += 1
+    detailCache.clear()
     clearState(null)
   }
 
@@ -315,6 +422,7 @@ export const useTestStore = defineStore('test', () => {
     currentTestId,
     comparisonTestIds,
     comparisonResult,
+    trendDetails,
     gazeAnalysis,
     currentTest,
     comparisonTests,
@@ -322,10 +430,13 @@ export const useTestStore = defineStore('test', () => {
     canAddComparison,
     listStatus,
     comparisonStatus,
+    trendStatus,
     gazeStatus,
     listError,
     listUiError,
     comparisonError,
+    trendError,
+    trendFailedCount,
     gazeError,
     setRepository,
     loadForStudent,
@@ -335,6 +446,8 @@ export const useTestStore = defineStore('test', () => {
     removeComparisonTest,
     retryComparison,
     loadComparison,
+    loadTrend,
+    retryTrend,
     loadGazeAnalysis,
     retryGazeAnalysis,
     reset,

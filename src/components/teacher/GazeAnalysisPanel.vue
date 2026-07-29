@@ -50,6 +50,64 @@ const metrics = computed(() => {
     },
   ]
 })
+
+interface AggregateBar {
+  readonly label: string
+  readonly value: number | null
+  readonly displayValue: string
+  readonly width: string
+}
+
+function aggregateBars(values: readonly Omit<AggregateBar, 'width'>[]): readonly AggregateBar[] {
+  const maximum = Math.max(
+    0,
+    ...values.map((item) => item.value).filter((value): value is number => value !== null),
+  )
+  return values.map((item) => ({
+    ...item,
+    width:
+      item.value === null || maximum === 0
+        ? '0%'
+        : `${Math.max(4, Math.round((item.value / maximum) * 100))}%`,
+  }))
+}
+
+const aggregateGroups = computed(() => {
+  if (props.state?.status !== 'AVAILABLE') return []
+  const analysis = props.state.analysis
+  return [
+    {
+      title: '체류 시간',
+      items: aggregateBars([
+        {
+          label: '총 체류',
+          value: analysis.totalVisitedDurationMs,
+          displayValue: formatGazeDuration(analysis.totalVisitedDurationMs),
+        },
+        {
+          label: '평균 체류',
+          value: analysis.avgVisitedDurationMs,
+          displayValue: formatGazeAverage(analysis.avgVisitedDurationMs),
+        },
+      ]),
+    },
+    {
+      title: '체류 행동',
+      items: aggregateBars([
+        {
+          label: '총 체류',
+          value: analysis.totalVisitedCount,
+          displayValue: formatGazeCount(analysis.totalVisitedCount),
+        },
+        {
+          label: '되돌아보기',
+          value: analysis.reverseReadCount,
+          displayValue: formatGazeCount(analysis.reverseReadCount),
+        },
+      ]),
+    },
+  ]
+})
 </script>
 
 <template>
@@ -81,12 +139,32 @@ const metrics = computed(() => {
       시선 분석을 완료하지 못했습니다.
     </p>
 
-    <dl v-else-if="state?.status === 'AVAILABLE'" class="gaze-metrics">
-      <div v-for="metric in metrics" :key="metric.label">
-        <dt>{{ metric.label }}</dt>
-        <dd>{{ metric.value }}</dd>
-      </div>
-    </dl>
+    <div v-else-if="state?.status === 'AVAILABLE'" class="gaze-results">
+      <dl class="gaze-metrics">
+        <div v-for="metric in metrics" :key="metric.label">
+          <dt>{{ metric.label }}</dt>
+          <dd>{{ metric.value }}</dd>
+        </div>
+      </dl>
+
+      <section class="aggregate-chart" aria-label="실제 시선 집계 지표 비교 그래프">
+        <h3>집계 지표 비교</h3>
+        <div class="aggregate-chart__groups">
+          <article v-for="group in aggregateGroups" :key="group.title">
+            <strong>{{ group.title }}</strong>
+            <div v-for="item in group.items" :key="item.label" class="aggregate-bar">
+              <div>
+                <span>{{ item.label }}</span>
+                <b>{{ item.displayValue }}</b>
+              </div>
+              <div class="aggregate-bar__track" aria-hidden="true">
+                <span :style="{ width: item.width }"></span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
 
     <p v-else class="analysis-state">표시할 시선 분석 결과가 없습니다.</p>
 
@@ -146,6 +224,75 @@ const metrics = computed(() => {
   border-radius: var(--radius-md);
   overflow: hidden;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.gaze-results {
+  display: grid;
+  gap: 14px;
+}
+
+.aggregate-chart {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  background: var(--slate-50);
+}
+
+.aggregate-chart h3 {
+  margin: 0;
+  color: var(--slate-800);
+  font-size: 13px;
+}
+
+.aggregate-chart__groups {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.aggregate-chart article {
+  display: grid;
+  gap: 10px;
+}
+
+.aggregate-chart article > strong {
+  color: var(--slate-600);
+  font-size: 11px;
+}
+
+.aggregate-bar {
+  display: grid;
+  gap: 6px;
+}
+
+.aggregate-bar > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--slate-600);
+  font-size: 11px;
+}
+
+.aggregate-bar b {
+  color: var(--slate-800);
+  font-size: 11px;
+}
+
+.aggregate-bar__track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--slate-200);
+}
+
+.aggregate-bar__track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary-500), var(--primary-300));
 }
 
 .gaze-metrics > div {
@@ -254,6 +401,10 @@ const metrics = computed(() => {
   .gaze-analysis--compact .gaze-metrics > div + div {
     border-top: 1px solid var(--slate-200);
     border-left: 0;
+  }
+
+  .aggregate-chart__groups {
+    grid-template-columns: 1fr;
   }
 }
 </style>

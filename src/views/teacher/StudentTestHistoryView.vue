@@ -33,15 +33,18 @@ const {
   currentTestId,
   comparisonTestIds,
   comparisonResult,
+  trendDetails,
   gazeAnalysis,
   availableComparisonTests,
   canAddComparison,
   listStatus,
   comparisonStatus,
+  trendStatus,
   gazeStatus,
   listError,
   listUiError,
   comparisonError,
+  trendError,
   gazeError,
 } = storeToRefs(testStore)
 const listErrorKind = computed(() => asyncStateKind(listUiError.value))
@@ -68,6 +71,16 @@ const areaNames = computed(() => {
   return [...names]
 })
 const hasAreaScores = computed(() => areaNames.value.length > 0)
+const areaAverageScores = computed(() =>
+  areaNames.value.map((area) => {
+    const scores = trendDetails.value
+      .map((detail) => detail.areaScores.find((areaScore) => areaScore.area === area)?.score)
+      .filter((score): score is number => score !== undefined)
+    if (scores.length === 0) return null
+    return Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10
+  }),
+)
+const hasAreaAverage = computed(() => areaAverageScores.value.some((score) => score !== null))
 const areaChartSummary = computed(
   () =>
     `검사별 영역 점수: ${displayedDetails.value
@@ -81,7 +94,16 @@ const areaChartSummary = computed(
             })
             .join(', ')}`,
       )
-      .join('; ')}`,
+      .join('; ')}${
+      hasAreaAverage.value
+        ? `; 전체 검사 평균 ${areaNames.value
+            .map((area, index) => {
+              const score = areaAverageScores.value[index]
+              return `${area} ${score === null ? '기록 없음' : `${score}점`}`
+            })
+            .join(', ')}`
+        : ''
+    }`,
 )
 const areaChart = computed<EChartsOption>(() => ({
   tooltip: {
@@ -89,7 +111,10 @@ const areaChart = computed<EChartsOption>(() => ({
     valueFormatter: (value) => (value == null ? '-' : `${value}점`),
   },
   legend: {
-    data: displayedDetails.value.map((detail, index) => seriesLabel(detail, index)),
+    data: [
+      ...displayedDetails.value.map((detail, index) => seriesLabel(detail, index)),
+      ...(hasAreaAverage.value ? ['검사 평균'] : []),
+    ],
     top: 4,
   },
   grid: { left: 52, right: 24, top: 52, bottom: 58 },
@@ -104,17 +129,46 @@ const areaChart = computed<EChartsOption>(() => ({
     max: 100,
     axisLabel: { formatter: '{value}' },
   },
-  series: displayedDetails.value.map((detail, index) => ({
-    name: seriesLabel(detail, index),
-    type: 'bar',
-    data: areaNames.value.map(
-      (area) => detail.areaScores.find((areaScore) => areaScore.area === area)?.score ?? null,
-    ),
-    itemStyle: {
-      color: chartPalette[index] ?? chartColors.muted,
-      borderRadius: [5, 5, 0, 0],
-    },
-  })),
+  series: [
+    ...displayedDetails.value.map((detail, index) => ({
+      name: seriesLabel(detail, index),
+      type: 'bar' as const,
+      data: areaNames.value.map(
+        (area) => detail.areaScores.find((areaScore) => areaScore.area === area)?.score ?? null,
+      ),
+      itemStyle: {
+        color: chartPalette[index] ?? chartColors.muted,
+        borderRadius: [5, 5, 0, 0],
+      },
+    })),
+    ...(hasAreaAverage.value
+      ? [
+          {
+            name: '검사 평균',
+            type: 'line' as const,
+            data: areaAverageScores.value,
+            connectNulls: false,
+            symbol: 'circle',
+            symbolSize: 7,
+            label: {
+              show: true,
+              position: 'top' as const,
+              formatter: '{c}점',
+            },
+            itemStyle: {
+              color: chartColors.white,
+              borderColor: chartColors.amber,
+              borderWidth: 2,
+            },
+            lineStyle: {
+              color: chartColors.amber,
+              width: 2,
+            },
+            z: 5,
+          },
+        ]
+      : []),
+  ],
 }))
 
 watch(
@@ -175,9 +229,7 @@ function testOptionLabel(test: TestListItem): string {
 
 <template>
   <div class="test-history page-stack">
-    <PageHeader
-      title="검사 이력"
-    />
+    <PageHeader title="검사 이력" />
 
     <AsyncStatePanel
       v-if="invalidStudentId"
@@ -300,16 +352,6 @@ function testOptionLabel(test: TestListItem): string {
           </span>
         </div>
 
-        <Card v-if="currentTestId !== null" class="gaze-card">
-          <GazeAnalysisPanel
-            title="검사 시선 분석"
-            :state="gazeAnalysis"
-            :status="gazeStatus"
-            :error="gazeError"
-            @retry="testStore.retryGazeAnalysis()"
-          />
-        </Card>
-
         <Card v-if="comparisonStatus === 'loading'" class="state-card" aria-live="polite">
           <strong>선택한 검사 결과를 불러오는 중입니다.</strong>
         </Card>
@@ -326,12 +368,21 @@ function testOptionLabel(test: TestListItem): string {
                 <div>
                   <h2>영역별 검사 점수</h2>
                 </div>
+                <span v-if="trendStatus === 'loading'" class="average-status" aria-live="polite">
+                  검사 평균 계산 중
+                </span>
               </header>
+              <div v-if="trendError" class="average-warning" role="status">
+                <span>{{ trendError }}</span>
+                <Button variant="outline" type="button" @click="testStore.retryTrend()">
+                  다시 확인
+                </Button>
+              </div>
               <ChartPanel
                 v-if="hasAreaScores"
                 :option="areaChart"
                 height="330px"
-                aria-label="기준 검사와 선택한 비교 검사의 영역별 점수 차트"
+                aria-label="기준 검사와 비교 검사 및 전체 검사 평균의 영역별 점수 차트"
                 :summary="areaChartSummary"
               />
               <div v-else class="inline-empty">표시할 영역별 점수가 없습니다.</div>
@@ -404,6 +455,16 @@ function testOptionLabel(test: TestListItem): string {
                 </dl>
               </article>
             </div>
+          </Card>
+
+          <Card v-if="currentTestId !== null" class="gaze-card">
+            <GazeAnalysisPanel
+              title="검사 시선 분석"
+              :state="gazeAnalysis"
+              :status="gazeStatus"
+              :error="gazeError"
+              @retry="testStore.retryGazeAnalysis()"
+            />
           </Card>
 
           <Card class="question-section">
@@ -590,6 +651,30 @@ function testOptionLabel(test: TestListItem): string {
 .gaze-card :deep(.gaze-analysis) {
   padding-top: 0;
   border-top: 0;
+}
+
+.average-status {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--slate-100);
+  color: var(--slate-600);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.average-warning {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 8px 14px;
+  border: 1px solid color-mix(in oklch, var(--warning-500) 30%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--warning-500) 8%, transparent);
+  color: var(--slate-700);
+  font-size: 12px;
 }
 
 .result-chart {
