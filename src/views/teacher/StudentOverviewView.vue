@@ -115,10 +115,10 @@ const trainingHistoryError = computed(
 )
 const accuracyDelta = computed(() => {
   if (accuracyTrend.value.length < 2) return null
-  return (
+  const delta =
     accuracyTrend.value[accuracyTrend.value.length - 1]!.accuracy -
     accuracyTrend.value[0]!.accuracy
-  )
+  return Math.round(delta * 100) / 100
 })
 const accuracyChartSummary = computed(
   () =>

@@ -1,9 +1,9 @@
 import { apiRequest, downloadFile, jsonBody } from '@/lib/api'
 import { resolveHistoryDateRange } from '@/features/teacher/periodDateRange'
 import {
-  mapGazeAnalysisState,
+  mapRawGazeAnalysis,
   type GazeAnalysisState,
-  type GazeAnalysisStateDto,
+  type RawGazeAnalysisDto,
 } from '@/features/teacher/gaze'
 import type {
   CurriculumLog,
@@ -18,7 +18,6 @@ import type {
   TrainingExportFormat,
   TrainingForm,
   TrainingPeriod,
-  TrainingQuestionResult,
   TrainingResult,
   TrainingStatus,
   TrainingStatistics,
@@ -93,35 +92,43 @@ interface CurriculumLogDto {
 }
 
 interface CurriculumTrainingLogDto {
-  readonly curriculumId: number
   readonly trainings: readonly {
     readonly trainingId: number
     readonly trainingName: string
     readonly startedAt: string | null
-    readonly finishedAt: string | null
-    readonly accuracy: number | null
-    readonly questions: readonly TrainingQuestionResult[]
+    readonly endedAt: string | null
+    readonly accuracyRate: number | null
+    readonly questionResults: readonly {
+      readonly questionNumber: number
+      readonly isCorrect: boolean | null
+    }[]
+    readonly incorrectItems: readonly {
+      readonly questionNumber: number
+      readonly question: string
+      readonly correctAnswer: string
+      readonly selectedAnswer: string
+    }[]
   }[]
 }
 
 interface TrainingStatisticsDto {
-  readonly accuracyComparisons: readonly {
+  readonly trainings: readonly {
     readonly trainingId: number
     readonly trainingName: string
     readonly date: string | null
-    readonly accuracy: number | null
+    readonly accuracyRate: number | null
     readonly previousTrainingDate: string | null
-    readonly previousAccuracy: number | null
+    readonly previousAccuracyRate: number | null
   }[]
-  readonly readingSpeedTrend: {
-    readonly unit: 'CORRECT_WORDS_PER_MINUTE'
-    readonly changeRate: number | null
-    readonly points: readonly {
-      readonly trainingId: number
-      readonly date: string
-      readonly speed: number
-    }[]
-  }
+}
+
+interface ReadingSpeedTrendDto {
+  readonly unit: 'WORDS_PER_MINUTE'
+  readonly voiceChangeRate: number | null
+  readonly points: readonly {
+    readonly date: string
+    readonly voiceSpeed: number | null
+  }[]
 }
 
 function requestInit(options?: TrainingRequestOptions): RequestInit {
@@ -180,27 +187,60 @@ function mapCurriculumLog(dto: CurriculumLogDto): CurriculumLog {
   }
 }
 
-function mapTrainingLog(dto: CurriculumTrainingLogDto): CurriculumTrainingLog {
+function mapTrainingLog(
+  curriculumId: number,
+  dto: CurriculumTrainingLogDto,
+): CurriculumTrainingLog {
   return {
-    curriculumId: dto.curriculumId,
-    trainings: dto.trainings.map((training) => ({
-      ...training,
-      questions: training.questions.map((question) => ({ ...question })),
-    })),
+    curriculumId,
+    trainings: dto.trainings.map((training) => {
+      const incorrectByQuestion = new Map(
+        training.incorrectItems.map((item) => [item.questionNumber, item]),
+      )
+      return {
+        trainingId: training.trainingId,
+        trainingName: training.trainingName,
+        startedAt: training.startedAt,
+        finishedAt: training.endedAt,
+        accuracy: training.accuracyRate,
+        questions: training.questionResults.map((result) => {
+          const incorrect = incorrectByQuestion.get(result.questionNumber)
+          return {
+            questionNumber: result.questionNumber,
+            question: incorrect?.question ?? null,
+            isCorrect: result.isCorrect,
+            selectedAnswer: incorrect?.selectedAnswer ?? null,
+            correctAnswer: incorrect?.correctAnswer ?? null,
+          }
+        }),
+      }
+    }),
   }
 }
 
-function mapStatistics(dto: TrainingStatisticsDto): TrainingStatistics {
+function mapStatistics(
+  statistics: TrainingStatisticsDto,
+  readingSpeed: ReadingSpeedTrendDto,
+): TrainingStatistics {
   return {
-    accuracyComparisons: dto.accuracyComparisons.map((comparison) => ({
-      ...comparison,
+    accuracyComparisons: statistics.trainings.map((training) => ({
+      trainingId: training.trainingId,
+      trainingName: training.trainingName,
+      date: training.date,
+      accuracy: training.accuracyRate,
+      previousTrainingDate: training.previousTrainingDate,
+      previousAccuracy: training.previousAccuracyRate,
     })),
     readingSpeedTrend: {
-      unit: dto.readingSpeedTrend.unit,
-      changeRate: dto.readingSpeedTrend.changeRate,
-      points: [...dto.readingSpeedTrend.points]
+      unit: 'CORRECT_WORDS_PER_MINUTE',
+      changeRate: readingSpeed.voiceChangeRate,
+      points: readingSpeed.points
+        .filter(
+          (point): point is { readonly date: string; readonly voiceSpeed: number } =>
+            point.voiceSpeed !== null,
+        )
         .sort((left, right) => left.date.localeCompare(right.date))
-        .map((point) => ({ ...point })),
+        .map((point) => ({ date: point.date, speed: point.voiceSpeed })),
     },
   }
 }
@@ -365,21 +405,29 @@ export function createTrainingApi(
         `/api/admin/training/${studentId}/${curriculumId}/training-log`,
         requestInit(options),
       )
-      return mapTrainingLog(dto)
+      return mapTrainingLog(curriculumId, dto)
     },
     async getStatistics(studentId, curriculumId, period, options) {
-      const dto = await request<TrainingStatisticsDto>(
-        `/api/admin/training/${studentId}/${curriculumId}/statistics?period=${period}`,
-        requestInit(options),
-      )
-      return mapStatistics(dto)
+      const { from, to } = resolveHistoryDateRange(period, now())
+      const search = new URLSearchParams({ from, to })
+      const [statistics, readingSpeed] = await Promise.all([
+        request<TrainingStatisticsDto>(
+          `/api/admin/training/${studentId}/${curriculumId}/statistics`,
+          requestInit(options),
+        ),
+        request<ReadingSpeedTrendDto>(
+          `/api/admin/student/${studentId}/reading-speed-trend?${search}`,
+          requestInit(options),
+        ),
+      ])
+      return mapStatistics(statistics, readingSpeed)
     },
     async getGazeAnalysis(studentId, trainingId, options) {
-      const dto = await request<GazeAnalysisStateDto>(
+      const dto = await request<RawGazeAnalysisDto>(
         `/api/admin/training/${studentId}/${trainingId}/gaze-analysis`,
         requestInit(options),
       )
-      return mapGazeAnalysisState(dto)
+      return mapRawGazeAnalysis(dto)
     },
     exportTraining(studentId, trainingId, format) {
       return download(`/api/admin/training/${studentId}/${trainingId}/export?format=${format}`, {

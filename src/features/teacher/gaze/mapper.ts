@@ -14,6 +14,15 @@ export interface GazeAnalysisStateDto {
   readonly analysis: GazeAnalysisDetailDto | null
 }
 
+export interface RawGazeAnalysisDto {
+  readonly gazeSessionId: number
+  readonly gazeAnalysisId: number
+  readonly totalDwellTime: number
+  readonly dwellCount: number
+  readonly regressionCount: number
+  readonly averageFixationTime: number | null
+}
+
 function assertPositiveInteger(value: unknown, field: string): asserts value is number {
   if (!Number.isInteger(value) || Number(value) <= 0) {
     throw new TypeError(`[시선 분석 API] ${field}은 양의 정수여야 합니다.`)
@@ -61,4 +70,18 @@ export function mapGazeAnalysisState(dto: GazeAnalysisStateDto): GazeAnalysisSta
     }
   }
   throw new TypeError(`[시선 분석 API] 지원하지 않는 상태입니다: ${String(dto.status)}`)
+}
+
+export function mapRawGazeAnalysis(dto: RawGazeAnalysisDto): GazeAnalysisState {
+  return mapGazeAnalysisState({
+    status: 'AVAILABLE',
+    analysis: {
+      gazeSessionId: dto.gazeSessionId,
+      gazeAnalysisResultId: dto.gazeAnalysisId,
+      totalVisitedDurationMs: dto.totalDwellTime,
+      totalVisitedCount: dto.dwellCount,
+      reverseReadCount: dto.regressionCount,
+      avgVisitedDurationMs: dto.averageFixationTime,
+    },
+  })
 }

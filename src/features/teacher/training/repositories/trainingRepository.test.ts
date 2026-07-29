@@ -61,6 +61,22 @@ describe('ApiTrainingRepository', () => {
 
     await expect(repository.getCurrentCurriculum(1)).rejects.toBe(forbidden)
   })
+
+  it('시선 분석 404를 분석 데이터 없음 상태로 변환한다', async () => {
+    const notFound = new ApiError({
+      status: 404,
+      code: 'RESOURCE_NOT_FOUND',
+      message: '시선 분석 결과를 찾을 수 없습니다.',
+    })
+    const repository = new ApiTrainingRepository(
+      api({ getGazeAnalysis: vi.fn().mockRejectedValue(notFound) }),
+    )
+
+    await expect(repository.getGazeAnalysis(1, 10)).resolves.toEqual({
+      status: 'NO_DATA',
+      analysis: null,
+    })
+  })
 })
 
 describe('Training API target contract', () => {
@@ -131,39 +147,104 @@ describe('Training API target contract', () => {
   it('training log와 statistics를 목표 endpoint에서 조회한다', async () => {
     const request = vi
       .fn()
-      .mockResolvedValueOnce({ curriculumId: 10, trainings: [] })
       .mockResolvedValueOnce({
-        accuracyComparisons: [],
-        readingSpeedTrend: {
-          unit: 'CORRECT_WORDS_PER_MINUTE',
-          changeRate: null,
-          points: [
-            { trainingId: 2, date: '2026-07-20', speed: 60 },
-            { trainingId: 1, date: '2026-07-01', speed: 50 },
-          ],
-        },
+        trainings: [
+          {
+            trainingId: 901,
+            trainingName: '음절 합치기',
+            startedAt: '2026-07-20T10:00:00',
+            endedAt: '2026-07-20T10:08:00',
+            accuracyRate: 80,
+            questionResults: [{ questionNumber: 1, isCorrect: false }],
+            incorrectItems: [
+              {
+                questionNumber: 1,
+                question: 'ㄱ + ㅏ',
+                selectedAnswer: '거',
+                correctAnswer: '가',
+              },
+            ],
+          },
+        ],
       })
-    const trainingApi = createTrainingApi(request)
+      .mockResolvedValueOnce({
+        trainings: [
+          {
+            trainingId: 901,
+            trainingName: '음절 합치기',
+            date: '2026-07-20',
+            accuracyRate: 80,
+            previousTrainingDate: '2026-07-01',
+            previousAccuracyRate: 70,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        unit: 'WORDS_PER_MINUTE',
+        voiceChangeRate: 20,
+        points: [
+          { date: '2026-07-20', voiceSpeed: 60 },
+          { date: '2026-07-01', voiceSpeed: 50 },
+          { date: '2026-07-15', voiceSpeed: null },
+        ],
+      })
+    const trainingApi = createTrainingApi(
+      request,
+      undefined,
+      () => new Date('2026-07-29T12:00:00+09:00'),
+    )
 
-    await trainingApi.getTrainingLog(7, 10)
+    const log = await trainingApi.getTrainingLog(7, 10)
     const statistics = await trainingApi.getStatistics(7, 10, '30d')
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/admin/training/7/10/training-log', {})
-    expect(request).toHaveBeenNthCalledWith(2, '/api/admin/training/7/10/statistics?period=30d', {})
-    expect(statistics.readingSpeedTrend.points.map((point) => point.trainingId)).toEqual([1, 2])
+    expect(request).toHaveBeenNthCalledWith(2, '/api/admin/training/7/10/statistics', {})
+    expect(request).toHaveBeenNthCalledWith(
+      3,
+      '/api/admin/student/7/reading-speed-trend?from=2026-06-30&to=2026-07-29',
+      {},
+    )
+    expect(log).toEqual({
+      curriculumId: 10,
+      trainings: [
+        expect.objectContaining({
+          trainingId: 901,
+          finishedAt: '2026-07-20T10:08:00',
+          accuracy: 80,
+          questions: [
+            {
+              questionNumber: 1,
+              question: 'ㄱ + ㅏ',
+              isCorrect: false,
+              selectedAnswer: '거',
+              correctAnswer: '가',
+            },
+          ],
+        }),
+      ],
+    })
+    expect(statistics.accuracyComparisons[0]).toMatchObject({
+      trainingId: 901,
+      accuracy: 80,
+      previousAccuracy: 70,
+    })
+    expect(statistics.readingSpeedTrend).toMatchObject({
+      changeRate: 20,
+      points: [
+        { date: '2026-07-01', speed: 50 },
+        { date: '2026-07-20', speed: 60 },
+      ],
+    })
   })
 
   it('실제 studentId와 trainingId로 시선 분석 상태를 조회한다', async () => {
     const request = vi.fn().mockResolvedValue({
-      status: 'AVAILABLE',
-      analysis: {
-        gazeSessionId: 61,
-        gazeAnalysisResultId: 71,
-        totalVisitedDurationMs: 1_500,
-        totalVisitedCount: 4,
-        reverseReadCount: 1,
-        avgVisitedDurationMs: null,
-      },
+      gazeSessionId: 61,
+      gazeAnalysisId: 71,
+      totalDwellTime: 1_500,
+      dwellCount: 4,
+      regressionCount: 1,
+      averageFixationTime: null,
     })
     const trainingApi = createTrainingApi(request)
 

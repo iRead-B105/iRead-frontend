@@ -95,12 +95,19 @@ export class ApiTrainingRepository implements TrainingRepository {
     return this.api.getStatistics(studentId, curriculumId, period, options)
   }
 
-  getGazeAnalysis(
+  async getGazeAnalysis(
     studentId: number,
     trainingId: number,
     options: Parameters<TrainingRepository['getGazeAnalysis']>[2] = {},
   ) {
-    return this.api.getGazeAnalysis(studentId, trainingId, options)
+    try {
+      return await this.api.getGazeAnalysis(studentId, trainingId, options)
+    } catch (error) {
+      if (isApiError(error) && error.status === 404) {
+        return { status: 'NO_DATA' as const, analysis: null }
+      }
+      throw error
+    }
   }
 
   exportTraining(

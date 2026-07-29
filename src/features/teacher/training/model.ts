@@ -112,7 +112,7 @@ export interface AccuracyComparison {
 }
 
 export interface ReadingSpeedPoint {
-  readonly trainingId: TrainingInstanceId
+  readonly trainingId?: TrainingInstanceId
   readonly date: string
   readonly speed: number
 }

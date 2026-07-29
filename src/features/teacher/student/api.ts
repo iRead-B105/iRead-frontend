@@ -87,6 +87,24 @@ type LearningEventDetailDto = Omit<StudentLearningEventDetail, 'eventType'> & {
   readonly eventType: Lowercase<StudentLearningEventType>
 }
 
+interface StudentTrainingHistoryDto {
+  readonly learningHistory: readonly {
+    readonly trainingId: number
+    readonly date: string
+    readonly learningType: string
+    readonly startedAt: string | null
+    readonly finishedAt: string | null
+    readonly accuracyRate: number | null
+  }[]
+}
+
+interface StudentAccuracyTrendDto {
+  readonly dailyAccuracy: readonly {
+    readonly date: string
+    readonly accuracyRate: number
+  }[]
+}
+
 function mapLearningEvent<T extends LearningEventDto | LearningEventDetailDto>(
   event: T,
 ): Omit<T, 'eventType'> & { eventType: StudentLearningEventType } {
@@ -162,19 +180,31 @@ export function createStudentApi(
       )
       return mapLearningEvent(result)
     },
-    getAccuracyTrend(studentId, options) {
-      return request<StudentAccuracyTrend>(
+    async getAccuracyTrend(studentId, options) {
+      const result = await request<StudentAccuracyTrendDto>(
         `/api/admin/student/${studentId}/accuracy-trend`,
         { signal: options?.signal },
       )
+      return {
+        dailyAccuracy: result.dailyAccuracy.map(({ date, accuracyRate }) => ({
+          date,
+          accuracy: accuracyRate,
+        })),
+      }
     },
-    getTrainingHistory(studentId, period, options) {
+    async getTrainingHistory(studentId, period, options) {
       const { from, to } = resolveTrainingHistoryDateRange(period, now())
       const search = new URLSearchParams({ from, to })
-      return request<StudentTrainingHistory>(
+      const result = await request<StudentTrainingHistoryDto>(
         `/api/admin/student/${studentId}/training-history?${search}`,
         { signal: options?.signal },
       )
+      return {
+        learningHistory: result.learningHistory.map(({ accuracyRate, ...item }) => ({
+          ...item,
+          achievement: accuracyRate,
+        })),
+      }
     },
     updateTeacherMemo(studentId, teacherMemo) {
       return request<void>(`/api/admin/student/${studentId}`, {

@@ -86,14 +86,18 @@ describe('Test API', () => {
 
   it('실제 studentId와 testId로 시선 분석 상태를 조회한다', async () => {
     const request = vi.fn().mockResolvedValue({
-      status: 'NO_DATA',
-      analysis: null,
+      gazeSessionId: 61,
+      gazeAnalysisId: 71,
+      totalDwellTime: 1_500,
+      dwellCount: 4,
+      regressionCount: 1,
+      averageFixationTime: null,
     })
     const api = createTestApi(request)
 
-    await expect(api.getGazeAnalysis(3, 1011)).resolves.toEqual({
-      status: 'NO_DATA',
-      analysis: null,
+    await expect(api.getGazeAnalysis(3, 1011)).resolves.toMatchObject({
+      status: 'AVAILABLE',
+      analysis: { avgVisitedDurationMs: null },
     })
     expect(request).toHaveBeenCalledWith('/api/admin/test/3/1011/gaze-analysis', {})
   })

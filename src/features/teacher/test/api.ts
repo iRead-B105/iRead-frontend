@@ -1,8 +1,8 @@
 import { apiRequest } from '@/lib/api'
 import {
-  mapGazeAnalysisState,
+  mapRawGazeAnalysis,
   type GazeAnalysisState,
-  type GazeAnalysisStateDto,
+  type RawGazeAnalysisDto,
 } from '@/features/teacher/gaze'
 import type {
   TestAreaScore,
@@ -146,11 +146,11 @@ export function createTestApi(request: TestApiRequest = apiRequest): TestApi {
       }
     },
     async getGazeAnalysis(studentId, testId, options) {
-      const dto = await request<GazeAnalysisStateDto>(
+      const dto = await request<RawGazeAnalysisDto>(
         `/api/admin/test/${studentId}/${testId}/gaze-analysis`,
         requestInit(options),
       )
-      return mapGazeAnalysisState(dto)
+      return mapRawGazeAnalysis(dto)
     },
   }
 }

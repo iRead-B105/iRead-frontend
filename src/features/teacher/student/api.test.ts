@@ -130,6 +130,67 @@ describe('Student API', () => {
     })
   })
 
+  it('교수자 메모 문자열만 범용 학생 PATCH body로 전송한다', async () => {
+    const request = vi.fn().mockResolvedValue(undefined)
+    const api = createStudentApi(request)
+
+    await api.updateTeacherMemo(7, '받침 읽기 연습 필요')
+
+    expect(request).toHaveBeenCalledWith('/api/admin/student/7', {
+      method: 'PATCH',
+      body: JSON.stringify({ teacherMemo: '받침 읽기 연습 필요' }),
+    })
+  })
+
+  it('훈련 이력 accuracyRate를 화면의 achievement로 변환한다', async () => {
+    const request = vi.fn().mockResolvedValue({
+      learningHistory: [
+        {
+          trainingId: 91,
+          date: '2026-07-28',
+          learningType: '음절 합쳐 낱말 만들기',
+          startedAt: '2026-07-28T10:00:00',
+          finishedAt: '2026-07-28T10:08:00',
+          accuracyRate: 82.5,
+        },
+      ],
+    })
+    const api = createStudentApi(
+      request,
+      () => new Date('2026-07-29T12:00:00+09:00'),
+    )
+
+    await expect(api.getTrainingHistory(7, '30d')).resolves.toEqual({
+      learningHistory: [
+        expect.objectContaining({
+          trainingId: 91,
+          achievement: 82.5,
+        }),
+      ],
+    })
+  })
+
+  it('정확도 추이 accuracyRate를 화면의 accuracy로 변환한다', async () => {
+    const request = vi.fn().mockResolvedValue({
+      dailyAccuracy: [
+        {
+          date: '2026-07-28',
+          accuracyRate: 84.5,
+        },
+      ],
+    })
+    const api = createStudentApi(request)
+
+    await expect(api.getAccuracyTrend(7)).resolves.toEqual({
+      dailyAccuracy: [
+        {
+          date: '2026-07-28',
+          accuracy: 84.5,
+        },
+      ],
+    })
+  })
+
   it('학습 이벤트·정확도·기간별 훈련 이력은 목표 계약 경로를 사용한다', async () => {
     const request = vi.fn()
       .mockResolvedValueOnce({ events: [] })
