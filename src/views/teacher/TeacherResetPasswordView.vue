@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { nextTick, reactive, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { computed, nextTick, reactive, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -11,27 +11,28 @@ import {
 } from '@/features/teacher/auth'
 import { useSessionStore } from '@/stores/session'
 
+const route = useRoute()
 const router = useRouter()
 const sessionStore = useSessionStore()
-const step = ref<1 | 2>(1)
-const identity = reactive({ email: '' })
-const password = reactive({ verificationCode: '', newPassword: '', confirmation: '' })
+const email = ref('')
+const password = reactive({ newPassword: '', confirmation: '' })
+const requestAccepted = ref(false)
 const errorMessage = ref('')
 const errorField = ref('')
-const errorSummary = ref<HTMLElement | null>(null)
-const showPassword = ref(false)
 const submitting = ref(false)
+const showPassword = ref(false)
+const errorSummary = ref<HTMLElement | null>(null)
 
-async function focusHeading(): Promise<void> {
-  await nextTick()
-  document.getElementById('reset-password-title')?.focus()
-}
+const resetToken = computed(() => {
+  const value = route.query.token
+  return typeof value === 'string' ? value.trim() : ''
+})
+const confirmationMode = computed(() => resetToken.value !== '')
 
 async function focusError(field?: string): Promise<void> {
   await nextTick()
   const fieldIds: Record<string, string> = {
     email: 'reset-email',
-    verificationCode: 'verification-code',
     newPassword: 'new-password',
     passwordConfirm: 'password-confirmation',
   }
@@ -39,10 +40,9 @@ async function focusError(field?: string): Promise<void> {
   ;(target ?? errorSummary.value)?.focus()
 }
 
-async function verifyIdentity() {
-  errorMessage.value = ''
-  errorField.value = ''
-  const validation = validateEmail(identity.email)
+async function requestResetLink(): Promise<void> {
+  if (submitting.value) return
+  const validation = validateEmail(email.value)
   if (!validation.ok) {
     errorMessage.value = validation.message
     errorField.value = validation.field
@@ -50,17 +50,24 @@ async function verifyIdentity() {
     return
   }
 
-  identity.email = validation.value
-  step.value = 2
-  await focusHeading()
+  submitting.value = true
+  errorMessage.value = ''
+  errorField.value = ''
+  try {
+    await authRepositories.auth.requestPasswordReset({ email: validation.value })
+    requestAccepted.value = true
+  } catch (error) {
+    errorMessage.value = getResetPasswordErrorMessage(error)
+    await focusError()
+  } finally {
+    submitting.value = false
+  }
 }
 
-async function resetPassword() {
+async function confirmReset(): Promise<void> {
   if (submitting.value) return
-
   const validation = validateResetPasswordForm({
-    email: identity.email,
-    verificationCode: password.verificationCode,
+    token: resetToken.value,
     newPassword: password.newPassword,
     passwordConfirm: password.confirmation,
   })
@@ -74,9 +81,8 @@ async function resetPassword() {
   submitting.value = true
   errorMessage.value = ''
   errorField.value = ''
-
   try {
-    await authRepositories.auth.resetPassword(validation.value)
+    await authRepositories.auth.confirmPasswordReset(validation.value)
     sessionStore.reset()
     await router.push({
       name: 'teacher-login',
@@ -89,13 +95,6 @@ async function resetPassword() {
     submitting.value = false
   }
 }
-
-async function returnToIdentityStep(): Promise<void> {
-  errorMessage.value = ''
-  errorField.value = ''
-  step.value = 1
-  await focusHeading()
-}
 </script>
 
 <template>
@@ -106,106 +105,37 @@ async function returnToIdentityStep(): Promise<void> {
       </RouterLink>
 
       <div class="recovery-card">
-        <ol class="stepper" aria-label="비밀번호 재설정 단계">
-          <li
-            :class="{ active: step === 1, complete: step > 1 }"
-            :aria-current="step === 1 ? 'step' : undefined"
-          >
-            <span>1</span>본인 확인
-          </li>
-          <li :class="{ active: step === 2 }" :aria-current="step === 2 ? 'step' : undefined">
-            <span>2</span>비밀번호 변경
-          </li>
-        </ol>
-
-        <template v-if="step === 1">
+        <template v-if="confirmationMode">
           <header class="recovery-heading">
-            <p class="recovery-eyebrow">계정 확인</p>
-            <h1 id="reset-password-title" tabindex="-1">비밀번호 찾기</h1>
-            <p>회원가입 시 등록한 이메일을 입력해 주세요.</p>
+            <p class="recovery-eyebrow">일회용 링크 확인</p>
+            <h1 id="reset-password-title">새 비밀번호 설정</h1>
+            <p>8~100자의 새 비밀번호를 입력해 주세요.</p>
           </header>
 
-          <form class="recovery-form" @submit.prevent="verifyIdentity">
-            <div class="field">
-              <label for="reset-email">이메일</label>
-              <Input
-                id="reset-email"
-                v-model.trim="identity.email"
-                class="input"
-                type="email"
-                required
-                maxlength="50"
-                autocomplete="email"
-                placeholder="example@iread.co.kr"
-                :aria-invalid="errorField === 'email'"
-                :aria-describedby="errorField === 'email' ? 'reset-password-error' : undefined"
-              />
-            </div>
-            <p
-              v-if="errorMessage"
-              id="reset-password-error"
-              ref="errorSummary"
-              class="error-message"
-              role="alert"
-              tabindex="-1"
-            >
-              {{ errorMessage }}
-            </p>
-            <Button class="recovery-submit" type="submit">본인 확인</Button>
-          </form>
-        </template>
-
-        <template v-else-if="step === 2">
-          <header class="recovery-heading">
-            <p class="recovery-eyebrow">본인 확인 완료</p>
-            <h1 id="reset-password-title" tabindex="-1">새 비밀번호 설정</h1>
-            <p>전달받은 검증 코드와 8~100자의 새 비밀번호를 입력해 주세요.</p>
-          </header>
-
-          <form class="recovery-form" @submit.prevent="resetPassword">
-            <div class="field">
-              <label for="verification-code">검증 코드</label>
-              <Input
-                id="verification-code"
-                v-model="password.verificationCode"
-                class="input"
-                required
-                autocomplete="one-time-code"
-                placeholder="검증 코드 입력"
-                :aria-invalid="errorField === 'verificationCode'"
-                :aria-describedby="
-                  errorField === 'verificationCode' ? 'reset-password-error' : undefined
-                "
-              />
-            </div>
+          <form class="recovery-form" @submit.prevent="confirmReset">
             <div class="field">
               <label for="new-password">새 비밀번호</label>
               <div class="password-input">
                 <Input
                   id="new-password"
                   v-model="password.newPassword"
-                  class="input"
+                  :type="showPassword ? 'text' : 'password'"
                   required
                   minlength="8"
                   maxlength="100"
-                  :type="showPassword ? 'text' : 'password'"
                   autocomplete="new-password"
-                  placeholder="새 비밀번호 입력"
                   :aria-invalid="errorField === 'newPassword'"
                   :aria-describedby="
                     errorField === 'newPassword' ? 'reset-password-error' : undefined
                   "
                 />
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <button
                   type="button"
                   :aria-label="showPassword ? '새 비밀번호 숨기기' : '새 비밀번호 보기'"
-                  :aria-pressed="showPassword"
                   @click="showPassword = !showPassword"
                 >
-                  {{ showPassword ? '숨기기' : '보기' }}
-                </Button>
+                  {{ showPassword ? '숨김' : '보기' }}
+                </button>
               </div>
             </div>
             <div class="field">
@@ -213,13 +143,11 @@ async function returnToIdentityStep(): Promise<void> {
               <Input
                 id="password-confirmation"
                 v-model="password.confirmation"
-                class="input"
+                :type="showPassword ? 'text' : 'password'"
                 required
                 minlength="8"
                 maxlength="100"
-                :type="showPassword ? 'text' : 'password'"
                 autocomplete="new-password"
-                placeholder="새 비밀번호 다시 입력"
                 :aria-invalid="errorField === 'passwordConfirm'"
                 :aria-describedby="
                   errorField === 'passwordConfirm' ? 'reset-password-error' : undefined
@@ -239,20 +167,59 @@ async function returnToIdentityStep(): Promise<void> {
             <Button class="recovery-submit" type="submit" :disabled="submitting">
               {{ submitting ? '변경 중...' : '비밀번호 변경' }}
             </Button>
-            <Button
-              variant="link"
-              class="text-button"
-              type="button"
-              :disabled="submitting"
-              @click="returnToIdentityStep"
+          </form>
+        </template>
+
+        <template v-else-if="requestAccepted">
+          <header class="recovery-heading">
+            <p class="recovery-eyebrow">요청 접수</p>
+            <h1 id="reset-password-title">이메일을 확인해 주세요</h1>
+            <p>
+              가입된 이메일이라면 10분 동안 사용할 수 있는 비밀번호 재설정 링크를
+              발송했습니다.
+            </p>
+          </header>
+          <RouterLink class="recovery-link" to="/login">로그인으로 돌아가기</RouterLink>
+        </template>
+
+        <template v-else>
+          <header class="recovery-heading">
+            <p class="recovery-eyebrow">계정 복구</p>
+            <h1 id="reset-password-title">비밀번호 재설정</h1>
+            <p>가입 이메일로 일회용 비밀번호 재설정 링크를 보내드립니다.</p>
+          </header>
+
+          <form class="recovery-form" @submit.prevent="requestResetLink">
+            <div class="field">
+              <label for="reset-email">이메일</label>
+              <Input
+                id="reset-email"
+                v-model.trim="email"
+                type="email"
+                required
+                maxlength="50"
+                autocomplete="email"
+                placeholder="example@iread.co.kr"
+                :aria-invalid="errorField === 'email'"
+                :aria-describedby="errorField === 'email' ? 'reset-password-error' : undefined"
+              />
+            </div>
+            <p
+              v-if="errorMessage"
+              id="reset-password-error"
+              ref="errorSummary"
+              class="error-message"
+              role="alert"
+              tabindex="-1"
             >
-              이전 단계
+              {{ errorMessage }}
+            </p>
+            <Button class="recovery-submit" type="submit" :disabled="submitting">
+              {{ submitting ? '요청 중...' : '재설정 링크 받기' }}
             </Button>
           </form>
         </template>
       </div>
-
-      <p class="back-link"><RouterLink to="/login">← 로그인으로 돌아가기</RouterLink></p>
     </section>
   </main>
 </template>
@@ -261,199 +228,107 @@ async function returnToIdentityStep(): Promise<void> {
 .recovery-page {
   display: grid;
   min-height: 100vh;
-  min-height: 100dvh;
-  padding: 52px 24px;
+  padding: 40px 20px;
   background: var(--slate-50);
-  place-items: start center;
+  place-items: center;
 }
 
 .recovery-shell {
-  width: min(480px, 100%);
+  width: min(100%, 460px);
 }
 
 .recovery-logo {
-  display: grid;
-  width: 132px;
-  height: 68px;
+  display: block;
+  width: 116px;
   margin: 0 auto 24px;
-  overflow: hidden;
-  place-items: center;
 }
 
 .recovery-logo img {
-  width: 108px;
-  height: 62px;
-  max-width: none;
-  object-fit: contain;
-  transform: scale(1.85);
+  width: 100%;
 }
 
 .recovery-card {
-  padding: 40px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--card);
-  box-shadow: var(--shadow-card);
-}
-
-.stepper {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 0 0 30px;
-  padding: 0;
-  list-style: none;
-}
-
-.stepper li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--slate-400);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.stepper li::after {
-  height: 2px;
-  flex: 1;
-  background: var(--slate-200);
-  content: '';
-}
-
-.stepper li:last-child::after {
-  display: none;
-}
-
-.stepper span {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--slate-200);
-  color: var(--slate-500);
-  place-items: center;
-}
-
-.stepper .active,
-.stepper .complete {
-  color: var(--primary-600);
-}
-
-.stepper .active span,
-.stepper .complete span {
-  background: var(--primary-600);
-  color: var(--white);
+  padding: 34px;
+  border: 1px solid var(--slate-200);
+  border-radius: 18px;
+  background: white;
+  box-shadow: 0 18px 45px rgb(15 23 42 / 8%);
 }
 
 .recovery-heading {
-  margin-bottom: 28px;
+  display: grid;
+  gap: 8px;
+  margin-bottom: 26px;
+}
+
+.recovery-heading h1,
+.recovery-heading p {
+  margin: 0;
 }
 
 .recovery-heading h1 {
-  margin: 6px 0 10px;
-  font-size: 28px;
+  color: var(--slate-900);
+  font-size: 24px;
 }
 
-.recovery-heading > p:last-child {
-  margin: 0;
-  color: var(--slate-500);
+.recovery-heading p {
+  color: var(--slate-600);
   line-height: 1.6;
 }
 
 .recovery-eyebrow {
-  margin: 0;
-  color: var(--primary-600) !important;
-  font-size: 13px;
+  color: var(--primary-700) !important;
+  font-size: 12px;
   font-weight: 800;
 }
 
-.recovery-form {
+.recovery-form,
+.field {
   display: grid;
+  gap: 9px;
+}
+
+.recovery-form {
   gap: 18px;
 }
 
-.recovery-form .input {
-  height: 48px;
+.field label {
+  color: var(--slate-700);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .password-input {
-  position: relative;
-}
-
-.password-input .input {
-  padding-right: 64px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .password-input button {
-  position: absolute;
-  top: 50%;
-  right: 13px;
-  min-width: 40px;
-  min-height: 32px;
-  border: 0;
-  background: transparent;
-  color: var(--slate-500);
-  font-size: 12px;
-  font-weight: 700;
-  transform: translateY(-50%);
-}
-
-.recovery-submit {
-  min-height: 50px;
-  margin-top: 8px;
+  border: 1px solid var(--slate-300);
+  border-radius: 8px;
+  background: white;
+  padding: 0 13px;
+  color: var(--slate-600);
 }
 
 .error-message {
-  margin: -6px 0 0;
-  color: var(--red-600, #dc2626);
-  font-size: 13px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff1f2;
+  color: var(--danger-600);
+  font-size: 12px;
 }
 
-.text-button {
-  border: 0;
-  background: transparent;
-  color: var(--slate-500);
-  font-size: 13px;
-  text-decoration: underline;
+.recovery-submit {
+  width: 100%;
 }
 
-.back-link {
-  margin: 20px 0 0;
+.recovery-link {
+  display: block;
+  color: var(--primary-700);
+  font-weight: 700;
   text-align: center;
-}
-
-.back-link a {
-  color: var(--slate-500);
-  font-size: 13px;
-  text-decoration: none;
-}
-
-@media (max-width: 520px) {
-  .recovery-page {
-    padding: 28px 16px 40px;
-  }
-
-  .recovery-card {
-    padding: 30px 22px;
-  }
-
-  .recovery-heading h1 {
-    font-size: 25px;
-  }
-}
-
-@media (max-width: 360px), (max-height: 620px) {
-  .recovery-page {
-    padding: 20px 14px 32px;
-  }
-
-  .recovery-card {
-    padding: 24px 18px;
-  }
-
-  .stepper {
-    margin-bottom: 24px;
-  }
 }
 </style>

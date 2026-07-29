@@ -114,19 +114,19 @@ describe('MockStudentRepository', () => {
     const events = await repository.listLearningEvents(1, { limit: 3 })
 
     expect(events.map((event) => event.eventId)).toEqual([1104, 1103, 1102])
-    await expect(repository.getLearningEvent(1, 1104)).resolves.toMatchObject({
+    await expect(repository.getLearningEvent(1, 'TRAINING', 1104)).resolves.toMatchObject({
       eventId: 1104,
       recommendedTrainingTemplateId: 301,
       recommendedMinutes: 10,
       recommendedRepeatCount: 2,
     })
-    await expect(repository.getLearningEvent(1, 1103)).resolves.toMatchObject({
+    await expect(repository.getLearningEvent(1, 'GAZE', 1103)).resolves.toMatchObject({
       eventId: 1103,
       accuracy: null,
       problemSegments: [],
       recommendedTrainingTemplateId: null,
     })
-    await expect(repository.getLearningEvent(1, 9999)).rejects.toMatchObject({
+    await expect(repository.getLearningEvent(1, 'TRAINING', 9999)).rejects.toMatchObject({
       status: 404,
     })
   })

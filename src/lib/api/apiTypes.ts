@@ -13,6 +13,7 @@ export type SuccessResponse<T> = SuccessResponseWithData<T> | SuccessResponseWit
 export interface ErrorDetail {
   readonly code: string
   readonly message: string
+  readonly details?: Readonly<Record<string, unknown>> | null
 }
 
 export interface ErrorResponse {

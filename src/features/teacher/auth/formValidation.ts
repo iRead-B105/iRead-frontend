@@ -1,10 +1,10 @@
-import type { ResetPasswordInput, SignUpInput } from './model'
+import type { PasswordResetConfirmInput, SignUpInput } from './model'
 
 export interface SignUpFormInput extends SignUpInput {
   readonly passwordConfirm: string
 }
 
-export interface ResetPasswordFormInput extends ResetPasswordInput {
+export interface ResetPasswordConfirmFormInput extends PasswordResetConfirmInput {
   readonly passwordConfirm: string
 }
 
@@ -14,7 +14,7 @@ export type AuthenticationFormField =
   | 'passwordConfirm'
   | 'name'
   | 'organization'
-  | 'verificationCode'
+  | 'token'
   | 'newPassword'
 
 export type ValidationResult<T> =
@@ -87,17 +87,14 @@ export function validateSignUpForm(input: SignUpFormInput): ValidationResult<Sig
 }
 
 export function validateResetPasswordForm(
-  input: ResetPasswordFormInput,
-): ValidationResult<ResetPasswordInput> {
-  const email = validateEmail(input.email)
-  if (!email.ok) return email
-
-  const verificationCode = input.verificationCode.trim()
-  if (verificationCode === '') {
+  input: ResetPasswordConfirmFormInput,
+): ValidationResult<PasswordResetConfirmInput> {
+  const token = input.token.trim()
+  if (token === '') {
     return {
       ok: false,
-      message: '검증 코드를 입력해 주세요.',
-      field: 'verificationCode',
+      message: '비밀번호 재설정 링크가 올바르지 않습니다.',
+      field: 'token',
     }
   }
 
@@ -120,8 +117,7 @@ export function validateResetPasswordForm(
   return {
     ok: true,
     value: {
-      email: email.value,
-      verificationCode,
+      token,
       newPassword: input.newPassword,
     },
   }

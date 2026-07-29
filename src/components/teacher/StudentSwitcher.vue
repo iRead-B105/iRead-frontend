@@ -204,7 +204,10 @@ onBeforeUnmount(() => {
           @click="selectStudent(student)"
         >
           <span class="student-avatar" aria-hidden="true">{{ studentInitial(student.name) }}</span>
-          <span><strong>{{ student.name }}</strong><small>{{ student.school }}</small></span>
+          <span
+            ><strong>{{ student.name }}</strong
+            ><small>{{ student.school ?? '학교 미입력' }}</small></span
+          >
           <span v-if="student.studentId === currentStudent.studentId" aria-label="현재 학습자">✓</span>
         </Button>
 
@@ -219,7 +222,10 @@ onBeforeUnmount(() => {
         >
           <img v-if="student.imageUrl" :src="student.imageUrl" alt="" />
           <span v-else class="student-avatar" aria-hidden="true">{{ studentInitial(student.name) }}</span>
-          <span><strong>{{ student.name }}</strong><small>{{ student.school }}</small></span>
+          <span
+            ><strong>{{ student.name }}</strong
+            ><small>{{ student.school ?? '학교 미입력' }}</small></span
+          >
           <span v-if="student.studentId === currentStudent.studentId" aria-label="현재 학습자">✓</span>
         </Button>
 

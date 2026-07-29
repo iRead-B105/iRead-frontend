@@ -12,7 +12,8 @@ function createAuthRepository(): AuthRepository {
     signUp: vi.fn(),
     refresh: vi.fn(),
     logout: vi.fn(),
-    resetPassword: vi.fn(),
+    requestPasswordReset: vi.fn(),
+    confirmPasswordReset: vi.fn(),
   }
 }
 
@@ -68,7 +69,8 @@ describe('auth repositories', () => {
       signUp: vi.fn(),
       refresh: vi.fn(),
       logout: vi.fn(),
-      resetPassword: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      confirmPasswordReset: vi.fn(),
     }
     const repository = new ApiAuthRepository(api)
 

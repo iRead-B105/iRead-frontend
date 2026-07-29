@@ -25,7 +25,11 @@ export class MockAuthRepository implements AuthRepository {
 
   async logout() {}
 
-  async resetPassword() {
+  async requestPasswordReset() {
+    throw new Error('[인증] mock 비밀번호 재설정은 지원하지 않습니다.')
+  }
+
+  async confirmPasswordReset() {
     throw new Error('[인증] mock 비밀번호 재설정은 지원하지 않습니다.')
   }
 }

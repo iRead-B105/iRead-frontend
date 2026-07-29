@@ -356,7 +356,7 @@ describe('StudentOverviewView', () => {
       .trigger('click')
     await flushPromises()
 
-    expect(getLearningEvent).toHaveBeenCalledWith(1, 701)
+    expect(getLearningEvent).toHaveBeenCalledWith(1, 'TRAINING', 701)
     expect(wrapper.text()).toContain('받침이 있는 문장 읽기')
     expect(wrapper.text()).toContain('최근 6주 정확도가 가장 낮은 영역입니다.')
 

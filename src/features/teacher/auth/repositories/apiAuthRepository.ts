@@ -26,7 +26,11 @@ export class ApiAuthRepository implements AuthRepository {
     return this.api.logout()
   }
 
-  resetPassword(input: Parameters<AuthRepository['resetPassword']>[0]) {
-    return this.api.resetPassword(input)
+  requestPasswordReset(input: Parameters<AuthRepository['requestPasswordReset']>[0]) {
+    return this.api.requestPasswordReset(input)
+  }
+
+  confirmPasswordReset(input: Parameters<AuthRepository['confirmPasswordReset']>[0]) {
+    return this.api.confirmPasswordReset(input)
   }
 }

@@ -152,21 +152,24 @@ describe('Student API', () => {
       })
       .mockResolvedValueOnce({ dailyAccuracy: [] })
       .mockResolvedValueOnce({ learningHistory: [] })
-    const api = createStudentApi(request)
+    const api = createStudentApi(
+      request,
+      () => new Date('2026-07-29T12:00:00+09:00'),
+    )
 
     await api.listLearningEvents(7, { limit: 3 })
-    await api.getLearningEvent(7, 701)
+    await api.getLearningEvent(7, 'TRAINING', 701)
     await api.getAccuracyTrend(7)
     await api.getTrainingHistory(7, '3m')
 
     expect(request).toHaveBeenNthCalledWith(
       1,
-      '/api/admin/student/7/learning-events?limit=3',
+      '/api/admin/student/7/learning-events/recent?limit=3',
       { signal: undefined },
     )
     expect(request).toHaveBeenNthCalledWith(
       2,
-      '/api/admin/student/7/learning-events/701',
+      '/api/admin/student/7/learning-events?eventType=training&eventId=701',
       { signal: undefined },
     )
     expect(request).toHaveBeenNthCalledWith(
@@ -176,7 +179,7 @@ describe('Student API', () => {
     )
     expect(request).toHaveBeenNthCalledWith(
       4,
-      '/api/admin/student/7/training-history?period=3m',
+      '/api/admin/student/7/training-history?from=2026-04-29&to=2026-07-29',
       { signal: undefined },
     )
   })

@@ -4,6 +4,7 @@ import type {
   StudentDetail,
   StudentLearningEvent,
   StudentLearningEventDetail,
+  StudentLearningEventType,
   StudentLearningSummary,
   StudentListQuery,
   StudentListResult,
@@ -45,6 +46,7 @@ export interface StudentRepository {
   ) => Promise<readonly StudentLearningEvent[]>
   readonly getLearningEvent: (
     studentId: number,
+    eventType: StudentLearningEventType,
     eventId: number,
     options?: StudentRequestOptions,
   ) => Promise<StudentLearningEventDetail>

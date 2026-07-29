@@ -43,19 +43,17 @@ describe('authentication form validation', () => {
     })
   })
 
-  it('비밀번호 재설정 요청 필드를 검증하고 trim한다', () => {
+  it('비밀번호 재설정 확인 필드를 검증하고 trim한다', () => {
     expect(
       validateResetPasswordForm({
-        email: ' teacher@example.com ',
-        verificationCode: ' verification-code ',
+        token: ' reset-token ',
         newPassword: 'new-password',
         passwordConfirm: 'new-password',
       }),
     ).toEqual({
       ok: true,
       value: {
-        email: 'teacher@example.com',
-        verificationCode: 'verification-code',
+        token: 'reset-token',
         newPassword: 'new-password',
       },
     })

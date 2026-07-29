@@ -9,8 +9,8 @@ export interface StudentListQuery {
 export interface StudentListItem {
   readonly studentId: number
   readonly name: string
-  readonly school: string
-  readonly age: number
+  readonly school: string | null
+  readonly age: number | null
   readonly imageUrl: string | null
   readonly recentTraining: string | null
   readonly recentLearningDate: string | null
@@ -36,7 +36,7 @@ export interface StudentSummary {
 export interface StudentNavigationItem {
   readonly studentId: number
   readonly name: string
-  readonly school: string
+  readonly school: string | null
   readonly imageUrl: string | null
 }
 

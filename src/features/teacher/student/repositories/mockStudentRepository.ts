@@ -1,6 +1,7 @@
 import { studentFixtures, type StudentFixtureRecord } from '../fixtures'
 import { createLearningInsightsFixture } from '../learningInsightsFixtures'
 import { normalizeStudentListQuery } from '../query'
+import { resolveTrainingHistoryDateRange } from '../trainingHistoryPeriod'
 import { createMockDemoDate } from '@/features/teacher/demo'
 import { ApiError } from '@/lib/api'
 import type {
@@ -41,7 +42,7 @@ function matchesKeyword(student: StudentFixtureRecord, keyword?: string): boolea
   const normalized = keyword.toLocaleLowerCase()
   return (
     student.name.toLocaleLowerCase().includes(normalized) ||
-    student.school.toLocaleLowerCase().includes(normalized)
+    student.school?.toLocaleLowerCase().includes(normalized) === true
   )
 }
 
@@ -72,13 +73,13 @@ export class MockStudentRepository implements StudentRepository {
   ) {
     this.students = students.map((student) => ({ ...student }))
     for (const student of this.students) {
-      const birthdayYear = this.now().getFullYear() - student.age
+      const birthdayYear = this.now().getFullYear() - (student.age ?? 0)
       this.details.set(student.studentId, {
         studentId: student.studentId,
         name: student.name,
         birthday: `${birthdayYear}-03-15`,
         gender: student.studentId % 2 === 0 ? 'Girl' : 'Boy',
-        school: student.school,
+        school: student.school ?? '',
         guardian: `${student.name.slice(0, 1)}보호자`,
         guardianContact: `010-0000-${String(student.studentId).padStart(4, '0')}`,
         guardianEmail: null,
@@ -267,13 +268,14 @@ export class MockStudentRepository implements StudentRepository {
 
   async getLearningEvent(
     studentId: number,
+    eventType: StudentLearningEventDetail['eventType'],
     eventId: number,
     options?: StudentRequestOptions,
   ) {
     throwIfAborted(options)
     await this.getDetail(studentId, options)
     const event = this.learningEventDetails.get(studentId)?.get(eventId)
-    if (!event) {
+    if (!event || event.eventType !== eventType) {
       throw new ApiError({
         status: 404,
         code: 'LEARNING_EVENT_NOT_FOUND',
@@ -300,15 +302,10 @@ export class MockStudentRepository implements StudentRepository {
   ) {
     throwIfAborted(options)
     await this.getDetail(studentId, options)
-    const cutoff = startOfDay(this.now())
-    if (period === '30d') {
-      cutoff.setDate(cutoff.getDate() - 29)
-    } else {
-      cutoff.setMonth(cutoff.getMonth() - 3)
-    }
+    const { from } = resolveTrainingHistoryDateRange(period, this.now())
     return {
       learningHistory: [...(this.trainingHistories.get(studentId) ?? [])]
-        .filter((item) => new Date(`${item.date}T00:00:00`).getTime() >= cutoff.getTime())
+        .filter((item) => item.date >= from)
         .sort((left, right) => right.date.localeCompare(left.date))
         .map((item) => ({ ...item })),
     }

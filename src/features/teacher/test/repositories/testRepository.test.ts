@@ -47,11 +47,13 @@ describe('Test API', () => {
   })
 
   it('완료 검사 목록을 날짜와 testId 기준으로 안정 정렬한다', async () => {
-    const request = vi.fn().mockResolvedValue([
-      { testId: 2, date: '2026-06-01' },
-      { testId: 1, date: '2026-07-01' },
-      { testId: 3, date: '2026-07-01' },
-    ])
+    const request = vi.fn().mockResolvedValue({
+      testHistory: [
+        { testId: 2, date: '2026-06-01' },
+        { testId: 1, date: '2026-07-01' },
+        { testId: 3, date: '2026-07-01' },
+      ],
+    })
     const api = createTestApi(request)
 
     await expect(api.getTests(1)).resolves.toEqual([
@@ -59,6 +61,13 @@ describe('Test API', () => {
       { testId: 1, date: '2026-07-01' },
       { testId: 2, date: '2026-06-01' },
     ])
+  })
+
+  it('완료 검사가 없으면 빈 testHistory를 빈 목록으로 반환한다', async () => {
+    const request = vi.fn().mockResolvedValue({ testHistory: [] })
+    const api = createTestApi(request)
+
+    await expect(api.getTests(1)).resolves.toEqual([])
   })
 
   it('0~100 범위를 벗어난 영역별 점수를 응답 계약 오류로 거부한다', async () => {

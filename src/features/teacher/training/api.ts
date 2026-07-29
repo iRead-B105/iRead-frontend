@@ -1,4 +1,5 @@
 import { apiRequest, downloadFile, jsonBody } from '@/lib/api'
+import { resolveHistoryDateRange } from '@/features/teacher/periodDateRange'
 import {
   mapGazeAnalysisState,
   type GazeAnalysisState,
@@ -83,7 +84,7 @@ interface TrainingDetailDto {
 interface CurriculumLogDto {
   readonly curriculumId: number
   readonly date: string
-  readonly achievement: number | null
+  readonly achievementRate: number | null
   readonly trainings: readonly {
     readonly trainingId: number
     readonly unitName: string
@@ -174,7 +175,7 @@ function mapCurriculumLog(dto: CurriculumLogDto): CurriculumLog {
   return {
     curriculumId: dto.curriculumId,
     date: dto.date,
-    achievement: dto.achievement,
+    achievement: dto.achievementRate,
     trainings: dto.trainings.map((training) => ({ ...training })),
   }
 }
@@ -278,6 +279,7 @@ export interface TrainingApi {
 export function createTrainingApi(
   request: TrainingApiRequest = apiRequest,
   download: TrainingApiDownloadRequest = downloadFile,
+  now: () => Date = () => new Date(),
 ): TrainingApi {
   return {
     async getCatalog(studentId, options) {
@@ -345,8 +347,10 @@ export function createTrainingApi(
       return mapTrainingDetail(dto)
     },
     async getCurriculumLogs(studentId, period, options) {
+      const { from, to } = resolveHistoryDateRange(period, now())
+      const search = new URLSearchParams({ from, to })
       const dto = await request<readonly CurriculumLogDto[]>(
-        `/api/admin/training/${studentId}/curriculum-log?period=${period}`,
+        `/api/admin/training/${studentId}/curriculum-log?${search}`,
         requestInit(options),
       )
       return [...dto]

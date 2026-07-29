@@ -1,7 +1,8 @@
 import { apiRequest, jsonBody } from '@/lib/api'
 import type {
   LoginInput,
-  ResetPasswordInput,
+  PasswordResetConfirmInput,
+  PasswordResetLinkRequestInput,
   SignUpInput,
   SignUpResult,
   TokenRefreshResult,
@@ -27,7 +28,8 @@ export interface AdminAuthApi {
   readonly signUp: (input: SignUpInput) => Promise<SignUpResult>
   readonly refresh: () => Promise<TokenRefreshResult>
   readonly logout: () => Promise<void>
-  readonly resetPassword: (input: ResetPasswordInput) => Promise<void>
+  readonly requestPasswordReset: (input: PasswordResetLinkRequestInput) => Promise<void>
+  readonly confirmPasswordReset: (input: PasswordResetConfirmInput) => Promise<void>
 }
 
 export function createAdminAuthApi(request: AuthRequest = apiRequest): AdminAuthApi {
@@ -68,9 +70,18 @@ export function createAdminAuthApi(request: AuthRequest = apiRequest): AdminAuth
         },
         noRefreshRetry,
       ),
-    resetPassword: (input) =>
+    requestPasswordReset: (input) =>
       request<void>(
-        '/api/auth/admin/password-reset',
+        '/api/auth/admin/password-reset/request',
+        {
+          method: 'POST',
+          body: jsonBody(input),
+        },
+        noRefreshRetry,
+      ),
+    confirmPasswordReset: (input) =>
+      request<void>(
+        '/api/auth/admin/password-reset/confirm',
         {
           method: 'POST',
           body: jsonBody(input),

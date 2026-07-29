@@ -21,6 +21,8 @@ import {
   validateTeacherMemo,
   type StudentAttentionReason,
   type StudentLearningEventDetail,
+  type StudentLearningEvent,
+  type StudentLearningEventType,
 } from '@/features/teacher/student'
 import { isApiError } from '@/lib/api'
 import { useStudentStore } from '@/stores/students'
@@ -65,10 +67,14 @@ const learningEventsError = computed(
   () => studentStore.learningEventsErrorById[studentId.value] ?? null,
 )
 const selectedEventId = ref<number | null>(null)
+const selectedEventType = ref<StudentLearningEventType | null>(null)
 const selectedEventKey = computed(() =>
-  selectedEventId.value === null
+  selectedEventId.value === null || selectedEventType.value === null
     ? null
-    : studentStore.insightKey(studentId.value, selectedEventId.value),
+    : studentStore.insightKey(
+        studentId.value,
+        `${selectedEventType.value}:${selectedEventId.value}`,
+      ),
 )
 const selectedEventDetail = computed(() =>
   selectedEventKey.value
@@ -206,6 +212,7 @@ async function loadOverview(nextStudentId: number): Promise<void> {
   noteDraft.value = ''
   memoError.value = ''
   selectedEventId.value = null
+  selectedEventType.value = null
   if (!Number.isInteger(nextStudentId) || nextStudentId <= 0) return
 
   await Promise.all([
@@ -221,9 +228,10 @@ async function loadOverview(nextStudentId: number): Promise<void> {
   noteDraft.value = studentStore.detailsById[nextStudentId]?.teacherMemo ?? ''
 }
 
-async function selectLearningEvent(eventId: number): Promise<void> {
-  selectedEventId.value = eventId
-  await studentStore.loadLearningEvent(studentId.value, eventId)
+async function selectLearningEvent(event: StudentLearningEvent): Promise<void> {
+  selectedEventId.value = event.eventId
+  selectedEventType.value = event.eventType
+  await studentStore.loadLearningEvent(studentId.value, event.eventType, event.eventId)
 }
 
 function addLearningEventToMemo(event: StudentLearningEventDetail): void {
@@ -430,6 +438,7 @@ watch(studentId, loadOverview, { immediate: true })
         <StudentLearningEvents
           :events="learningEvents"
           :selected-event-id="selectedEventId"
+          :selected-event-type="selectedEventType"
           :detail="selectedEventDetail"
           :list-status="learningEventsStatus"
           :list-error="learningEventsError"
@@ -437,7 +446,7 @@ watch(studentId, loadOverview, { immediate: true })
           :detail-error="selectedEventDetailError"
           @select="selectLearningEvent"
           @retry-list="studentStore.loadLearningEvents(detail.studentId, 3)"
-          @retry-detail="studentStore.loadLearningEvent(detail.studentId, $event)"
+          @retry-detail="selectLearningEvent"
           @add-to-memo="addLearningEventToMemo"
         />
 

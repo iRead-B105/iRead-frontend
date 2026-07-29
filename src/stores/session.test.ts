@@ -39,7 +39,8 @@ function createRepositories(
         expiresIn: 900,
       }),
       logout: vi.fn().mockResolvedValue(undefined),
-      resetPassword: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      confirmPasswordReset: vi.fn(),
       ...overrides.auth,
     },
     teacher: {
