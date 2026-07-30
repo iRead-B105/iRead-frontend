@@ -5,7 +5,6 @@ import {
   type RawGazeAnalysisDto,
 } from '@/features/teacher/gaze'
 import type {
-  TestAreaScore,
   TestComparison,
   TestDetail,
   TestListItem,
@@ -24,11 +23,6 @@ interface TestListDataDto {
   readonly testHistory: readonly TestListItemDto[]
 }
 
-interface TestAreaScoreDto {
-  readonly area: string
-  readonly score: number
-}
-
 interface TestQuestionResultDto {
   readonly questionNumber: number
   readonly question?: string | null
@@ -40,16 +34,10 @@ interface TestQuestionResultDto {
 interface TestDetailDto {
   readonly testId: number
   readonly date: string
-  readonly overallScore?: number | null
-  readonly changeFromPrevious?: number | null
-  readonly strengthAreas?: readonly string[] | null
-  readonly improvementAreas?: readonly string[] | null
-  readonly recommendedCourse?: string | null
-  readonly nextTestRecommendation?: string | null
-  readonly areaScores?: readonly TestAreaScoreDto[] | null
   readonly readingTimeSeconds?: number | null
   readonly solvingTimeSeconds?: number | null
   readonly accuracy?: number | null
+  readonly gazeDepartureCount?: number | null
   readonly questions?: readonly TestQuestionResultDto[] | null
 }
 
@@ -60,18 +48,6 @@ interface TestComparisonDto {
 
 function requestInit(options?: TestRequestOptions): RequestInit {
   return options?.signal ? { signal: options.signal } : {}
-}
-
-function mapAreaScore(dto: TestAreaScoreDto): TestAreaScore {
-  if (!Number.isFinite(dto.score) || dto.score < 0 || dto.score > 100) {
-    throw new TypeError(
-      `[검사 API] 영역별 점수는 0~100이어야 합니다. 현재 값: ${String(dto.score)}`,
-    )
-  }
-  return {
-    area: dto.area,
-    score: dto.score,
-  }
 }
 
 function mapQuestion(dto: TestQuestionResultDto): TestQuestionResult {
@@ -88,16 +64,10 @@ function mapDetail(dto: TestDetailDto): TestDetail {
   return {
     testId: dto.testId,
     date: dto.date,
-    overallScore: dto.overallScore ?? null,
-    changeFromPrevious: dto.changeFromPrevious ?? null,
-    strengthAreas: [...(dto.strengthAreas ?? [])],
-    improvementAreas: [...(dto.improvementAreas ?? [])],
-    recommendedCourse: dto.recommendedCourse ?? null,
-    nextTestRecommendation: dto.nextTestRecommendation ?? null,
-    areaScores: (dto.areaScores ?? []).map(mapAreaScore),
     readingTimeSeconds: dto.readingTimeSeconds ?? null,
     solvingTimeSeconds: dto.solvingTimeSeconds ?? null,
     accuracy: dto.accuracy ?? null,
+    gazeDepartureCount: dto.gazeDepartureCount ?? null,
     questions: (dto.questions ?? []).map(mapQuestion),
   }
 }

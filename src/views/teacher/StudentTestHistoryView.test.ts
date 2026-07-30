@@ -43,7 +43,7 @@ async function mountHistory(
                 return this.option.series.map((series: { name: string }) => series.name).join(', ')
               },
             },
-            template: '<div data-test="area-chart">{{ ariaLabel }} {{ seriesNames }}</div>',
+            template: '<div data-test="metric-chart">{{ ariaLabel }} {{ seriesNames }}</div>',
           },
         },
       },
@@ -67,19 +67,24 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('학습자 목록으로 이동')
   })
 
-  it('최신 검사 한 건의 상세와 시선 집계를 표시하고 임의 지표는 표시하지 않는다', async () => {
+  it('최신 검사에 실제 네 지표와 전체 평균 표본 수를 표시하고 임의 지표는 표시하지 않는다', async () => {
     const { wrapper, store } = await mountHistory(new MockTestRepository())
 
     expect(store.currentTestId).toBe(1_011)
     expect(store.comparisonTestIds).toEqual([])
-    expect(wrapper.text()).toContain('84점')
-    expect(wrapper.text()).toContain('이전 검사 대비 +8점')
-    expect(wrapper.text()).toContain('문장 의미 연결 2단계')
+    expect(wrapper.text()).toContain('정확도')
+    expect(wrapper.text()).toContain('문제 풀이 시간')
+    expect(wrapper.text()).toContain('시선 이탈 횟수')
+    expect(wrapper.text()).toContain('시선 역행 횟수')
+    expect(wrapper.text()).toContain('전체 평균 · 4건 기준')
+    expect(wrapper.text()).toContain('전체 평균 · 2건 기준')
     expect(wrapper.text()).toContain('1분 32초')
     expect(wrapper.text()).toContain('친구를 배려하는 마음')
-    expect(wrapper.findAll('[data-test="area-chart"]')).toHaveLength(1)
+    expect(wrapper.findAll('[data-test="metric-chart"]')).toHaveLength(4)
     expect(wrapper.text()).not.toContain('전체 검사 추이')
-    expect(wrapper.text()).toContain('검사 평균')
+    expect(wrapper.text()).not.toContain('영역별 검사 점수')
+    expect(wrapper.text()).not.toContain('강점 영역')
+    expect(wrapper.text()).not.toContain('권장 과정')
     expect(wrapper.find('input[type="date"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('검사 시선 분석')
     expect(wrapper.text().indexOf('검사별 주요 기록')).toBeLessThan(
@@ -89,7 +94,7 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('82회')
     expect(wrapper.text()).toContain('9회')
     expect(wrapper.text()).not.toContain('시선 고정')
-    expect(wrapper.text()).not.toContain('읽기 이탈')
+    expect(wrapper.text()).toContain('시선 이탈 횟수')
   })
 
   it('전체 검사 상세 일부가 실패하면 성공한 평균을 유지하고 재시도를 제공한다', async () => {
@@ -110,7 +115,7 @@ describe('StudentTestHistoryView', () => {
     expect(compareTests).toHaveBeenCalled()
     expect(store.trendStatus).toBe('success')
     expect(store.trendDetails.map((detail) => detail.testId)).toEqual([1_004, 1_008, 1_011])
-    expect(wrapper.text()).toContain('일부 검사 1건을 불러오지 못해')
+    expect(wrapper.text()).toContain('일부 검사 상세 1건을 불러오지 못해')
     expect(wrapper.text()).toContain('다시 확인')
   })
 
@@ -162,16 +167,15 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('비교 0/2건')
   })
 
-  it('서버의 0점·0초·0%를 결측값과 구분한다', async () => {
+  it('서버의 0초·0%·0회를 결측값과 구분한다', async () => {
     const { wrapper } = await mountHistory(new MockTestRepository())
 
     await wrapper.get<HTMLSelectElement>('#current-test').setValue('1004')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('0점')
     expect(wrapper.text()).toContain('0초')
     expect(wrapper.text()).toContain('0%')
-    expect(wrapper.text()).toContain('이전 검사와 동일')
+    expect(wrapper.text()).toContain('0회')
   })
 
   it('학습자 route 변경 시 목록과 선택을 초기화하고 검사 없음 상태를 표시한다', async () => {

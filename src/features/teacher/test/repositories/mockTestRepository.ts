@@ -13,6 +13,8 @@ export interface MockTestRepositoryFixtures {
   readonly details?: readonly TestDetail[]
   readonly forbiddenStudentIds?: readonly number[]
   readonly gazeByTestId?: Readonly<Record<number, GazeAnalysisState>>
+  readonly failedDetailTestIds?: readonly number[]
+  readonly failedGazeTestIds?: readonly number[]
 }
 
 function clone<T>(value: T): T {
@@ -38,6 +40,8 @@ export class MockTestRepository implements TestRepository {
   private readonly details = new Map<number, TestDetail>()
   private readonly forbiddenStudentIds: ReadonlySet<number>
   private readonly gazeByTestId = new Map<number, GazeAnalysisState>()
+  private readonly failedDetailTestIds: ReadonlySet<number>
+  private readonly failedGazeTestIds: ReadonlySet<number>
 
   constructor(fixtures: MockTestRepositoryFixtures = {}) {
     this.testsByStudent = clone(fixtures.testsByStudent ?? testListFixtures)
@@ -45,6 +49,8 @@ export class MockTestRepository implements TestRepository {
       this.details.set(detail.testId, clone(detail))
     }
     this.forbiddenStudentIds = new Set(fixtures.forbiddenStudentIds ?? [])
+    this.failedDetailTestIds = new Set(fixtures.failedDetailTestIds ?? [])
+    this.failedGazeTestIds = new Set(fixtures.failedGazeTestIds ?? [])
     for (const [testId, gaze] of Object.entries(fixtures.gazeByTestId ?? testGazeFixtures)) {
       this.gazeByTestId.set(Number(testId), clone(gaze))
     }
@@ -80,6 +86,13 @@ export class MockTestRepository implements TestRepository {
         message: '완료된 검사 기록을 찾을 수 없습니다.',
       })
     }
+    if (this.failedDetailTestIds.has(currentTestId)) {
+      throw new ApiError({
+        status: 500,
+        code: 'MOCK_TEST_DETAIL_FAILURE',
+        message: '검사 상세를 불러오는 중 일시적인 오류가 발생했습니다.',
+      })
+    }
 
     const currentTest = this.details.get(currentTestId)
     const comparisonTests = comparisonTestIds.map((testId) => this.details.get(testId))
@@ -111,6 +124,13 @@ export class MockTestRepository implements TestRepository {
         status: 404,
         code: 'TEST_NOT_FOUND',
         message: '완료된 검사 기록을 찾을 수 없습니다.',
+      })
+    }
+    if (this.failedGazeTestIds.has(testId)) {
+      throw new ApiError({
+        status: 500,
+        code: 'MOCK_TEST_GAZE_FAILURE',
+        message: '검사 시선 분석을 불러오는 중 일시적인 오류가 발생했습니다.',
       })
     }
     return clone(

@@ -203,17 +203,21 @@ describe('Test store', () => {
     expect(store.trendStatus).toBe('success')
     expect(store.trendFailedCount).toBe(1)
     expect(store.trendDetails.map((detail) => detail.testId)).toEqual([1_004, 1_008, 1_011])
-    expect(store.trendError).toContain('일부 검사 1건')
+    expect(store.trendError).toContain('일부 검사 상세 1건')
   })
 
-  it('빠른 기준 검사 변경에서 늦게 끝난 이전 시선 응답을 무시한다', async () => {
-    const oldGaze = deferred<GazeAnalysisState>()
+  it('전체 검사 시선을 최대 세 건씩 조회하고 성공 결과는 기준 검사 변경에도 캐시한다', async () => {
     const mock = new MockTestRepository()
-    const getGazeAnalysis = vi
-      .fn()
-      .mockResolvedValueOnce(await mock.getGazeAnalysis(1, 1_011))
-      .mockReturnValueOnce(oldGaze.promise)
-      .mockResolvedValueOnce({ status: 'FAILED', analysis: null })
+    let activeRequests = 0
+    let maximumActiveRequests = 0
+    const getGazeAnalysis = vi.fn().mockImplementation(async (studentId, testId) => {
+      activeRequests += 1
+      maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests)
+      await Promise.resolve()
+      activeRequests -= 1
+      if (testId === 1_005) throw new Error('temporary gaze failure')
+      return mock.getGazeAnalysis(studentId, testId)
+    })
     const store = useTestStore()
     store.setRepository(
       repository({
@@ -226,15 +230,52 @@ describe('Test store', () => {
         getGazeAnalysis,
       }),
     )
+
     await store.loadForStudent(1)
 
-    const oldRequest = store.selectCurrentTest(1, 1_008)
-    await store.selectCurrentTest(1, 1_005)
+    expect(maximumActiveRequests).toBeLessThanOrEqual(3)
+    expect(store.trendGazeFailedCount).toBe(1)
+    expect(store.trendGazeResults.map((result) => result.testId)).toEqual([1_011, 1_008, 1_004])
+    expect(store.trendError).toContain('시선 분석 1건')
+    expect(getGazeAnalysis.mock.calls.filter((call) => call[1] === 1_008)).toHaveLength(1)
+
+    await store.selectCurrentTest(1, 1_008)
+
+    expect(getGazeAnalysis.mock.calls.filter((call) => call[1] === 1_008)).toHaveLength(1)
+  })
+
+  it('학습자 변경에서 늦게 끝난 이전 전체 시선 평균 응답을 무시한다', async () => {
+    const oldGaze = deferred<GazeAnalysisState>()
+    const mock = new MockTestRepository()
+    const getGazeAnalysis = vi.fn().mockImplementation((studentId, testId) => {
+      if (studentId === 1 && testId === 1_008) return oldGaze.promise
+      return mock.getGazeAnalysis(studentId, testId)
+    })
+    const store = useTestStore()
+    store.setRepository(
+      repository({
+        getTests: vi.fn().mockImplementation((studentId) => mock.getTests(studentId)),
+        compareTests: vi
+          .fn()
+          .mockImplementation((studentId, currentTestId, ids) =>
+            mock.compareTests(studentId, currentTestId, ids),
+          ),
+        getGazeAnalysis,
+      }),
+    )
+
+    const oldRequest = store.loadForStudent(1)
+    for (let index = 0; index < 20; index += 1) {
+      if (getGazeAnalysis.mock.calls.some((call) => call[0] === 1 && call[1] === 1_008)) break
+      await Promise.resolve()
+    }
+    await store.loadForStudent(2)
     oldGaze.resolve({ status: 'NO_DATA', analysis: null })
     await oldRequest
 
-    expect(store.currentTestId).toBe(1_005)
-    expect(store.gazeAnalysis).toEqual({ status: 'FAILED', analysis: null })
+    expect(store.studentId).toBe(2)
+    expect(store.currentTestId).toBe(2_001)
+    expect(store.trendGazeResults.map((result) => result.testId)).toEqual([2_001])
   })
 
   it('시선 요청 오류를 검사 상세 성공과 도메인 상태에서 분리한다', async () => {

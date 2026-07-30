@@ -1,5 +1,6 @@
 export * from './api'
 export * from './fixtures'
 export * from './model'
+export * from './metrics'
 export * from './presenters'
 export * from './repositories'

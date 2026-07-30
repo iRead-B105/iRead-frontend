@@ -75,14 +75,15 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('학습자 목록으로 이동')
   })
 
-  it('최신 커리큘럼의 첫 실제 훈련 상세·음성 통계·시선 집계를 표시한다', async () => {
+  it('최신 커리큘럼의 첫 실제 훈련 상세·정확도 비교·시선 집계를 표시한다', async () => {
     const { wrapper } = await mountHistory(new MockTrainingRepository())
 
     expect(wrapper.text()).toContain('2026.07.20')
     expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기')
     expect(wrapper.text()).toContain('8분 30초')
     expect(wrapper.text()).toContain('받침 소리를 안정적으로 구분했습니다.')
-    expect(wrapper.text()).toContain('음성 기준 읽기 속도')
+    expect(wrapper.text()).toContain('선택 훈련 정확도 비교')
+    expect(wrapper.text()).not.toContain('음성 읽기 속도 추이')
     expect(wrapper.text()).not.toContain('아이 트래킹 기준')
     expect(wrapper.text()).toContain('훈련 시선 분석')
     expect(wrapper.text()).toContain('42.4초')
