@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
@@ -63,6 +63,7 @@ function parseStudentId(value: unknown): number | null {
 
 const studentId = computed(() => parseStudentId(route.params.id))
 const invalidStudentId = computed(() => studentId.value === null)
+const selectedMetricKey = ref<TestMetricKey>('accuracy')
 const displayedDetails = computed<TestDetail[]>(() => {
   if (!comparisonResult.value) return []
   return [comparisonResult.value.currentTest, ...comparisonResult.value.comparisonTests]
@@ -154,10 +155,14 @@ const metricCharts = computed(() =>
     }
   }),
 )
+const selectedMetricChart = computed(
+  () => metricCharts.value.find((metric) => metric.key === selectedMetricKey.value) ?? null,
+)
 
 watch(
   studentId,
   async (id) => {
+    selectedMetricKey.value = 'accuracy'
     if (id === null) {
       testStore.reset()
       return
@@ -365,26 +370,44 @@ function testOptionLabel(test: TestListItem): string {
                 다시 확인
               </Button>
             </div>
-            <div class="metric-chart-grid">
-              <article
-                v-for="metric in metricCharts"
+            <div class="metric-tabs" role="tablist" aria-label="검사 비교 지표">
+              <button
+                v-for="metric in metricDefinitions"
+                :id="`test-metric-tab-${metric.key}`"
                 :key="metric.key"
-                class="metric-chart-card"
+                class="metric-tab"
+                :class="{ active: selectedMetricKey === metric.key }"
+                type="button"
+                role="tab"
+                aria-controls="test-metric-panel"
+                :aria-selected="selectedMetricKey === metric.key"
+                @click="selectedMetricKey = metric.key"
               >
+                {{ metric.label }}
+              </button>
+            </div>
+            <div
+              v-if="selectedMetricChart"
+              id="test-metric-panel"
+              class="metric-chart-panel"
+              role="tabpanel"
+              :aria-labelledby="`test-metric-tab-${selectedMetricChart.key}`"
+            >
+              <article class="metric-chart-card">
                 <header>
-                  <h3>{{ metric.label }}</h3>
+                  <h3>{{ selectedMetricChart.label }}</h3>
                   <span>
-                    {{ metric.averageLabel }}
-                    <b v-if="metric.average.value !== null">
-                      {{ metric.average.value }}{{ metric.unit }}
+                    {{ selectedMetricChart.averageLabel }}
+                    <b v-if="selectedMetricChart.average.value !== null">
+                      {{ selectedMetricChart.average.value }}{{ selectedMetricChart.unit }}
                     </b>
                   </span>
                 </header>
                 <ChartPanel
-                  :option="metric.option"
-                  height="230px"
-                  :aria-label="`${metric.label} 기준·비교 검사와 전체 평균 차트`"
-                  :summary="metric.summary"
+                  :option="selectedMetricChart.option"
+                  height="280px"
+                  :aria-label="`${selectedMetricChart.label} 기준·비교 검사와 전체 평균 차트`"
+                  :summary="selectedMetricChart.summary"
                 />
               </article>
             </div>
@@ -411,31 +434,36 @@ function testOptionLabel(test: TestListItem): string {
                     <dt>읽기 시간</dt>
                     <dd>{{ formatTestSeconds(detail.readingTimeSeconds) }}</dd>
                   </div>
-                  <div>
+                  <div
+                    data-metric-key="solvingTimeSeconds"
+                    :class="{ highlighted: selectedMetricKey === 'solvingTimeSeconds' }"
+                  >
                     <dt>문제 풀이 시간</dt>
                     <dd>{{ formatTestSeconds(detail.solvingTimeSeconds) }}</dd>
                   </div>
-                  <div>
+                  <div
+                    data-metric-key="accuracy"
+                    :class="{ highlighted: selectedMetricKey === 'accuracy' }"
+                  >
                     <dt>정확도</dt>
                     <dd>{{ formatTestPercent(detail.accuracy) }}</dd>
                   </div>
-                  <div>
+                  <div
+                    data-metric-key="gazeDepartureCount"
+                    :class="{ highlighted: selectedMetricKey === 'gazeDepartureCount' }"
+                  >
                     <dt>시선 이탈 횟수</dt>
                     <dd>
-                      {{
-                        formatMetricValue(
-                          detailMetricValue(detail, 'gazeDepartureCount'),
-                          '회',
-                        )
-                      }}
+                      {{ formatMetricValue(detailMetricValue(detail, 'gazeDepartureCount'), '회') }}
                     </dd>
                   </div>
-                  <div>
+                  <div
+                    data-metric-key="reverseReadCount"
+                    :class="{ highlighted: selectedMetricKey === 'reverseReadCount' }"
+                  >
                     <dt>시선 역행 횟수</dt>
                     <dd>
-                      {{
-                        formatMetricValue(detailMetricValue(detail, 'reverseReadCount'), '회')
-                      }}
+                      {{ formatMetricValue(detailMetricValue(detail, 'reverseReadCount'), '회') }}
                     </dd>
                   </div>
                 </dl>
@@ -679,10 +707,38 @@ function testOptionLabel(test: TestListItem): string {
   gap: 14px;
 }
 
-.metric-chart-grid {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.metric-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.metric-tab {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--slate-600);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.metric-tab:hover {
+  background: var(--interactive-hover-background);
+}
+
+.metric-tab.active {
+  border-color: color-mix(in oklch, var(--primary-600) 38%, var(--border));
+  background: var(--active-selection-background);
+  color: var(--active-selection-foreground);
+}
+
+.metric-chart-panel {
+  min-width: 0;
 }
 
 .metric-chart-card {
@@ -779,6 +835,23 @@ function testOptionLabel(test: TestListItem): string {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.detail-card dl > div {
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  transition: 150ms ease;
+}
+
+.detail-card dl > div.highlighted {
+  border-color: color-mix(in oklch, var(--primary-600) 30%, var(--border));
+  background: var(--active-selection-background);
+}
+
+.detail-card dl > div.highlighted dt {
+  color: var(--primary-700);
+  font-weight: 800;
+}
+
 .question-list {
   display: grid;
   gap: 12px;
@@ -861,10 +934,6 @@ function testOptionLabel(test: TestListItem): string {
   .selection-field {
     width: 100%;
     min-width: 0;
-  }
-
-  .metric-chart-grid {
-    grid-template-columns: 1fr;
   }
 
   .detail-card dl,

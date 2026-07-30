@@ -46,8 +46,13 @@ async function mountHistory(
         plugins: [pinia, router],
         stubs: {
           ChartPanel: {
-            props: ['ariaLabel'],
-            template: '<div data-test="chart">{{ ariaLabel }}</div>',
+            props: ['ariaLabel', 'summary', 'option'],
+            computed: {
+              categories() {
+                return this.option.xAxis.data.join(', ')
+              },
+            },
+            template: '<div data-test="chart">{{ ariaLabel }} {{ categories }} {{ summary }}</div>',
           },
         },
       },
@@ -83,6 +88,12 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('8분 30초')
     expect(wrapper.text()).toContain('받침 소리를 안정적으로 구분했습니다.')
     expect(wrapper.text()).toContain('선택 훈련 정확도 비교')
+    expect(wrapper.findAll('[data-test="chart"]')).toHaveLength(1)
+    expect(wrapper.get('[data-test="chart"]').text()).toContain(
+      '현재 훈련과 이전 훈련 정확도 막대그래프',
+    )
+    expect(wrapper.get('[data-test="chart"]').text()).toContain('이전 훈련, 현재 훈련')
+    expect(wrapper.get('[data-test="chart"]').text()).toContain('이전 훈련 정확도 70%')
     expect(wrapper.text()).not.toContain('음성 읽기 속도 추이')
     expect(wrapper.text()).not.toContain('아이 트래킹 기준')
     expect(wrapper.text()).toContain('훈련 시선 분석')
@@ -103,6 +114,7 @@ describe('StudentTrainingHistoryView', () => {
     await flushPromises()
     expect(store.historyGazeStatus).toBe('success')
     expect(wrapper.text()).toContain('시선 분석 데이터가 없습니다.')
+    expect(wrapper.get('[data-test="chart"]').text()).toContain('이전 훈련 정확도 기록 없음')
 
     await rows.find((row) => row.text().includes('음소 합쳐 음절 만들기'))?.trigger('click')
     await flushPromises()
@@ -151,6 +163,27 @@ describe('StudentTrainingHistoryView', () => {
     expect(saveDownloadMock).toHaveBeenCalledWith(
       expect.objectContaining({ fileName: 'training-901-mock.csv' }),
       'training-901.csv',
+    )
+  })
+
+  it('훈련 전환 중 상세와 시선 분석 외곽을 유지하고 내부 로딩 상태를 표시한다', async () => {
+    const { wrapper, store } = await mountHistory(new MockTrainingRepository())
+    const detailCard = wrapper.get('.detail-card').element
+    const detailShell = wrapper.get('.detail-content-shell').element
+
+    store.historyTrainingDetail = null
+    store.historyDetailStatus = 'loading'
+    store.historyGazeAnalysis = null
+    store.historyGazeStatus = 'loading'
+    await flushPromises()
+
+    expect(wrapper.get('.detail-card').element).toBe(detailCard)
+    expect(wrapper.get('.detail-content-shell').element).toBe(detailShell)
+    expect(wrapper.get('.detail-content-shell').attributes('aria-busy')).toBe('true')
+    expect(wrapper.get('.detail-content-shell').text()).toContain('훈련 상세를 불러오는 중입니다.')
+    expect(wrapper.find('.history-gaze-shell').exists()).toBe(true)
+    expect(wrapper.get('.history-gaze-shell').text()).toContain(
+      '시선 분석 결과를 불러오는 중입니다.',
     )
   })
 

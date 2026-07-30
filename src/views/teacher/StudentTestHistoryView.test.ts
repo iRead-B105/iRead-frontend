@@ -67,7 +67,7 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('학습자 목록으로 이동')
   })
 
-  it('최신 검사에 실제 네 지표와 전체 평균 표본 수를 표시하고 임의 지표는 표시하지 않는다', async () => {
+  it('최신 검사의 정확도를 기본 탭과 단일 그래프로 표시하고 주요 기록을 강조한다', async () => {
     const { wrapper, store } = await mountHistory(new MockTestRepository())
 
     expect(store.currentTestId).toBe(1_011)
@@ -77,10 +77,17 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('시선 이탈 횟수')
     expect(wrapper.text()).toContain('시선 역행 횟수')
     expect(wrapper.text()).toContain('전체 평균 · 4건 기준')
-    expect(wrapper.text()).toContain('전체 평균 · 2건 기준')
     expect(wrapper.text()).toContain('1분 32초')
     expect(wrapper.text()).toContain('친구를 배려하는 마음')
-    expect(wrapper.findAll('[data-test="metric-chart"]')).toHaveLength(4)
+    expect(wrapper.findAll('[role="tab"]')).toHaveLength(4)
+    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('정확도')
+    expect(wrapper.findAll('[data-test="metric-chart"]')).toHaveLength(1)
+    expect(wrapper.get('[data-test="metric-chart"]').text()).toContain(
+      '정확도 기준·비교 검사와 전체 평균 차트',
+    )
+    expect(wrapper.findAll('[data-metric-key="accuracy"].highlighted')).toHaveLength(
+      wrapper.findAll('.detail-card').length,
+    )
     expect(wrapper.text()).not.toContain('전체 검사 추이')
     expect(wrapper.text()).not.toContain('영역별 검사 점수')
     expect(wrapper.text()).not.toContain('강점 영역')
@@ -95,6 +102,27 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('9회')
     expect(wrapper.text()).not.toContain('시선 고정')
     expect(wrapper.text()).toContain('시선 이탈 횟수')
+  })
+
+  it('지표 탭을 바꾸면 그래프 하나와 모든 주요 기록 카드의 강조가 함께 변경된다', async () => {
+    const { wrapper } = await mountHistory(new MockTestRepository())
+    const reverseReadTab = wrapper
+      .findAll('[role="tab"]')
+      .find((tab) => tab.text() === '시선 역행 횟수')
+
+    await reverseReadTab?.trigger('click')
+    await flushPromises()
+
+    expect(reverseReadTab?.attributes('aria-selected')).toBe('true')
+    expect(wrapper.findAll('[data-test="metric-chart"]')).toHaveLength(1)
+    expect(wrapper.get('[data-test="metric-chart"]').text()).toContain(
+      '시선 역행 횟수 기준·비교 검사와 전체 평균 차트',
+    )
+    expect(wrapper.text()).toContain('전체 평균 · 2건 기준')
+    expect(wrapper.findAll('[data-metric-key="reverseReadCount"].highlighted')).toHaveLength(
+      wrapper.findAll('.detail-card').length,
+    )
+    expect(wrapper.findAll('[data-metric-key="accuracy"].highlighted')).toHaveLength(0)
   })
 
   it('전체 검사 상세 일부가 실패하면 성공한 평균을 유지하고 재시도를 제공한다', async () => {
