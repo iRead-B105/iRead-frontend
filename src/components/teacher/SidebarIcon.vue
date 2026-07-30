@@ -7,6 +7,7 @@ defineProps<{
     | 'book'
     | 'chart'
     | 'clipboard'
+    | 'story'
     | 'report'
     | 'edit'
 }>()
@@ -50,6 +51,11 @@ defineProps<{
     <g v-else-if="name === 'clipboard'">
       <rect x="5" y="4" width="14" height="17" rx="2" />
       <path d="M9 4V2h6v2M8.5 12l2 2 5-5" />
+    </g>
+    <g v-else-if="name === 'story'">
+      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5Z" />
+      <path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5Z" />
+      <path d="m7.5 8 1 1 1.75-2" />
     </g>
     <g v-else-if="name === 'report'">
       <path d="M6 2h8l4 4v16H6Z" />

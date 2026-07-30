@@ -98,6 +98,11 @@ function createTestRouter(): Router {
         component: { template: '<div />' },
       },
       {
+        path: '/teacher/students/:id/story-history',
+        name: 'student-story-history',
+        component: { template: '<div />' },
+      },
+      {
         path: '/teacher/students/:id/report',
         name: 'student-report',
         component: { template: '<div />' },
@@ -183,7 +188,7 @@ describe('TeacherSidebar', () => {
 
     expect(useStudentStore(pinia).selectedStudentId).toBeNull()
     expect(wrapper.text()).toContain('아동을 선택해 주세요')
-    expect(wrapper.findAll('[aria-disabled="true"]')).toHaveLength(6)
+    expect(wrapper.findAll('[aria-disabled="true"]')).toHaveLength(7)
     expect(wrapper.html()).not.toContain('/teacher/students/7')
     expect(wrapper.html()).not.toContain('/teacher/students/0')
   })
@@ -205,6 +210,7 @@ describe('TeacherSidebar', () => {
 
   it.each([
     ['/teacher/students/7/curriculum', 'student-curriculum'],
+    ['/teacher/students/7/story-history', 'student-story-history'],
     ['/teacher/students/7/edit', 'student-overview'],
   ])(
     '학생 변경 시 현재 화면 정책에 맞는 route로 이동한다: %s',
@@ -243,7 +249,7 @@ describe('TeacherSidebar', () => {
 
     expect(wrapper.text()).toContain('아동을 선택해 주세요')
     expect(wrapper.text()).toContain('학습 현황')
-    expect(wrapper.findAll('[aria-disabled="true"]')).toHaveLength(6)
+    expect(wrapper.findAll('[aria-disabled="true"]')).toHaveLength(7)
     expect(wrapper.html()).not.toContain('/teacher/students/0')
   })
 

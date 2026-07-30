@@ -108,6 +108,12 @@ const router = createRouter({
               meta: { title: '검사 이력' },
             },
             {
+              path: 'story-history',
+              name: 'student-story-history',
+              component: () => import('@/views/teacher/StudentStoryHistoryView.vue'),
+              meta: { title: '이야기 이력' },
+            },
+            {
               path: 'report',
               name: 'student-report',
               component: () => import('@/views/teacher/StudentReportView.vue'),
