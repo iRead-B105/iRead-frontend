@@ -9,6 +9,7 @@ import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
+import { dataSource } from '@/config/dataSource'
 import {
   CURRICULUM_TRAINING_COUNT,
   trainingStatusLabel,
@@ -50,7 +51,7 @@ const {
   materialGenerationError,
   hasChanges,
   draftTrainingIds,
-  canEditCurriculum,
+  canEditCurriculum: canEditCurriculumFromStore,
 } = storeToRefs(trainingStore)
 
 const draggedDraftKey = ref<string | null>(null)
@@ -68,6 +69,13 @@ function parseStudentId(value: unknown): number | null {
 
 const studentId = computed(() => parseStudentId(route.params.id))
 const invalidStudentId = computed(() => studentId.value === null)
+const canEditCurriculum = computed(
+  () =>
+    canEditCurriculumFromStore.value &&
+    (dataSource === 'mock' ||
+      savedCurriculum.value === null ||
+      savedCurriculum.value.trainings.every((training) => training.status === 'NOT_READY')),
+)
 const canSave = computed(
   () =>
     hasChanges.value &&
@@ -624,7 +632,8 @@ function deletionMessage(): string {
               "
               class="locked-state"
             >
-              시작되거나 완료된 커리큘럼은 수정할 수 없습니다.
+              훈련 자료 생성이 완료되어 수정할 수 없습니다. 생성 전 커리큘럼만 편집할 수
+              있습니다.
             </p>
           </section>
         </Card>
