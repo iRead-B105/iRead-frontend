@@ -21,15 +21,19 @@ const props = defineProps<{
   detail: TrainingDetail | null
   expectedWordsStatus: TrainingRequestStatus
   detailStatus: TrainingRequestStatus
+  materialGenerationStatus: TrainingRequestStatus
+  requiresRegeneration: boolean
   isMutating: boolean
   expectedWordError: string | null
   detailError: string | null
+  materialGenerationError: string | null
 }>()
 
 const emit = defineEmits<{
   close: []
   addWord: [wordName: string]
   deleteWord: [wordId: number]
+  regenerate: []
   retry: []
 }>()
 
@@ -41,7 +45,18 @@ const normalizedWord = computed(() => newWord.value.trim())
 const canEditExpectedWords = computed(
   () => props.training.status === 'NOT_READY' || props.training.status === 'NOT_STARTED',
 )
-const requiresRegeneration = computed(() => props.training.status === 'NOT_STARTED')
+const willRequireRegenerationAfterChange = computed(
+  () => props.training.status === 'NOT_STARTED',
+)
+const isGenerating = computed(() => props.materialGenerationStatus === 'loading')
+const isBusy = computed(() => props.isMutating || isGenerating.value)
+const canGenerate = computed(
+  () =>
+    props.requiresRegeneration &&
+    props.detailStatus === 'success' &&
+    props.expectedWordsStatus === 'success' &&
+    !isBusy.value,
+)
 const wordValidationError = computed(() => {
   if (!newWord.value) return null
   if (!normalizedWord.value) return '공백만 입력할 수 없습니다.'
@@ -56,7 +71,7 @@ const canAddWord = computed(
     Boolean(normalizedWord.value) &&
     !wordValidationError.value &&
     canEditExpectedWords.value &&
-    !props.isMutating,
+    !isBusy.value,
 )
 
 watch(
@@ -90,7 +105,7 @@ function addWord(): void {
 }
 
 function confirmDeleteWord(): void {
-  if (!wordPendingDeletion.value || !canEditExpectedWords.value || props.isMutating) return
+  if (!wordPendingDeletion.value || !canEditExpectedWords.value || isBusy.value) return
   emit('deleteWord', wordPendingDeletion.value.wordId)
 }
 </script>
@@ -145,12 +160,12 @@ function confirmDeleteWord(): void {
                   maxlength="51"
                   autocomplete="off"
                   placeholder="최대 50자"
-                  :disabled="!canEditExpectedWords || isMutating"
+                  :disabled="!canEditExpectedWords || isBusy"
                   :aria-invalid="Boolean(wordValidationError)"
                   aria-describedby="expected-word-help"
                 />
                 <Button type="submit" :disabled="!canAddWord">
-                  {{ isMutating ? '처리 중' : '추가' }}
+                  {{ isBusy ? '처리 중' : '추가' }}
                 </Button>
               </div>
               <small
@@ -179,7 +194,7 @@ function confirmDeleteWord(): void {
                   size="icon-sm"
                   type="button"
                   :aria-label="`${word.wordName} 예상 단어 삭제`"
-                  :disabled="!canEditExpectedWords || isMutating"
+                  :disabled="!canEditExpectedWords || isBusy"
                   @click="wordPendingDeletion = word"
                 >
                   ×
@@ -198,11 +213,14 @@ function confirmDeleteWord(): void {
             <p v-if="!canEditExpectedWords" class="word-help word-help--locked">
               진행 중이거나 완료된 훈련의 예상 단어는 변경할 수 없습니다.
             </p>
-            <p v-else-if="requiresRegeneration" class="word-help word-help--warning">
-              예상 단어를 변경하면 기존 훈련 자료가 무효화되며 재생성이 필요합니다. 자료 생성은
-              학습자 훈련 흐름에서 진행됩니다.
+            <p v-else-if="willRequireRegenerationAfterChange" class="word-help word-help--warning">
+              예상 단어를 변경하면 교안 재생성 필요 상태로 전환되며, 이 화면에서 AI 교안을
+              다시 생성할 수 있습니다.
             </p>
-            <p v-else class="word-help">변경한 예상 단어는 다음 훈련 자료 생성 시 반영됩니다.</p>
+            <p v-else-if="requiresRegeneration" class="word-help word-help--warning">
+              변경한 예상 단어를 반영하려면 AI 교안 재생성을 완료해 주세요.
+            </p>
+            <p v-else class="word-help">변경한 예상 단어는 AI 교안 재생성 시 반영됩니다.</p>
           </section>
 
           <section class="preview-panel" aria-labelledby="preview-title">
@@ -211,17 +229,51 @@ function confirmDeleteWord(): void {
                 <p>읽기 전용</p>
                 <h3 id="preview-title">아동 화면 미리보기</h3>
               </div>
-              <Badge variant="outline">
-                {{
-                  preview.source === 'generated'
-                    ? '생성 자료'
-                    : preview.source === 'template'
-                      ? '템플릿'
-                      : '자료 없음'
-                }}
-              </Badge>
+              <div class="preview-panel__actions">
+                <Badge v-if="requiresRegeneration" variant="destructive">재생성 필요</Badge>
+                <Badge v-else variant="outline">
+                  {{
+                    preview.source === 'generated'
+                      ? '생성 자료'
+                      : preview.source === 'template'
+                        ? '템플릿'
+                        : '자료 없음'
+                  }}
+                </Badge>
+              </div>
             </header>
-            <p class="preview-help">훈련 자료와 템플릿 설정은 현재 백엔드에서 조회만 지원합니다.</p>
+            <p class="preview-help">
+              생성된 교안은 읽기 전용입니다. 제목·지시문·문항·보기·정답은 직접 저장할 수
+              없습니다.
+            </p>
+
+            <div
+              v-if="requiresRegeneration"
+              class="generation-notice"
+              :class="{ 'generation-notice--error': materialGenerationStatus === 'error' }"
+              :role="materialGenerationStatus === 'error' ? 'alert' : 'status'"
+            >
+              <div>
+                <strong>AI 교안 재생성이 필요합니다.</strong>
+                <span v-if="materialGenerationStatus === 'error'">
+                  {{ materialGenerationError }}
+                </span>
+                <span v-else-if="preview.source === 'generated'">
+                  현재 미리보기는 변경 전 예상 단어로 생성된 이전 자료입니다.
+                </span>
+                <span v-else>현재 예상 단어를 반영한 교안이 아직 생성되지 않았습니다.</span>
+              </div>
+              <Button type="button" :disabled="!canGenerate" @click="emit('regenerate')">
+                {{ isGenerating ? 'AI 교안 생성 중' : 'AI 교안 재생성' }}
+              </Button>
+            </div>
+            <p
+              v-else-if="materialGenerationStatus === 'success'"
+              class="generation-success"
+              role="status"
+            >
+              AI 교안 재생성이 완료되어 최신 미리보기에 반영되었습니다.
+            </p>
 
             <p v-if="detailStatus === 'loading'" class="section-state" role="status">
               미리보기를 불러오는 중입니다.
@@ -340,6 +392,11 @@ function confirmDeleteWord(): void {
   justify-content: space-between;
   gap: 16px;
 }
+.preview-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .word-panel h3,
 .preview-panel h3 {
   font-size: 16px;
@@ -438,6 +495,46 @@ function confirmDeleteWord(): void {
   color: var(--slate-500);
   font-size: 11px;
   line-height: 1.6;
+}
+.generation-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in oklch, var(--warning-600, #ca8a04) 34%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--warning-500, #eab308) 8%, var(--white));
+}
+.generation-notice > div {
+  display: grid;
+  gap: 3px;
+}
+.generation-notice strong {
+  color: var(--slate-900);
+  font-size: 12px;
+}
+.generation-notice span {
+  color: var(--slate-600);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.generation-notice--error {
+  border-color: color-mix(in oklch, var(--danger-600) 34%, var(--border));
+  background: color-mix(in oklch, var(--danger-600) 5%, var(--white));
+}
+.generation-notice--error span {
+  color: var(--danger-600);
+}
+.generation-success {
+  margin: 16px 0 0;
+  padding: 11px 13px;
+  border-radius: var(--radius-sm);
+  background: var(--success-50, #f0fdf4);
+  color: var(--success-700, #15803d);
+  font-size: 12px;
+  font-weight: 700;
 }
 .preview-device {
   max-width: 560px;

@@ -28,6 +28,7 @@ function repository(overrides: Partial<TrainingRepository> = {}): TrainingReposi
     getExpectedWords: vi.fn().mockResolvedValue([]),
     addExpectedWord: vi.fn().mockResolvedValue(undefined),
     deleteExpectedWord: vi.fn().mockResolvedValue(undefined),
+    generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
     getTrainingDetail: vi.fn(),
     getCurriculumLogs: vi.fn().mockResolvedValue([]),
     getTrainingLog: vi.fn(),
@@ -415,6 +416,34 @@ describe('Training store', () => {
     await expect(store.deleteExpectedWord(1001)).resolves.toBe(false)
     expect(addExpectedWord).toHaveBeenCalledTimes(1)
     expect(deleteExpectedWord).not.toHaveBeenCalled()
+  })
+
+  it('예상 단어 변경 후 AI 교안을 재생성하고 실제 응답으로 미리보기를 갱신한다', async () => {
+    const mock = new MockTrainingRepository()
+    const generateTraining = vi.spyOn(mock, 'generateTraining')
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadForStudent(1)
+    await store.selectDraftItem(1, 'training-101')
+
+    await expect(store.addExpectedWord('별')).resolves.toBe(true)
+    expect(store.requiresMaterialRegeneration).toBe(true)
+    expect(store.selectedTrainingDetail?.status).toBe('NOT_READY')
+
+    await expect(store.regenerateSelectedTraining()).resolves.toBe(true)
+
+    expect(generateTraining).toHaveBeenCalledWith(1, 101)
+    expect(store.materialGenerationStatus).toBe('success')
+    expect(store.materialGenerationError).toBeNull()
+    expect(store.requiresMaterialRegeneration).toBe(false)
+    expect(store.selectedTrainingDetail?.status).toBe('NOT_STARTED')
+    expect(store.selectedTrainingDetail?.generatedData?.questions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          problem: expect.objectContaining({ targetText: '별' }),
+        }),
+      ]),
+    )
   })
 
   it('reset이 커리큘럼·예상 단어·선택 상태를 모두 비운다', async () => {

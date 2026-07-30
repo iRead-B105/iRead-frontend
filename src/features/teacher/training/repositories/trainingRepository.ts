@@ -3,6 +3,7 @@ import type {
   CurriculumTrainingLog,
   DailyCurriculum,
   ExpectedWord,
+  GeneratedTrainingData,
   SaveCurriculumRequest,
   TrainingCatalogItem,
   TrainingDetail,
@@ -99,6 +100,10 @@ export interface TrainingRepository {
     trainingId: number,
     wordId: number,
   ) => Promise<void>
+  readonly generateTraining: (
+    studentId: number,
+    trainingId: number,
+  ) => Promise<GeneratedTrainingData>
   readonly getTrainingDetail: (
     studentId: number,
     trainingId: number,

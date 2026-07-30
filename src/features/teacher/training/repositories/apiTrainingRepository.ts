@@ -78,6 +78,10 @@ export class ApiTrainingRepository implements TrainingRepository {
     return this.api.deleteExpectedWord(studentId, trainingId, wordId)
   }
 
+  generateTraining(studentId: number, trainingId: number) {
+    return this.api.generateTraining(studentId, trainingId)
+  }
+
   getTrainingDetail(
     studentId: number,
     trainingId: number,

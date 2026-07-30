@@ -81,6 +81,7 @@ export const useTrainingStore = defineStore('training', () => {
   const curriculumStatus = ref<TrainingRequestStatus>('idle')
   const expectedWordsStatus = ref<TrainingRequestStatus>('idle')
   const detailStatus = ref<TrainingRequestStatus>('idle')
+  const materialGenerationStatus = ref<TrainingRequestStatus>('idle')
   const curriculumSynchronizationStatus = ref<CurriculumSynchronizationStatus>('refreshing')
   const isSavingCurriculum = ref(false)
   const curriculumSaveConflict = ref(false)
@@ -90,6 +91,7 @@ export const useTrainingStore = defineStore('training', () => {
   const curriculumError = ref<string | null>(null)
   const expectedWordError = ref<string | null>(null)
   const detailError = ref<string | null>(null)
+  const materialGenerationError = ref<string | null>(null)
 
   const historyStudentId = ref<number | null>(null)
   const period = ref<TrainingPeriod>('30d')
@@ -178,6 +180,9 @@ export const useTrainingStore = defineStore('training', () => {
       (selectedTraining.value?.status === 'NOT_READY' ||
         selectedTraining.value?.status === 'NOT_STARTED'),
   )
+  const requiresMaterialRegeneration = computed(
+    () => selectedTrainingDetail.value?.status === 'NOT_READY',
+  )
   const selectedCurriculumLog = computed(
     () =>
       curriculumLogs.value.find(
@@ -220,6 +225,7 @@ export const useTrainingStore = defineStore('training', () => {
     curriculumStatus.value = 'loading'
     expectedWordsStatus.value = 'idle'
     detailStatus.value = 'idle'
+    materialGenerationStatus.value = 'idle'
     curriculumSynchronizationStatus.value = 'refreshing'
     isSavingCurriculum.value = false
     curriculumSaveConflict.value = false
@@ -229,6 +235,7 @@ export const useTrainingStore = defineStore('training', () => {
     curriculumError.value = null
     expectedWordError.value = null
     detailError.value = null
+    materialGenerationError.value = null
   }
 
   async function loadForStudent(studentId: number): Promise<void> {
@@ -513,6 +520,8 @@ export const useTrainingStore = defineStore('training', () => {
     if (!item) return
     selectedDraftItemKey.value = key
     selectedTrainingId.value = item.trainingId
+    materialGenerationStatus.value = 'idle'
+    materialGenerationError.value = null
     if (item.trainingId === null) {
       resourceController?.abort()
       resourceGeneration += 1
@@ -605,6 +614,8 @@ export const useTrainingStore = defineStore('training', () => {
     expectedWordError.value = null
     try {
       await repository.value.addExpectedWord(studentId, trainingId, normalized)
+      materialGenerationStatus.value = 'idle'
+      materialGenerationError.value = null
       await loadSelectedTrainingResources(studentId, trainingId)
       return true
     } catch (error) {
@@ -631,6 +642,8 @@ export const useTrainingStore = defineStore('training', () => {
     expectedWordError.value = null
     try {
       await repository.value.deleteExpectedWord(studentId, trainingId, wordId)
+      materialGenerationStatus.value = 'idle'
+      materialGenerationError.value = null
       await loadSelectedTrainingResources(studentId, trainingId)
       return true
     } catch (error) {
@@ -638,6 +651,44 @@ export const useTrainingStore = defineStore('training', () => {
       return false
     } finally {
       isMutatingExpectedWord.value = false
+    }
+  }
+
+  async function regenerateSelectedTraining(): Promise<boolean> {
+    const studentId = currentStudentId.value
+    const trainingId = selectedTrainingId.value
+    if (
+      studentId === null ||
+      trainingId === null ||
+      !requiresMaterialRegeneration.value ||
+      materialGenerationStatus.value === 'loading'
+    ) {
+      return false
+    }
+
+    materialGenerationStatus.value = 'loading'
+    materialGenerationError.value = null
+    try {
+      const generatedData = await repository.value.generateTraining(studentId, trainingId)
+      const currentDetail = trainingDetailById.value[trainingId]
+      if (currentDetail) {
+        trainingDetailById.value = {
+          ...trainingDetailById.value,
+          [trainingId]: {
+            ...currentDetail,
+            generatedData,
+            status: 'NOT_STARTED',
+          },
+        }
+      } else {
+        await loadSelectedTrainingResources(studentId, trainingId)
+      }
+      materialGenerationStatus.value = 'success'
+      return true
+    } catch (error) {
+      materialGenerationStatus.value = 'error'
+      materialGenerationError.value = errorMessage(error, 'AI 교안을 생성하지 못했습니다.')
+      return false
     }
   }
 
@@ -992,6 +1043,7 @@ export const useTrainingStore = defineStore('training', () => {
     curriculumStatus.value = 'idle'
     expectedWordsStatus.value = 'idle'
     detailStatus.value = 'idle'
+    materialGenerationStatus.value = 'idle'
     curriculumSynchronizationStatus.value = 'refreshing'
     isSavingCurriculum.value = false
     curriculumSaveConflict.value = false
@@ -1001,6 +1053,7 @@ export const useTrainingStore = defineStore('training', () => {
     curriculumError.value = null
     expectedWordError.value = null
     detailError.value = null
+    materialGenerationError.value = null
     historyStudentId.value = null
     period.value = '30d'
     curriculumLogs.value = []
@@ -1044,6 +1097,7 @@ export const useTrainingStore = defineStore('training', () => {
     curriculumStatus,
     expectedWordsStatus,
     detailStatus,
+    materialGenerationStatus,
     curriculumSynchronizationStatus,
     isSavingCurriculum,
     curriculumSaveConflict,
@@ -1053,9 +1107,11 @@ export const useTrainingStore = defineStore('training', () => {
     curriculumError,
     expectedWordError,
     detailError,
+    materialGenerationError,
     hasChanges,
     canEditCurriculum,
     canEditExpectedWords,
+    requiresMaterialRegeneration,
     historyStudentId,
     period,
     curriculumLogs,
@@ -1094,6 +1150,7 @@ export const useTrainingStore = defineStore('training', () => {
     loadSelectedTrainingResources,
     addExpectedWord,
     deleteExpectedWord,
+    regenerateSelectedTraining,
     loadHistoryForStudent,
     setHistoryPeriod,
     retryHistory,

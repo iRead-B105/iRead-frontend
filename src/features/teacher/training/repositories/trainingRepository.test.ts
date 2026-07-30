@@ -16,6 +16,7 @@ function api(overrides: Partial<TrainingApi> = {}): TrainingApi {
     getExpectedWords: vi.fn().mockResolvedValue([]),
     addExpectedWord: vi.fn().mockResolvedValue(undefined),
     deleteExpectedWord: vi.fn().mockResolvedValue(undefined),
+    generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
     getTrainingDetail: vi.fn(),
     getCurriculumLogs: vi.fn().mockResolvedValue([]),
     getTrainingLog: vi.fn(),
@@ -208,6 +209,20 @@ describe('Training API target contract', () => {
     await expect(trainingApi.getExpectedWords(1, 101)).resolves.toEqual([
       { wordId: 1, wordName: '사과' },
     ])
+  })
+
+  it('실제 studentId와 trainingId로 AI 교안 생성을 요청한다', async () => {
+    const generatedData = {
+      schemaVersion: 2,
+      questions: [{ questionId: 1, problem: { targetText: '사과' } }],
+    }
+    const request = vi.fn().mockResolvedValue(generatedData)
+    const trainingApi = createTrainingApi(request)
+
+    await expect(trainingApi.generateTraining(7, 101)).resolves.toBe(generatedData)
+    expect(request).toHaveBeenCalledWith('/api/admin/training/7/101/generate', {
+      method: 'POST',
+    })
   })
 
   it('기간 query로 curriculum log를 조회하고 최신순으로 정렬한다', async () => {
@@ -427,6 +442,19 @@ describe('MockTrainingRepository', () => {
     await expect(repository.getTrainingDetail(1, 101)).resolves.toMatchObject({
       generatedData: null,
       status: 'NOT_READY',
+    })
+
+    const generatedData = await repository.generateTraining(1, 101)
+    expect(generatedData.questions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          problem: expect.objectContaining({ targetText: '별' }),
+        }),
+      ]),
+    )
+    await expect(repository.getTrainingDetail(1, 101)).resolves.toMatchObject({
+      generatedData,
+      status: 'NOT_STARTED',
     })
   })
 

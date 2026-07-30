@@ -37,6 +37,8 @@ const {
   curriculumSynchronizationStatus,
   expectedWordsStatus,
   detailStatus,
+  materialGenerationStatus,
+  requiresMaterialRegeneration,
   isSavingCurriculum,
   curriculumSaveConflict,
   isRefreshingCurriculumConflict,
@@ -45,6 +47,7 @@ const {
   curriculumError,
   expectedWordError,
   detailError,
+  materialGenerationError,
   hasChanges,
   draftTrainingIds,
   canEditCurriculum,
@@ -125,7 +128,7 @@ onBeforeRouteUpdate((to) => {
 onBeforeRouteLeave(() => confirmDiscard())
 
 function achievementLabel(value: number | null): string {
-  if (value === null) return '기록 없음'
+  if (value === null) return '미수행(평가 기록 없음)'
   if (value >= 80) return '충분'
   if (value >= 60) return '보완 필요'
   return '우선 학습'
@@ -253,6 +256,10 @@ async function addExpectedWord(wordName: string): Promise<void> {
 
 async function deleteExpectedWord(wordId: number): Promise<void> {
   await trainingStore.deleteExpectedWord(wordId)
+}
+
+async function regenerateMaterial(): Promise<void> {
+  await trainingStore.regenerateSelectedTraining()
 }
 
 function deletionMessage(): string {
@@ -417,7 +424,7 @@ function deletionMessage(): string {
                   <dd>
                     {{
                       selectedTemplate.studentAchievementRate === null
-                        ? '기록 없음'
+                        ? '미수행(평가 기록 없음)'
                         : `${selectedTemplate.studentAchievementRate}%`
                     }}
                   </dd>
@@ -641,12 +648,16 @@ function deletionMessage(): string {
       :detail="selectedTrainingDetail"
       :expected-words-status="expectedWordsStatus"
       :detail-status="detailStatus"
+      :material-generation-status="materialGenerationStatus"
+      :requires-regeneration="requiresMaterialRegeneration"
       :is-mutating="isMutatingExpectedWord"
       :expected-word-error="expectedWordError"
       :detail-error="detailError"
+      :material-generation-error="materialGenerationError"
       @close="materialEditorOpen = false"
       @add-word="addExpectedWord"
       @delete-word="deleteExpectedWord"
+      @regenerate="regenerateMaterial"
       @retry="retryResources"
     />
   </div>

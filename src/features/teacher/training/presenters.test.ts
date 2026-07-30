@@ -51,6 +51,37 @@ describe('training preview presenter', () => {
     ])
   })
 
+  it('백엔드 34개 템플릿의 다양한 문항 필드를 실제 값으로 표시한다', () => {
+    const preview = toTrainingPreview(detail({
+      generatedData: {
+        questions: [
+          { audioText: 'ㄱ', choices: ['ㄴ', 'ㄱ'], answerIndex: 1 },
+          { words: ['사과', '나무', '바다'] },
+          {
+            cards: ['먹는다.', '아기는', '사과를'],
+            answerOrder: [1, 2, 0],
+            completedSentence: '아기는 사과를 먹는다.',
+          },
+          {
+            difficultWords: [{ word: '국물', syllables: ['국', '물'] }],
+            sentence: '아기는 따뜻한 국물을 먹는다.',
+          },
+        ],
+      },
+    }))
+
+    expect(preview.source).toBe('generated')
+    expect(preview.items).toEqual([
+      expect.objectContaining({ content: 'ㄱ', answer: 'ㄱ' }),
+      expect.objectContaining({ content: '사과 · 나무 · 바다' }),
+      expect.objectContaining({
+        content: '아기는 사과를 먹는다.',
+        answer: '아기는 사과를 먹는다.',
+      }),
+      expect.objectContaining({ content: '아기는 따뜻한 국물을 먹는다.' }),
+    ])
+  })
+
   it('생성 자료가 없으면 알려진 form 필드만 표시하고 raw JSON을 노출하지 않는다', () => {
     const preview = toTrainingPreview(
       detail({
