@@ -107,8 +107,7 @@ function handlePopoverKeydown(event: KeyboardEvent): void {
       'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
     ),
   ].filter((element) => !element.hasAttribute('hidden'))
-  const first =
-    popover.value.querySelector<HTMLElement>('#student-switcher-search') ?? focusable[0]
+  const first = popover.value.querySelector<HTMLElement>('#student-switcher-search') ?? focusable[0]
   const last = popover.value.querySelector<HTMLElement>('.manage') ?? focusable.at(-1)
   if (!first || !last) return
   const eventTarget = event.target instanceof HTMLElement ? event.target : null
@@ -199,16 +198,23 @@ onBeforeUnmount(() => {
           v-for="student in !keyword ? recentStudents : []"
           :key="`recent-${student.studentId}`"
           class="student-option"
+          variant="ghost"
           type="button"
-          :disabled="student.studentId === currentStudent.studentId"
+          :data-selected="student.studentId === currentStudent.studentId"
+          :aria-current="student.studentId === currentStudent.studentId ? 'true' : undefined"
           @click="selectStudent(student)"
         >
-          <span class="student-avatar" aria-hidden="true">{{ studentInitial(student.name) }}</span>
+          <img v-if="student.imageUrl" :src="student.imageUrl" alt="" />
+          <span v-else class="student-avatar" aria-hidden="true">{{
+            studentInitial(student.name)
+          }}</span>
           <span
             ><strong>{{ student.name }}</strong
             ><small>{{ student.school ?? '학교 미입력' }}</small></span
           >
-          <span v-if="student.studentId === currentStudent.studentId" aria-label="현재 학습자">✓</span>
+          <span v-if="student.studentId === currentStudent.studentId" aria-label="현재 학습자"
+            >✓</span
+          >
         </Button>
 
         <p class="section-label">{{ keyword ? '검색 결과' : '전체 학습자' }}</p>
@@ -216,17 +222,23 @@ onBeforeUnmount(() => {
           v-for="student in keyword ? navigationItems : remainingStudents"
           :key="student.studentId"
           class="student-option"
+          variant="ghost"
           type="button"
-          :disabled="student.studentId === currentStudent.studentId"
+          :data-selected="student.studentId === currentStudent.studentId"
+          :aria-current="student.studentId === currentStudent.studentId ? 'true' : undefined"
           @click="selectStudent(student)"
         >
           <img v-if="student.imageUrl" :src="student.imageUrl" alt="" />
-          <span v-else class="student-avatar" aria-hidden="true">{{ studentInitial(student.name) }}</span>
+          <span v-else class="student-avatar" aria-hidden="true">{{
+            studentInitial(student.name)
+          }}</span>
           <span
             ><strong>{{ student.name }}</strong
             ><small>{{ student.school ?? '학교 미입력' }}</small></span
           >
-          <span v-if="student.studentId === currentStudent.studentId" aria-label="현재 학습자">✓</span>
+          <span v-if="student.studentId === currentStudent.studentId" aria-label="현재 학습자"
+            >✓</span
+          >
         </Button>
 
         <p v-if="navigationStatus === 'loading'" class="state-copy" role="status">
@@ -234,15 +246,16 @@ onBeforeUnmount(() => {
         </p>
         <div v-else-if="navigationStatus === 'error'" class="state-copy" role="alert">
           <p>{{ navigationError }}</p>
-          <Button type="button" size="sm" variant="outline" @click="studentStore.loadNavigation({ reset: true })">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            @click="studentStore.loadNavigation({ reset: true })"
+          >
             다시 시도
           </Button>
         </div>
-        <p
-          v-else-if="navigationItems.length === 0"
-          class="state-copy"
-          role="status"
-        >
+        <p v-else-if="navigationItems.length === 0" class="state-copy" role="status">
           검색 결과가 없습니다.
         </p>
         <Button
@@ -280,6 +293,14 @@ onBeforeUnmount(() => {
   padding: 8px 9px;
   border: 1px solid var(--slate-200);
   grid-template-columns: 38px minmax(0, 1fr) 16px;
+}
+.student-switcher__trigger:hover {
+  background: var(--interactive-hover-background);
+  color: var(--sidebar-accent-foreground);
+}
+.student-switcher__trigger[aria-expanded='true'] {
+  background: var(--active-selection-background);
+  color: var(--active-selection-foreground);
 }
 .student-switcher__trigger img,
 .student-avatar {
@@ -366,10 +387,19 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 50px;
   gap: 9px;
+  margin-top: 4px;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-sm);
+  background: var(--card);
   grid-template-columns: 34px minmax(0, 1fr) 18px;
 }
-.student-option:disabled {
-  opacity: 1;
+.student-option[data-selected='true'] {
+  background: var(--active-selection-background);
+  color: var(--active-selection-foreground);
+}
+.student-option:hover {
+  background: var(--interactive-hover-background);
+  color: var(--sidebar-accent-foreground);
 }
 .student-option img {
   width: 34px;

@@ -18,6 +18,22 @@ function mountSwitcher() {
 }
 
 describe('StudentSwitcher accessibility', () => {
+  it('학습자 카드는 ghost 기본 상태를 사용하고 현재 학습자를 선택 상태로 유지한다', async () => {
+    const wrapper = mountSwitcher()
+
+    await wrapper.get('.student-switcher__trigger').trigger('click')
+    await flushPromises()
+
+    const options = wrapper.findAll('.student-option')
+    const currentOption = options.find((option) => option.attributes('aria-current') === 'true')
+
+    expect(options.length).toBeGreaterThan(0)
+    expect(options.every((option) => option.attributes('data-variant') === 'ghost')).toBe(true)
+    expect(currentOption?.attributes('data-selected')).toBe('true')
+    expect(currentOption?.attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('열릴 때 검색으로 focus하고 Escape 후 trigger로 복귀한다', async () => {
     const wrapper = mountSwitcher()
     const trigger = wrapper.get<HTMLButtonElement>('.student-switcher__trigger')

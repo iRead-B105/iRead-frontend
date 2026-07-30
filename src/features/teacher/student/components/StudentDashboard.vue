@@ -6,12 +6,6 @@ import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import SaveToast from '@/components/common/SaveToast.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -149,9 +143,6 @@ onBeforeUnmount(() => {
       <div>
         <h1>아동 목록</h1>
       </div>
-      <Button type="button" @click="router.push({ name: 'student-create' })">
-        ＋ 아동 등록
-      </Button>
     </header>
 
     <SaveToast :visible="mutationNoticeVisible" :message="mutationNoticeMessage" inline />
@@ -188,6 +179,13 @@ onBeforeUnmount(() => {
           <SelectItem value="30">최근 30일</SelectItem>
         </SelectContent>
       </Select>
+      <Button
+        class="student-create-button"
+        type="button"
+        @click="router.push({ name: 'student-create' })"
+      >
+        ＋ 아동 등록
+      </Button>
     </Card>
 
     <AsyncStatePanel
@@ -253,18 +251,22 @@ onBeforeUnmount(() => {
             <TableHead>최근 학습</TableHead>
             <TableHead>이번 주 상태</TableHead>
             <TableHead>누적 학습</TableHead>
-            <TableHead><span class="sr-only">관리 메뉴</span></TableHead>
+            <TableHead><span class="sr-only">정보 수정</span></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          <TableRow v-for="student in students" :key="student.studentId">
+          <TableRow
+            v-for="student in students"
+            :key="student.studentId"
+            class="student-row"
+            tabindex="0"
+            :aria-label="`${student.name} 학습 현황으로 이동`"
+            @click="openStudent(student)"
+            @keydown.enter="openStudent(student)"
+            @keydown.space.prevent="openStudent(student)"
+          >
             <TableCell>
-              <Button
-                class="student-link"
-                variant="ghost"
-                type="button"
-                @click="openStudent(student)"
-              >
+              <div class="student-link">
                 <img v-if="student.imageUrl" :src="student.imageUrl" alt="" />
                 <span v-else class="avatar" aria-hidden="true">{{
                   studentInitial(student.name)
@@ -276,7 +278,7 @@ onBeforeUnmount(() => {
                     {{ student.age === null ? '나이 미입력' : `만 ${student.age}세` }}
                   </small>
                 </span>
-              </Button>
+              </div>
             </TableCell>
             <TableCell>{{ student.recentTraining ?? '완료 훈련 없음' }}</TableCell>
             <TableCell>{{ formatLearningDate(student.recentLearningDate) }}</TableCell>
@@ -291,22 +293,16 @@ onBeforeUnmount(() => {
             </TableCell>
             <TableCell>{{ formatLearningMinutes(student.totalLearningMinutes) }}</TableCell>
             <TableCell>
-              <DropdownMenu>
-                <DropdownMenuTrigger as-child>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    type="button"
-                    :aria-label="`${student.name} 관리 메뉴`"
-                  >
-                    ···
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem @select="openStudent(student)">아동 상세</DropdownMenuItem>
-                  <DropdownMenuItem @select="editStudent(student)">정보 수정</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                :aria-label="`${student.name} 정보 수정`"
+                @click.stop="editStudent(student)"
+                @keydown.stop
+              >
+                정보 수정
+              </Button>
             </TableCell>
           </TableRow>
         </TableBody>
@@ -380,9 +376,13 @@ onBeforeUnmount(() => {
 .filters {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(260px, 1fr) 150px 150px;
+  align-items: center;
+  grid-template-columns: minmax(260px, 1fr) 150px 150px auto;
   gap: 10px;
   padding: 14px;
+}
+.student-create-button {
+  justify-self: end;
 }
 .search {
   display: flex;
@@ -407,12 +407,19 @@ onBeforeUnmount(() => {
   overflow-x: auto;
   padding: 0;
 }
+.student-row {
+  cursor: pointer;
+}
+.student-row:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--ring) 48%, transparent);
+  outline-offset: -3px;
+}
 .student-link {
-  display: inline-flex;
+  display: flex;
   min-width: 190px;
+  align-items: center;
   justify-content: flex-start;
   gap: 10px;
-  padding: 0;
 }
 .student-identity {
   display: grid;
@@ -463,15 +470,19 @@ onBeforeUnmount(() => {
     min-height: 0;
   }
   .filters {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
   }
 
   .filters {
     padding: 12px;
   }
 
-  .page-heading > :deep([data-slot='button']) {
-    align-self: flex-start;
+  .search {
+    grid-column: 1 / -1;
+  }
+
+  .student-create-button {
+    grid-column: 1 / -1;
   }
 }
 
@@ -483,6 +494,19 @@ onBeforeUnmount(() => {
   .state-card {
     min-height: 200px;
     padding: 24px 16px;
+  }
+
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .search,
+  .student-create-button {
+    grid-column: auto;
+  }
+
+  .student-create-button {
+    width: 100%;
   }
 
   .pagination :deep([data-slot='button']) {
