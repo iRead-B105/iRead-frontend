@@ -34,6 +34,7 @@ const studentRouteNames = new Set([
   'student-curriculum',
   'student-training-history',
   'student-test-history',
+  'student-story-history',
   'student-report',
 ])
 
@@ -126,6 +127,12 @@ onMounted(() => {
             ><strong>검사 이력</strong>
           </RouterLink>
           <RouterLink
+            :to="{ name: 'student-story-history', params: { id: currentStudent.studentId } }"
+          >
+            <span class="sidebar-nav__icon"><SidebarIcon name="story" /></span
+            ><strong>이야기 이력</strong>
+          </RouterLink>
+          <RouterLink
             :to="{ name: 'student-report', params: { id: currentStudent.studentId } }"
             @click="reportStore.startNewReport()"
           >
@@ -153,6 +160,10 @@ onMounted(() => {
           <span class="sidebar-nav__item sidebar-nav__item--disabled" aria-disabled="true">
             <span class="sidebar-nav__icon"><SidebarIcon name="clipboard" /></span>
             <strong>검사 이력</strong>
+          </span>
+          <span class="sidebar-nav__item sidebar-nav__item--disabled" aria-disabled="true">
+            <span class="sidebar-nav__icon"><SidebarIcon name="story" /></span>
+            <strong>이야기 이력</strong>
           </span>
           <span class="sidebar-nav__item sidebar-nav__item--disabled" aria-disabled="true">
             <span class="sidebar-nav__icon"><SidebarIcon name="report" /></span>

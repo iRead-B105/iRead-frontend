@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { installAuthenticationGuard, resolveTeacherRedirect } from '.'
+import router, { installAuthenticationGuard, resolveTeacherRedirect } from '.'
 import type { TeacherProfile } from '@/features/teacher/auth'
 import { useSessionStore } from '@/stores/session'
 
@@ -144,5 +144,15 @@ describe('resolveTeacherRedirect', () => {
     const router = createTestRouter()
 
     expect(resolveTeacherRedirect(router, redirect)).toBe('/teacher/students')
+  })
+})
+
+describe('teacher story history route', () => {
+  it('학생 종속 이야기 이력 주소를 전용 route로 연결한다', () => {
+    const resolved = router.resolve('/teacher/students/7/story-history')
+
+    expect(resolved.name).toBe('student-story-history')
+    expect(resolved.params.id).toBe('7')
+    expect(resolved.meta.title).toBe('이야기 이력')
   })
 })
