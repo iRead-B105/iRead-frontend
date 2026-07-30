@@ -14,13 +14,16 @@ import { Label } from '@/components/ui/label'
 import { chartColors } from '@/features/teacher/chartTheme'
 import { asyncStateKind } from '@/features/teacher/error'
 import {
-  formatTestChange,
   formatTestDate,
   formatTestPercent,
-  formatTestScore,
   formatTestSeconds,
+  averageReverseReadCount,
+  averageTestMetric,
+  testGazeMap,
+  testMetricValue,
   type TestDetail,
   type TestListItem,
+  type TestMetricKey,
   type TestQuestionResult,
 } from '@/features/teacher/test'
 import { useTestStore } from '@/stores/test'
@@ -34,6 +37,7 @@ const {
   comparisonTestIds,
   comparisonResult,
   trendDetails,
+  trendGazeResults,
   gazeAnalysis,
   availableComparisonTests,
   canAddComparison,
@@ -63,113 +67,93 @@ const displayedDetails = computed<TestDetail[]>(() => {
   if (!comparisonResult.value) return []
   return [comparisonResult.value.currentTest, ...comparisonResult.value.comparisonTests]
 })
-const areaNames = computed(() => {
-  const names = new Set<string>()
-  displayedDetails.value.forEach((detail) => {
-    detail.areaScores.forEach((areaScore) => names.add(areaScore.area))
-  })
-  return [...names]
-})
-const hasAreaScores = computed(() => areaNames.value.length > 0)
-const areaAverageScores = computed(() =>
-  areaNames.value.map((area) => {
-    const scores = trendDetails.value
-      .map((detail) => detail.areaScores.find((areaScore) => areaScore.area === area)?.score)
-      .filter((score): score is number => score !== undefined)
-    if (scores.length === 0) return null
-    return Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10
-  }),
-)
-const hasAreaAverage = computed(() => areaAverageScores.value.some((score) => score !== null))
-const areaChartSummary = computed(
-  () =>
-    `검사별 영역 점수: ${displayedDetails.value
+const gazeByTestId = computed(() => testGazeMap(trendGazeResults.value))
+
+interface MetricDefinition {
+  readonly key: TestMetricKey
+  readonly label: string
+  readonly unit: '%' | '초' | '회'
+}
+
+const metricDefinitions: readonly MetricDefinition[] = [
+  { key: 'accuracy', label: '정확도', unit: '%' },
+  { key: 'solvingTimeSeconds', label: '문제 풀이 시간', unit: '초' },
+  { key: 'gazeDepartureCount', label: '시선 이탈 횟수', unit: '회' },
+  { key: 'reverseReadCount', label: '시선 역행 횟수', unit: '회' },
+]
+
+const metricCharts = computed(() =>
+  metricDefinitions.map((metric) => {
+    const values = displayedDetails.value.map((detail) =>
+      testMetricValue(detail, metric.key, gazeByTestId.value),
+    )
+    const average =
+      metric.key === 'reverseReadCount'
+        ? averageReverseReadCount(trendGazeResults.value)
+        : averageTestMetric(trendDetails.value, metric.key, gazeByTestId.value)
+    const averageLabel = `전체 평균 · ${average.sampleCount}건 기준`
+    const option: EChartsOption = {
+      tooltip: {
+        trigger: 'axis',
+        valueFormatter: (value) => (value == null ? '-' : `${value}${metric.unit}`),
+      },
+      grid: { left: 44, right: 18, top: 36, bottom: 48 },
+      xAxis: {
+        type: 'category',
+        data: displayedDetails.value.map((detail, index) => seriesLabel(detail, index)),
+        axisLabel: { interval: 0, fontSize: 11 },
+      },
+      yAxis: {
+        type: 'value',
+        min: 0,
+        max: metric.key === 'accuracy' ? 100 : undefined,
+        axisLabel: { formatter: `{value}${metric.unit}` },
+      },
+      series: [
+        {
+          name: metric.label,
+          type: 'bar',
+          data: values.map((value, index) => ({
+            value,
+            itemStyle: {
+              color: chartPalette[index] ?? chartColors.muted,
+              borderRadius: [5, 5, 0, 0],
+            },
+          })),
+          markLine:
+            average.value === null
+              ? undefined
+              : {
+                  symbol: 'none',
+                  label: {
+                    formatter: `${average.value}${metric.unit}`,
+                    position: 'insideEndTop',
+                  },
+                  lineStyle: { color: chartColors.amber, width: 2, type: 'dashed' },
+                  data: [{ name: averageLabel, yAxis: average.value }],
+                },
+        },
+      ],
+    }
+    const selectedSummary = displayedDetails.value
       .map(
         (detail, index) =>
-          `${seriesLabel(detail, index)} ${areaNames.value
-            .map((area) => {
-              const score =
-                detail.areaScores.find((areaScore) => areaScore.area === area)?.score ?? null
-              return `${area} ${score === null ? '기록 없음' : `${score}점`}`
-            })
-            .join(', ')}`,
+          `${seriesLabel(detail, index)} ${
+            values[index] === null ? '기록 없음' : `${values[index]}${metric.unit}`
+          }`,
       )
-      .join('; ')}${
-      hasAreaAverage.value
-        ? `; 전체 검사 평균 ${areaNames.value
-            .map((area, index) => {
-              const score = areaAverageScores.value[index]
-              return `${area} ${score === null ? '기록 없음' : `${score}점`}`
-            })
-            .join(', ')}`
-        : ''
-    }`,
+      .join(', ')
+    return {
+      ...metric,
+      average,
+      averageLabel,
+      option,
+      summary: `${metric.label}: ${selectedSummary}; ${averageLabel} ${
+        average.value === null ? '기록 없음' : `${average.value}${metric.unit}`
+      }`,
+    }
+  }),
 )
-const areaChart = computed<EChartsOption>(() => ({
-  tooltip: {
-    trigger: 'axis',
-    valueFormatter: (value) => (value == null ? '-' : `${value}점`),
-  },
-  legend: {
-    data: [
-      ...displayedDetails.value.map((detail, index) => seriesLabel(detail, index)),
-      ...(hasAreaAverage.value ? ['검사 평균'] : []),
-    ],
-    top: 4,
-  },
-  grid: { left: 52, right: 24, top: 52, bottom: 58 },
-  xAxis: {
-    type: 'category',
-    data: areaNames.value,
-    axisLabel: { interval: 0, rotate: areaNames.value.length > 4 ? 16 : 0 },
-  },
-  yAxis: {
-    type: 'value',
-    min: 0,
-    max: 100,
-    axisLabel: { formatter: '{value}' },
-  },
-  series: [
-    ...displayedDetails.value.map((detail, index) => ({
-      name: seriesLabel(detail, index),
-      type: 'bar' as const,
-      data: areaNames.value.map(
-        (area) => detail.areaScores.find((areaScore) => areaScore.area === area)?.score ?? null,
-      ),
-      itemStyle: {
-        color: chartPalette[index] ?? chartColors.muted,
-        borderRadius: [5, 5, 0, 0],
-      },
-    })),
-    ...(hasAreaAverage.value
-      ? [
-          {
-            name: '검사 평균',
-            type: 'line' as const,
-            data: areaAverageScores.value,
-            connectNulls: false,
-            symbol: 'circle',
-            symbolSize: 7,
-            label: {
-              show: true,
-              position: 'top' as const,
-              formatter: '{c}점',
-            },
-            itemStyle: {
-              color: chartColors.white,
-              borderColor: chartColors.amber,
-              borderWidth: 2,
-            },
-            lineStyle: {
-              color: chartColors.amber,
-              width: 2,
-            },
-            z: 5,
-          },
-        ]
-      : []),
-  ],
-}))
 
 watch(
   studentId,
@@ -218,8 +202,12 @@ function questionStatusClass(question: TestQuestionResult): string {
   return question.isCorrect ? 'is-correct' : 'is-incorrect'
 }
 
-function listText(values: readonly string[]): string {
-  return values.length > 0 ? values.join(' · ') : '-'
+function detailMetricValue(detail: TestDetail, metric: TestMetricKey): number | null {
+  return testMetricValue(detail, metric, gazeByTestId.value)
+}
+
+function formatMetricValue(value: number | null, unit: string): string {
+  return value === null ? '기록 없음' : `${value}${unit}`
 }
 
 function testOptionLabel(test: TestListItem): string {
@@ -362,62 +350,45 @@ function testOptionLabel(test: TestListItem): string {
         </Card>
 
         <template v-else-if="comparisonStatus === 'success' && comparisonResult">
-          <div class="result-grid">
-            <Card class="result-chart">
-              <header class="section-heading">
-                <div>
-                  <h2>영역별 검사 점수</h2>
-                </div>
-                <span v-if="trendStatus === 'loading'" class="average-status" aria-live="polite">
-                  검사 평균 계산 중
-                </span>
-              </header>
-              <div v-if="trendError" class="average-warning" role="status">
-                <span>{{ trendError }}</span>
-                <Button variant="outline" type="button" @click="testStore.retryTrend()">
-                  다시 확인
-                </Button>
+          <Card class="metric-chart-section">
+            <header class="section-heading metric-chart-heading">
+              <div>
+                <h2>검사 지표 비교</h2>
               </div>
-              <ChartPanel
-                v-if="hasAreaScores"
-                :option="areaChart"
-                height="330px"
-                aria-label="기준 검사와 비교 검사 및 전체 검사 평균의 영역별 점수 차트"
-                :summary="areaChartSummary"
-              />
-              <div v-else class="inline-empty">표시할 영역별 점수가 없습니다.</div>
-            </Card>
-
-            <Card class="result-summary">
-              <header class="summary-heading">
-                <span>기준 검사 종합</span>
-                <div>
-                  <strong>{{ formatTestScore(comparisonResult.currentTest.overallScore) }}</strong>
-                  <small>{{
-                    formatTestChange(comparisonResult.currentTest.changeFromPrevious)
-                  }}</small>
-                </div>
-              </header>
-              <dl>
-                <div>
-                  <dt>강점 영역</dt>
-                  <dd>{{ listText(comparisonResult.currentTest.strengthAreas) }}</dd>
-                </div>
-                <div>
-                  <dt>보완 영역</dt>
-                  <dd>{{ listText(comparisonResult.currentTest.improvementAreas) }}</dd>
-                </div>
-                <div>
-                  <dt>권장 과정</dt>
-                  <dd>{{ comparisonResult.currentTest.recommendedCourse ?? '-' }}</dd>
-                </div>
-                <div>
-                  <dt>다음 검사 권장</dt>
-                  <dd>{{ comparisonResult.currentTest.nextTestRecommendation ?? '-' }}</dd>
-                </div>
-              </dl>
-            </Card>
-          </div>
+              <span v-if="trendStatus === 'loading'" class="average-status" aria-live="polite">
+                전체 평균 계산 중
+              </span>
+            </header>
+            <div v-if="trendError" class="average-warning" role="status">
+              <span>{{ trendError }}</span>
+              <Button variant="outline" type="button" @click="testStore.retryTrend()">
+                다시 확인
+              </Button>
+            </div>
+            <div class="metric-chart-grid">
+              <article
+                v-for="metric in metricCharts"
+                :key="metric.key"
+                class="metric-chart-card"
+              >
+                <header>
+                  <h3>{{ metric.label }}</h3>
+                  <span>
+                    {{ metric.averageLabel }}
+                    <b v-if="metric.average.value !== null">
+                      {{ metric.average.value }}{{ metric.unit }}
+                    </b>
+                  </span>
+                </header>
+                <ChartPanel
+                  :option="metric.option"
+                  height="230px"
+                  :aria-label="`${metric.label} 기준·비교 검사와 전체 평균 차트`"
+                  :summary="metric.summary"
+                />
+              </article>
+            </div>
+          </Card>
 
           <Card class="metric-section">
             <header class="section-heading">
@@ -437,10 +408,6 @@ function testOptionLabel(test: TestListItem): string {
                 </header>
                 <dl>
                   <div>
-                    <dt>종합 점수</dt>
-                    <dd>{{ formatTestScore(detail.overallScore) }}</dd>
-                  </div>
-                  <div>
                     <dt>읽기 시간</dt>
                     <dd>{{ formatTestSeconds(detail.readingTimeSeconds) }}</dd>
                   </div>
@@ -451,6 +418,25 @@ function testOptionLabel(test: TestListItem): string {
                   <div>
                     <dt>정확도</dt>
                     <dd>{{ formatTestPercent(detail.accuracy) }}</dd>
+                  </div>
+                  <div>
+                    <dt>시선 이탈 횟수</dt>
+                    <dd>
+                      {{
+                        formatMetricValue(
+                          detailMetricValue(detail, 'gazeDepartureCount'),
+                          '회',
+                        )
+                      }}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>시선 역행 횟수</dt>
+                    <dd>
+                      {{
+                        formatMetricValue(detailMetricValue(detail, 'reverseReadCount'), '회')
+                      }}
+                    </dd>
                   </div>
                 </dl>
               </article>
@@ -631,15 +617,7 @@ function testOptionLabel(test: TestListItem): string {
   gap: 8px;
 }
 
-.result-grid {
-  display: grid;
-  align-items: stretch;
-  gap: 20px;
-  grid-template-columns: minmax(0, 1fr) 320px;
-}
-
-.result-chart,
-.result-summary,
+.metric-chart-section,
 .metric-section,
 .question-section,
 .gaze-card {
@@ -677,14 +655,6 @@ function testOptionLabel(test: TestListItem): string {
   font-size: 12px;
 }
 
-.result-chart {
-  gap: 10px;
-}
-
-.result-summary {
-  gap: 0;
-}
-
 .section-heading {
   display: flex;
   align-items: flex-start;
@@ -704,54 +674,58 @@ function testOptionLabel(test: TestListItem): string {
   font-size: 12px;
 }
 
-.summary-heading {
-  padding-bottom: 8px;
-}
-
-.summary-heading > span {
-  color: var(--slate-500);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.summary-heading > div {
+.metric-chart-section {
   display: grid;
-  gap: 5px;
-  margin-top: 7px;
+  gap: 14px;
 }
 
-.summary-heading strong {
-  color: var(--slate-900);
-  font-size: 28px;
-}
-
-.summary-heading small {
-  color: var(--slate-600);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.result-summary dl {
+.metric-chart-grid {
   display: grid;
-  gap: 8px;
-  margin: 16px 0 0;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.result-summary dl > div {
-  padding: 11px 12px;
+.metric-chart-card {
+  min-width: 0;
+  padding: 14px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: color-mix(in oklch, var(--muted) 32%, transparent);
 }
 
-.result-summary dt,
+.metric-chart-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.metric-chart-card h3 {
+  margin: 0;
+  color: var(--slate-900);
+  font-size: 14px;
+}
+
+.metric-chart-card header span {
+  display: grid;
+  justify-items: end;
+  color: var(--slate-500);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.metric-chart-card header b {
+  margin-top: 3px;
+  color: var(--slate-800);
+  font-size: 13px;
+}
+
 .detail-card dt,
 .question-list dt {
   color: var(--slate-500);
   font-size: 12px;
 }
 
-.result-summary dd,
 .detail-card dd,
 .question-list dd {
   margin: 5px 0 0;
@@ -878,22 +852,6 @@ function testOptionLabel(test: TestListItem): string {
 }
 
 @container (max-width: 900px) {
-  .result-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .result-summary {
-    display: grid;
-    align-items: start;
-    gap: 28px;
-    grid-template-columns: 220px minmax(0, 1fr);
-  }
-
-  .result-summary dl {
-    margin: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .detail-cards {
     grid-template-columns: 1fr;
   }
@@ -905,12 +863,7 @@ function testOptionLabel(test: TestListItem): string {
     min-width: 0;
   }
 
-  .result-summary {
-    gap: 20px;
-    grid-template-columns: 1fr;
-  }
-
-  .result-summary dl {
+  .metric-chart-grid {
     grid-template-columns: 1fr;
   }
 
@@ -919,8 +872,7 @@ function testOptionLabel(test: TestListItem): string {
     grid-template-columns: 1fr;
   }
 
-  .result-chart,
-  .result-summary,
+  .metric-chart-section,
   .metric-section,
   .question-section,
   .gaze-card {

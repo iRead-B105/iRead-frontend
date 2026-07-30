@@ -14,6 +14,7 @@ describe('Test API', () => {
         readingTimeSeconds: 0,
         solvingTimeSeconds: null,
         accuracy: 0,
+        gazeDepartureCount: 0,
         questions: [],
       },
       comparisonTests: [],
@@ -24,11 +25,10 @@ describe('Test API', () => {
 
     expect(request).toHaveBeenCalledWith('/api/admin/test/1/compare?currentTestId=11', {})
     expect(result.currentTest).toMatchObject({
-      overallScore: null,
       readingTimeSeconds: 0,
       solvingTimeSeconds: null,
       accuracy: 0,
-      areaScores: [],
+      gazeDepartureCount: 0,
     })
   })
 
@@ -71,18 +71,21 @@ describe('Test API', () => {
     await expect(api.getTests(1)).resolves.toEqual([])
   })
 
-  it('0~100 범위를 벗어난 영역별 점수를 응답 계약 오류로 거부한다', async () => {
+  it('실제 gazeDepartureCount를 ViewModel로 변환하고 null과 0을 구분한다', async () => {
     const request = vi.fn().mockResolvedValue({
       currentTest: {
         testId: 11,
         date: '2026-07-24',
-        areaScores: [{ area: '문장 이해', score: 101 }],
+        gazeDepartureCount: 0,
       },
-      comparisonTests: [],
+      comparisonTests: [{ testId: 9, date: '2026-06-24', gazeDepartureCount: null }],
     })
     const api = createTestApi(request)
 
-    await expect(api.compareTests(1, 11, [])).rejects.toThrow('영역별 점수는 0~100이어야 합니다.')
+    const result = await api.compareTests(1, 11, [9])
+
+    expect(result.currentTest.gazeDepartureCount).toBe(0)
+    expect(result.comparisonTests[0]?.gazeDepartureCount).toBeNull()
   })
 
   it('실제 studentId와 testId로 시선 분석 상태를 조회한다', async () => {
@@ -150,12 +153,11 @@ describe('Test Repository', () => {
 
     expect(comparison.comparisonTests.map((test) => test.testId)).toEqual([1_004, 1_005])
     expect(comparison.comparisonTests[0]).toMatchObject({
-      overallScore: 0,
-      changeFromPrevious: 0,
       readingTimeSeconds: 0,
       accuracy: 0,
+      gazeDepartureCount: 0,
     })
-    expect(comparison.comparisonTests[1]?.changeFromPrevious).toBeNull()
+    expect(comparison.comparisonTests[1]?.gazeDepartureCount).toBe(8)
   })
 
   it('기준 중복·비교 중복·세 번째 비교 검사를 Repository에서 차단한다', () => {
@@ -201,6 +203,25 @@ describe('Test Repository', () => {
     })
     await expect(repository.getGazeAnalysis(2, 1_011)).rejects.toMatchObject({
       status: 404,
+    })
+  })
+
+  it('Mock 부분 실패 Fixture로 상세·시선 요청 오류를 독립 재현한다', async () => {
+    const repository = new MockTestRepository({
+      failedDetailTestIds: [1_005],
+      failedGazeTestIds: [1_008],
+    })
+
+    await expect(repository.compareTests(1, 1_005, [])).rejects.toMatchObject({
+      status: 500,
+      code: 'MOCK_TEST_DETAIL_FAILURE',
+    })
+    await expect(repository.getGazeAnalysis(1, 1_008)).rejects.toMatchObject({
+      status: 500,
+      code: 'MOCK_TEST_GAZE_FAILURE',
+    })
+    await expect(repository.compareTests(1, 1_011, [])).resolves.toMatchObject({
+      currentTest: { testId: 1_011 },
     })
   })
 })

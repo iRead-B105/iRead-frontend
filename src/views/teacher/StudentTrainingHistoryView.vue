@@ -2,16 +2,13 @@
 import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
-import type { EChartsOption } from 'echarts'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
-import ChartPanel from '@/components/common/ChartPanel.vue'
 import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
 import HistoryToolbar from '@/components/teacher/HistoryToolbar.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { chartColors } from '@/features/teacher/chartTheme'
 import { asyncStateKind } from '@/features/teacher/error'
 import {
   formatTrainingDuration,
@@ -71,47 +68,6 @@ const selectedAccuracyComparison = computed(
       (comparison) => comparison.trainingId === selectedHistoryTrainingId.value,
     ) ?? null,
 )
-const readingSpeedPoints = computed(() => statistics.value?.readingSpeedTrend.points ?? [])
-const speedChartSummary = computed(
-  () =>
-    `날짜별 음성 읽기 속도: ${readingSpeedPoints.value
-      .map((point) => `${formatChartDate(point.date)} ${point.speed}단어/분`)
-      .join(', ')}`,
-)
-const speedChart = computed<EChartsOption>(() => ({
-  tooltip: {
-    trigger: 'axis',
-    valueFormatter: (value) => `${value}단어/분`,
-  },
-  grid: { left: 52, right: 24, top: 26, bottom: 38 },
-  xAxis: {
-    type: 'category',
-    data: readingSpeedPoints.value.map((point) => formatChartDate(point.date)),
-  },
-  yAxis: {
-    type: 'value',
-    min: 0,
-    axisLabel: { formatter: '{value}' },
-  },
-  series: [
-    {
-      name: '음성 기준 읽기 속도',
-      type: 'line',
-      smooth: false,
-      showSymbol: true,
-      symbol: 'circle',
-      symbolSize: 6,
-      data: readingSpeedPoints.value.map((point) => point.speed),
-      lineStyle: { color: chartColors.blue, width: 2.5 },
-      itemStyle: {
-        color: chartColors.white,
-        borderColor: chartColors.blue,
-        borderWidth: 2,
-      },
-    },
-  ],
-}))
-
 watch(
   studentId,
   async (id) => {
@@ -180,19 +136,8 @@ function formatDateTime(value: string | null): string {
   }).format(date)
 }
 
-function formatChartDate(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
-  return match ? `${Number(match[2])}/${Number(match[3])}` : value
-}
-
 function formatAccuracy(value: number | null): string {
   return value === null ? '기록 없음' : `${value}%`
-}
-
-function formatChangeRate(value: number | null | undefined): string {
-  if (value == null) return '-'
-  const prefix = value > 0 ? '+' : ''
-  return `${prefix}${Number(value.toFixed(2))}%`
 }
 
 function questionStatus(question: TrainingQuestionResult): string {
@@ -360,17 +305,12 @@ function questionStatusClass(question: TrainingQuestionResult): string {
           </div>
         </Card>
 
-        <Card class="statistics-card">
-          <header class="section-heading statistics-heading">
+        <Card class="statistics-card accuracy-card">
+          <header class="section-heading">
             <div>
-              <h2>음성 읽기 속도 추이</h2>
-            </div>
-            <div class="change-rate">
-              <strong>{{ formatChangeRate(statistics?.readingSpeedTrend.changeRate) }}</strong>
-              <span>기간 시작 대비</span>
+              <h2>선택 훈련 정확도 비교</h2>
             </div>
           </header>
-
           <AsyncStatePanel
             v-if="statisticsStatus === 'loading'"
             kind="loading"
@@ -386,22 +326,7 @@ function questionStatusClass(question: TrainingQuestionResult): string {
             compact
             @retry="retrySelectedCurriculum"
           />
-          <AsyncStatePanel
-            v-else-if="readingSpeedPoints.length === 0"
-            kind="empty"
-            message="선택한 기간의 음성 읽기 속도 자료가 없습니다."
-            compact
-          />
-          <ChartPanel
-            v-else
-            :option="speedChart"
-            height="240px"
-            aria-label="음성 기준 읽기 속도 추이 차트"
-            :summary="speedChartSummary"
-          />
-
-          <section class="accuracy-comparison" aria-labelledby="accuracy-comparison-title">
-            <h3 id="accuracy-comparison-title">선택 훈련 정확도 비교</h3>
+          <section v-else class="accuracy-comparison" aria-label="선택 훈련 정확도 비교">
             <dl>
               <div>
                 <dt>현재 정확도</dt>
@@ -689,22 +614,6 @@ function questionStatusClass(question: TrainingQuestionResult): string {
   place-items: center;
 }
 
-.change-rate {
-  display: grid;
-  flex: 0 0 auto;
-  justify-items: end;
-  gap: 1px;
-}
-
-.change-rate strong {
-  font-size: 18px;
-}
-
-.change-rate span {
-  color: var(--slate-500);
-  font-size: 11px;
-}
-
 .section-state {
   display: grid;
   min-height: 132px;
@@ -721,10 +630,6 @@ function questionStatusClass(question: TrainingQuestionResult): string {
   margin: 0;
 }
 
-.section-state--chart {
-  min-height: 240px;
-}
-
 .section-state--error,
 .export-error {
   color: var(--destructive);
@@ -734,6 +639,12 @@ function questionStatusClass(question: TrainingQuestionResult): string {
   margin-top: 12px;
   padding-top: 14px;
   border-top: 1px solid var(--slate-200);
+}
+
+.accuracy-card .accuracy-comparison {
+  margin-top: 16px;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .accuracy-comparison h3,
