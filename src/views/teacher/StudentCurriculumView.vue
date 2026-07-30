@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -9,7 +9,6 @@ import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
-import { dataSource } from '@/config/dataSource'
 import {
   CURRICULUM_TRAINING_COUNT,
   trainingStatusLabel,
@@ -55,11 +54,32 @@ const {
 } = storeToRefs(trainingStore)
 
 const draggedDraftKey = ref<string | null>(null)
-const editCurriculum = ref(false)
+const dragOffsetY = ref(0)
+const dragTargetKey = ref<string | null>(null)
+const recommendationList = ref<HTMLElement | null>(null)
+const selectedCatalogUnit = ref('all')
 const materialEditorOpen = ref(false)
 const draftPendingDeletion = ref<CurriculumDraftItem | null>(null)
 const reorderAnnouncement = ref('')
 const { visible: saved, show: showSaved } = useTemporaryNotice()
+
+interface PointerDragState {
+  readonly pointerId: number
+  readonly sourceKey: string
+  readonly startY: number
+  readonly sourceCenterY: number
+  readonly minOffsetY: number
+  readonly maxOffsetY: number
+  readonly targets: readonly {
+    readonly key: string
+    readonly centerY: number
+  }[]
+}
+
+let pointerDragState: PointerDragState | null = null
+let suppressRowClickUntil = 0
+
+const DRAG_ACTIVATION_THRESHOLD = 6
 
 function parseStudentId(value: unknown): number | null {
   const normalized = Array.isArray(value) ? value[0] : value
@@ -69,13 +89,7 @@ function parseStudentId(value: unknown): number | null {
 
 const studentId = computed(() => parseStudentId(route.params.id))
 const invalidStudentId = computed(() => studentId.value === null)
-const canEditCurriculum = computed(
-  () =>
-    canEditCurriculumFromStore.value &&
-    (dataSource === 'mock' ||
-      savedCurriculum.value === null ||
-      savedCurriculum.value.trainings.every((training) => training.status === 'NOT_READY')),
-)
+const canEditCurriculum = computed(() => canEditCurriculumFromStore.value)
 const canSave = computed(
   () =>
     hasChanges.value &&
@@ -94,17 +108,54 @@ const curriculumSizeGuidance = computed(() => {
   }
   return null
 })
+const showCurriculumFeedback = computed(
+  () =>
+    curriculumStatus.value === 'error' ||
+    curriculumSynchronizationStatus.value === 'required' ||
+    curriculumSynchronizationStatus.value === 'refreshing' ||
+    curriculumSaveConflict.value ||
+    Boolean(curriculumError.value) ||
+    (hasChanges.value && Boolean(curriculumSizeGuidance.value)) ||
+    Boolean(savedCurriculum.value && !canEditCurriculum.value),
+)
 const selectedAttemptLabel = computed(() => {
   const item = draftItems.value.find((candidate) => candidate.key === selectedDraftItemKey.value)
   return item ? attemptLabel(item) : '선택한 시행'
 })
+const catalogUnitTabs = computed(() => {
+  const counts = new Map<string, number>()
+  for (const item of catalog.value) {
+    counts.set(item.unitName, (counts.get(item.unitName) ?? 0) + 1)
+  }
+  return [
+    { id: 'all', key: 'all', label: '전체', count: catalog.value.length },
+    ...Array.from(counts, ([unitName, count], index) => ({
+      id: `unit-${index + 1}`,
+      key: unitName,
+      label: unitName,
+      count,
+    })),
+  ]
+})
+const selectedCatalogTabId = computed(
+  () => catalogUnitTabs.value.find((tab) => tab.key === selectedCatalogUnit.value)?.id ?? 'all',
+)
+const visibleCatalogRows = computed(() =>
+  catalog.value
+    .map((item, catalogIndex) => ({ item, catalogIndex }))
+    .filter(
+      ({ item }) =>
+        selectedCatalogUnit.value === 'all' || item.unitName === selectedCatalogUnit.value,
+    ),
+)
 
 watch(
   studentId,
   async (id) => {
     materialEditorOpen.value = false
-    editCurriculum.value = false
     draftPendingDeletion.value = null
+    selectedCatalogUnit.value = 'all'
+    cancelPointerDragging()
     if (id === null) {
       trainingStore.reset()
       return
@@ -117,9 +168,14 @@ watch(
 watch(curriculumSynchronizationStatus, (status) => {
   if (status === 'synced') return
   materialEditorOpen.value = false
-  editCurriculum.value = false
   draftPendingDeletion.value = null
-  draggedDraftKey.value = null
+  cancelPointerDragging()
+})
+
+watch(catalogUnitTabs, (tabs) => {
+  if (!tabs.some((tab) => tab.key === selectedCatalogUnit.value)) {
+    selectedCatalogUnit.value = 'all'
+  }
 })
 
 function confirmDiscard(): boolean {
@@ -170,39 +226,117 @@ function attemptLabel(item: CurriculumDraftItem): string {
   return `${template?.trainingName ?? '훈련'} ${attemptNumber(item)}/${total}회차`
 }
 
-function startDragging(key: string): void {
-  if (editCurriculum.value && canEditCurriculum.value && !isSavingCurriculum.value) {
-    draggedDraftKey.value = key
+function startPointerDragging(item: CurriculumDraftItem, event: PointerEvent): void {
+  const eventTarget = event.target
+  if (
+    event.button !== 0 ||
+    !canEditCurriculum.value ||
+    isSavingCurriculum.value ||
+    !recommendationList.value ||
+    (eventTarget instanceof Element &&
+      Boolean(eventTarget.closest('.material-edit-button, .remove-button')))
+  ) {
+    return
   }
-}
 
-function dropDraftItem(targetKey: string): void {
-  if (!draggedDraftKey.value) return
-  trainingStore.moveDraftItem(draggedDraftKey.value, targetKey)
+  const source = event.currentTarget as HTMLElement | null
+  if (!source) return
+  const listBounds = recommendationList.value.getBoundingClientRect()
+  const sourceBounds = source.getBoundingClientRect()
+  const targets = Array.from(
+    recommendationList.value.querySelectorAll<HTMLElement>('[data-draft-key]'),
+  ).flatMap((element) => {
+    const key = element.dataset.draftKey
+    if (!key) return []
+    const bounds = element.getBoundingClientRect()
+    return [{ key, centerY: bounds.top + bounds.height / 2 }]
+  })
+
+  pointerDragState = {
+    pointerId: event.pointerId,
+    sourceKey: item.key,
+    startY: event.clientY,
+    sourceCenterY: sourceBounds.top + sourceBounds.height / 2,
+    minOffsetY: listBounds.top - sourceBounds.top,
+    maxOffsetY: listBounds.bottom - sourceBounds.bottom,
+    targets,
+  }
   draggedDraftKey.value = null
+  dragTargetKey.value = item.key
+  dragOffsetY.value = 0
 }
 
-async function moveDraftItem(
-  item: CurriculumDraftItem,
-  index: number,
-  direction: -1 | 1,
-): Promise<void> {
-  const target = draftItems.value[index + direction]
-  if (!target || !canEditCurriculum.value || isSavingCurriculum.value) return
+function movePointerDragging(event: PointerEvent): void {
+  if (!pointerDragState || event.pointerId !== pointerDragState.pointerId) return
+  const rawOffsetY = event.clientY - pointerDragState.startY
+  if (draggedDraftKey.value === null && Math.abs(rawOffsetY) < DRAG_ACTIVATION_THRESHOLD) {
+    return
+  }
+  if (draggedDraftKey.value === null) {
+    draggedDraftKey.value = pointerDragState.sourceKey
+    ;(event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId)
+  }
+  const offsetY = Math.min(
+    pointerDragState.maxOffsetY,
+    Math.max(pointerDragState.minOffsetY, rawOffsetY),
+  )
+  dragOffsetY.value = offsetY
+  const currentCenterY = pointerDragState.sourceCenterY + offsetY
+  dragTargetKey.value =
+    pointerDragState.targets.reduce(
+      (closest, candidate) =>
+        Math.abs(candidate.centerY - currentCenterY) < Math.abs(closest.centerY - currentCenterY)
+          ? candidate
+          : closest,
+      pointerDragState.targets[0] ?? {
+        key: pointerDragState.sourceKey,
+        centerY: currentCenterY,
+      },
+    ).key ?? pointerDragState.sourceKey
+  event.preventDefault()
+}
 
-  trainingStore.moveDraftItem(item.key, target.key)
-  const nextIndex = index + direction
-  reorderAnnouncement.value = `${templateFor(item)?.trainingName ?? '훈련'}을(를) ${nextIndex + 1}번째로 이동했습니다.`
-  await nextTick()
-  document
-    .getElementById(`curriculum-item-${item.key}`)
-    ?.querySelector<HTMLButtonElement>('button:not(:disabled)')
-    ?.focus()
+function finishPointerDragging(event: PointerEvent): void {
+  if (!pointerDragState || event.pointerId !== pointerDragState.pointerId) return
+  const { sourceKey } = pointerDragState
+  if (draggedDraftKey.value !== sourceKey) {
+    cancelPointerDragging()
+    return
+  }
+  const targetKey = dragTargetKey.value
+  ;(event.currentTarget as HTMLElement | null)?.releasePointerCapture?.(event.pointerId)
+  if (targetKey && targetKey !== sourceKey) {
+    const item = draftItems.value.find((candidate) => candidate.key === sourceKey)
+    trainingStore.moveDraftItem(sourceKey, targetKey)
+    const nextIndex = draftItems.value.findIndex((candidate) => candidate.key === sourceKey)
+    if (item && nextIndex >= 0) {
+      reorderAnnouncement.value = `${templateFor(item)?.trainingName ?? '훈련'}을(를) ${nextIndex + 1}번째로 이동했습니다.`
+    }
+  }
+  suppressRowClickUntil = Date.now() + 250
+  event.preventDefault()
+  cancelPointerDragging()
+}
+
+function cancelPointerDragging(): void {
+  pointerDragState = null
+  draggedDraftKey.value = null
+  dragTargetKey.value = null
+  dragOffsetY.value = 0
 }
 
 async function selectDraftItem(item: CurriculumDraftItem): Promise<void> {
   if (studentId.value === null) return
   await trainingStore.selectDraftItem(studentId.value, item.key)
+}
+
+async function handleDraftItemClick(item: CurriculumDraftItem, event: MouseEvent): Promise<void> {
+  if (Date.now() < suppressRowClickUntil) {
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
+  await selectDraftItem(item)
 }
 
 async function openMaterialEditor(item: CurriculumDraftItem): Promise<void> {
@@ -234,7 +368,6 @@ function confirmDraftDeletion(): void {
 
 async function saveChanges(): Promise<void> {
   if (await trainingStore.saveCurriculum()) {
-    editCurriculum.value = false
     showSaved()
   }
 }
@@ -288,11 +421,6 @@ function deletionMessage(): string {
     <PageHeader title="커리큘럼 관리">
       <template #actions>
         <SaveToast :visible="saved" inline message="커리큘럼 변경 사항이 저장되었습니다." />
-        <Button type="button" :disabled="!canSave" @click="saveChanges">
-          {{
-            isSavingCurriculum ? '저장 중...' : savedCurriculum ? '변경 사항 저장' : '커리큘럼 생성'
-          }}
-        </Button>
       </template>
     </PageHeader>
 
@@ -305,18 +433,10 @@ function deletionMessage(): string {
     </Card>
 
     <template v-else>
-      <div
-        v-if="catalogStatus === 'error' || curriculumStatus === 'error'"
-        class="load-errors"
-        role="alert"
-      >
-        <div v-if="catalogStatus === 'error'">
+      <div v-if="catalogStatus === 'error'" class="load-errors" role="alert">
+        <div>
           <strong>전체 훈련 목록을 불러오지 못했습니다.</strong>
           <span>{{ catalogError }}</span>
-        </div>
-        <div v-if="curriculumStatus === 'error'">
-          <strong>다음 회차 커리큘럼을 불러오지 못했습니다.</strong>
-          <span>{{ curriculumError }}</span>
         </div>
         <Button
           variant="outline"
@@ -324,52 +444,6 @@ function deletionMessage(): string {
           @click="studentId && trainingStore.loadForStudent(studentId)"
         >
           다시 시도
-        </Button>
-      </div>
-
-      <div
-        v-if="curriculumStatus === 'success' && curriculumSynchronizationStatus === 'required'"
-        class="load-errors"
-        role="alert"
-      >
-        <div>
-          <strong>저장은 완료됐지만 최신 커리큘럼 확인이 필요합니다.</strong>
-          <span>{{ curriculumError }}</span>
-        </div>
-        <Button variant="outline" type="button" @click="retryCurriculumSynchronization">
-          최신 내용 다시 불러오기
-        </Button>
-      </div>
-
-      <div
-        v-else-if="
-          curriculumStatus === 'success' && curriculumSynchronizationStatus === 'refreshing'
-        "
-        class="load-errors"
-        role="status"
-      >
-        <div>
-          <strong>저장된 최신 커리큘럼을 확인하고 있습니다.</strong>
-          <span>확인이 끝날 때까지 커리큘럼 편집 기능을 잠시 사용할 수 없습니다.</span>
-        </div>
-      </div>
-
-      <div
-        v-if="curriculumStatus === 'success' && curriculumSaveConflict"
-        class="load-errors"
-        role="alert"
-      >
-        <div>
-          <strong>커리큘럼 저장 요청이 서버 상태와 충돌했습니다.</strong>
-          <span>{{ curriculumError }}</span>
-        </div>
-        <Button
-          variant="outline"
-          type="button"
-          :disabled="isRefreshingCurriculumConflict"
-          @click="refreshCurriculumAfterConflict"
-        >
-          {{ isRefreshingCurriculumConflict ? '불러오는 중...' : '서버 최신 내용으로 되돌리기' }}
         </Button>
       </div>
 
@@ -382,18 +456,47 @@ function deletionMessage(): string {
             <span>{{ catalog.length }}개 훈련</span>
           </header>
 
+          <div
+            v-if="catalogStatus === 'success' && catalog.length"
+            class="catalog-tabs"
+            role="tablist"
+            aria-label="훈련 영역 선택"
+          >
+            <button
+              v-for="tab in catalogUnitTabs"
+              :id="`catalog-tab-${tab.id}`"
+              :key="tab.key"
+              class="catalog-tab"
+              :class="{ active: selectedCatalogUnit === tab.key }"
+              type="button"
+              role="tab"
+              aria-controls="training-catalog-panel"
+              :aria-selected="selectedCatalogUnit === tab.key"
+              @click="selectedCatalogUnit = tab.key"
+            >
+              {{ tab.label }}
+              <span>{{ tab.count }}</span>
+            </button>
+          </div>
+
           <p v-if="catalogStatus === 'loading'" class="section-state" role="status">
             전체 훈련 목록을 불러오는 중입니다.
           </p>
           <p v-else-if="catalogStatus === 'success' && catalog.length === 0" class="section-state">
             사용할 수 있는 훈련이 없습니다.
           </p>
-          <div v-else class="curriculum-table">
+          <div
+            v-else
+            id="training-catalog-panel"
+            class="curriculum-table"
+            role="tabpanel"
+            :aria-labelledby="`catalog-tab-${selectedCatalogTabId}`"
+          >
             <div class="curriculum-table__head">
               <span>순서</span><span>영역</span><span>훈련명</span><span>진행률</span>
             </div>
             <Button
-              v-for="(item, catalogIndex) in catalog"
+              v-for="{ item, catalogIndex } in visibleCatalogRows"
               :key="item.trainingTemplateId"
               class="curriculum-row"
               :class="{ active: item.trainingTemplateId === selectedTemplateId }"
@@ -402,7 +505,7 @@ function deletionMessage(): string {
               @click="trainingStore.selectTemplate(item.trainingTemplateId)"
             >
               <b>{{ catalogIndex + 1 }}</b>
-              <span>{{ item.unitName }}</span>
+              <span class="unit-label">{{ item.unitName }}</span>
               <strong>{{ item.trainingName }}</strong>
               <span class="achievement">
                 <b>
@@ -477,38 +580,136 @@ function deletionMessage(): string {
                 <p v-else>저장된 다음 회차가 없습니다. 훈련을 추가해 새로 구성하세요.</p>
               </div>
               <Button
-                class="edit-button"
-                :class="{ active: editCurriculum }"
-                :variant="editCurriculum ? 'default' : 'outline'"
+                class="save-curriculum-button"
                 size="sm"
                 type="button"
-                :disabled="!canEditCurriculum || isSavingCurriculum"
-                :aria-pressed="editCurriculum"
-                @click="editCurriculum = !editCurriculum"
+                :disabled="!canSave"
+                @click="saveChanges"
               >
-                {{ editCurriculum ? '순서 편집 완료' : '순서 편집' }}
+                {{
+                  isSavingCurriculum
+                    ? '저장 중...'
+                    : savedCurriculum
+                      ? '변경 사항 저장'
+                      : '커리큘럼 생성'
+                }}
               </Button>
             </header>
 
-            <div class="recommendation-list">
+            <div v-if="showCurriculumFeedback" class="curriculum-feedback" aria-live="polite">
+              <div
+                v-if="curriculumStatus === 'error'"
+                class="feedback-message is-error"
+                role="alert"
+              >
+                <span>
+                  <strong>다음 회차 커리큘럼을 불러오지 못했습니다.</strong>
+                  <small>{{ curriculumError }}</small>
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  @click="studentId && trainingStore.loadForStudent(studentId)"
+                >
+                  다시 시도
+                </Button>
+              </div>
+              <div
+                v-else-if="curriculumSynchronizationStatus === 'required'"
+                class="feedback-message is-error"
+                role="alert"
+              >
+                <span>
+                  <strong>저장은 완료됐지만 최신 커리큘럼 확인이 필요합니다.</strong>
+                  <small>{{ curriculumError }}</small>
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  @click="retryCurriculumSynchronization"
+                >
+                  최신 내용 다시 불러오기
+                </Button>
+              </div>
+              <div
+                v-else-if="curriculumSynchronizationStatus === 'refreshing'"
+                class="feedback-message"
+                role="status"
+              >
+                <span>
+                  <strong>저장된 최신 커리큘럼을 확인하고 있습니다.</strong>
+                  <small>확인이 끝날 때까지 편집 기능을 잠시 사용할 수 없습니다.</small>
+                </span>
+              </div>
+              <div
+                v-else-if="curriculumSaveConflict"
+                class="feedback-message is-error"
+                role="alert"
+              >
+                <span>
+                  <strong>커리큘럼 저장 요청이 서버 상태와 충돌했습니다.</strong>
+                  <small>{{ curriculumError }}</small>
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  :disabled="isRefreshingCurriculumConflict"
+                  @click="refreshCurriculumAfterConflict"
+                >
+                  {{
+                    isRefreshingCurriculumConflict
+                      ? '불러오는 중...'
+                      : '서버 최신 내용으로 되돌리기'
+                  }}
+                </Button>
+              </div>
+              <p v-else-if="curriculumError" class="feedback-message is-error" role="alert">
+                {{ curriculumError }}
+              </p>
+              <p
+                v-else-if="hasChanges && curriculumSizeGuidance"
+                class="feedback-message is-guidance"
+                role="status"
+              >
+                {{ curriculumSizeGuidance }}
+              </p>
+              <p
+                v-else-if="savedCurriculum && !canEditCurriculum"
+                class="feedback-message"
+                role="status"
+              >
+                현재 커리큘럼 상태에서는 수정할 수 없습니다. 실행 전 커리큘럼만 편집할 수 있습니다.
+              </p>
+            </div>
+
+            <div ref="recommendationList" class="recommendation-list">
               <article
                 v-for="(item, index) in draftItems"
                 :id="`curriculum-item-${item.key}`"
                 :key="item.key"
-                :draggable="editCurriculum && canEditCurriculum && !isSavingCurriculum"
+                :data-draft-key="item.key"
                 :class="{
-                  editable: editCurriculum,
+                  editable: canEditCurriculum && !isSavingCurriculum,
                   dragging: draggedDraftKey === item.key,
+                  'drop-target': dragTargetKey === item.key && draggedDraftKey !== item.key,
                   selected: selectedDraftItemKey === item.key,
                 }"
-                @dragstart="startDragging(item.key)"
-                @dragend="draggedDraftKey = null"
-                @dragover.prevent
-                @drop="dropDraftItem(item.key)"
+                :style="
+                  draggedDraftKey === item.key
+                    ? { transform: `translateY(${dragOffsetY}px)` }
+                    : undefined
+                "
+                @pointerdown="startPointerDragging(item, $event)"
+                @pointermove="movePointerDragging"
+                @pointerup="finishPointerDragging"
+                @pointercancel="cancelPointerDragging"
               >
                 <span
                   class="drag-handle"
-                  :class="{ enabled: editCurriculum }"
+                  :class="{ enabled: canEditCurriculum && !isSavingCurriculum }"
                   aria-hidden="true"
                 ></span>
                 <b class="recommendation-order">{{ index + 1 }}</b>
@@ -518,43 +719,15 @@ function deletionMessage(): string {
                   :disabled="curriculumSynchronizationStatus !== 'synced'"
                   :aria-label="`${attemptLabel(item)} 선택`"
                   :aria-pressed="selectedDraftItemKey === item.key"
-                  @click="selectDraftItem(item)"
+                  @click="handleDraftItemClick(item, $event)"
                 >
                   <small>{{ templateFor(item)?.unitName }} · {{ attemptNumber(item) }}회차</small>
                   <strong>{{ templateFor(item)?.trainingName }}</strong>
                 </button>
                 <div class="recommendation-actions">
-                  <div
-                    v-if="editCurriculum"
-                    class="reorder-controls"
-                    role="group"
-                    :aria-label="`${templateFor(item)?.trainingName ?? '훈련'} 순서 변경`"
-                  >
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      type="button"
-                      :aria-label="`${templateFor(item)?.trainingName ?? '훈련'} 위로 이동`"
-                      :disabled="index === 0 || !canEditCurriculum || isSavingCurriculum"
-                      @click.stop="moveDraftItem(item, index, -1)"
-                    >
-                      <span aria-hidden="true">↑</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon-sm"
-                      type="button"
-                      :aria-label="`${templateFor(item)?.trainingName ?? '훈련'} 아래로 이동`"
-                      :disabled="
-                        index === draftItems.length - 1 || !canEditCurriculum || isSavingCurriculum
-                      "
-                      @click.stop="moveDraftItem(item, index, 1)"
-                    >
-                      <span aria-hidden="true">↓</span>
-                    </Button>
-                  </div>
                   <span v-if="item.trainingId === null" class="unsaved-label">저장 전</span>
                   <Button
+                    class="material-edit-button"
                     variant="outline"
                     size="sm"
                     type="button"
@@ -565,10 +738,10 @@ function deletionMessage(): string {
                     "
                     @click.stop="openMaterialEditor(item)"
                   >
-                    예상 단어·미리보기
+                    교안 편집
                   </Button>
                   <Button
-                    v-if="editCurriculum"
+                    v-if="canEditCurriculum"
                     class="remove-button"
                     variant="ghost"
                     size="icon-sm"
@@ -604,37 +777,6 @@ function deletionMessage(): string {
                 변경 취소
               </Button>
             </div>
-            <p
-              v-if="hasChanges && curriculumSizeGuidance"
-              class="curriculum-count-guide"
-              role="status"
-            >
-              {{ curriculumSizeGuidance }}
-            </p>
-            <p
-              v-if="
-                curriculumError &&
-                curriculumStatus !== 'error' &&
-                !curriculumSaveConflict &&
-                curriculumSynchronizationStatus === 'synced'
-              "
-              class="inline-error"
-              role="alert"
-            >
-              {{ curriculumError }}
-            </p>
-            <p
-              v-if="
-                savedCurriculum &&
-                curriculumSynchronizationStatus === 'synced' &&
-                !curriculumSaveConflict &&
-                !canEditCurriculum
-              "
-              class="locked-state"
-            >
-              훈련 자료 생성이 완료되어 수정할 수 없습니다. 생성 전 커리큘럼만 편집할 수
-              있습니다.
-            </p>
           </section>
         </Card>
       </div>
@@ -703,8 +845,7 @@ function deletionMessage(): string {
   display: grid;
   gap: 3px;
 }
-.load-errors strong,
-.inline-error {
+.load-errors strong {
   color: var(--danger-600);
 }
 .load-errors span {
@@ -757,10 +898,48 @@ function deletionMessage(): string {
   font-size: 12px;
   text-align: center;
 }
+.catalog-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  padding-bottom: 4px;
+  overflow-x: auto;
+}
+.catalog-tab {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--slate-600);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.catalog-tab span {
+  color: var(--slate-400);
+  font-size: 10px;
+}
+.catalog-tab:hover {
+  background: var(--interactive-hover-background);
+}
+.catalog-tab.active {
+  border-color: color-mix(in oklch, var(--primary-600) 42%, var(--border));
+  background: var(--active-selection-background);
+  color: var(--active-selection-foreground);
+}
+.catalog-tab.active span {
+  color: var(--primary-700);
+}
 .curriculum-table {
   overflow: auto;
   max-height: min(640px, max(240px, calc(100dvh - 250px)));
-  margin: 18px 0 0;
+  margin: 10px 0 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
@@ -812,6 +991,11 @@ function deletionMessage(): string {
 }
 .curriculum-row.active::before {
   background: var(--primary-600);
+}
+.unit-label {
+  color: var(--slate-500);
+  font-size: 11px;
+  font-weight: 700;
 }
 .achievement {
   display: grid;
@@ -867,15 +1051,50 @@ function deletionMessage(): string {
   padding-top: 20px;
   border-top: 1px solid var(--border);
 }
-.edit-button.active {
-  border-color: var(--primary-600);
-  background: var(--primary-600);
-  color: var(--white);
+.curriculum-feedback {
+  height: 92px;
+  margin-top: 8px;
+  overflow: auto;
+}
+.feedback-message {
+  display: flex;
+  min-height: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--muted) 22%, transparent);
+  color: var(--slate-600);
+  font-size: 12px;
+}
+.feedback-message > span {
+  display: grid;
+  gap: 3px;
+}
+.feedback-message strong {
+  color: var(--slate-800);
+}
+.feedback-message small {
+  color: var(--slate-500);
+  font-size: 11px;
+}
+.feedback-message.is-error,
+.feedback-message.is-error strong {
+  color: var(--danger-600);
+}
+.feedback-message.is-guidance {
+  color: var(--primary-800);
+  font-weight: 700;
 }
 .recommendation-list {
+  position: relative;
   display: grid;
   gap: 8px;
   margin-top: 12px;
+  overflow: hidden;
 }
 .recommendation-list article {
   display: grid;
@@ -896,9 +1115,22 @@ function deletionMessage(): string {
 .recommendation-list article.editable {
   cursor: grab;
 }
+.recommendation-list article.editable .recommendation-copy {
+  cursor: grab;
+}
 .recommendation-list article.dragging {
-  opacity: 0.45;
-  transform: scale(0.99);
+  z-index: 2;
+  opacity: 0.78;
+  box-shadow: var(--shadow-card);
+  cursor: grabbing;
+  transition: none;
+}
+.recommendation-list article.dragging .recommendation-copy {
+  cursor: grabbing;
+}
+.recommendation-list article.drop-target {
+  border-color: var(--primary-600);
+  background: var(--interactive-hover-background);
 }
 .drag-handle {
   width: 15px;
@@ -910,6 +1142,7 @@ function deletionMessage(): string {
 .drag-handle.enabled {
   background-image: radial-gradient(circle, var(--slate-600) 1.5px, transparent 1.7px);
   cursor: grab;
+  touch-action: none;
 }
 .recommendation-order {
   color: var(--slate-500);
@@ -944,10 +1177,6 @@ function deletionMessage(): string {
   flex-wrap: wrap;
   gap: 7px;
 }
-.reorder-controls {
-  display: flex;
-  gap: 4px;
-}
 .unsaved-label {
   color: var(--slate-500);
   font-size: 11px;
@@ -972,19 +1201,6 @@ function deletionMessage(): string {
   color: var(--primary-800);
   font-size: 12px;
   font-weight: 700;
-}
-.inline-error,
-.locked-state,
-.curriculum-count-guide {
-  margin: 12px 0 0;
-  font-size: 12px;
-}
-.curriculum-count-guide {
-  color: var(--primary-800);
-  font-weight: 700;
-}
-.locked-state {
-  color: var(--slate-500);
 }
 @container (max-width: 900px) {
   .curriculum-workspace {
@@ -1011,6 +1227,16 @@ function deletionMessage(): string {
   .draft-actions {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .curriculum-feedback {
+    height: 116px;
+  }
+
+  .feedback-message {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
   }
 }
 
