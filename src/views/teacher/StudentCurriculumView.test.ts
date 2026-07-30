@@ -83,6 +83,37 @@ function buttonWithText(wrapper: ReturnType<typeof mount>, text: string) {
   return wrapper.findAll('button').find((button) => button.text().includes(text))
 }
 
+function mockRect(top: number, bottom: number): DOMRect {
+  return {
+    x: 0,
+    y: top,
+    top,
+    bottom,
+    left: 0,
+    right: 400,
+    width: 400,
+    height: bottom - top,
+    toJSON: () => ({}),
+  }
+}
+
+function dispatchPointerEvent(
+  element: Element,
+  type: string,
+  init: {
+    button?: number
+    clientX?: number
+    clientY: number
+    pointerId: number
+  },
+): void {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  for (const [key, value] of Object.entries(init)) {
+    Object.defineProperty(event, key, { value })
+  }
+  element.dispatchEvent(event)
+}
+
 describe('StudentCurriculumView', () => {
   it('잘못된 studentId에서는 API를 호출하지 않고 목록 이동 action을 표시한다', async () => {
     const trainingRepository = repository()
@@ -131,15 +162,15 @@ describe('StudentCurriculumView', () => {
     expect(wrapper.text()).toContain('5회 시행')
   })
 
-  it('실제 training ID가 있는 반복 시행에서만 예상 단어·미리보기를 연다', async () => {
+  it('실제 training ID가 있는 반복 시행에서만 교안 편집을 연다', async () => {
     const getExpectedWords = vi.fn().mockResolvedValue([{ wordId: 1, wordName: '꽃' }])
     const { wrapper } = await mountCurriculum(repository({ getExpectedWords }))
 
-    const previewButtons = wrapper
+    const editorButtons = wrapper
       .findAll('button')
-      .filter((button) => button.text().includes('예상 단어·미리보기'))
-    expect(previewButtons).toHaveLength(3)
-    await previewButtons[1]?.trigger('click')
+      .filter((button) => button.text().includes('교안 편집'))
+    expect(editorButtons).toHaveLength(3)
+    await editorButtons[1]?.trigger('click')
     await flushPromises()
 
     expect(getExpectedWords).toHaveBeenCalledWith(
@@ -161,6 +192,51 @@ describe('StudentCurriculumView', () => {
     expect(wrapper.text()).not.toContain('모음 따라 보기0%')
   })
 
+  it('전체와 영역별 탭으로 34개 목록을 원래 순서 그대로 필터링한다', async () => {
+    const { wrapper, store } = await mountCurriculum(repository())
+
+    const tabs = wrapper.findAll('[role="tab"]')
+    expect(tabs[0]?.text()).toContain('전체')
+    expect(tabs[0]?.text()).toContain('34')
+    expect(tabs[0]?.attributes('aria-selected')).toBe('true')
+    expect(wrapper.findAll('.curriculum-row')).toHaveLength(34)
+    expect(store.catalog.map((item) => item.trainingTemplateId)).toEqual(
+      trainingCatalogFixture.map((item) => item.trainingTemplateId),
+    )
+
+    await buttonWithText(wrapper, '글자 만들기')?.trigger('click')
+    await flushPromises()
+
+    const filteredRows = wrapper.findAll('.curriculum-row')
+    expect(filteredRows).toHaveLength(5)
+    expect(filteredRows.map((row) => row.find('.unit-label').text())).toEqual(
+      Array.from({ length: 5 }, () => '글자 만들기'),
+    )
+    expect(filteredRows.map((row) => row.find('b').text())).toEqual(['14', '15', '16', '17', '18'])
+    expect(wrapper.get('[role="tabpanel"]').attributes('aria-labelledby')).toBe(
+      wrapper.find('[role="tab"][aria-selected="true"]').attributes('id'),
+    )
+  })
+
+  it('커리큘럼이 시작 전이면 개별 훈련 상태가 섞여 있어도 편집을 허용한다', async () => {
+    const { wrapper } = await mountCurriculum(repository())
+
+    expect(
+      new Set(currentCurriculumFixture.trainings.map((training) => training.status)).size,
+    ).toBe(2)
+    expect(wrapper.findAll('.recommendation-list article.editable')).toHaveLength(
+      currentCurriculumFixture.trainings.length,
+    )
+    expect(wrapper.findAll('.remove-button')).toHaveLength(
+      currentCurriculumFixture.trainings.length,
+    )
+    expect(wrapper.find('.curriculum-feedback').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('순서 편집')
+    expect(
+      wrapper.findAll('button').filter((button) => button.text() === '변경 사항 저장'),
+    ).toHaveLength(1)
+  })
+
   it('재동기화 필요 상태에서는 편집을 잠그고 GET 재시도 action을 제공한다', async () => {
     const getCurrentCurriculum = vi.fn().mockResolvedValue(currentCurriculumFixture)
     const trainingRepository = repository({ getCurrentCurriculum })
@@ -172,14 +248,17 @@ describe('StudentCurriculumView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('저장은 완료됐지만 최신 커리큘럼 확인이 필요합니다.')
-    expect(buttonWithText(wrapper, '순서 편집')?.attributes('disabled')).toBeDefined()
-    expect(buttonWithText(wrapper, '예상 단어·미리보기')?.attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.curriculum-feedback').exists()).toBe(true)
+    expect(buttonWithText(wrapper, '변경 사항 저장')?.attributes('disabled')).toBeDefined()
+    expect(buttonWithText(wrapper, '교안 편집')?.attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.recommendation-list article.editable').exists()).toBe(false)
 
     await buttonWithText(wrapper, '최신 내용 다시 불러오기')?.trigger('click')
     await flushPromises()
 
     expect(getCurrentCurriculum).toHaveBeenCalledTimes(2)
     expect(store.curriculumSynchronizationStatus).toBe('synced')
+    expect(wrapper.find('.curriculum-feedback').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('최신 커리큘럼 확인이 필요합니다.')
   })
 
@@ -206,7 +285,7 @@ describe('StudentCurriculumView', () => {
 
     expect(wrapper.text()).toContain('커리큘럼 저장 요청이 서버 상태와 충돌했습니다.')
     expect(wrapper.text()).not.toContain('커리큘럼 변경 사항이 저장되었습니다.')
-    expect(buttonWithText(wrapper, '순서 편집')?.attributes('disabled')).toBeDefined()
+    expect(buttonWithText(wrapper, '변경 사항 저장')?.attributes('disabled')).toBeDefined()
 
     await buttonWithText(wrapper, '서버 최신 내용으로 되돌리기')?.trigger('click')
     await flushPromises()
@@ -216,33 +295,83 @@ describe('StudentCurriculumView', () => {
     expect(store.hasChanges).toBe(false)
   })
 
-  it('drag 없이 위로·아래로 순서를 바꾸고 이동한 항목 안에 focus를 유지한다', async () => {
+  it('드래그를 목록 안의 수직 방향으로 제한해 순서를 바꾸고 이동 버튼은 표시하지 않는다', async () => {
     const { wrapper, store } = await mountCurriculum(repository())
     const firstItem = store.draftItems[0]!
     const firstTemplate = trainingCatalogFixture.find(
       (template) => template.trainingTemplateId === firstItem.trainingTemplateId,
     )!
+    const list = wrapper.get<HTMLElement>('.recommendation-list')
+    const articles = wrapper.findAll<HTMLElement>('.recommendation-list article')
+    vi.spyOn(list.element, 'getBoundingClientRect').mockReturnValue(mockRect(0, 210))
+    vi.spyOn(articles[0]!.element, 'getBoundingClientRect').mockReturnValue(mockRect(0, 62))
+    vi.spyOn(articles[1]!.element, 'getBoundingClientRect').mockReturnValue(mockRect(70, 132))
+    vi.spyOn(articles[2]!.element, 'getBoundingClientRect').mockReturnValue(mockRect(140, 202))
+    const rowBody = articles[0]!.get('.recommendation-copy')
+    const editorButton = articles[0]!.get('.material-edit-button')
+    const removeButton = articles[0]!.get('.remove-button')
 
-    await buttonWithText(wrapper, '순서 편집')?.trigger('click')
-    const moveDown = wrapper
-      .findAll('button')
-      .find(
-        (button) => button.attributes('aria-label') === `${firstTemplate.trainingName} 아래로 이동`,
-      )
-    await moveDown?.trigger('click')
+    for (const excludedButton of [editorButton, removeButton]) {
+      dispatchPointerEvent(excludedButton.element, 'pointerdown', {
+        button: 0,
+        clientX: 40,
+        clientY: 31,
+        pointerId: 1,
+      })
+      dispatchPointerEvent(excludedButton.element, 'pointermove', {
+        clientX: 40,
+        clientY: 180,
+        pointerId: 1,
+      })
+      dispatchPointerEvent(excludedButton.element, 'pointerup', {
+        clientX: 40,
+        clientY: 180,
+        pointerId: 1,
+      })
+    }
+    expect(store.draftItems[0]?.key).toBe(firstItem.key)
+    expect(articles[0]!.attributes('style')).toBeUndefined()
+
+    await articles[1]!.get('.recommendation-copy').trigger('click')
+    await flushPromises()
+    expect(store.selectedDraftItemKey).toBe(store.draftItems[1]?.key)
+
+    dispatchPointerEvent(rowBody.element, 'pointerdown', {
+      button: 0,
+      clientX: 40,
+      clientY: 31,
+      pointerId: 1,
+    })
+    dispatchPointerEvent(rowBody.element, 'pointermove', {
+      clientX: 999,
+      clientY: 500,
+      pointerId: 1,
+    })
     await flushPromises()
 
-    expect(store.draftItems[1]?.key).toBe(firstItem.key)
-    expect(wrapper.text()).toContain(`${firstTemplate.trainingName}을(를) 2번째로 이동했습니다.`)
-    expect(document.activeElement?.closest('article')?.id).toBe(`curriculum-item-${firstItem.key}`)
+    expect(articles[0]!.attributes('style')).toContain('translateY(148px)')
+    expect(articles[0]!.attributes('style')).not.toContain('translateX')
+
+    dispatchPointerEvent(rowBody.element, 'pointerup', {
+      clientX: 999,
+      clientY: 500,
+      pointerId: 1,
+    })
+    await flushPromises()
+
+    expect(store.draftItems[2]?.key).toBe(firstItem.key)
+    expect(wrapper.text()).toContain(`${firstTemplate.trainingName}을(를) 3번째로 이동했습니다.`)
+    expect(
+      wrapper
+        .findAll('button')
+        .some((button) => /위로 이동|아래로 이동/.test(button.attributes('aria-label') ?? '')),
+    ).toBe(false)
   })
 
   it('삭제 확인 후 선택한 훈련을 draft에서 제거한다', async () => {
     const { wrapper, store } = await mountCurriculum(repository())
     const target = store.draftItems[0]!
 
-    await buttonWithText(wrapper, '순서 편집')?.trigger('click')
-    await flushPromises()
     await wrapper.find('.remove-button').trigger('click')
     await flushPromises()
 
