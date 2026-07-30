@@ -295,6 +295,14 @@ async function loadOverview(nextStudentId: number): Promise<void> {
 }
 
 async function selectLearningEvent(event: StudentLearningEvent): Promise<void> {
+  if (
+    selectedEventId.value === event.eventId &&
+    selectedEventType.value === event.eventType
+  ) {
+    selectedEventId.value = null
+    selectedEventType.value = null
+    return
+  }
   selectedEventId.value = event.eventId
   selectedEventType.value = event.eventType
   await studentStore.loadLearningEvent(studentId.value, event.eventType, event.eventId)

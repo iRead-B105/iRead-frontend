@@ -116,6 +116,15 @@ export interface StudentReadingSpeedTrend {
 
 export type StudentTrainingHistoryPeriod = '30d' | '3m'
 
+export interface StudentTrainingHistoryDateRange {
+  readonly from: string
+  readonly to: string
+}
+
+export type StudentTrainingHistoryQuery =
+  | StudentTrainingHistoryPeriod
+  | StudentTrainingHistoryDateRange
+
 export interface StudentTrainingHistoryItem {
   readonly trainingId: number
   readonly date: string

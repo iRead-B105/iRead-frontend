@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import {
   DEFAULT_STUDENT_PAGE_SIZE,
   studentRepository,
+  trainingHistoryQueryKey,
   toStudentNavigationItem,
   type StudentAccuracyTrend,
   type StudentCreateInput,
@@ -19,7 +20,7 @@ import {
   type StudentRequestStatus,
   type StudentSummary,
   type StudentTrainingHistory,
-  type StudentTrainingHistoryPeriod,
+  type StudentTrainingHistoryQuery,
   type StudentUpdateInput,
 } from '@/features/teacher/student'
 import { mapCommonError, type UiError } from '@/features/teacher/error'
@@ -578,9 +579,9 @@ export const useStudentStore = defineStore('students', () => {
 
   async function loadTrainingHistory(
     studentId: number,
-    period: StudentTrainingHistoryPeriod,
+    query: StudentTrainingHistoryQuery,
   ): Promise<StudentTrainingHistory | null> {
-    const key = insightKey(studentId, period)
+    const key = insightKey(studentId, trainingHistoryQueryKey(query))
     const requestSequence = (trainingHistorySequences.get(key) ?? 0) + 1
     trainingHistorySequences.set(key, requestSequence)
     trainingHistoryStatusByKey.value = {
@@ -593,7 +594,7 @@ export const useStudentStore = defineStore('students', () => {
     }
 
     try {
-      const history = await repository.value.getTrainingHistory(studentId, period)
+      const history = await repository.value.getTrainingHistory(studentId, query)
       if (trainingHistorySequences.get(key) !== requestSequence) return null
       trainingHistoryByKey.value = {
         ...trainingHistoryByKey.value,

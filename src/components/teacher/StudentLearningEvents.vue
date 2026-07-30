@@ -95,115 +95,105 @@ const emit = defineEmits<{
             <b>{{ event.accuracy === null ? '정확도 없음' : `${event.accuracy}%` }}</b>
           </span>
         </button>
+        <template
+          v-if="selectedEventId === event.eventId && selectedEventType === event.eventType"
+        >
+          <div v-if="detailStatus === 'loading'" class="detail-placeholder" aria-live="polite">
+            학습 이벤트 상세를 불러오는 중입니다.
+          </div>
+
+          <div v-else-if="detailStatus === 'error'" class="detail-placeholder is-error" role="alert">
+            <strong>학습 이벤트 상세를 불러오지 못했습니다.</strong>
+            <span>{{ detailError ?? '잠시 후 다시 시도해 주세요.' }}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              @click="emit('retryDetail', event)"
+            >
+              상세 다시 시도
+            </Button>
+          </div>
+
+          <article v-else-if="detail" class="event-detail" aria-live="polite">
+            <header>
+              <div>
+                <span>학습 이벤트 상세</span>
+                <h3>{{ studentLearningEventTypeLabels[detail.eventType] }}</h3>
+              </div>
+              <Badge v-if="detail.attentionRequired" variant="secondary">확인 필요</Badge>
+            </header>
+
+            <dl>
+              <div>
+                <dt>발생 시각</dt>
+                <dd>{{ formatStudentDateTime(detail.occurredAt) }}</dd>
+              </div>
+              <div>
+                <dt>정확도</dt>
+                <dd>
+                  {{ detail.accuracy === null ? '산정할 수 없음' : `${detail.accuracy}%` }}
+                </dd>
+              </div>
+              <div>
+                <dt>재시도</dt>
+                <dd>{{ detail.retryCount }}회</dd>
+              </div>
+              <div>
+                <dt>문제 구간</dt>
+                <dd>
+                  <ul v-if="detail.problemSegments.length" class="problem-segments">
+                    <li v-for="segment in detail.problemSegments" :key="segment">{{ segment }}</li>
+                  </ul>
+                  <span v-else>확인된 문제 구간 없음</span>
+                </dd>
+              </div>
+              <div>
+                <dt>주의 사유</dt>
+                <dd>
+                  <ul v-if="detail.attentionReasons.length" class="attention-reasons">
+                    <li v-for="reason in detail.attentionReasons" :key="reason">
+                      {{ attentionReasonLabels[reason] }}
+                    </li>
+                  </ul>
+                  <span v-else>공식 주의 사유 없음</span>
+                </dd>
+              </div>
+            </dl>
+
+            <section v-if="detail.recommendedTrainingTemplateId !== null" class="recommendation">
+              <span>Backend 권장 훈련</span>
+              <strong>{{ detail.recommendedCurriculumUnitName }}</strong>
+              <p>{{ detail.recommendationReason }}</p>
+              <dl>
+                <div>
+                  <dt>권장 시간</dt>
+                  <dd>{{ detail.recommendedMinutes }}분</dd>
+                </div>
+                <div>
+                  <dt>권장 반복</dt>
+                  <dd>{{ detail.recommendedRepeatCount }}회</dd>
+                </div>
+              </dl>
+            </section>
+            <p v-else class="recommendation-empty">
+              Backend에서 제공한 권장 훈련이 없습니다.
+            </p>
+
+            <div class="event-detail__actions">
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                @click="emit('addToMemo', detail)"
+              >
+                내부 메모에 추가
+              </Button>
+            </div>
+          </article>
+        </template>
       </li>
     </ol>
-
-    <div
-      v-if="selectedEventId !== null && detailStatus === 'loading'"
-      class="detail-placeholder"
-      aria-live="polite"
-    >
-      학습 이벤트 상세를 불러오는 중입니다.
-    </div>
-
-    <div
-      v-else-if="selectedEventId !== null && detailStatus === 'error'"
-      class="detail-placeholder is-error"
-      role="alert"
-    >
-      <strong>학습 이벤트 상세를 불러오지 못했습니다.</strong>
-      <span>{{ detailError ?? '잠시 후 다시 시도해 주세요.' }}</span>
-      <Button
-        variant="outline"
-        size="sm"
-        type="button"
-        @click="
-          events.find(
-            (event) =>
-              event.eventId === selectedEventId && event.eventType === selectedEventType,
-          ) &&
-          emit(
-            'retryDetail',
-            events.find(
-              (event) =>
-                event.eventId === selectedEventId && event.eventType === selectedEventType,
-            )!,
-          )
-        "
-      >
-        상세 다시 시도
-      </Button>
-    </div>
-
-    <article v-else-if="detail" class="event-detail" aria-live="polite">
-      <header>
-        <div>
-          <span>학습 이벤트 상세</span>
-          <h3>{{ studentLearningEventTypeLabels[detail.eventType] }}</h3>
-        </div>
-        <Badge v-if="detail.attentionRequired" variant="secondary">확인 필요</Badge>
-      </header>
-
-      <dl>
-        <div>
-          <dt>발생 시각</dt>
-          <dd>{{ formatStudentDateTime(detail.occurredAt) }}</dd>
-        </div>
-        <div>
-          <dt>정확도</dt>
-          <dd>{{ detail.accuracy === null ? '산정할 수 없음' : `${detail.accuracy}%` }}</dd>
-        </div>
-        <div>
-          <dt>재시도</dt>
-          <dd>{{ detail.retryCount }}회</dd>
-        </div>
-        <div>
-          <dt>문제 구간</dt>
-          <dd>
-            <ul v-if="detail.problemSegments.length" class="problem-segments">
-              <li v-for="segment in detail.problemSegments" :key="segment">{{ segment }}</li>
-            </ul>
-            <span v-else>확인된 문제 구간 없음</span>
-          </dd>
-        </div>
-        <div>
-          <dt>주의 사유</dt>
-          <dd>
-            <ul v-if="detail.attentionReasons.length" class="attention-reasons">
-              <li v-for="reason in detail.attentionReasons" :key="reason">
-                {{ attentionReasonLabels[reason] }}
-              </li>
-            </ul>
-            <span v-else>공식 주의 사유 없음</span>
-          </dd>
-        </div>
-      </dl>
-
-      <section v-if="detail.recommendedTrainingTemplateId !== null" class="recommendation">
-        <span>Backend 권장 훈련</span>
-        <strong>{{ detail.recommendedCurriculumUnitName }}</strong>
-        <p>{{ detail.recommendationReason }}</p>
-        <dl>
-          <div>
-            <dt>권장 시간</dt>
-            <dd>{{ detail.recommendedMinutes }}분</dd>
-          </div>
-          <div>
-            <dt>권장 반복</dt>
-            <dd>{{ detail.recommendedRepeatCount }}회</dd>
-          </div>
-        </dl>
-      </section>
-      <p v-else class="recommendation-empty">
-        Backend에서 제공한 권장 훈련이 없습니다.
-      </p>
-
-      <div class="event-detail__actions">
-        <Button variant="outline" size="sm" type="button" @click="emit('addToMemo', detail)">
-          내부 메모에 추가
-        </Button>
-      </div>
-    </article>
   </section>
 </template>
 
@@ -242,6 +232,11 @@ const emit = defineEmits<{
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.learning-event-list > li {
+  display: grid;
+  gap: 8px;
 }
 
 .learning-event {

@@ -79,10 +79,12 @@ const growthChart = computed<EChartsOption>(() => ({
   ],
 }))
 
-const summaryItems = computed(() => [
+const participationItems = computed(() => [
   { label: '학습일', value: `${props.snapshot.learningDays}일` },
   { label: '총 훈련 시간', value: formatReportMinutes(props.snapshot.totalTrainingTimeMinutes) },
   { label: '완료 훈련', value: `${props.snapshot.completedTrainingCount}회` },
+])
+const performanceItems = computed(() => [
   { label: '평균 정확도', value: formatReportNumber(props.snapshot.averageAccuracy, '%') },
   {
     label: '평균 읽기 속도',
@@ -94,7 +96,7 @@ const summaryItems = computed(() => [
 ])
 const growthChartSummary = computed(
   () =>
-    `기간별 성장 기록: ${props.snapshot.growthHistory
+    `기간별 성장 추이: ${props.snapshot.growthHistory
       .map(
         (point) =>
           `${formatReportDate(point.date)} 정확도 ${formatReportNumber(point.accuracy, '%')}, 읽기 속도 ${formatReportNumber(point.readingSpeed, readingSpeedUnit.value)}, 발음 점수 ${formatReportNumber(point.pronunciationScore)}`,
@@ -104,12 +106,24 @@ const growthChartSummary = computed(
 </script>
 
 <template>
-  <section class="snapshot-section" aria-labelledby="report-summary-title">
+  <section class="snapshot-section" aria-labelledby="participation-summary-title">
     <header class="section-heading">
-      <h2 id="report-summary-title">학습 요약</h2>
+      <h2 id="participation-summary-title">학습 참여 요약</h2>
     </header>
-    <dl class="summary-grid">
-      <div v-for="item in summaryItems" :key="item.label">
+    <dl class="summary-grid summary-grid--participation">
+      <div v-for="item in participationItems" :key="item.label">
+        <dt>{{ item.label }}</dt>
+        <dd>{{ item.value }}</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="snapshot-section" aria-labelledby="performance-summary-title">
+    <header class="section-heading">
+      <h2 id="performance-summary-title">핵심 성과 요약</h2>
+    </header>
+    <dl class="summary-grid summary-grid--performance">
+      <div v-for="item in performanceItems" :key="item.label">
         <dt>{{ item.label }}</dt>
         <dd>{{ item.value }}</dd>
       </div>
@@ -118,7 +132,7 @@ const growthChartSummary = computed(
 
   <section class="snapshot-section" aria-labelledby="growth-history-title">
     <header class="section-heading">
-      <h2 id="growth-history-title">기간별 성장 기록</h2>
+      <h2 id="growth-history-title">기간별 성장 추이</h2>
     </header>
     <p v-if="snapshot.growthHistory.length === 0" class="empty-state">
       표시할 성장 기록이 없습니다.
@@ -134,7 +148,7 @@ const growthChartSummary = computed(
 
   <section class="snapshot-section" aria-labelledby="area-achievement-title">
     <header class="section-heading">
-      <h2 id="area-achievement-title">영역별 성취도</h2>
+      <h2 id="area-achievement-title">커리큘럼 영역별 성취도</h2>
     </header>
     <p v-if="snapshot.areaAchievements.length === 0" class="empty-state">
       표시할 영역별 성취도가 없습니다.
@@ -157,7 +171,7 @@ const growthChartSummary = computed(
 
   <section class="snapshot-section" aria-labelledby="incorrect-words-title">
     <header class="section-heading">
-      <h2 id="incorrect-words-title">자주 틀리는 낱말</h2>
+      <h2 id="incorrect-words-title">자주 틀린 단어와 오답률</h2>
     </header>
     <p v-if="snapshot.frequentlyIncorrectWords.length === 0" class="empty-state">
       표시할 낱말 기록이 없습니다.
@@ -180,32 +194,6 @@ const growthChartSummary = computed(
     </div>
   </section>
 
-  <section class="snapshot-section pattern-grid" aria-label="학습 패턴">
-    <div>
-      <header class="section-heading">
-        <h2>개선된 패턴</h2>
-      </header>
-      <p v-if="snapshot.improvedPatterns.length === 0" class="empty-state">
-        표시할 개선 패턴이 없습니다.
-      </p>
-      <ul v-else>
-        <li v-for="pattern in snapshot.improvedPatterns" :key="pattern">{{ pattern }}</li>
-      </ul>
-    </div>
-    <div>
-      <header class="section-heading">
-        <h2>지속적으로 어려운 패턴</h2>
-      </header>
-      <p v-if="snapshot.persistentDifficultyPatterns.length === 0" class="empty-state">
-        표시할 어려움 패턴이 없습니다.
-      </p>
-      <ul v-else>
-        <li v-for="pattern in snapshot.persistentDifficultyPatterns" :key="pattern">
-          {{ pattern }}
-        </li>
-      </ul>
-    </div>
-  </section>
 </template>
 
 <style scoped>
@@ -232,7 +220,12 @@ const growthChartSummary = computed(
   margin: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.summary-grid--participation {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.summary-grid--performance {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .summary-grid > div {
   padding: 14px 12px;
@@ -281,24 +274,8 @@ thead th {
 tbody th {
   font-weight: 700;
 }
-.pattern-grid {
-  display: grid;
-  gap: 18px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.pattern-grid ul {
-  display: grid;
-  margin: 0;
-  padding: 14px 14px 14px 32px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  gap: 8px;
-  font-size: 12px;
-  line-height: 1.6;
-}
 @media (max-width: 760px) {
-  .summary-grid,
-  .pattern-grid {
+  .summary-grid {
     grid-template-columns: 1fr;
   }
   .summary-grid > div + div {

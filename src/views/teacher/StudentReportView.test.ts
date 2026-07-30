@@ -91,36 +91,57 @@ describe('StudentReportView', () => {
   })
 
   it('선택한 상세가 snapshot과 현재 교수자 정보만 표시한다', async () => {
-    const { wrapper } = await mountReport()
+    const { wrapper, pinia } = await mountReport()
 
     await wrapper.get('.saved-report-row').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('김하늘 학습 보고서')
     expect(wrapper.text()).toContain('이선생')
-    expect(wrapper.text()).toContain('학습 요약')
-    expect(wrapper.text()).toContain('기간별 성장 기록')
+    expect(wrapper.text()).toContain('학습 참여 요약')
+    expect(wrapper.text()).toContain('핵심 성과 요약')
+    expect(wrapper.text()).toContain('기간별 성장 추이')
+    expect(wrapper.text()).toContain('커리큘럼 영역별 성취도')
+    expect(wrapper.text()).toContain('자주 틀린 단어와 오답률')
     expect(wrapper.text()).toContain('훈련 시선 추이')
     expect(wrapper.text()).toContain('검사 시선 추이')
     expect(wrapper.text()).toContain('교수자 의견')
     expect(wrapper.find('[aria-label="교수자 의견"]').exists()).toBe(true)
+    expect(
+      (wrapper.get('[aria-label="교수자 의견"]').element as HTMLTextAreaElement).value,
+    ).toBe(useReportStore(pinia).teacherMemoDraft)
     expect(wrapper.text()).toContain('변화를 비교하려면 두 건 이상의 결과가 필요합니다.')
     expect(wrapper.text()).not.toContain('내부 메모에서 불러오기')
     expect(wrapper.text()).not.toContain('학습 판단')
     expect(wrapper.text()).not.toContain('보고서 버전')
   })
 
-  it('완료 학습이 없는 기간은 입력을 유지하고 빈 보고서를 만들지 않는다', async () => {
-    const { wrapper, pinia } = await mountReport('/teacher/students/3/report')
-    const store = useReportStore(pinia)
-    const inputs = wrapper.findAll('input[type="date"]')
-    await inputs[0]!.setValue('2026-07-01')
-    await inputs[1]!.setValue('2026-07-28')
-
-    await buttonWithText(wrapper, '보고서 생성')?.trigger('click')
+  it('교수자 의견 입력값과 Store draft를 같은 값으로 유지한다', async () => {
+    const { wrapper, pinia } = await mountReport()
+    await wrapper.get('.saved-report-row').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('선택한 기간에 완료된 학습 기록이 없습니다.')
+    const textarea = wrapper.get('[aria-label="교수자 의견"]')
+    await textarea.setValue('새로 작성한 교수자 의견')
+
+    expect(useReportStore(pinia).teacherMemoDraft).toBe('새로 작성한 교수자 의견')
+    expect(buttonWithText(wrapper, '의견 저장')?.attributes('disabled')).toBeUndefined()
+  })
+
+  it('완료 학습이 없는 기간은 입력을 유지하고 빈 보고서를 만들지 않는다', async () => {
+    const repository = new MockReportRepository({ delayMs: 0 })
+    const create = vi.spyOn(repository, 'create')
+    const { wrapper, pinia } = await mountReport('/teacher/students/3/report', repository)
+    const store = useReportStore(pinia)
+    store.startDate = '2026-07-01'
+    store.endDate = '2026-07-28'
+    await flushPromises()
+
+    const generateButton = buttonWithText(wrapper, '보고서 생성')
+
+    expect(generateButton?.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('서로 다른 완료 학습일이 2일 이상 필요합니다.')
+    expect(create).not.toHaveBeenCalled()
     expect(store.startDate).toBe('2026-07-01')
     expect(store.endDate).toBe('2026-07-28')
     expect(store.selectedReport).toBeNull()
@@ -134,9 +155,10 @@ describe('StudentReportView', () => {
     const create = vi.spyOn(repository, 'create')
     const get = vi.spyOn(repository, 'get')
     const { wrapper, pinia } = await mountReport('/teacher/students/1/report', repository)
-    const inputs = wrapper.findAll('input[type="date"]')
-    await inputs[0]!.setValue('2026-07-03')
-    await inputs[1]!.setValue('2026-07-24')
+    const store = useReportStore(pinia)
+    store.startDate = '2026-07-03'
+    store.endDate = '2026-07-24'
+    await flushPromises()
 
     await buttonWithText(wrapper, '보고서 생성')?.trigger('click')
     await flushPromises()
@@ -148,7 +170,7 @@ describe('StudentReportView', () => {
       endDate: '2026-07-24',
     })
     expect(get).toHaveBeenCalledWith(
-      useReportStore(pinia).selectedReportId,
+      store.selectedReportId,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
     expect(wrapper.text()).toContain('김하늘 학습 보고서')

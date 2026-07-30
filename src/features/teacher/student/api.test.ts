@@ -331,4 +331,16 @@ describe('Student API', () => {
       { signal: undefined },
     )
   })
+
+  it('보고서 달력의 명시적인 기간으로 훈련 이력을 조회한다', async () => {
+    const request = vi.fn().mockResolvedValue({ learningHistory: [] })
+    const api = createStudentApi(request)
+
+    await api.getTrainingHistory(7, { from: '2026-06-01', to: '2026-06-30' })
+
+    expect(request).toHaveBeenCalledWith(
+      '/api/admin/student/7/training-history?from=2026-06-01&to=2026-06-30',
+      { signal: undefined },
+    )
+  })
 })
