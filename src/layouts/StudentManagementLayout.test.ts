@@ -1,5 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import StudentManagementLayout from './StudentManagementLayout.vue'
@@ -20,6 +21,23 @@ const student: StudentDetail = {
   createdAt: '2026-07-01T00:00:00Z',
   imageUrl: null,
   teacherMemo: null,
+}
+const secondStudent: StudentDetail = {
+  ...student,
+  studentId: 8,
+  name: '박바다',
+  school: '푸른초등학교',
+}
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+} {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve
+  })
+  return { promise, resolve }
 }
 
 function createRepository(getDetail: StudentRepository['getDetail']): StudentRepository {
@@ -126,5 +144,33 @@ describe('StudentManagementLayout', () => {
 
     expect(getDetail).toHaveBeenCalledTimes(2)
     expect(wrapper.get('[data-test="student-view"]').text()).toBe('학습자 화면')
+  })
+
+  it('다른 학생을 불러오는 동안 하위 화면을 유지하고 같은 셸에서 스켈레톤을 표시한다', async () => {
+    const secondRequest = deferred<StudentDetail>()
+    const getDetail = vi
+      .fn<StudentRepository['getDetail']>()
+      .mockResolvedValueOnce(student)
+      .mockImplementationOnce(() => secondRequest.promise)
+    const { router, wrapper } = await mountRoute('/teacher/students/7', getDetail)
+    const initialViewElement = wrapper.get('[data-test="student-view"]').element
+
+    await router.push('/teacher/students/8')
+    await nextTick()
+
+    expect(wrapper.find('[data-test="student-route-skeleton"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="student-route-content"]').attributes('style')).toContain(
+      'display: none',
+    )
+    expect(wrapper.get('[data-test="student-view"]').element).toBe(initialViewElement)
+
+    secondRequest.resolve(secondStudent)
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="student-route-skeleton"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="student-route-content"]').attributes('style')).not.toContain(
+      'display: none',
+    )
+    expect(wrapper.get('[data-test="student-view"]').element).toBe(initialViewElement)
   })
 })

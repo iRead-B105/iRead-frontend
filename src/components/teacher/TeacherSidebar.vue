@@ -35,15 +35,14 @@ const studentRouteNames = new Set([
   'student-training-history',
   'student-test-history',
   'student-report',
-  'student-edit',
 ])
 
-function selectStudent(student: StudentNavigationItem) {
+function selectStudent(student: StudentNavigationItem): void {
   const routeName = studentRouteNames.has(String(route.name))
     ? String(route.name)
     : 'student-overview'
   studentStore.rememberStudent(student)
-  router.push({ name: routeName, params: { id: student.studentId } })
+  void router.push({ name: routeName, params: { id: student.studentId } })
 }
 
 function openProfileSettings() {
@@ -108,7 +107,9 @@ onMounted(() => {
             <span class="sidebar-nav__icon"><SidebarIcon name="home" /></span
             ><strong>학습 현황</strong>
           </RouterLink>
-          <RouterLink :to="{ name: 'student-curriculum', params: { id: currentStudent.studentId } }">
+          <RouterLink
+            :to="{ name: 'student-curriculum', params: { id: currentStudent.studentId } }"
+          >
             <span class="sidebar-nav__icon"><SidebarIcon name="book" /></span
             ><strong>커리큘럼 관리</strong>
           </RouterLink>
@@ -118,7 +119,9 @@ onMounted(() => {
             <span class="sidebar-nav__icon"><SidebarIcon name="chart" /></span
             ><strong>훈련 이력</strong>
           </RouterLink>
-          <RouterLink :to="{ name: 'student-test-history', params: { id: currentStudent.studentId } }">
+          <RouterLink
+            :to="{ name: 'student-test-history', params: { id: currentStudent.studentId } }"
+          >
             <span class="sidebar-nav__icon"><SidebarIcon name="clipboard" /></span
             ><strong>검사 이력</strong>
           </RouterLink>
@@ -194,9 +197,7 @@ onMounted(() => {
           </svg>
         </Button>
       </div>
-      <p v-if="logoutPending" class="sidebar-account__status" role="status">
-        로그아웃 중...
-      </p>
+      <p v-if="logoutPending" class="sidebar-account__status" role="status">로그아웃 중...</p>
       <p v-if="logoutError" class="sidebar-account__error" role="alert">
         {{ logoutError }}
       </p>

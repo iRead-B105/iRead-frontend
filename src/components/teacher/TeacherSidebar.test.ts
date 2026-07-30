@@ -4,11 +4,9 @@ import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import TeacherSidebar from './TeacherSidebar.vue'
+import StudentSwitcher from './StudentSwitcher.vue'
 import { MockReportRepository } from '@/features/teacher/report'
-import type {
-  StudentListItem,
-  StudentRepository,
-} from '@/features/teacher/student'
+import type { StudentListItem, StudentRepository } from '@/features/teacher/student'
 import { useSessionStore } from '@/stores/session'
 import { useReportStore } from '@/stores/report'
 import { installSessionScopedStoreReset } from '@/stores/sessionScopedStores'
@@ -27,6 +25,19 @@ const defaultStudents: readonly StudentListItem[] = [
     weeklyCompletedCount: 2,
     weeklyParticipationRate: 67,
     totalLearningMinutes: 120,
+  },
+  {
+    studentId: 8,
+    name: '박바다',
+    school: '푸른초등학교',
+    age: 9,
+    imageUrl: null,
+    recentTraining: '낱말 읽기',
+    recentLearningDate: '2026-07-17',
+    weeklyScheduledCount: 3,
+    weeklyCompletedCount: 1,
+    weeklyParticipationRate: 33,
+    totalLearningMinutes: 80,
   },
 ]
 
@@ -66,12 +77,36 @@ function createTestRouter(): Router {
       { path: '/login', name: 'teacher-login', component: { template: '<div />' } },
       { path: '/teacher/students', name: 'teacher-students', component: { template: '<div />' } },
       { path: '/teacher/settings', name: 'teacher-settings', component: { template: '<div />' } },
-      { path: '/teacher/students/:id', name: 'student-overview', component: { template: '<div />' } },
-      { path: '/teacher/students/:id/curriculum', name: 'student-curriculum', component: { template: '<div />' } },
-      { path: '/teacher/students/:id/training-history', name: 'student-training-history', component: { template: '<div />' } },
-      { path: '/teacher/students/:id/test-history', name: 'student-test-history', component: { template: '<div />' } },
-      { path: '/teacher/students/:id/report', name: 'student-report', component: { template: '<div />' } },
-      { path: '/teacher/students/:id/edit', name: 'student-edit', component: { template: '<div />' } },
+      {
+        path: '/teacher/students/:id',
+        name: 'student-overview',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/teacher/students/:id/curriculum',
+        name: 'student-curriculum',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/teacher/students/:id/training-history',
+        name: 'student-training-history',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/teacher/students/:id/test-history',
+        name: 'student-test-history',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/teacher/students/:id/report',
+        name: 'student-report',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/teacher/students/:id/edit',
+        name: 'student-edit',
+        component: { template: '<div />' },
+      },
     ],
   })
 }
@@ -168,11 +203,30 @@ describe('TeacherSidebar', () => {
     expect(wrapper.findAll('[aria-disabled="true"]')).toHaveLength(0)
   })
 
+  it.each([
+    ['/teacher/students/7/curriculum', 'student-curriculum'],
+    ['/teacher/students/7/edit', 'student-overview'],
+  ])(
+    '학생 변경 시 현재 화면 정책에 맞는 route로 이동한다: %s',
+    async (initialPath, expectedRouteName) => {
+      const { wrapper, router } = await mountSidebar(createRepository(), initialPath)
+      const switcher = wrapper.getComponent(StudentSwitcher)
+
+      switcher.vm.$emit('select', {
+        studentId: 8,
+        name: '박바다',
+        school: '푸른초등학교',
+        imageUrl: null,
+      })
+      await flushPromises()
+
+      expect(router.currentRoute.value.name).toBe(expectedRouteName)
+      expect(router.currentRoute.value.params.id).toBe('8')
+    },
+  )
+
   it('현재 보고서 메뉴를 다시 선택하면 보고서 상세 선택을 초기화한다', async () => {
-    const { wrapper, pinia } = await mountSidebar(
-      createRepository(),
-      '/teacher/students/7/report',
-    )
+    const { wrapper, pinia } = await mountSidebar(createRepository(), '/teacher/students/7/report')
     const reports = useReportStore(pinia)
     reports.selectedReportId = 1002
 

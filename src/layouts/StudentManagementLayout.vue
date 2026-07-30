@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import AsyncStatePanel, { type AsyncStatePanelKind } from '@/components/common/AsyncStatePanel.vue'
@@ -25,6 +25,7 @@ const studentStore = useStudentStore()
 const { detailsById, detailStatusById, detailErrorStatusById, detailStaleById } =
   storeToRefs(studentStore)
 const studentId = computed(() => parseStudentId(route.params.id))
+const hasRenderedRouteContent = ref(false)
 const studentDetail = computed(() =>
   studentId.value === null ? null : (detailsById.value[studentId.value] ?? null),
 )
@@ -82,16 +83,42 @@ function goToStudentList(): void {
 }
 
 watch(studentId, loadStudentRoute, { immediate: true })
-watch(routeState, (nextState, previousState) => {
-  if (previousState && !nextState) void focusRouteContent()
-})
+watch(
+  routeState,
+  (nextState, previousState) => {
+    if (!nextState) {
+      hasRenderedRouteContent.value = true
+      if (previousState) void focusRouteContent()
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
-  <div class="student-layout">
-    <h1 v-if="routeState" class="sr-only" data-route-focus>아동 관리</h1>
+  <div class="student-layout" :aria-busy="routeState?.kind === 'loading' ? 'true' : undefined">
+    <h1 v-if="routeState && routeState.kind !== 'loading'" class="sr-only" data-route-focus>
+      아동 관리
+    </h1>
+    <section
+      v-if="routeState?.kind === 'loading'"
+      class="student-layout__skeleton"
+      data-test="student-route-skeleton"
+      role="status"
+      aria-live="polite"
+      aria-label="학습자 정보를 불러오는 중입니다"
+    >
+      <span class="sr-only">학습자 정보를 불러오는 중입니다.</span>
+      <div class="student-layout__skeleton-heading">
+        <span class="skeleton-block skeleton-block--title" />
+        <span class="skeleton-block skeleton-block--action" />
+      </div>
+      <div class="student-layout__skeleton-grid">
+        <span v-for="index in 4" :key="index" class="skeleton-block skeleton-block--card" />
+      </div>
+    </section>
     <AsyncStatePanel
-      v-if="routeState"
+      v-else-if="routeState"
       :kind="routeState.kind"
       :title="routeState.title"
       :message="routeState.message"
@@ -100,12 +127,90 @@ watch(routeState, (nextState, previousState) => {
       @retry="loadStudentRoute(studentId)"
       @action="goToStudentList"
     />
-    <RouterView v-else />
+    <RouterView v-slot="{ Component, route: childRoute }">
+      <div
+        v-show="!routeState"
+        class="student-layout__content"
+        data-test="student-route-content"
+        :aria-hidden="routeState ? 'true' : undefined"
+      >
+        <component
+          :is="Component"
+          v-if="hasRenderedRouteContent"
+          :key="String(childRoute.name ?? childRoute.path)"
+        />
+      </div>
+    </RouterView>
   </div>
 </template>
 
 <style scoped>
 .student-layout {
   width: 100%;
+  min-height: 560px;
+}
+.student-layout__content {
+  width: 100%;
+}
+.student-layout__skeleton {
+  display: grid;
+  min-height: 560px;
+  gap: 20px;
+}
+.student-layout__skeleton-heading {
+  display: flex;
+  min-height: 76px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--slate-200);
+}
+.student-layout__skeleton-grid {
+  display: grid;
+  align-content: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.skeleton-block {
+  display: block;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--slate-100) 25%,
+    var(--slate-50) 50%,
+    var(--slate-100) 75%
+  );
+  background-size: 200% 100%;
+  animation: student-skeleton 1.2s ease-in-out infinite;
+}
+.skeleton-block--title {
+  width: 168px;
+  height: 30px;
+}
+.skeleton-block--action {
+  width: 96px;
+  height: 32px;
+}
+.skeleton-block--card {
+  min-height: 190px;
+}
+@keyframes student-skeleton {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block {
+    animation: none;
+  }
+}
+@media (max-width: 760px) {
+  .student-layout__skeleton-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -9,9 +9,7 @@ const route = useRoute()
 const studentStore = useStudentStore()
 const studentId = computed(() => Number(route.params.id))
 const student = computed(() => studentStore.detailsById[studentId.value])
-const detailStatus = computed(
-  () => studentStore.detailStatusById[studentId.value] ?? 'idle',
-)
+const detailStatus = computed(() => studentStore.detailStatusById[studentId.value] ?? 'idle')
 const detailError = computed(
   () => studentStore.detailErrorById[studentId.value] ?? '아동 정보를 불러오지 못했습니다.',
 )
@@ -23,7 +21,8 @@ watch(
       Number.isInteger(nextStudentId) &&
       nextStudentId > 0 &&
       (!studentStore.detailsById[nextStudentId] ||
-        studentStore.detailStaleById[nextStudentId] === true)
+        studentStore.detailStaleById[nextStudentId] === true) &&
+      studentStore.detailStatusById[nextStudentId] !== 'loading'
     ) {
       await studentStore.loadDetail(nextStudentId)
     }
