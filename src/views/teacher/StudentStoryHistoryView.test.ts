@@ -6,6 +6,7 @@ import type {
   StoryHistoryList,
   StoryRepository,
 } from '@/features/teacher/story'
+import { MockStoryRepository } from '@/features/teacher/story'
 import { useStoryHistoryStore } from '@/stores/storyHistory'
 import StudentStoryHistoryView from './StudentStoryHistoryView.vue'
 
@@ -45,7 +46,29 @@ const listResult: StoryHistoryList = {
 function repository(
   listHistory: StoryRepository['listHistory'] = vi.fn().mockResolvedValue(listResult),
 ): StoryRepository {
-  return { listHistory }
+  const story = listResult.stories[0]!
+  return {
+    listHistory,
+    getDetail: vi.fn().mockResolvedValue({
+      story,
+      scenes: [],
+      branches: [],
+    }),
+    getGazeAnalysis: vi.fn().mockResolvedValue({
+      gazeSessionId: 7401,
+      gazeAnalysisId: 7501,
+      calibrationStatus: 'SUCCESS',
+      startedAt: '2026-07-30T16:40:00+09:00',
+      endedAt: '2026-07-30T16:42:00+09:00',
+      totalVisitedDurationMs: 38_400,
+      totalVisitedCount: 42,
+      reverseReadCount: 5,
+      avgVisitedDurationMs: 914,
+      sentenceMetrics: [],
+      regressions: [],
+      analysisMeta: null,
+    }),
+  }
 }
 
 async function mountView(storyRepository: StoryRepository = repository()) {
@@ -83,12 +106,73 @@ describe('StudentStoryHistoryView', () => {
     expect(wrapper.text()).toContain('아직 이야기를 읽지 않았어요')
     expect(useStoryHistoryStore(pinia).selectedStoryId).toBeNull()
 
-    await wrapper.get('.story-list-item').trigger('click')
+    await wrapper.get('.story-title-tab').trigger('click')
+    await flushPromises()
 
     expect(useStoryHistoryStore(pinia).selectedStoryId).toBe(6801)
     expect(wrapper.text()).toContain('선택한 이야기')
     expect(wrapper.text()).toContain('읽는 중 (9/12)')
     expect(wrapper.text()).toContain('시선 분석 완료')
+    expect(wrapper.find('.story-list-panel').exists()).toBe(false)
+    expect(wrapper.get('.story-workspace').classes()).toContain('story-workspace')
+  })
+
+  it('시선 분석을 기본으로 네 탭을 정해진 순서와 단일 패널로 표시한다', async () => {
+    const { wrapper } = await mountView(new MockStoryRepository({ delayMs: 0 }))
+    expect(wrapper.findAll('.story-title-tab')).toHaveLength(3)
+
+    await wrapper.get('.story-title-tab').trigger('click')
+    await flushPromises()
+
+    const tabs = wrapper.findAll('.story-detail-tabs [role="tab"]')
+    expect(tabs.map((tab) => tab.text())).toEqual([
+      '시선 분석',
+      '이야기 내용',
+      '분기 기록',
+      '생성 이미지',
+    ])
+    expect(tabs[0]?.attributes('aria-selected')).toBe('true')
+    expect(wrapper.findAll('.story-detail-tabpanel[role="tabpanel"]')).toHaveLength(1)
+    expect(wrapper.text()).toContain('문장별 시선 분석')
+    expect(wrapper.text()).toContain('별빛이 내려앉은 숲에서 토끼가 길을 찾아요.')
+
+    await tabs[1]!.trigger('click')
+    expect(wrapper.text()).toContain('1번째 장면')
+    expect(wrapper.text()).toContain('분기 문장')
+    expect(wrapper.text()).not.toContain('문장별 시선 분석')
+
+    await wrapper.findAll('.story-detail-tabs [role="tab"]')[2]!.trigger('click')
+    expect(wrapper.text()).toContain('토끼가 먼저 누구에게 도움을 요청하면 좋을까?')
+    expect(wrapper.text()).toContain('별을 잘 아는 부엉이에게 물어보면 좋겠어요.')
+
+    await wrapper.findAll('.story-detail-tabs [role="tab"]')[3]!.trigger('click')
+    expect(wrapper.findAll('.story-image-frame img')).toHaveLength(2)
+    expect(wrapper.text()).toContain('이미지 생성 중')
+    expect(wrapper.text()).toContain('이미지 생성 실패')
+  })
+
+  it('시선 상태가 AVAILABLE이 아니면 시선 상세를 요청하지 않는다', async () => {
+    const noGazeList = {
+      ...listResult,
+      stories: [
+        {
+          ...listResult.stories[0]!,
+          gazeAnalysisStatus: 'RUNNING' as const,
+        },
+      ],
+    }
+    const getGazeAnalysis = vi.fn<StoryRepository['getGazeAnalysis']>()
+    const detailRepository = {
+      ...repository(vi.fn().mockResolvedValue(noGazeList)),
+      getGazeAnalysis,
+    }
+    const { wrapper } = await mountView(detailRepository)
+
+    await wrapper.get('.story-title-tab').trigger('click')
+    await flushPromises()
+
+    expect(getGazeAnalysis).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('시선 분석을 준비하고 있어요')
   })
 
   it('기간·원본 이야기 필터를 page 0으로 Repository에 전달한다', async () => {

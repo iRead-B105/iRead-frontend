@@ -1,4 +1,9 @@
-import type { StoryHistoryList, StoryHistoryQuery } from '../model'
+import type {
+  StoryDetail,
+  StoryGazeAnalysis,
+  StoryHistoryList,
+  StoryHistoryQuery,
+} from '../model'
 
 export interface StoryRequestOptions {
   readonly signal?: AbortSignal
@@ -10,4 +15,14 @@ export interface StoryRepository {
     query?: StoryHistoryQuery,
     options?: StoryRequestOptions,
   ) => Promise<StoryHistoryList>
+  readonly getDetail: (
+    studentId: number,
+    storyId: number,
+    options?: StoryRequestOptions,
+  ) => Promise<StoryDetail>
+  readonly getGazeAnalysis: (
+    studentId: number,
+    storyId: number,
+    options?: StoryRequestOptions,
+  ) => Promise<StoryGazeAnalysis>
 }

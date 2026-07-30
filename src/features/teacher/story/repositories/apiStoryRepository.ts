@@ -11,4 +11,20 @@ export class ApiStoryRepository implements StoryRepository {
   ) {
     return this.api.listHistory(studentId, query, options)
   }
+
+  getDetail(
+    studentId: number,
+    storyId: number,
+    options: Parameters<StoryRepository['getDetail']>[2] = {},
+  ) {
+    return this.api.getDetail(studentId, storyId, options)
+  }
+
+  getGazeAnalysis(
+    studentId: number,
+    storyId: number,
+    options: Parameters<StoryRepository['getGazeAnalysis']>[2] = {},
+  ) {
+    return this.api.getGazeAnalysis(studentId, storyId, options)
+  }
 }
