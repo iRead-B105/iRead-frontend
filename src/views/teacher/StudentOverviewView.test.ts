@@ -369,6 +369,7 @@ describe('StudentOverviewView', () => {
     expect(getLearningEvent).toHaveBeenCalledWith(1, 'TRAINING', 701)
     expect(wrapper.text()).toContain('받침이 있는 문장 읽기')
     expect(wrapper.text()).toContain('최근 6주 정확도가 가장 낮은 영역입니다.')
+    expect(wrapper.get('.event-detail').element.parentElement?.tagName).toBe('LI')
 
     await wrapper
       .findAll('button')
@@ -379,6 +380,13 @@ describe('StudentOverviewView', () => {
       '받침 ㄹ 발음',
     )
     expect(updateTeacherMemo).not.toHaveBeenCalled()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('읽기 훈련'))!
+      .trigger('click')
+
+    expect(wrapper.find('.event-detail').exists()).toBe(false)
   })
 
   it('학습 분석 API 오류를 고정 mock 이벤트로 대체하지 않는다', async () => {

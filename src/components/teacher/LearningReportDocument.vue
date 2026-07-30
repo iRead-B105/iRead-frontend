@@ -91,12 +91,12 @@ const emit = defineEmits<{
         >
       </header>
       <Textarea
-        :value="teacherMemoDraft"
+        :model-value="teacherMemoDraft"
         :maxlength="REPORT_MEMO_MAX_LENGTH"
         aria-label="교수자 의견"
         :aria-invalid="Boolean(memoError)"
         placeholder="저장할 교수자 의견을 입력해 주세요. 공백만 저장하면 의견이 삭제됩니다."
-        @input="emit('update:teacherMemoDraft', ($event.target as HTMLTextAreaElement).value)"
+        @update:model-value="emit('update:teacherMemoDraft', String($event))"
       />
       <p v-if="memoStatus === 'saved'" class="save-state" role="status">
         교수자 의견을 저장했습니다.

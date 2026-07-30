@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveTrainingHistoryDateRange } from './trainingHistoryPeriod'
+import {
+  resolveTrainingHistoryDateRange,
+  trainingHistoryQueryKey,
+} from './trainingHistoryPeriod'
 
 describe('resolveTrainingHistoryDateRange', () => {
   it('오늘을 포함한 최근 30일의 시작일과 종료일을 계산한다', () => {
@@ -27,5 +30,12 @@ describe('resolveTrainingHistoryDateRange', () => {
       from: '2026-02-28',
       to: '2026-05-31',
     })
+  })
+
+  it('명시적인 날짜 범위는 변경하지 않고 사용한다', () => {
+    const range = { from: '2026-06-01', to: '2026-06-30' }
+
+    expect(resolveTrainingHistoryDateRange(range)).toEqual(range)
+    expect(trainingHistoryQueryKey(range)).toBe('2026-06-01:2026-06-30')
   })
 })

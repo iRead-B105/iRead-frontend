@@ -173,6 +173,15 @@ describe('MockStudentRepository', () => {
     expect(quarter.learningHistory.map((item) => item.trainingId)).toEqual([9105, 9104, 9103, 9102])
   })
 
+  it('명시적인 날짜 범위에서는 종료일 이후 기록도 제외한다', async () => {
+    const history = await repository.getTrainingHistory(1, {
+      from: '2026-07-01',
+      to: '2026-07-21',
+    })
+
+    expect(history.learningHistory.map((item) => item.trainingId)).toEqual([9104, 9103])
+  })
+
   it('단일 교수자 메모를 저장하고 null로 삭제한다', async () => {
     const mutableRepository = new MockStudentRepository(studentFixtures)
 

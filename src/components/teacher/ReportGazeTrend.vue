@@ -114,7 +114,7 @@ function statusLabel(status: ReportGazeSeries['status']): string {
   <section class="gaze-trend" aria-labelledby="report-gaze-title">
     <header class="gaze-trend__heading">
       <div>
-        <h2 id="report-gaze-title">시선 분석 추이</h2>
+        <h2 id="report-gaze-title">훈련·검사 시선 분석 추이</h2>
       </div>
       <span>집계 {{ formatReportDateTime(trend.generatedAt) }}</span>
     </header>

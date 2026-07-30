@@ -12,7 +12,7 @@ import type {
   StudentReadingSpeedTrend,
   StudentSummary,
   StudentTrainingHistory,
-  StudentTrainingHistoryPeriod,
+  StudentTrainingHistoryQuery,
   StudentUpdateInput,
 } from '../model'
 
@@ -61,7 +61,7 @@ export interface StudentRepository {
   ) => Promise<StudentReadingSpeedTrend>
   readonly getTrainingHistory: (
     studentId: number,
-    period: StudentTrainingHistoryPeriod,
+    query: StudentTrainingHistoryQuery,
     options?: StudentRequestOptions,
   ) => Promise<StudentTrainingHistory>
   readonly updateTeacherMemo: (

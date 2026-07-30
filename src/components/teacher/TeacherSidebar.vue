@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import type { StudentNavigationItem } from '@/features/teacher/student'
+import { useReportStore } from '@/stores/report'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
 import SidebarIcon from '@/components/teacher/SidebarIcon.vue'
@@ -13,6 +14,7 @@ const route = useRoute()
 const router = useRouter()
 const sessionStore = useSessionStore()
 const studentStore = useStudentStore()
+const reportStore = useReportStore()
 const { teacher, logoutPending } = storeToRefs(sessionStore)
 const { navigationItemsById, selectedStudentId } = storeToRefs(studentStore)
 const logoutError = ref('')
@@ -120,7 +122,10 @@ onMounted(() => {
             <span class="sidebar-nav__icon"><SidebarIcon name="clipboard" /></span
             ><strong>검사 이력</strong>
           </RouterLink>
-          <RouterLink :to="{ name: 'student-report', params: { id: currentStudent.studentId } }">
+          <RouterLink
+            :to="{ name: 'student-report', params: { id: currentStudent.studentId } }"
+            @click="reportStore.startNewReport()"
+          >
             <span class="sidebar-nav__icon"><SidebarIcon name="report" /></span
             ><strong>보고서</strong>
           </RouterLink>

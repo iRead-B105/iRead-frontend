@@ -168,6 +168,22 @@ describe('TeacherSidebar', () => {
     expect(wrapper.findAll('[aria-disabled="true"]')).toHaveLength(0)
   })
 
+  it('현재 보고서 메뉴를 다시 선택하면 보고서 상세 선택을 초기화한다', async () => {
+    const { wrapper, pinia } = await mountSidebar(
+      createRepository(),
+      '/teacher/students/7/report',
+    )
+    const reports = useReportStore(pinia)
+    reports.selectedReportId = 1002
+
+    await wrapper
+      .findAll('a')
+      .find((link) => link.text().includes('보고서'))!
+      .trigger('click')
+
+    expect(reports.selectedReportId).toBeNull()
+  })
+
   it('목록이 비어 있어도 학생 종속 메뉴 위치를 유지한다', async () => {
     const { wrapper } = await mountSidebar(createRepository([]))
 

@@ -18,6 +18,11 @@ import {
   validateReportPeriod,
   type ReportListItem,
 } from '@/features/teacher/report'
+import type {
+  StudentRequestStatus,
+  StudentTrainingHistoryDateRange,
+  StudentTrainingHistoryItem,
+} from '@/features/teacher/student'
 import { asyncStateKind } from '@/features/teacher/error'
 import { useReportStore } from '@/stores/report'
 import { useSessionStore } from '@/stores/session'
@@ -56,6 +61,11 @@ const { teacher } = storeToRefs(sessionStore)
 
 const reportQuery = ref('')
 const today = localDateString()
+const completedTrainingsById = ref<Record<number, StudentTrainingHistoryItem>>({})
+const reportHistoryStatus = ref<StudentRequestStatus>('idle')
+const reportHistoryError = ref<string | null>(null)
+const loadedHistoryRanges = new Set<string>()
+const loadingHistoryRanges = new Map<string, Promise<void>>()
 const studentId = computed(() => parsePositiveReportId(route.params.id))
 const invalidStudentId = computed(() => studentId.value === null)
 const listErrorKind = computed(() => asyncStateKind(listUiError.value))
@@ -77,6 +87,32 @@ const studentLoadError = computed(() =>
   studentId.value === null ? null : (detailErrorById.value[studentId.value] ?? null),
 )
 const periodErrors = computed(() => validateReportPeriod(startDate.value, endDate.value, today))
+const completedDateCounts = computed<Record<string, number>>(() => {
+  const counts: Record<string, number> = {}
+  for (const training of Object.values(completedTrainingsById.value)) {
+    const finishedDate = training.finishedAt?.slice(0, 10)
+    if (!finishedDate) continue
+    counts[finishedDate] = (counts[finishedDate] ?? 0) + 1
+  }
+  return counts
+})
+const selectedCompletedTrainings = computed(() =>
+  Object.values(completedTrainingsById.value).filter((training) => {
+    const finishedDate = training.finishedAt?.slice(0, 10)
+    return Boolean(
+      finishedDate && finishedDate >= startDate.value && finishedDate <= endDate.value,
+    )
+  }),
+)
+const completedTrainingCount = computed(() => selectedCompletedTrainings.value.length)
+const learningDayCount = computed(
+  () =>
+    new Set(
+      selectedCompletedTrainings.value
+        .map((training) => training.finishedAt?.slice(0, 10))
+        .filter((date): date is string => Boolean(date)),
+    ).size,
+)
 const filteredReports = computed(() => {
   const query = reportQuery.value.trim().toLowerCase()
   if (!query) return reports.value
@@ -89,6 +125,11 @@ watch(
   studentId,
   async (id) => {
     reportQuery.value = ''
+    completedTrainingsById.value = {}
+    loadedHistoryRanges.clear()
+    loadingHistoryRanges.clear()
+    reportHistoryStatus.value = 'idle'
+    reportHistoryError.value = null
     if (id === null) {
       reportStore.reset()
       return
@@ -102,6 +143,85 @@ watch(
   },
   { immediate: true },
 )
+
+watch(
+  [studentId, startDate, endDate],
+  ([id, from, to]) => {
+    if (id === null || !from || !to || from > to) return
+    void loadCompletedTrainingRange({ from, to }, true)
+  },
+  { immediate: true },
+)
+
+function historyRangeKey(student: number, range: StudentTrainingHistoryDateRange): string {
+  return `${student}:${range.from}:${range.to}`
+}
+
+async function loadCompletedTrainingRange(
+  range: StudentTrainingHistoryDateRange,
+  exposeStatus = false,
+  force = false,
+): Promise<void> {
+  const requestedStudentId = studentId.value
+  if (requestedStudentId === null) return
+  const key = historyRangeKey(requestedStudentId, range)
+  if (force) loadedHistoryRanges.delete(key)
+  if (loadedHistoryRanges.has(key)) {
+    if (exposeStatus) reportHistoryStatus.value = 'success'
+    return
+  }
+  const inFlight = loadingHistoryRanges.get(key)
+  if (inFlight) {
+    await inFlight
+    return
+  }
+
+  if (exposeStatus) {
+    reportHistoryStatus.value = 'loading'
+    reportHistoryError.value = null
+  }
+  const request = (async () => {
+    const history = await studentStore.loadTrainingHistory(requestedStudentId, range)
+    if (studentId.value !== requestedStudentId) return
+    if (!history) {
+      if (exposeStatus) {
+        reportHistoryStatus.value = 'error'
+        reportHistoryError.value = '완료 훈련일을 불러오지 못했습니다.'
+      }
+      return
+    }
+    completedTrainingsById.value = {
+      ...completedTrainingsById.value,
+      ...Object.fromEntries(
+        history.learningHistory
+          .filter((training) => training.finishedAt !== null)
+          .map((training) => [training.trainingId, training]),
+      ),
+    }
+    loadedHistoryRanges.add(key)
+    if (exposeStatus) {
+      reportHistoryStatus.value = 'success'
+      reportHistoryError.value = null
+    }
+  })().finally(() => {
+    loadingHistoryRanges.delete(key)
+  })
+  loadingHistoryRanges.set(key, request)
+  await request
+}
+
+function loadVisibleHistoryRange(range: StudentTrainingHistoryDateRange): void {
+  void loadCompletedTrainingRange(range)
+}
+
+function retrySelectedHistory(): void {
+  if (studentId.value === null || !startDate.value || !endDate.value) return
+  void loadCompletedTrainingRange(
+    { from: startDate.value, to: endDate.value },
+    true,
+    true,
+  )
+}
 
 async function generateReport(): Promise<void> {
   if (studentId.value === null) return
@@ -275,8 +395,15 @@ async function retryStudent(): Promise<void> {
           :create-error="createError"
           :duplicate-report-id="duplicateReportId"
           :submitting="createStatus === 'submitting'"
+          :completed-training-count="completedTrainingCount"
+          :learning-day-count="learningDayCount"
+          :completed-date-counts="completedDateCounts"
+          :history-status="reportHistoryStatus"
+          :history-error="reportHistoryError"
           @generate="generateReport"
           @open-duplicate="reportStore.openDuplicateReport()"
+          @visible-range="loadVisibleHistoryRange"
+          @retry-history="retrySelectedHistory"
         />
       </div>
     </template>

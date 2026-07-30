@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import ReportPeriodCalendar from '@/components/teacher/ReportPeriodCalendar.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import type { ReportPeriodErrors } from '@/features/teacher/report'
+import type { StudentRequestStatus } from '@/features/teacher/student'
 
 const props = defineProps<{
   startDate: string
@@ -14,6 +14,11 @@ const props = defineProps<{
   createError: string | null
   duplicateReportId: number | null
   submitting: boolean
+  completedTrainingCount: number
+  learningDayCount: number
+  completedDateCounts: Readonly<Record<string, number>>
+  historyStatus: StudentRequestStatus
+  historyError: string | null
 }>()
 
 const emit = defineEmits<{
@@ -21,13 +26,27 @@ const emit = defineEmits<{
   'update:endDate': [value: string]
   generate: []
   openDuplicate: []
+  visibleRange: [range: { from: string; to: string }]
+  retryHistory: []
 }>()
 
 const invalid = computed(
-  () => Boolean(props.periodErrors.startDate) || Boolean(props.periodErrors.endDate),
+  () =>
+    Boolean(props.periodErrors.startDate) ||
+    Boolean(props.periodErrors.endDate) ||
+    props.historyStatus !== 'success' ||
+    props.learningDayCount < 2,
 )
 
-const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '교수자 의견']
+const reportSections = [
+  '학습 참여 요약',
+  '핵심 성과 요약',
+  '기간별 성장 추이',
+  '커리큘럼 영역별 성취도',
+  '자주 틀린 단어와 오답률',
+  '훈련·검사 시선 분석 추이',
+  '교수자 의견',
+]
 </script>
 
 <template>
@@ -41,43 +60,29 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
     <CardContent class="report-setup__body">
       <div class="report-period">
         <h3>조회 기간</h3>
-        <div class="report-period__fields">
-          <div class="field">
-            <Label for="report-start-date">시작일</Label>
-            <Input
-              id="report-start-date"
-              type="date"
-              required
-              :value="startDate"
-              :max="today"
-              :aria-invalid="Boolean(periodErrors.startDate)"
-              :aria-describedby="periodErrors.startDate ? 'report-start-date-error' : undefined"
-              :disabled="submitting"
-              @input="emit('update:startDate', ($event.target as HTMLInputElement).value)"
-            />
-            <p v-if="periodErrors.startDate" id="report-start-date-error" class="field-error">
-              {{ periodErrors.startDate }}
-            </p>
-          </div>
-          <span aria-hidden="true">—</span>
-          <div class="field">
-            <Label for="report-end-date">종료일</Label>
-            <Input
-              id="report-end-date"
-              type="date"
-              required
-              :value="endDate"
-              :max="today"
-              :aria-invalid="Boolean(periodErrors.endDate)"
-              :aria-describedby="periodErrors.endDate ? 'report-end-date-error' : undefined"
-              :disabled="submitting"
-              @input="emit('update:endDate', ($event.target as HTMLInputElement).value)"
-            />
-            <p v-if="periodErrors.endDate" id="report-end-date-error" class="field-error">
-              {{ periodErrors.endDate }}
-            </p>
-          </div>
+        <ReportPeriodCalendar
+          :start-date="startDate"
+          :end-date="endDate"
+          :today="today"
+          :completed-date-counts="completedDateCounts"
+          :history-status="historyStatus"
+          :history-error="historyError"
+          :disabled="submitting"
+          @update:start-date="emit('update:startDate', $event)"
+          @update:end-date="emit('update:endDate', $event)"
+          @visible-range="emit('visibleRange', $event)"
+          @retry="emit('retryHistory')"
+        />
+        <div class="report-period__selection">
+          <span>{{ startDate }} ~ {{ endDate }}</span>
+          <strong>완료 훈련 {{ completedTrainingCount }}회 · 학습일 {{ learningDayCount }}일</strong>
         </div>
+        <p v-if="periodErrors.startDate || periodErrors.endDate" class="field-error">
+          {{ periodErrors.startDate ?? periodErrors.endDate }}
+        </p>
+        <p v-else-if="historyStatus === 'success' && learningDayCount < 2" class="field-error">
+          보고서를 생성하려면 서로 다른 완료 학습일이 2일 이상 필요합니다.
+        </p>
       </div>
 
       <div class="report-contents">
@@ -147,22 +152,21 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
   margin-bottom: 15px;
   font-size: 13px;
 }
-.report-period__fields {
+.report-period__selection {
   display: grid;
-  align-items: start;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 3px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  font-size: 11px;
 }
-.report-period__fields > span {
-  padding-top: 34px;
-  color: var(--slate-400);
-}
-.field {
-  display: grid;
-  gap: 7px;
+.report-period__selection strong {
+  color: var(--foreground);
+  font-size: 12px;
 }
 .field-error {
-  margin: 0;
+  margin: 9px 0 0;
   color: var(--destructive);
   font-size: 11px;
 }
@@ -224,12 +228,8 @@ const reportSections = ['학습 요약', '기간별 분석', '시선 추이', '�
   }
 }
 @container (max-width: 520px) {
-  .report-period__fields,
   .report-contents ul {
     grid-template-columns: 1fr;
-  }
-  .report-period__fields > span {
-    display: none;
   }
 
   .report-period,

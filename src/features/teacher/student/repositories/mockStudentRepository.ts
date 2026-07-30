@@ -15,7 +15,7 @@ import type {
   StudentMutationCommand,
   StudentReadingSpeedPoint,
   StudentTrainingHistoryItem,
-  StudentTrainingHistoryPeriod,
+  StudentTrainingHistoryQuery,
   StudentUpdateInput,
 } from '../model'
 import type { StudentRepository, StudentRequestOptions } from './studentRepository'
@@ -311,15 +311,15 @@ export class MockStudentRepository implements StudentRepository {
 
   async getTrainingHistory(
     studentId: number,
-    period: StudentTrainingHistoryPeriod,
+    query: StudentTrainingHistoryQuery,
     options?: StudentRequestOptions,
   ) {
     throwIfAborted(options)
     await this.getDetail(studentId, options)
-    const { from } = resolveTrainingHistoryDateRange(period, this.now())
+    const { from, to } = resolveTrainingHistoryDateRange(query, this.now())
     return {
       learningHistory: [...(this.trainingHistories.get(studentId) ?? [])]
-        .filter((item) => item.date >= from)
+        .filter((item) => item.date >= from && item.date <= to)
         .sort((left, right) => right.date.localeCompare(left.date))
         .map((item) => ({ ...item })),
     }

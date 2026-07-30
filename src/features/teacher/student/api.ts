@@ -16,7 +16,7 @@ import type {
   StudentGender,
   StudentSummary,
   StudentTrainingHistory,
-  StudentTrainingHistoryPeriod,
+  StudentTrainingHistoryQuery,
   StudentUpdateInput,
 } from './model'
 import type { StudentRequestOptions } from './repositories/studentRepository'
@@ -61,7 +61,7 @@ export interface StudentApi {
   ) => Promise<StudentReadingSpeedTrend>
   readonly getTrainingHistory: (
     studentId: number,
-    period: StudentTrainingHistoryPeriod,
+    query: StudentTrainingHistoryQuery,
     options?: StudentRequestOptions,
   ) => Promise<StudentTrainingHistory>
   readonly updateTeacherMemo: (studentId: number, teacherMemo: string | null) => Promise<void>
@@ -298,8 +298,8 @@ export function createStudentApi(
           .sort((left, right) => left.date.localeCompare(right.date)),
       }
     },
-    async getTrainingHistory(studentId, period, options) {
-      const { from, to } = resolveTrainingHistoryDateRange(period, now())
+    async getTrainingHistory(studentId, query, options) {
+      const { from, to } = resolveTrainingHistoryDateRange(query, now())
       const search = new URLSearchParams({ from, to })
       const result = await request<StudentTrainingHistoryDto>(
         `/api/admin/student/${studentId}/training-history?${search}`,

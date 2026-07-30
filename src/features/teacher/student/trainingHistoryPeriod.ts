@@ -1,9 +1,13 @@
 import { resolveHistoryDateRange } from '@/features/teacher/periodDateRange'
-import type { StudentTrainingHistoryPeriod } from './model'
+import type { StudentTrainingHistoryQuery } from './model'
 
 export function resolveTrainingHistoryDateRange(
-  period: StudentTrainingHistoryPeriod,
+  query: StudentTrainingHistoryQuery,
   today: Date = new Date(),
 ): ReturnType<typeof resolveHistoryDateRange> {
-  return resolveHistoryDateRange(period, today)
+  return typeof query === 'string' ? resolveHistoryDateRange(query, today) : query
+}
+
+export function trainingHistoryQueryKey(query: StudentTrainingHistoryQuery): string {
+  return typeof query === 'string' ? query : `${query.from}:${query.to}`
 }

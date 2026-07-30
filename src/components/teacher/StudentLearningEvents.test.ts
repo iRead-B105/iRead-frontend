@@ -69,6 +69,8 @@ describe('StudentLearningEvents', () => {
     expect(wrapper.text()).toContain('10분')
     expect(wrapper.text()).toContain('2회')
     expect(wrapper.text()).toContain('받침 ㄹ 발음')
+    expect(wrapper.get('.event-detail').element.parentElement?.tagName).toBe('LI')
+    expect(wrapper.findAll('.event-detail')).toHaveLength(1)
 
     await wrapper
       .findAll('button')
