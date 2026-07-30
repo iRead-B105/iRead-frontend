@@ -27,10 +27,10 @@ import { isApiError } from '@/lib/api'
 import { useStudentStore } from '@/stores/students'
 
 const attentionReasonLabels: Readonly<Record<StudentAttentionReason, string>> = {
-  LOW_ACCURACY: '최근 읽기 정확도 확인 필요',
-  GAZE_ANALYSIS_FAILED: '최근 시선 분석 확인 필요',
-  INACTIVE: '장기간 학습 기록 없음',
-  NO_HISTORY: '아직 학습 기록 없음',
+  LOW_ACCURACY: '정확도 저하',
+  GAZE_ANALYSIS_FAILED: '시선 분석 확인',
+  INACTIVE: '학습 공백',
+  NO_HISTORY: '학습 기록 없음',
 }
 
 const route = useRoute()
@@ -192,9 +192,6 @@ const selectedTrendHasData = computed(() =>
     ? accuracyTrend.value.length > 0
     : readingSpeedTrend.value.length > 0,
 )
-const selectedTrendTitle = computed(() =>
-  selectedTrend.value === 'accuracy' ? '읽기 정확도' : '읽기 속도',
-)
 const selectedTrendLoadingLabel = computed(() =>
   selectedTrend.value === 'accuracy'
     ? '정확도 추이를 불러오는 중입니다.'
@@ -214,17 +211,12 @@ const selectedTrendOption = computed(() =>
   selectedTrend.value === 'accuracy' ? accuracyChartOption.value : readingSpeedChartOption.value,
 )
 const selectedTrendSummary = computed(() =>
-  selectedTrend.value === 'accuracy'
-    ? accuracyChartSummary.value
-    : readingSpeedChartSummary.value,
+  selectedTrend.value === 'accuracy' ? accuracyChartSummary.value : readingSpeedChartSummary.value,
 )
 const selectedTrendAriaLabel = computed(() =>
   selectedTrend.value === 'accuracy'
     ? '최근 6주 날짜별 읽기 정확도 추이 차트'
     : '최근 30일 날짜별 읽기 속도 추이 차트',
-)
-const hasNoHistory = computed(
-  () => learningSummary.value?.attentionReasons.includes('NO_HISTORY') ?? false,
 )
 const visibleAttentionReasons = computed(
   () => learningSummary.value?.attentionReasons.filter((reason) => reason !== 'NO_HISTORY') ?? [],
@@ -279,6 +271,7 @@ async function loadOverview(nextStudentId: number): Promise<void> {
   memoError.value = ''
   selectedEventId.value = null
   selectedEventType.value = null
+  selectedTrend.value = 'accuracy'
   if (!Number.isInteger(nextStudentId) || nextStudentId <= 0) return
 
   await Promise.all([
@@ -295,16 +288,17 @@ async function loadOverview(nextStudentId: number): Promise<void> {
 }
 
 async function selectLearningEvent(event: StudentLearningEvent): Promise<void> {
-  if (
-    selectedEventId.value === event.eventId &&
-    selectedEventType.value === event.eventType
-  ) {
+  if (selectedEventId.value === event.eventId && selectedEventType.value === event.eventType) {
     selectedEventId.value = null
     selectedEventType.value = null
     return
   }
   selectedEventId.value = event.eventId
   selectedEventType.value = event.eventType
+  await studentStore.loadLearningEvent(studentId.value, event.eventType, event.eventId)
+}
+
+async function retryLearningEvent(event: StudentLearningEvent): Promise<void> {
   await studentStore.loadLearningEvent(studentId.value, event.eventType, event.eventId)
 }
 
@@ -444,94 +438,90 @@ watch(studentId, loadOverview, { immediate: true })
             <UserRound :size="20" aria-hidden="true" />
             <span>교수자 확인 신호</span>
             <strong>{{ learningSummary.attentionRequiredCount }}건</strong>
-          </Card>
-        </div>
-
-        <div v-if="learningSummary" class="attention-state">
-          <p v-if="hasNoHistory" class="attention-state__empty">
-            아직 학습 기록이 없습니다. 첫 학습이 완료되면 상태 요약이 표시됩니다.
-          </p>
-          <template v-else-if="visibleAttentionReasons.length">
-            <strong>확인이 필요한 사유</strong>
-            <ul>
+            <ul v-if="visibleAttentionReasons.length" class="summary-card__reasons">
               <li v-for="reason in visibleAttentionReasons" :key="reason">
                 <Badge variant="secondary">{{ attentionReasonLabels[reason] }}</Badge>
               </li>
             </ul>
-          </template>
-          <p v-else class="attention-state__clear">현재 확인이 필요한 공식 학습 신호가 없습니다.</p>
+          </Card>
         </div>
       </section>
 
       <div class="learning-analysis">
-        <Card class="trend-panel" :aria-labelledby="`${selectedTrend}-title`">
-          <header class="section-heading">
-            <div>
-              <h2 :id="`${selectedTrend}-title`">{{ selectedTrendTitle }}</h2>
-            </div>
-            <div class="trend-heading-actions">
-              <div class="trend-switch" aria-label="학습 변화 지표 선택">
-                <Button
-                  size="sm"
-                  type="button"
-                  :variant="selectedTrend === 'accuracy' ? 'default' : 'outline'"
-                  :aria-pressed="selectedTrend === 'accuracy'"
-                  @click="selectedTrend = 'accuracy'"
-                >
-                  읽기 정확도
-                </Button>
-                <Button
-                  size="sm"
-                  type="button"
-                  :variant="selectedTrend === 'reading-speed' ? 'default' : 'outline'"
-                  :aria-pressed="selectedTrend === 'reading-speed'"
-                  @click="selectedTrend = 'reading-speed'"
-                >
-                  읽기 속도
-                </Button>
-              </div>
-              <Button
-                v-if="selectedTrendStatus === 'error'"
-                variant="outline"
-                size="sm"
+        <Card class="trend-panel" :aria-labelledby="`${selectedTrend}-tab`">
+          <header class="trend-heading">
+            <div class="trend-tabs" role="tablist" aria-label="학습 변화 지표">
+              <button
+                id="accuracy-tab"
+                class="trend-tab"
+                :class="{ 'is-selected': selectedTrend === 'accuracy' }"
                 type="button"
-                @click="retrySelectedTrend"
+                role="tab"
+                aria-controls="learning-trend-panel"
+                :aria-selected="selectedTrend === 'accuracy'"
+                @click="selectedTrend = 'accuracy'"
               >
-                다시 시도
-              </Button>
+                읽기 정확도
+              </button>
+              <button
+                id="reading-speed-tab"
+                class="trend-tab"
+                :class="{ 'is-selected': selectedTrend === 'reading-speed' }"
+                type="button"
+                role="tab"
+                aria-controls="learning-trend-panel"
+                :aria-selected="selectedTrend === 'reading-speed'"
+                @click="selectedTrend = 'reading-speed'"
+              >
+                읽기 속도
+              </button>
             </div>
+            <Button
+              v-if="selectedTrendStatus === 'error'"
+              variant="outline"
+              size="sm"
+              type="button"
+              @click="retrySelectedTrend"
+            >
+              다시 시도
+            </Button>
           </header>
 
-          <div v-if="selectedTrendStatus === 'loading'" class="insight-state" aria-live="polite">
-            {{ selectedTrendLoadingLabel }}
-          </div>
           <div
-            v-else-if="selectedTrendStatus === 'error'"
-            class="insight-state is-error"
-            role="alert"
+            id="learning-trend-panel"
+            class="trend-content"
+            role="tabpanel"
+            :aria-labelledby="`${selectedTrend}-tab`"
           >
-            <strong>{{ selectedTrendErrorLabel }}</strong>
-            <span>{{ selectedTrendError ?? '잠시 후 다시 시도해 주세요.' }}</span>
+            <div v-if="selectedTrendStatus === 'loading'" class="insight-state" aria-live="polite">
+              {{ selectedTrendLoadingLabel }}
+            </div>
+            <div
+              v-else-if="selectedTrendStatus === 'error'"
+              class="insight-state is-error"
+              role="alert"
+            >
+              <strong>{{ selectedTrendErrorLabel }}</strong>
+              <span>{{ selectedTrendError ?? '잠시 후 다시 시도해 주세요.' }}</span>
+            </div>
+            <div v-else-if="!selectedTrendHasData" class="insight-state">
+              {{ selectedTrendEmptyLabel }}
+            </div>
+            <ChartPanel
+              v-else
+              :option="selectedTrendOption"
+              height="220px"
+              :aria-label="selectedTrendAriaLabel"
+              :summary="selectedTrendSummary"
+            />
           </div>
-          <div v-else-if="!selectedTrendHasData" class="insight-state">
-            {{ selectedTrendEmptyLabel }}
-          </div>
-          <ChartPanel
-            v-else
-            :option="selectedTrendOption"
-            height="220px"
-            :aria-label="selectedTrendAriaLabel"
-            :summary="selectedTrendSummary"
-          />
 
           <div class="analysis-followup">
             <div>
               <span class="followup-label">읽기 정확도 기록</span>
               <strong>
                 {{
-                  latestAccuracy === null
-                    ? '기록 없음'
-                    : `${firstAccuracy}% → ${latestAccuracy}%`
+                  latestAccuracy === null ? '기록 없음' : `${firstAccuracy}% → ${latestAccuracy}%`
                 }}
               </strong>
               <p>
@@ -574,7 +564,7 @@ watch(studentId, loadOverview, { immediate: true })
             :detail-error="selectedEventDetailError"
             @select="selectLearningEvent"
             @retry-list="studentStore.loadLearningEvents(detail.studentId, 3)"
-            @retry-detail="selectLearningEvent"
+            @retry-detail="retryLearningEvent"
             @add-to-memo="addLearningEventToMemo"
           />
           <RouterLink
@@ -691,7 +681,7 @@ watch(studentId, loadOverview, { immediate: true })
   min-height: 132px;
   align-content: center;
   gap: 6px;
-  padding: 18px;
+  padding: 18px 18px 18px 28px;
 }
 
 .summary-card > svg {
@@ -720,41 +710,25 @@ watch(studentId, loadOverview, { immediate: true })
   color: var(--success-600);
 }
 
-.summary-loading,
-.attention-state {
+.summary-card__reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summary-card__reasons :deep([data-slot='badge']) {
+  font-size: 10px;
+}
+
+.summary-loading {
   padding: 18px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   color: var(--slate-500);
   font-size: 13px;
-}
-
-.attention-state {
-  display: grid;
-  gap: 9px;
-}
-
-.attention-state p,
-.attention-state strong {
-  margin: 0;
-  font-size: 12px;
-}
-
-.attention-state ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.attention-state__empty {
-  color: var(--slate-600);
-}
-
-.attention-state__clear {
-  color: var(--success-700, #15803d);
 }
 
 .learning-analysis {
@@ -772,29 +746,55 @@ watch(studentId, loadOverview, { immediate: true })
   border-radius: var(--radius-lg);
 }
 
-.section-heading {
+.trend-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
+  margin: -4px -4px 14px;
+  border-bottom: 1px solid var(--border);
 }
 
-.section-heading h2 {
-  margin: 0;
+.trend-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.trend-tab {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--slate-500);
+  font: inherit;
   font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
-.trend-heading-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
+.trend-tab:hover {
+  color: var(--slate-800);
 }
 
-.trend-switch {
-  display: flex;
-  gap: 6px;
+.trend-tab.is-selected {
+  border-bottom-color: var(--primary-600);
+  color: var(--slate-950);
+}
+
+.trend-tab:focus-visible {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  outline: 3px solid color-mix(in oklch, var(--ring) 44%, transparent);
+  outline-offset: -3px;
+}
+
+.trend-heading > :deep([data-slot='button']) {
+  margin-bottom: 8px;
+}
+
+.trend-content {
+  min-height: 250px;
 }
 
 .trend-panel :deep(.chart-panel) {
@@ -906,19 +906,18 @@ watch(studentId, loadOverview, { immediate: true })
 
 @media (max-width: 560px) {
   .learning-summary-section > header,
-  .section-heading,
   .analysis-followup {
     align-items: flex-start;
     grid-template-columns: 1fr;
   }
 
-  .section-heading {
+  .trend-heading {
+    align-items: stretch;
     flex-direction: column;
   }
 
-  .trend-heading-actions {
-    width: 100%;
-    justify-content: flex-start;
+  .trend-heading > :deep([data-slot='button']) {
+    align-self: flex-start;
   }
 
   .overview-state {

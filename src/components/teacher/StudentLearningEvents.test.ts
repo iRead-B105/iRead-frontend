@@ -1,10 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import StudentLearningEvents from './StudentLearningEvents.vue'
-import type {
-  StudentLearningEvent,
-  StudentLearningEventDetail,
-} from '@/features/teacher/student'
+import type { StudentLearningEvent, StudentLearningEventDetail } from '@/features/teacher/student'
 
 const events: readonly StudentLearningEvent[] = [
   {
@@ -69,7 +66,7 @@ describe('StudentLearningEvents', () => {
     expect(wrapper.text()).toContain('10분')
     expect(wrapper.text()).toContain('2회')
     expect(wrapper.text()).toContain('받침 ㄹ 발음')
-    expect(wrapper.get('.event-detail').element.parentElement?.tagName).toBe('LI')
+    expect(wrapper.get('.event-detail').element.closest('li')).not.toBeNull()
     expect(wrapper.findAll('.event-detail')).toHaveLength(1)
 
     await wrapper
@@ -105,5 +102,50 @@ describe('StudentLearningEvents', () => {
     expect(wrapper.text()).toContain('산정할 수 없음')
     expect(wrapper.text()).toContain('확인된 문제 구간 없음')
     expect(wrapper.text()).toContain('Backend에서 제공한 권장 훈련이 없습니다.')
+  })
+
+  it('상세 요청 상태가 바뀌어도 선택 카드 내부의 상세 셸을 유지한다', async () => {
+    const wrapper = mount(StudentLearningEvents, {
+      props: {
+        events,
+        selectedEventId: 701,
+        selectedEventType: 'TRAINING',
+        listStatus: 'success',
+        detailStatus: 'loading',
+      },
+    })
+
+    expect(wrapper.get('.event-detail-shell').attributes('aria-busy')).toBe('true')
+    expect(wrapper.text()).toContain('학습 이벤트 상세를 불러오는 중입니다.')
+
+    await wrapper.setProps({
+      detail,
+      detailStatus: 'success',
+    })
+
+    expect(wrapper.get('.event-detail-shell').attributes('aria-busy')).toBeUndefined()
+    expect(wrapper.get('.event-detail').text()).toContain('받침 ㄹ 발음')
+  })
+
+  it('상세 오류 재시도는 선택을 닫지 않고 retry 이벤트만 전달한다', async () => {
+    const wrapper = mount(StudentLearningEvents, {
+      props: {
+        events,
+        selectedEventId: 701,
+        selectedEventType: 'TRAINING',
+        listStatus: 'success',
+        detailStatus: 'error',
+        detailError: '연결 실패',
+      },
+    })
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '상세 다시 시도')!
+      .trigger('click')
+
+    expect(wrapper.emitted('retryDetail')).toEqual([[events[0]]])
+    expect(wrapper.emitted('select')).toBeUndefined()
+    expect(wrapper.find('.event-detail-shell').exists()).toBe(true)
   })
 })

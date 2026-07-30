@@ -71,9 +71,7 @@ const emit = defineEmits<{
       <strong>최근 학습 이벤트를 불러오지 못했습니다.</strong>
       <span>{{ listError ?? '잠시 후 다시 확인해 주세요.' }}</span>
     </div>
-    <p v-else-if="events.length === 0" class="content-state">
-      아직 표시할 학습 이벤트가 없습니다.
-    </p>
+    <p v-else-if="events.length === 0" class="content-state">아직 표시할 학습 이벤트가 없습니다.</p>
 
     <ol v-else class="learning-event-list">
       <li v-for="event in events" :key="`${event.eventType}:${event.eventId}`">
@@ -95,103 +93,111 @@ const emit = defineEmits<{
             <b>{{ event.accuracy === null ? '정확도 없음' : `${event.accuracy}%` }}</b>
           </span>
         </button>
-        <template
+        <div
           v-if="selectedEventId === event.eventId && selectedEventType === event.eventType"
+          class="event-detail-shell"
+          :aria-busy="detailStatus === 'loading' ? 'true' : undefined"
         >
           <div v-if="detailStatus === 'loading'" class="detail-placeholder" aria-live="polite">
             학습 이벤트 상세를 불러오는 중입니다.
           </div>
 
-          <div v-else-if="detailStatus === 'error'" class="detail-placeholder is-error" role="alert">
+          <div
+            v-else-if="detailStatus === 'error'"
+            class="detail-placeholder is-error"
+            role="alert"
+          >
             <strong>학습 이벤트 상세를 불러오지 못했습니다.</strong>
             <span>{{ detailError ?? '잠시 후 다시 시도해 주세요.' }}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              type="button"
-              @click="emit('retryDetail', event)"
-            >
+            <Button variant="outline" size="sm" type="button" @click="emit('retryDetail', event)">
               상세 다시 시도
             </Button>
           </div>
 
-          <article v-else-if="detail" class="event-detail" aria-live="polite">
-            <header>
-              <div>
-                <span>학습 이벤트 상세</span>
-                <h3>{{ studentLearningEventTypeLabels[detail.eventType] }}</h3>
-              </div>
-              <Badge v-if="detail.attentionRequired" variant="secondary">확인 필요</Badge>
-            </header>
+          <Transition v-else name="event-detail-fade" appear>
+            <article
+              v-if="detail"
+              :key="`${detail.eventType}:${detail.eventId}`"
+              class="event-detail"
+              aria-live="polite"
+            >
+              <header>
+                <div>
+                  <span>학습 이벤트 상세</span>
+                  <h3>{{ studentLearningEventTypeLabels[detail.eventType] }}</h3>
+                </div>
+                <Badge v-if="detail.attentionRequired" variant="secondary">확인 필요</Badge>
+              </header>
 
-            <dl>
-              <div>
-                <dt>발생 시각</dt>
-                <dd>{{ formatStudentDateTime(detail.occurredAt) }}</dd>
-              </div>
-              <div>
-                <dt>정확도</dt>
-                <dd>
-                  {{ detail.accuracy === null ? '산정할 수 없음' : `${detail.accuracy}%` }}
-                </dd>
-              </div>
-              <div>
-                <dt>재시도</dt>
-                <dd>{{ detail.retryCount }}회</dd>
-              </div>
-              <div>
-                <dt>문제 구간</dt>
-                <dd>
-                  <ul v-if="detail.problemSegments.length" class="problem-segments">
-                    <li v-for="segment in detail.problemSegments" :key="segment">{{ segment }}</li>
-                  </ul>
-                  <span v-else>확인된 문제 구간 없음</span>
-                </dd>
-              </div>
-              <div>
-                <dt>주의 사유</dt>
-                <dd>
-                  <ul v-if="detail.attentionReasons.length" class="attention-reasons">
-                    <li v-for="reason in detail.attentionReasons" :key="reason">
-                      {{ attentionReasonLabels[reason] }}
-                    </li>
-                  </ul>
-                  <span v-else>공식 주의 사유 없음</span>
-                </dd>
-              </div>
-            </dl>
-
-            <section v-if="detail.recommendedTrainingTemplateId !== null" class="recommendation">
-              <span>Backend 권장 훈련</span>
-              <strong>{{ detail.recommendedCurriculumUnitName }}</strong>
-              <p>{{ detail.recommendationReason }}</p>
               <dl>
                 <div>
-                  <dt>권장 시간</dt>
-                  <dd>{{ detail.recommendedMinutes }}분</dd>
+                  <dt>발생 시각</dt>
+                  <dd>{{ formatStudentDateTime(detail.occurredAt) }}</dd>
                 </div>
                 <div>
-                  <dt>권장 반복</dt>
-                  <dd>{{ detail.recommendedRepeatCount }}회</dd>
+                  <dt>정확도</dt>
+                  <dd>
+                    {{ detail.accuracy === null ? '산정할 수 없음' : `${detail.accuracy}%` }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>재시도</dt>
+                  <dd>{{ detail.retryCount }}회</dd>
+                </div>
+                <div>
+                  <dt>문제 구간</dt>
+                  <dd>
+                    <ul v-if="detail.problemSegments.length" class="problem-segments">
+                      <li v-for="segment in detail.problemSegments" :key="segment">
+                        {{ segment }}
+                      </li>
+                    </ul>
+                    <span v-else>확인된 문제 구간 없음</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>주의 사유</dt>
+                  <dd>
+                    <ul v-if="detail.attentionReasons.length" class="attention-reasons">
+                      <li v-for="reason in detail.attentionReasons" :key="reason">
+                        {{ attentionReasonLabels[reason] }}
+                      </li>
+                    </ul>
+                    <span v-else>공식 주의 사유 없음</span>
+                  </dd>
                 </div>
               </dl>
-            </section>
-            <p v-else class="recommendation-empty">
-              Backend에서 제공한 권장 훈련이 없습니다.
-            </p>
 
-            <div class="event-detail__actions">
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                @click="emit('addToMemo', detail)"
-              >
-                내부 메모에 추가
-              </Button>
-            </div>
-          </article>
-        </template>
+              <section v-if="detail.recommendedTrainingTemplateId !== null" class="recommendation">
+                <span>Backend 권장 훈련</span>
+                <strong>{{ detail.recommendedCurriculumUnitName }}</strong>
+                <p>{{ detail.recommendationReason }}</p>
+                <dl>
+                  <div>
+                    <dt>권장 시간</dt>
+                    <dd>{{ detail.recommendedMinutes }}분</dd>
+                  </div>
+                  <div>
+                    <dt>권장 반복</dt>
+                    <dd>{{ detail.recommendedRepeatCount }}회</dd>
+                  </div>
+                </dl>
+              </section>
+              <p v-else class="recommendation-empty">Backend에서 제공한 권장 훈련이 없습니다.</p>
+
+              <div class="event-detail__actions">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  @click="emit('addToMemo', detail)"
+                >
+                  내부 메모에 추가
+                </Button>
+              </div>
+            </article>
+          </Transition>
+        </div>
       </li>
     </ol>
   </section>
@@ -310,6 +316,16 @@ const emit = defineEmits<{
   display: block;
 }
 
+.event-detail-shell {
+  display: grid;
+  min-height: 360px;
+  align-items: start;
+}
+
+.event-detail-shell .detail-placeholder {
+  min-height: 360px;
+}
+
 .event-detail {
   display: grid;
   gap: 16px;
@@ -407,6 +423,20 @@ const emit = defineEmits<{
 .event-detail__actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.event-detail-fade-enter-active {
+  transition: opacity 140ms ease;
+}
+
+.event-detail-fade-enter-from {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event-detail-fade-enter-active {
+    transition: none;
+  }
 }
 
 @media (max-width: 620px) {
