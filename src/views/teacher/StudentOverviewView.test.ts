@@ -13,6 +13,17 @@ import type {
 import { ApiError } from '@/lib/api'
 import { useStudentStore } from '@/stores/students'
 
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+} {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve
+  })
+  return { promise, resolve }
+}
+
 function detail(studentId: number, name = '김하늘'): StudentDetail {
   return {
     studentId,
@@ -132,8 +143,12 @@ describe('StudentOverviewView', () => {
 
     expect(wrapper.text()).toContain('학습 현황')
     expect(wrapper.text()).toContain('문장 이해력 향상')
-    expect(wrapper.text()).toContain('최근 읽기 정확도 확인 필요')
+    expect(wrapper.text()).toContain('정확도 저하')
     expect(wrapper.text()).toContain('교수자 확인 신호')
+    expect(wrapper.find('.attention-state').exists()).toBe(false)
+    expect(wrapper.get('.summary-card--attention').find('.summary-card__reasons').exists()).toBe(
+      true,
+    )
     expect(wrapper.find('.student-profile-card').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('김하늘')
     expect(wrapper.text()).not.toContain('확인 완료')
@@ -176,17 +191,22 @@ describe('StudentOverviewView', () => {
 
     expect(wrapper.text()).toContain('교수자 확인 신호')
     expect(wrapper.text()).toContain('0건')
-    expect(wrapper.text()).toContain('아직 학습 기록이 없습니다.')
+    expect(wrapper.find('.summary-card__reasons').exists()).toBe(false)
+    expect(wrapper.find('.attention-state').exists()).toBe(false)
     expect(wrapper.text()).toContain('표시할 읽기 정확도 데이터가 없습니다.')
     expect(wrapper.text()).toContain('아직 표시할 학습 이벤트가 없습니다.')
     expect(wrapper.text()).toContain('전체 훈련 이력 보기')
     expect(wrapper.text()).not.toContain('최근 읽기 정확도 확인 필요')
 
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text().trim() === '읽기 속도')!
-      .trigger('click')
+    const tabs = wrapper.findAll('[role="tab"]')
+    expect(tabs).toHaveLength(2)
+    expect(tabs[0]!.attributes('aria-selected')).toBe('true')
+    expect(tabs[1]!.attributes('aria-selected')).toBe('false')
 
+    await tabs[1]!.trigger('click')
+
+    expect(tabs[0]!.attributes('aria-selected')).toBe('false')
+    expect(tabs[1]!.attributes('aria-selected')).toBe('true')
     expect(wrapper.text()).toContain('표시할 읽기 속도 데이터가 없습니다.')
   })
 
@@ -369,7 +389,7 @@ describe('StudentOverviewView', () => {
     expect(getLearningEvent).toHaveBeenCalledWith(1, 'TRAINING', 701)
     expect(wrapper.text()).toContain('받침이 있는 문장 읽기')
     expect(wrapper.text()).toContain('최근 6주 정확도가 가장 낮은 영역입니다.')
-    expect(wrapper.get('.event-detail').element.parentElement?.tagName).toBe('LI')
+    expect(wrapper.get('.event-detail').element.closest('li')).not.toBeNull()
 
     await wrapper
       .findAll('button')
@@ -408,5 +428,79 @@ describe('StudentOverviewView', () => {
       .trigger('click')
 
     expect(wrapper.text()).toContain('읽기 속도 추이를 불러오지 못했습니다.')
+  })
+
+  it('기록을 빠르게 바꿔도 이전 상세 응답이 현재 선택을 덮어쓰지 않는다', async () => {
+    const firstEvent: StudentLearningEvent = {
+      eventId: 701,
+      eventType: 'TRAINING',
+      occurredAt: '2026-07-27T16:00:00+09:00',
+      sourceId: 91,
+      accuracy: 68,
+      attentionRequired: true,
+      attentionReasons: ['LOW_ACCURACY'],
+    }
+    const secondEvent: StudentLearningEvent = {
+      eventId: 702,
+      eventType: 'GAZE',
+      occurredAt: '2026-07-28T16:00:00+09:00',
+      sourceId: 92,
+      accuracy: null,
+      attentionRequired: true,
+      attentionReasons: ['GAZE_ANALYSIS_FAILED'],
+    }
+    const firstRequest = deferred<StudentLearningEventDetail>()
+    const secondRequest = deferred<StudentLearningEventDetail>()
+    const getLearningEvent = vi
+      .fn()
+      .mockImplementation((_studentId: number, _eventType: string, eventId: number) =>
+        eventId === firstEvent.eventId ? firstRequest.promise : secondRequest.promise,
+      )
+    const { wrapper } = await mountOverview(
+      repository({
+        listLearningEvents: vi.fn().mockResolvedValue([firstEvent, secondEvent]),
+        getLearningEvent,
+      }),
+    )
+    const eventButtons = wrapper.findAll('.learning-event')
+
+    await eventButtons[0]!.trigger('click')
+    await eventButtons[1]!.trigger('click')
+
+    expect(wrapper.findAll('.event-detail-shell')).toHaveLength(1)
+    expect(eventButtons[1]!.classes()).toContain('is-selected')
+    expect(wrapper.text()).toContain('학습 이벤트 상세를 불러오는 중입니다.')
+
+    firstRequest.resolve({
+      ...firstEvent,
+      retryCount: 1,
+      problemSegments: ['이전 상세 문제'],
+      recommendedTrainingTemplateId: null,
+      recommendedCurriculumUnitId: null,
+      recommendedCurriculumUnitName: null,
+      recommendationReason: null,
+      recommendedMinutes: null,
+      recommendedRepeatCount: null,
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('이전 상세 문제')
+    expect(wrapper.text()).toContain('학습 이벤트 상세를 불러오는 중입니다.')
+
+    secondRequest.resolve({
+      ...secondEvent,
+      retryCount: 0,
+      problemSegments: ['현재 상세 문제'],
+      recommendedTrainingTemplateId: null,
+      recommendedCurriculumUnitId: null,
+      recommendedCurriculumUnitName: null,
+      recommendationReason: null,
+      recommendedMinutes: null,
+      recommendedRepeatCount: null,
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('현재 상세 문제')
+    expect(wrapper.text()).not.toContain('이전 상세 문제')
   })
 })
