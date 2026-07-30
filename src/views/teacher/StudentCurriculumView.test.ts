@@ -24,6 +24,7 @@ function repository(overrides: Partial<TrainingRepository> = {}): TrainingReposi
     getExpectedWords: vi.fn().mockResolvedValue([]),
     addExpectedWord: vi.fn().mockResolvedValue(undefined),
     deleteExpectedWord: vi.fn().mockResolvedValue(undefined),
+    generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
     getTrainingDetail: vi.fn().mockResolvedValue(trainingDetailFixtures[0]),
     getCurriculumLogs: vi.fn().mockResolvedValue([]),
     getTrainingLog: vi.fn(),
@@ -152,11 +153,11 @@ describe('StudentCurriculumView', () => {
     expect(wrapper.text()).not.toContain('훈련 기본 정보')
   })
 
-  it('진행률 null을 0%가 아니라 기록 없음으로 표시한다', async () => {
+  it('성취도 null을 0%가 아니라 미수행 평가 기록 없음으로 표시한다', async () => {
     const { wrapper } = await mountCurriculum(repository())
 
     expect(wrapper.text()).toContain('34개 훈련')
-    expect(wrapper.text()).toContain('기록 없음')
+    expect(wrapper.text()).toContain('미수행(평가 기록 없음)')
     expect(wrapper.text()).not.toContain('모음 따라 보기0%')
   })
 

@@ -15,6 +15,7 @@ import type {
   CurriculumTrainingLog,
   DailyCurriculum,
   ExpectedWord,
+  GeneratedTrainingData,
   SaveCurriculumRequest,
   TrainingCatalogItem,
   TrainingDetail,
@@ -231,6 +232,55 @@ export class MockTrainingRepository implements TrainingRepository {
       words.filter((word) => word.wordId !== wordId),
     )
     this.invalidateGeneratedTraining(trainingId)
+  }
+
+  async generateTraining(
+    studentId: number,
+    trainingId: number,
+  ): Promise<GeneratedTrainingData> {
+    this.assertTrainingBelongsToStudent(studentId, trainingId)
+    const detail = this.details.get(trainingId)
+    if (!detail) {
+      throw new ApiError({
+        status: 404,
+        code: 'TRAINING_DETAIL_NOT_FOUND',
+        message: '훈련 상세 정보를 찾을 수 없습니다.',
+      })
+    }
+    if (detail.status !== 'NOT_READY') {
+      throw new ApiError({
+        status: 409,
+        code: 'TRAINING_ALREADY_READY',
+        message: '시작했거나 완료한 훈련은 다시 생성할 수 없습니다.',
+      })
+    }
+
+    const words = this.expectedWords.get(trainingId) ?? []
+    const targets =
+      words.length > 0
+        ? words.map((word) => word.wordName)
+        : [`${detail.name} 연습 ${detail.trainingTemplateId}`]
+    const generatedData: GeneratedTrainingData = {
+      schemaVersion: 2,
+      trainingTemplateId: detail.trainingTemplateId,
+      expectedWords: clone(words),
+      questions: targets.map((target, index) => ({
+        questionId: index + 1,
+        problem: {
+          targetText: target,
+          instruction: `${detail.name} 활동을 수행해 보세요.`,
+        },
+        answer: {
+          correctText: target,
+        },
+      })),
+    }
+    this.details.set(trainingId, {
+      ...detail,
+      generatedData,
+      status: 'NOT_STARTED',
+    })
+    return clone(generatedData)
   }
 
   async getTrainingDetail(studentId: number, trainingId: number, options?: TrainingRequestOptions) {

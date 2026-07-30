@@ -11,6 +11,7 @@ import type {
   CurriculumStatus,
   DailyCurriculum,
   ExpectedWord,
+  GeneratedTrainingData,
   SaveCurriculumRequest,
   TrainingCatalogItem,
   TrainingDetail,
@@ -298,6 +299,10 @@ export interface TrainingApi {
     trainingId: number,
     wordId: number,
   ) => Promise<void>
+  readonly generateTraining: (
+    studentId: number,
+    trainingId: number,
+  ) => Promise<GeneratedTrainingData>
   readonly getTrainingDetail: (
     studentId: number,
     trainingId: number,
@@ -388,6 +393,12 @@ export function createTrainingApi(
       await request<void>(
         `/api/admin/training/${studentId}/${trainingId}/expected-word/${wordId}`,
         { method: 'DELETE' },
+      )
+    },
+    async generateTraining(studentId, trainingId) {
+      return request<GeneratedTrainingData>(
+        `/api/admin/training/${studentId}/${trainingId}/generate`,
+        { method: 'POST' },
       )
     },
     async getTrainingDetail(studentId, trainingId, options) {

@@ -18,6 +18,66 @@ function firstString(record: Readonly<Record<string, unknown>>, keys: readonly s
   return null
 }
 
+function displayValue(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    const values = value
+      .map(displayValue)
+      .filter((item): item is string => item !== null)
+    return values.length > 0 ? values.join(' · ') : null
+  }
+  if (!isRecord(value)) return null
+  return firstString(value, [
+    'text',
+    'word',
+    'sentence',
+    'target',
+    'targetText',
+    'audioText',
+    'result',
+    'title',
+  ])
+}
+
+function firstDisplayValue(
+  record: Readonly<Record<string, unknown>>,
+  keys: readonly string[],
+): string | null {
+  for (const key of keys) {
+    const value = displayValue(record[key])
+    if (value) return value
+  }
+  return null
+}
+
+function indexedAnswer(question: Readonly<Record<string, unknown>>): string | null {
+  const answerIndex = question.answerIndex
+  const choices = question.choices
+  if (
+    typeof answerIndex === 'number' &&
+    Number.isInteger(answerIndex) &&
+    Array.isArray(choices) &&
+    answerIndex >= 0 &&
+    answerIndex < choices.length
+  ) {
+    return displayValue(choices[answerIndex])
+  }
+  return null
+}
+
+function orderedAnswer(question: Readonly<Record<string, unknown>>): string | null {
+  const answerOrder = question.answerOrder
+  const cards = question.cards
+  if (!Array.isArray(answerOrder) || !Array.isArray(cards)) return null
+  const values = answerOrder.flatMap((value) => {
+    if (typeof value !== 'number' || !Number.isInteger(value)) return []
+    const item = displayValue(cards[value])
+    return item ? [item] : []
+  })
+  return values.length > 0 ? values.join(' ') : null
+}
+
 function generatedItems(detail: TrainingDetail): readonly TrainingPreviewItem[] {
   const questions = detail.generatedData?.questions
   if (!Array.isArray(questions)) return []
@@ -26,20 +86,46 @@ function generatedItems(detail: TrainingDetail): readonly TrainingPreviewItem[] 
     if (!isRecord(question)) return []
     const problem = isRecord(question.problem) ? question.problem : question
     const answer = isRecord(question.answer) ? question.answer : {}
-    const content = firstString(problem, [
+    const content = firstDisplayValue(problem, [
       'targetText',
       'question',
       'prompt',
       'text',
       'sentence',
       'word',
+      'target',
+      'audioText',
+      'targetAudioText',
+      'source',
+      'completedSentence',
+      'result',
+      'title',
+      'imagePrompt',
+      'words',
+      'sentences',
+      'phrases',
+      'cards',
+      'choices',
+      'syllables',
+      'audioParts',
+      'difficultWords',
     ])
     if (!content) return []
+    const directAnswer =
+      firstDisplayValue(answer, ['correctText', 'correctAnswer', 'answer', 'text']) ??
+      indexedAnswer(problem) ??
+      orderedAnswer(problem) ??
+      firstDisplayValue(problem, [
+        'acceptedAnswers',
+        'completedSentence',
+        'result',
+        'target',
+      ])
     return [{
       id: String(question.questionId ?? question.id ?? index + 1),
       label: `문항 ${index + 1}`,
       content,
-      answer: firstString(answer, ['correctText', 'correctAnswer', 'answer', 'text']),
+      answer: directAnswer,
     }]
   })
 }
