@@ -1,6 +1,8 @@
 export type StoryStatus = 'IN_PROGRESS' | 'COMPLETED' | 'DELETED'
 export type StoryReadingStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'
 export type StoryGazeAnalysisStatus = 'NOT_COLLECTED' | 'RUNNING' | 'AVAILABLE' | 'FAILED'
+export type StoryImageGenerationStatus = 'NOT_REQUESTED' | 'PENDING' | 'AVAILABLE' | 'FAILED'
+export type StoryDetailTab = 'gaze' | 'content' | 'branches' | 'images'
 
 export interface StoryTemplateOption {
   readonly storyTemplateId: number
@@ -41,6 +43,76 @@ export interface StoryHistoryList {
   readonly size: number
   readonly totalElements: number
   readonly totalPages: number
+}
+
+export interface StoryLine {
+  readonly lineId: number
+  readonly lineOrder: number
+  readonly lineText: string
+  readonly requiresBranchInput: boolean
+  readonly readAt: string | null
+}
+
+export interface StoryScene {
+  readonly sceneId: number
+  readonly sequenceNo: number
+  readonly imageUrl: string | null
+  readonly imageGenerationStatus: StoryImageGenerationStatus
+  readonly lines: readonly StoryLine[]
+}
+
+export interface StoryBranch {
+  readonly choiceId: number
+  readonly branchLineId: number
+  readonly promptText: string
+  readonly transcript: string
+  readonly createdAt: string
+}
+
+export interface StoryDetail {
+  readonly story: StoryHistoryItem
+  readonly scenes: readonly StoryScene[]
+  readonly branches: readonly StoryBranch[]
+}
+
+export interface StorySentenceGazeMetric {
+  readonly storyLineId: number
+  readonly sequenceNo: number
+  readonly surfaceText: string
+  readonly dwellDurationMs: number
+  readonly fixationCount: number
+  readonly firstGazeOffsetMs: number
+  readonly lastGazeOffsetMs: number
+}
+
+export interface StoryGazeRegression {
+  readonly fromTargetIndex: number
+  readonly fromTokenIndex: number
+  readonly toTargetIndex: number
+  readonly toTokenIndex: number
+  readonly offsetMs: number
+}
+
+export interface StoryGazeAnalysisMeta {
+  readonly contentType: string
+  readonly storyId: number
+  readonly calculationSource: string
+  readonly gazeSessionDurationMs: number
+}
+
+export interface StoryGazeAnalysis {
+  readonly gazeSessionId: number
+  readonly gazeAnalysisId: number
+  readonly calibrationStatus: string
+  readonly startedAt: string
+  readonly endedAt: string
+  readonly totalVisitedDurationMs: number
+  readonly totalVisitedCount: number
+  readonly reverseReadCount: number
+  readonly avgVisitedDurationMs: number | null
+  readonly sentenceMetrics: readonly StorySentenceGazeMetric[]
+  readonly regressions: readonly StoryGazeRegression[]
+  readonly analysisMeta: StoryGazeAnalysisMeta | null
 }
 
 export type StoryRequestStatus = 'idle' | 'loading' | 'success' | 'error'

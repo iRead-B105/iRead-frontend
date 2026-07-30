@@ -4,6 +4,10 @@ import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
+import StoryBranchesTab from '@/components/teacher/story/StoryBranchesTab.vue'
+import StoryContentTab from '@/components/teacher/story/StoryContentTab.vue'
+import StoryGazeTab from '@/components/teacher/story/StoryGazeTab.vue'
+import StoryImagesTab from '@/components/teacher/story/StoryImagesTab.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -14,6 +18,7 @@ import {
   storyGazeStatusLabel,
   storyReadingStatusLabel,
   storyStatusLabel,
+  type StoryDetailTab,
   type StoryHistoryItem,
 } from '@/features/teacher/story'
 import { useStoryHistoryStore } from '@/stores/storyHistory'
@@ -35,11 +40,24 @@ const {
   totalPages,
   selectedStory,
   selectedStoryId,
+  activeTab,
+  currentDetail,
+  currentGazeAnalysis,
   listStatus,
+  detailStatus,
+  gazeStatus,
   listError,
+  detailError,
+  gazeError,
   listUiError,
   hasFilters,
 } = storeToRefs(storyStore)
+const detailTabs: readonly { id: StoryDetailTab; label: string }[] = [
+  { id: 'gaze', label: '시선 분석' },
+  { id: 'content', label: '이야기 내용' },
+  { id: 'branches', label: '분기 기록' },
+  { id: 'images', label: '생성 이미지' },
+]
 const studentId = computed(() => parseStudentId(route.params.id))
 const invalidStudentId = computed(() => studentId.value === null)
 const listErrorKind = computed(() => asyncStateKind(listUiError.value))
@@ -102,16 +120,25 @@ async function changePage(page: number): Promise<void> {
 }
 
 function selectStory(story: StoryHistoryItem): void {
-  storyStore.selectStory(story.storyId)
+  const id = studentId.value
+  if (id === null) return
+  void storyStore.selectAndLoad(id, story.storyId)
 }
 
-function storyStatusClass(story: StoryHistoryItem): string {
-  return story.storyStatus === 'IN_PROGRESS' ? 'is-running' : 'is-completed'
+function retryDetail(): void {
+  const id = studentId.value
+  const storyId = selectedStoryId.value
+  if (id === null || storyId === null) return
+  void storyStore.loadDetail(id, storyId)
 }
 
-function gazeStatusClass(story: StoryHistoryItem): string {
-  return `is-${story.gazeAnalysisStatus.toLowerCase().replace('_', '-')}`
+function retryGaze(): void {
+  const id = studentId.value
+  const storyId = selectedStoryId.value
+  if (id === null || storyId === null) return
+  void storyStore.loadGazeAnalysis(id, storyId)
 }
+
 </script>
 
 <template>
@@ -166,12 +193,12 @@ function gazeStatusClass(story: StoryHistoryItem): string {
         <p v-if="filterError" class="story-filter-error" role="alert">{{ filterError }}</p>
       </Card>
 
-      <div class="story-history-layout">
-        <section class="story-list-panel" aria-labelledby="story-list-title">
-          <div class="story-list-heading">
+      <section class="story-workspace" aria-labelledby="story-selector-title">
+        <div class="story-selector">
+          <div class="story-selector-heading">
             <div>
-              <h2 id="story-list-title">이야기 목록</h2>
-              <p>최근 읽기 활동 순으로 표시됩니다.</p>
+              <h2 id="story-selector-title">이야기 선택</h2>
+              <p>이야기 제목을 선택하면 아래에서 상세 기록을 확인할 수 있습니다.</p>
             </div>
             <strong>{{ totalElements }}개</strong>
           </div>
@@ -197,44 +224,32 @@ function gazeStatusClass(story: StoryHistoryItem): string {
             message="선택한 기간과 이야기 종류에 해당하는 읽기 이력이 없습니다."
             compact
           />
-          <div v-else class="story-list" :aria-busy="listStatus === 'loading'">
+          <div
+            v-else
+            class="story-title-tabs"
+            role="tablist"
+            aria-label="이야기 선택"
+            :aria-busy="listStatus === 'loading'"
+          >
             <button
               v-for="story in stories"
+              :id="`story-selector-tab-${story.storyId}`"
               :key="story.storyId"
-              class="story-list-item"
+              class="story-title-tab"
               :class="{ 'is-selected': selectedStoryId === story.storyId }"
               type="button"
-              :aria-pressed="selectedStoryId === story.storyId"
+              role="tab"
+              :aria-selected="selectedStoryId === story.storyId"
+              aria-controls="story-selected-panel"
+              :tabindex="selectedStoryId === story.storyId ? 0 : -1"
               @click="selectStory(story)"
             >
-              <span class="story-list-item__thumbnail" aria-hidden="true">
-                <img v-if="story.imageUrl" :src="story.imageUrl" alt="" />
-                <span v-else>이야기</span>
-              </span>
-              <span class="story-list-item__content">
-                <span class="story-list-item__top">
-                  <strong>{{ story.title }}</strong>
-                  <time :datetime="story.activityAt">
-                    {{ formatStoryActivityAt(story.activityAt) }}
-                  </time>
-                </span>
-                <span class="story-list-item__badges">
-                  <span class="story-badge" :class="storyStatusClass(story)">
-                    {{ storyStatusLabel(story.storyStatus) }}
-                  </span>
-                  <span class="story-badge is-reading">
-                    {{ storyReadingStatusLabel(story) }}
-                  </span>
-                  <span class="story-badge" :class="gazeStatusClass(story)">
-                    {{ storyGazeStatusLabel(story.gazeAnalysisStatus) }}
-                  </span>
-                </span>
-                <span class="story-progress">
-                  <span>
-                    <span :style="{ width: `${story.readingProgress}%` }" />
-                  </span>
-                  <small>{{ story.readLineCount }}/{{ story.totalLineCount }}문장</small>
-                </span>
+              <strong>{{ story.title }}</strong>
+              <time :datetime="story.activityAt">
+                {{ formatStoryActivityAt(story.activityAt) }}
+              </time>
+              <span class="story-title-tab__progress">
+                {{ story.readLineCount }}/{{ story.totalLineCount }}문장
               </span>
             </button>
           </div>
@@ -260,9 +275,16 @@ function gazeStatusClass(story: StoryHistoryItem): string {
               다음
             </Button>
           </nav>
-        </section>
+        </div>
 
-        <section class="story-detail-shell" aria-labelledby="story-detail-title">
+        <div
+          id="story-selected-panel"
+          class="story-detail-shell"
+          :role="selectedStory ? 'tabpanel' : undefined"
+          :aria-labelledby="
+            selectedStory ? `story-selector-tab-${selectedStory.storyId}` : undefined
+          "
+        >
           <template v-if="selectedStory">
             <div class="story-detail-heading">
               <div>
@@ -289,15 +311,80 @@ function gazeStatusClass(story: StoryHistoryItem): string {
                 </div>
               </dl>
             </div>
+            <div class="story-detail-tabs" role="tablist" aria-label="이야기 상세 정보">
+              <button
+                v-for="tab in detailTabs"
+                :id="`story-tab-${tab.id}`"
+                :key="tab.id"
+                type="button"
+                role="tab"
+                :aria-selected="activeTab === tab.id"
+                :aria-controls="`story-tabpanel-${tab.id}`"
+                :tabindex="activeTab === tab.id ? 0 : -1"
+                :class="{ 'is-active': activeTab === tab.id }"
+                @click="storyStore.setActiveTab(tab.id)"
+              >
+                {{ tab.label }}
+              </button>
+            </div>
+            <div
+              :id="`story-tabpanel-${activeTab}`"
+              class="story-detail-tabpanel"
+              role="tabpanel"
+              :aria-labelledby="`story-tab-${activeTab}`"
+            >
+              <StoryGazeTab
+                v-if="activeTab === 'gaze'"
+                :story-status="selectedStory.gazeAnalysisStatus"
+                :analysis="currentGazeAnalysis"
+                :request-status="gazeStatus"
+                :error="gazeError"
+                @retry="retryGaze"
+              />
+              <template v-else>
+                <p
+                  v-if="detailStatus === 'loading' && currentDetail"
+                  class="story-detail-updating"
+                  role="status"
+                >
+                  최신 상세 내용을 불러오고 있습니다.
+                </p>
+                <AsyncStatePanel
+                  v-if="detailStatus === 'loading' && !currentDetail"
+                  kind="loading"
+                  message="이야기 상세를 불러오고 있습니다."
+                  compact
+                />
+                <AsyncStatePanel
+                  v-else-if="detailStatus === 'error'"
+                  kind="error"
+                  :message="detailError ?? '이야기 상세를 불러오지 못했습니다.'"
+                  retry-label="다시 불러오기"
+                  compact
+                  @retry="retryDetail"
+                />
+                <template v-else-if="currentDetail">
+                  <StoryContentTab
+                    v-if="activeTab === 'content'"
+                    :detail="currentDetail"
+                  />
+                  <StoryBranchesTab
+                    v-else-if="activeTab === 'branches'"
+                    :detail="currentDetail"
+                  />
+                  <StoryImagesTab v-else :detail="currentDetail" />
+                </template>
+              </template>
+            </div>
           </template>
           <AsyncStatePanel
             v-else
             kind="empty"
             title="아직 이야기를 읽지 않았어요"
-            message="왼쪽 이야기 목록에서 상세 기록을 확인할 이야기를 선택해 주세요."
+            message="위 이야기 제목 탭에서 상세 기록을 확인할 이야기를 선택해 주세요."
           />
-        </section>
-      </div>
+        </div>
+      </section>
     </template>
   </div>
 </template>
@@ -308,8 +395,7 @@ function gazeStatusClass(story: StoryHistoryItem): string {
 }
 
 .story-filter-card,
-.story-list-panel,
-.story-detail-shell {
+.story-workspace {
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-lg);
   background: var(--white);
@@ -354,43 +440,38 @@ function gazeStatusClass(story: StoryHistoryItem): string {
   font-size: 12px;
 }
 
-.story-history-layout {
-  display: grid;
-  min-height: 560px;
-  align-items: stretch;
-  gap: 18px;
-  grid-template-columns: minmax(320px, 0.78fr) minmax(0, 1.7fr);
-}
-
-.story-list-panel,
-.story-detail-shell {
+.story-workspace {
   min-width: 0;
-  padding: 20px;
+  min-height: 620px;
+  padding: 24px;
 }
 
-.story-list-heading,
+.story-selector {
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--slate-200);
+}
+
+.story-selector-heading,
 .story-detail-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--slate-200);
 }
 
-.story-list-heading h2,
+.story-selector-heading h2,
 .story-detail-heading h2,
-.story-list-heading p,
+.story-selector-heading p,
 .story-detail-heading p {
   margin: 0;
 }
 
-.story-list-heading h2,
+.story-selector-heading h2,
 .story-detail-heading h2 {
   font-size: 18px;
 }
 
-.story-list-heading p,
+.story-selector-heading p,
 .story-detail-heading p,
 .story-detail-heading time {
   margin-top: 3px;
@@ -398,152 +479,84 @@ function gazeStatusClass(story: StoryHistoryItem): string {
   font-size: 12px;
 }
 
-.story-list-heading > strong {
+.story-selector-heading > strong {
   color: var(--primary-700);
   font-size: 13px;
 }
 
-.story-list {
-  display: grid;
+.story-title-tabs {
+  display: flex;
   gap: 10px;
-  padding-top: 14px;
+  margin-top: 18px;
+  overflow-x: auto;
+  padding: 2px 2px 6px;
+  scrollbar-width: thin;
 }
 
-.story-list[aria-busy='true'] {
+.story-title-tabs[aria-busy='true'] {
   opacity: 0.64;
 }
 
-.story-list-item {
+.story-title-tab {
+  position: relative;
   display: grid;
-  width: 100%;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
+  min-width: 190px;
+  max-width: 260px;
+  flex: 1 0 190px;
+  gap: 5px;
+  padding: 14px 16px;
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-md);
   background: var(--white);
   color: var(--slate-800);
+  cursor: pointer;
+  font: inherit;
   text-align: left;
-  grid-template-columns: 58px minmax(0, 1fr);
   transition:
     border-color 150ms ease,
-    background-color 150ms ease;
+    background-color 150ms ease,
+    box-shadow 150ms ease;
 }
 
-.story-list-item:hover {
-  border-color: var(--primary-100);
+.story-title-tab:hover {
+  border-color: var(--primary-300);
   background: var(--interactive-hover-background);
 }
 
-.story-list-item.is-selected {
+.story-title-tab.is-selected {
   border-color: var(--primary-500);
   background: var(--active-selection-background);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary-500) 24%, transparent);
 }
 
-.story-list-item__thumbnail {
-  display: grid;
-  width: 58px;
-  height: 72px;
+.story-title-tab.is-selected::after {
+  position: absolute;
+  right: 16px;
+  bottom: -1px;
+  left: 16px;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: var(--primary-600);
+  content: '';
+}
+
+.story-title-tab strong {
   overflow: hidden;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(145deg, var(--primary-50), var(--slate-100));
   color: var(--primary-700);
-  font-size: 11px;
-  font-weight: 700;
-  place-items: center;
-}
-
-.story-list-item__thumbnail img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.story-list-item__content {
-  display: grid;
-  min-width: 0;
-  gap: 8px;
-}
-
-.story-list-item__top {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.story-list-item__top strong {
-  overflow: hidden;
   font-size: 14px;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.story-list-item__top time {
+.story-title-tab time,
+.story-title-tab__progress {
   color: var(--slate-500);
   font-size: 11px;
 }
 
-.story-list-item__badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.story-badge {
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: var(--slate-100);
-  color: var(--slate-600);
-  font-size: 10px;
+.story-title-tab__progress {
   font-weight: 650;
-}
-
-.story-badge.is-running,
-.story-badge.is-not-collected {
-  background: var(--slate-100);
-}
-
-.story-badge.is-completed,
-.story-badge.is-available {
-  background: color-mix(in oklch, var(--success-600) 12%, white);
-  color: color-mix(in oklch, var(--success-600) 82%, black);
-}
-
-.story-badge.is-reading {
-  background: var(--primary-50);
-  color: var(--primary-700);
-}
-
-.story-badge.is-failed {
-  background: color-mix(in oklch, var(--danger-600) 10%, white);
-  color: var(--danger-600);
-}
-
-.story-progress {
-  display: grid;
-  align-items: center;
-  gap: 7px;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.story-progress > span {
-  height: 5px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--slate-100);
-}
-
-.story-progress > span > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--primary-500);
-}
-
-.story-progress small {
-  color: var(--slate-500);
-  font-size: 10px;
 }
 
 .story-pagination {
@@ -562,11 +575,18 @@ function gazeStatusClass(story: StoryHistoryItem): string {
 
 .story-detail-shell {
   display: grid;
+  min-width: 0;
   align-content: start;
+  padding-top: 24px;
+}
+
+.story-detail-heading {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--slate-200);
 }
 
 .story-detail-shell > :deep(.async-state-panel) {
-  min-height: 430px;
+  min-height: 360px;
   border: 0;
 }
 
@@ -600,8 +620,83 @@ function gazeStatusClass(story: StoryHistoryItem): string {
   font-weight: 700;
 }
 
+.story-detail-tabs {
+  display: grid;
+  margin-top: 20px;
+  border-bottom: 1px solid var(--slate-200);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.story-detail-tabs button {
+  position: relative;
+  min-height: 46px;
+  border: 0;
+  background: transparent;
+  color: var(--slate-500);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.story-detail-tabs button::after {
+  position: absolute;
+  right: 12px;
+  bottom: -1px;
+  left: 12px;
+  height: 2px;
+  border-radius: 999px 999px 0 0;
+  background: transparent;
+  content: '';
+}
+
+.story-detail-tabs button:hover {
+  color: var(--slate-800);
+}
+
+.story-detail-tabs button.is-active {
+  color: var(--primary-700);
+}
+
+.story-detail-tabs button.is-active::after {
+  background: var(--primary-600);
+}
+
+.story-detail-tabpanel {
+  display: grid;
+  min-height: 430px;
+  padding-top: 18px;
+  animation: story-tab-fade 140ms ease-out;
+}
+
+.story-detail-tabpanel > :deep(.async-state-panel) {
+  min-height: 220px;
+}
+
+.story-detail-updating {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--primary-50);
+  color: var(--primary-700);
+  font-size: 11px;
+}
+
+@keyframes story-tab-fade {
+  from {
+    opacity: 0.45;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .story-list-item {
+  .story-title-tab,
+  .story-detail-tabpanel {
+    animation: none;
     transition: none;
   }
 }
@@ -614,16 +709,11 @@ function gazeStatusClass(story: StoryHistoryItem): string {
   .story-filter-actions {
     justify-content: flex-end;
   }
-
-  .story-history-layout {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 640px) {
   .story-filter-card,
-  .story-list-panel,
-  .story-detail-shell {
+  .story-workspace {
     padding: 16px;
   }
 
@@ -640,12 +730,22 @@ function gazeStatusClass(story: StoryHistoryItem): string {
   }
 
   .story-detail-heading,
-  .story-list-heading {
+  .story-selector-heading {
     flex-direction: column;
+  }
+
+  .story-title-tab {
+    min-width: 168px;
+    flex-basis: 168px;
   }
 
   .story-detail-summary dl {
     grid-template-columns: 1fr;
+  }
+
+  .story-detail-tabs {
+    overflow-x: auto;
+    grid-template-columns: repeat(4, minmax(112px, 1fr));
   }
 }
 </style>

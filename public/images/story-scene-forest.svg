@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-labelledby="title">
+  <title id="title">별빛 숲 장면</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#27346b"/>
+      <stop offset="1" stop-color="#7565bd"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" rx="24" fill="url(#sky)"/>
+  <circle cx="520" cy="72" r="34" fill="#fff5b7"/>
+  <g fill="#fff" opacity=".85">
+    <circle cx="90" cy="70" r="3"/><circle cx="170" cy="42" r="4"/>
+    <circle cx="280" cy="85" r="3"/><circle cx="390" cy="48" r="4"/>
+  </g>
+  <path d="M0 250 110 140l72 88 86-126 104 126 84-92 184 124v100H0Z" fill="#244e53"/>
+  <path d="M0 294c92-42 163-18 240 2 92 24 163-35 251-30 56 3 105 24 149 54v40H0Z" fill="#183b3d"/>
+  <ellipse cx="320" cy="324" rx="170" ry="18" fill="#9fd6c4" opacity=".55"/>
+</svg>
