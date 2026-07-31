@@ -306,73 +306,74 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
           </p>
         </div>
       </div>
-    </SettingsSection>
-
-    <SettingsSection title="보호자 정보">
-      <div class="form-grid">
-        <div class="field">
-          <Label for="guardian-name">보호자명 <span aria-hidden="true">*</span></Label>
-          <Input
-            id="guardian-name"
-            v-model="form.guardian"
-            required
-            :maxlength="STUDENT_FIELD_MAX_LENGTH.guardian"
-            :aria-invalid="Boolean(fieldErrors.guardian)"
-            :aria-describedby="fieldErrors.guardian ? 'guardian-name-error' : undefined"
-            placeholder="보호자 이름"
-          />
-          <p v-if="fieldErrors.guardian" id="guardian-name-error" class="field-error">
-            {{ fieldErrors.guardian }}
-          </p>
+      <section class="form-subsection" aria-labelledby="guardian-section-title">
+        <div class="form-subsection__heading">
+          <h3 id="guardian-section-title">보호자 정보</h3>
+          <p>연락 및 안내에 필요한 보호자 정보를 관리합니다.</p>
         </div>
-        <div class="field">
-          <Label for="guardian-contact">보호자 연락처 <span aria-hidden="true">*</span></Label>
-          <Input
-            id="guardian-contact"
-            v-model="form.guardianContact"
-            required
-            :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianContact"
-            :aria-invalid="Boolean(fieldErrors.guardianContact)"
-            :aria-describedby="
-              fieldErrors.guardianContact ? 'guardian-contact-error' : undefined
-            "
-            inputmode="tel"
-            placeholder="010-0000-0000"
-          />
-          <p v-if="fieldErrors.guardianContact" id="guardian-contact-error" class="field-error">
-            {{ fieldErrors.guardianContact }}
-          </p>
+        <div class="form-grid">
+          <div class="field">
+            <Label for="guardian-name">보호자명 <span aria-hidden="true">*</span></Label>
+            <Input
+              id="guardian-name"
+              v-model="form.guardian"
+              required
+              :maxlength="STUDENT_FIELD_MAX_LENGTH.guardian"
+              :aria-invalid="Boolean(fieldErrors.guardian)"
+              :aria-describedby="fieldErrors.guardian ? 'guardian-name-error' : undefined"
+              placeholder="보호자 이름"
+            />
+            <p v-if="fieldErrors.guardian" id="guardian-name-error" class="field-error">
+              {{ fieldErrors.guardian }}
+            </p>
+          </div>
+          <div class="field">
+            <Label for="guardian-contact">보호자 연락처 <span aria-hidden="true">*</span></Label>
+            <Input
+              id="guardian-contact"
+              v-model="form.guardianContact"
+              required
+              :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianContact"
+              :aria-invalid="Boolean(fieldErrors.guardianContact)"
+              :aria-describedby="fieldErrors.guardianContact ? 'guardian-contact-error' : undefined"
+              inputmode="tel"
+              placeholder="010-0000-0000"
+            />
+            <p v-if="fieldErrors.guardianContact" id="guardian-contact-error" class="field-error">
+              {{ fieldErrors.guardianContact }}
+            </p>
+          </div>
+          <div class="field">
+            <Label for="guardian-email">보호자 이메일</Label>
+            <Input
+              id="guardian-email"
+              v-model="form.guardianEmail"
+              :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianEmail"
+              :aria-invalid="Boolean(fieldErrors.guardianEmail)"
+              :aria-describedby="fieldErrors.guardianEmail ? 'guardian-email-error' : undefined"
+              type="email"
+              placeholder="example@email.com"
+            />
+            <p v-if="fieldErrors.guardianEmail" id="guardian-email-error" class="field-error">
+              {{ fieldErrors.guardianEmail }}
+            </p>
+          </div>
+          <div class="field form-grid__wide">
+            <Label for="student-address">주소</Label>
+            <Input
+              id="student-address"
+              v-model="form.address"
+              :maxlength="STUDENT_FIELD_MAX_LENGTH.address"
+              :aria-invalid="Boolean(fieldErrors.address)"
+              :aria-describedby="fieldErrors.address ? 'student-address-error' : undefined"
+              placeholder="주소를 입력하세요"
+            />
+            <p v-if="fieldErrors.address" id="student-address-error" class="field-error">
+              {{ fieldErrors.address }}
+            </p>
+          </div>
         </div>
-        <div class="field">
-          <Label for="guardian-email">보호자 이메일</Label>
-          <Input
-            id="guardian-email"
-            v-model="form.guardianEmail"
-            :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianEmail"
-            :aria-invalid="Boolean(fieldErrors.guardianEmail)"
-            :aria-describedby="fieldErrors.guardianEmail ? 'guardian-email-error' : undefined"
-            type="email"
-            placeholder="example@email.com"
-          />
-          <p v-if="fieldErrors.guardianEmail" id="guardian-email-error" class="field-error">
-            {{ fieldErrors.guardianEmail }}
-          </p>
-        </div>
-        <div class="field form-grid__wide">
-          <Label for="student-address">주소</Label>
-          <Input
-            id="student-address"
-            v-model="form.address"
-            :maxlength="STUDENT_FIELD_MAX_LENGTH.address"
-            :aria-invalid="Boolean(fieldErrors.address)"
-            :aria-describedby="fieldErrors.address ? 'student-address-error' : undefined"
-            placeholder="주소를 입력하세요"
-          />
-          <p v-if="fieldErrors.address" id="student-address-error" class="field-error">
-            {{ fieldErrors.address }}
-          </p>
-        </div>
-      </div>
+      </section>
     </SettingsSection>
 
     <div class="student-form__footer">
@@ -389,11 +390,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
 
       <section v-if="mode === 'edit'" class="danger-zone" aria-label="아동 삭제">
         <div>
-          <h2>아동 삭제</h2>
-          <p>연결된 학습 기록을 포함한 모든 데이터가 삭제되며 되돌릴 수 없습니다.</p>
+          <h2>데이터 관리</h2>
+          <p>아동과 연결된 모든 학습 기록을 영구 삭제합니다.</p>
         </div>
-        <Button variant="destructive" size="sm" type="button" @click="openDeleteDialog">
-          아동 삭제
+        <Button variant="outline" size="sm" type="button" @click="openDeleteDialog">
+          아동 영구 삭제
         </Button>
       </section>
     </div>
@@ -462,6 +463,32 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
   border-top: 1px solid var(--border);
 }
 
+.form-subsection {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.form-subsection__heading {
+  margin-bottom: 18px;
+}
+
+.form-subsection__heading h3,
+.form-subsection__heading p {
+  margin: 0;
+}
+
+.form-subsection__heading h3 {
+  color: var(--slate-900);
+  font-size: 15px;
+}
+
+.form-subsection__heading p {
+  margin-top: 4px;
+  color: var(--slate-500);
+  font-size: 12px;
+}
+
 .form-grid__wide {
   grid-column: 1 / -1;
 }
@@ -481,21 +508,18 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
 
 .danger-zone {
   display: flex;
-  min-height: 76px;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 16px 18px;
-  border: 1px solid color-mix(in oklch, var(--destructive) 30%, var(--border));
-  border-left: 3px solid var(--destructive);
-  border-radius: var(--radius-lg);
-  background: var(--white);
+  gap: 20px;
+  margin-top: 2px;
+  padding: 18px 2px 0;
+  border-top: 1px solid var(--border);
 }
 
 .danger-zone h2 {
   margin: 0;
-  color: var(--destructive);
-  font-size: 15px;
+  color: var(--slate-700);
+  font-size: 13px;
 }
 
 .danger-zone p {
@@ -503,6 +527,15 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
   color: var(--slate-500);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.danger-zone :deep([data-slot='button']) {
+  border-color: color-mix(in oklch, var(--destructive) 32%, var(--border));
+  color: var(--destructive);
+}
+
+.danger-zone :deep([data-slot='button']:hover) {
+  background: color-mix(in oklch, var(--destructive) 8%, var(--background));
 }
 
 .delete-dialog {

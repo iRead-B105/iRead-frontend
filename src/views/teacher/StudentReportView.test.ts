@@ -2,7 +2,7 @@ import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
-import { MockReportRepository } from '@/features/teacher/report'
+import { MockReportRepository, reportFixtures } from '@/features/teacher/report'
 import { MockStudentRepository } from '@/features/teacher/student'
 import { useReportStore } from '@/stores/report'
 import { useSessionStore } from '@/stores/session'
@@ -88,6 +88,28 @@ describe('StudentReportView', () => {
     expect(wrapper.text()).not.toContain('버전')
     expect(wrapper.text()).not.toContain('교수자 의견 (선택)')
     expect(wrapper.find('[aria-label="교수자 의견"]').exists()).toBe(false)
+  })
+
+  it('저장된 보고서를 6개씩 나누고 페이지를 이동한다', async () => {
+    const baseReport = reportFixtures[0]!
+    const reports = Array.from({ length: 7 }, (_, index) => ({
+      ...baseReport,
+      reportId: 9_000 + index,
+      createdAt: `2026-07-${String(20 - index).padStart(2, '0')}T09:00:00+09:00`,
+    }))
+    const { wrapper } = await mountReport(
+      '/teacher/students/1/report',
+      new MockReportRepository({ reports, delayMs: 0 }),
+    )
+
+    expect(wrapper.findAll('.saved-report-row')).toHaveLength(6)
+    expect(wrapper.get('.saved-reports__pagination').text()).toContain('1 / 2')
+
+    await wrapper.get('[aria-label="다음 보고서 페이지"]').trigger('click')
+
+    expect(wrapper.findAll('.saved-report-row')).toHaveLength(1)
+    expect(wrapper.get('.saved-reports__pagination').text()).toContain('2 / 2')
+    expect(wrapper.get('[aria-label="다음 보고서 페이지"]').attributes('disabled')).toBeDefined()
   })
 
   it('선택한 상세가 snapshot과 현재 교수자 정보만 표시한다', async () => {

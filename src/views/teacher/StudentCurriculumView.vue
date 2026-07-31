@@ -929,10 +929,10 @@ function deletionMessage(): string {
 }
 .catalog-tabs {
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 8px 6px;
   margin-top: 14px;
-  padding-bottom: 4px;
-  overflow-x: auto;
+  padding-bottom: 0;
 }
 .catalog-tab {
   display: inline-flex;

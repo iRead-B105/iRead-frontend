@@ -134,7 +134,8 @@ describe('StudentStoryHistoryView', () => {
     await flushPromises()
 
     expect(useStoryHistoryStore(pinia).selectedStoryId).toBe(6801)
-    expect(wrapper.text()).toContain('선택한 이야기')
+    expect(wrapper.text()).not.toContain('선택한 이야기')
+    expect(wrapper.find('.story-detail-heading').exists()).toBe(false)
     expect(wrapper.text()).toContain('읽는 중 (9/12)')
     expect(wrapper.text()).toContain('시선 분석 완료')
     expect(wrapper.find('.story-list-panel').exists()).toBe(false)

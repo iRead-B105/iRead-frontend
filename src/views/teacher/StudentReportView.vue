@@ -60,6 +60,8 @@ const { detailsById, navigationItemsById, detailStatusById, detailErrorById } =
 const { teacher } = storeToRefs(sessionStore)
 
 const reportQuery = ref('')
+const REPORTS_PER_PAGE = 6
+const reportPage = ref(0)
 const today = localDateString()
 const completedTrainingsById = ref<Record<number, StudentTrainingHistoryItem>>({})
 const reportHistoryStatus = ref<StudentRequestStatus>('idle')
@@ -120,11 +122,25 @@ const filteredReports = computed(() => {
     `${report.createdAt} ${report.startDate} ${report.endDate}`.toLowerCase().includes(query),
   )
 })
+const totalReportPages = computed(() => Math.ceil(filteredReports.value.length / REPORTS_PER_PAGE))
+const paginatedReports = computed(() => {
+  const start = reportPage.value * REPORTS_PER_PAGE
+  return filteredReports.value.slice(start, start + REPORTS_PER_PAGE)
+})
+
+watch(reportQuery, () => {
+  reportPage.value = 0
+})
+
+watch(totalReportPages, (total) => {
+  reportPage.value = Math.min(reportPage.value, Math.max(0, total - 1))
+})
 
 watch(
   studentId,
   async (id) => {
     reportQuery.value = ''
+    reportPage.value = 0
     completedTrainingsById.value = {}
     loadedHistoryRanges.clear()
     loadingHistoryRanges.clear()
@@ -143,6 +159,11 @@ watch(
   },
   { immediate: true },
 )
+
+function changeReportPage(page: number): void {
+  if (page < 0 || page >= totalReportPages.value) return
+  reportPage.value = page
+}
 
 watch(
   [studentId, startDate, endDate],
@@ -364,25 +385,54 @@ async function retryStudent(): Promise<void> {
                 message="검색 조건에 맞는 보고서가 없습니다."
                 compact
               />
-              <ul v-else>
-                <li v-for="item in filteredReports" :key="item.reportId">
+              <template v-else>
+                <ul>
+                  <li v-for="item in paginatedReports" :key="item.reportId">
+                    <Button
+                      variant="ghost"
+                      class="saved-report-row"
+                      type="button"
+                      @click="selectReport(item)"
+                    >
+                      <span>
+                        <strong>{{ formatReportDateTime(item.createdAt) }} 생성</strong>
+                        <small>
+                          {{ formatReportDate(item.startDate) }} ~
+                          {{ formatReportDate(item.endDate) }}
+                        </small>
+                      </span>
+                      <b aria-hidden="true">›</b>
+                    </Button>
+                  </li>
+                </ul>
+                <nav
+                  v-if="totalReportPages > 1"
+                  class="saved-reports__pagination"
+                  aria-label="저장된 보고서 페이지"
+                >
                   <Button
-                    variant="ghost"
-                    class="saved-report-row"
                     type="button"
-                    @click="selectReport(item)"
+                    variant="outline"
+                    size="sm"
+                    :disabled="reportPage === 0"
+                    aria-label="이전 보고서 페이지"
+                    @click="changeReportPage(reportPage - 1)"
                   >
-                    <span>
-                      <strong>{{ formatReportDateTime(item.createdAt) }} 생성</strong>
-                      <small>
-                        {{ formatReportDate(item.startDate) }} ~
-                        {{ formatReportDate(item.endDate) }}
-                      </small>
-                    </span>
-                    <b aria-hidden="true">›</b>
+                    이전
                   </Button>
-                </li>
-              </ul>
+                  <span aria-live="polite">{{ reportPage + 1 }} / {{ totalReportPages }}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    :disabled="reportPage + 1 >= totalReportPages"
+                    aria-label="다음 보고서 페이지"
+                    @click="changeReportPage(reportPage + 1)"
+                  >
+                    다음
+                  </Button>
+                </nav>
+              </template>
             </template>
           </CardContent>
         </Card>
@@ -474,6 +524,22 @@ async function retryStudent(): Promise<void> {
   gap: 12px;
   padding: 11px 12px;
   text-align: left;
+}
+.saved-reports__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 12px 4px 4px;
+  border-top: 1px solid var(--border);
+}
+.saved-reports__pagination span {
+  min-width: 48px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 650;
+  text-align: center;
 }
 .saved-report-row > span {
   display: grid;
