@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
-  LESSON_MATERIAL_COUNT,
+  LESSON_MATERIAL_MAX_COUNT,
+  LESSON_MATERIAL_MIN_COUNT,
   editableItem,
   getLessonMaterialEditorDefinition,
   lessonMaterialCategoryLabel,
@@ -141,8 +142,11 @@ const materialIssues = computed(() =>
 const selectedIssues = computed(() => materialIssues.value[selectedMaterialIndex.value] ?? [])
 const materialValidationError = computed(() => {
   if (!props.lessonMaterial || props.lessonMaterialStatus !== 'success') return null
-  if (draftMaterials.value.length !== LESSON_MATERIAL_COUNT) {
-    return `학습 자료는 정확히 ${LESSON_MATERIAL_COUNT}개로 구성되어야 합니다.`
+  if (
+    draftMaterials.value.length < LESSON_MATERIAL_MIN_COUNT ||
+    draftMaterials.value.length > LESSON_MATERIAL_MAX_COUNT
+  ) {
+    return `학습 자료는 ${LESSON_MATERIAL_MIN_COUNT}~${LESSON_MATERIAL_MAX_COUNT}개로 구성되어야 합니다.`
   }
   if (editorInputError.value) return editorInputError.value
   const invalidIndex = draftMaterials.value.findIndex(

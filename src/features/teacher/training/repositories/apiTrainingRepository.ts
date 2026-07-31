@@ -4,6 +4,7 @@ import { createTrainingApi, type TrainingApi } from '../api'
 import {
   assertLessonMaterialRequestCount,
   assertLessonMaterialResponseCount,
+  normalizeLessonMaterialDocument,
 } from '../lessonMaterial'
 import {
   assertSaveCurriculumRequest,
@@ -84,7 +85,7 @@ export class ApiTrainingRepository implements TrainingRepository {
     options: Parameters<TrainingRepository['getLessonMaterial']>[2] = {},
   ) {
     const document = await this.api.getLessonMaterial(studentId, trainingId, options)
-    return assertLessonMaterialResponseCount(document)
+    return normalizeLessonMaterialDocument(assertLessonMaterialResponseCount(document))
   }
 
   async saveLessonMaterial(

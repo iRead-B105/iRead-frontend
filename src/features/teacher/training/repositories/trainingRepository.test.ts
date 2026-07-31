@@ -118,7 +118,7 @@ describe('ApiTrainingRepository', () => {
     })
   })
 
-  it('교안 조회 응답과 저장 요청이 정확히 5개가 아니면 API 경계에서 거부한다', async () => {
+  it('교안 조회 응답과 저장 요청이 1~5개 범위를 벗어나면 API 경계에서 거부한다', async () => {
     const getLessonMaterial = vi.fn().mockResolvedValue({ materials: [] })
     const saveLessonMaterial = vi.fn()
     const repository = new ApiTrainingRepository(api({ getLessonMaterial, saveLessonMaterial }))
@@ -135,8 +135,43 @@ describe('ApiTrainingRepository', () => {
     })
     expect(saveLessonMaterial).not.toHaveBeenCalled()
   })
-})
 
+  it('교안 조회 시 null presentation을 편집 가능한 기본 문구로 정규화한다', async () => {
+    const getLessonMaterial = vi.fn().mockResolvedValue({
+      trainingId: 101,
+      trainingTemplateId: 12,
+      trainingName: '서로 다른 받침 음절 비교하기',
+      unitName: '소리 듣고 고르기',
+      status: 'NOT_STARTED',
+      schemaVersion: 2,
+      revision: 1,
+      editable: true,
+      materials: [
+        {
+          questionNo: 1,
+          questionType: 'FINAL_CONSONANT_COMPARISON',
+          responseType: 'SINGLE_CHOICE',
+          requiredInputs: [],
+          presentation: null,
+          content: {},
+          answer: {},
+        },
+      ],
+    })
+    const repository = new ApiTrainingRepository(api({ getLessonMaterial }))
+
+    await expect(repository.getLessonMaterial(1, 101)).resolves.toMatchObject({
+      materials: [
+        {
+          presentation: {
+            activityName: '서로 다른 받침 음절 비교하기 1',
+            instruction: '화면의 안내에 따라 활동해 보세요.',
+          },
+        },
+      ],
+    })
+  })
+})
 describe('Training API target contract', () => {
   it('훈련 목록의 백엔드 배열 순서와 template ID를 그대로 보존한다', async () => {
     const request = vi.fn().mockResolvedValue({
