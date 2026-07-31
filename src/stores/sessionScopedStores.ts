@@ -1,6 +1,7 @@
 import type { Pinia } from 'pinia'
 import { watch, type WatchStopHandle } from 'vue'
 import { useReportStore } from './report'
+import { useRealtimeFreshnessStore } from './realtimeFreshness'
 import { useSessionStore } from './session'
 import { useStoryHistoryStore } from './storyHistory'
 import { useStudentStore } from './students'
@@ -12,6 +13,7 @@ export function installSessionScopedStoreReset(pinia: Pinia): WatchStopHandle {
   const studentStore = useStudentStore(pinia)
   const storyHistoryStore = useStoryHistoryStore(pinia)
   const reportStore = useReportStore(pinia)
+  const realtimeFreshnessStore = useRealtimeFreshnessStore(pinia)
   const testStore = useTestStore(pinia)
   const trainingStore = useTrainingStore(pinia)
 
@@ -23,6 +25,7 @@ export function installSessionScopedStoreReset(pinia: Pinia): WatchStopHandle {
       studentStore.reset()
       storyHistoryStore.reset()
       reportStore.reset()
+      realtimeFreshnessStore.reset()
       testStore.reset()
       trainingStore.reset()
     },

@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import type { TeacherProfile } from '@/features/teacher/auth'
 import { useReportStore } from './report'
+import { useRealtimeFreshnessStore } from './realtimeFreshness'
 import { useSessionStore } from './session'
 import { useStoryHistoryStore } from './storyHistory'
 import { installSessionScopedStoreReset } from './sessionScopedStores'
@@ -32,6 +33,7 @@ function setup() {
     useStudentStore(pinia),
     useStoryHistoryStore(pinia),
     useReportStore(pinia),
+    useRealtimeFreshnessStore(pinia),
     useTestStore(pinia),
     useTrainingStore(pinia),
   ] as const
