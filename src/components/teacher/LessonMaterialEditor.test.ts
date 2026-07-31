@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import type {
   CurriculumTraining,
@@ -161,7 +161,7 @@ describe('LessonMaterialEditor', () => {
     expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined()
   })
 
-  it('자료 5개를 모두 표시하고 추가·삭제 없이 배열 순서를 변경한다', async () => {
+  it('자료 5개를 모두 표시하고 드래그 앤 드롭으로 배열 순서를 변경한다', async () => {
     const wrapper = mountEditor('NOT_STARTED')
     const materialTabs = wrapper.findAll('[role="tab"]')
 
@@ -175,8 +175,17 @@ describe('LessonMaterialEditor', () => {
     ])
     expect(wrapper.text()).not.toContain('자료 추가')
     expect(wrapper.text()).not.toContain('자료 삭제')
+    expect(wrapper.find('[aria-label="자료 1 뒤로 이동"]').exists()).toBe(false)
 
-    await wrapper.get('button[aria-label="자료 1 뒤로 이동"]').trigger('click')
+    const dataTransfer = {
+      effectAllowed: '',
+      dropEffect: '',
+      setData: vi.fn(),
+    }
+    const materialItems = wrapper.findAll('.material-tab-item')
+    await materialItems[2]?.trigger('dragstart', { dataTransfer })
+    await materialItems[1]?.trigger('dragover', { dataTransfer })
+    await materialItems[1]?.trigger('drop', { dataTransfer })
     await wrapper
       .findAll('button')
       .find((button) => button.text() === '교안 저장')
@@ -185,9 +194,10 @@ describe('LessonMaterialEditor', () => {
     const request = wrapper.emitted('save')?.[0]?.[0] as SaveLessonMaterialRequest | undefined
     expect(request?.materials).toHaveLength(5)
     expect(request?.materials[0]?.questionNo).toBe(1)
-    expect(request?.materials[0]?.presentation.activityName).toBe('받침 소리 비교 2')
+    expect(request?.materials[0]?.presentation.activityName).toBe('받침 소리 비교 1')
     expect(request?.materials[1]?.questionNo).toBe(2)
-    expect(request?.materials[1]?.presentation.activityName).toBe('받침 소리 비교 1')
+    expect(request?.materials[1]?.presentation.activityName).toBe('받침 소리 비교 3')
+    expect(request?.materials[2]?.presentation.activityName).toBe('받침 소리 비교 2')
   })
 
   it('재생성 필요 상태에서 기존 AI 재생성 동작을 유지한다', async () => {

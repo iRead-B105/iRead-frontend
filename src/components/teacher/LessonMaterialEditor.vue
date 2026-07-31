@@ -78,6 +78,8 @@ const selectedMaterialIndex = ref(0)
 const draftMaterials = ref<MaterialDraft[]>([])
 const editorInputError = ref<string | null>(null)
 const reorderAnnouncement = ref('')
+const draggedMaterialIndex = ref<number | null>(null)
+const dragOverMaterialIndex = ref<number | null>(null)
 
 const canEditMaterial = computed(
   () =>
@@ -235,18 +237,73 @@ function updateField(section: 'content' | 'answer', key: string, value: unknown)
   emit('fieldEdited', materialPath(selectedMaterialIndex.value, section, key))
 }
 
-function moveMaterial(index: number, offset: -1 | 1): void {
+function reorderMaterial(source: number, target: number): void {
   if (!canEditMaterial.value) return
-  const target = index + offset
-  if (target < 0 || target >= draftMaterials.value.length) return
+  if (
+    source === target ||
+    source < 0 ||
+    target < 0 ||
+    source >= draftMaterials.value.length ||
+    target >= draftMaterials.value.length
+  ) {
+    return
+  }
   const next = [...draftMaterials.value]
-  const [moved] = next.splice(index, 1)
+  const [moved] = next.splice(source, 1)
   if (!moved) return
   next.splice(target, 0, moved)
   draftMaterials.value = next
   selectedMaterialIndex.value = target
-  reorderAnnouncement.value = `자료 ${index + 1}을(를) ${target + 1}번 위치로 이동했습니다.`
+  reorderAnnouncement.value = `자료 ${source + 1}을(를) ${target + 1}번 위치로 이동했습니다.`
   emit('fieldEdited', 'materials')
+}
+
+function moveMaterial(index: number, offset: -1 | 1): void {
+  reorderMaterial(index, index + offset)
+}
+
+function handleMaterialDragStart(event: DragEvent, index: number): void {
+  if (!canEditMaterial.value) {
+    event.preventDefault()
+    return
+  }
+  draggedMaterialIndex.value = index
+  dragOverMaterialIndex.value = index
+  selectedMaterialIndex.value = index
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', draftMaterials.value[index]?.clientKey ?? '')
+  }
+}
+
+function handleMaterialDragOver(event: DragEvent, index: number): void {
+  if (draggedMaterialIndex.value === null || !canEditMaterial.value) return
+  event.preventDefault()
+  dragOverMaterialIndex.value = index
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+}
+
+function handleMaterialDrop(event: DragEvent, target: number): void {
+  event.preventDefault()
+  const source = draggedMaterialIndex.value
+  if (source !== null) reorderMaterial(source, target)
+  handleMaterialDragEnd()
+}
+
+function handleMaterialDragEnd(): void {
+  draggedMaterialIndex.value = null
+  dragOverMaterialIndex.value = null
+}
+
+function handleMaterialKeydown(event: KeyboardEvent, index: number): void {
+  if (!event.altKey) return
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    moveMaterial(index, -1)
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    moveMaterial(index, 1)
+  }
 }
 
 function saveMaterial(): void {
@@ -358,40 +415,36 @@ function confirmReloadLatest(): void {
                     v-for="(material, index) in draftMaterials"
                     :key="material.clientKey"
                     class="material-tab-item"
+                    :class="{
+                      dragging: draggedMaterialIndex === index,
+                      'drag-over':
+                        dragOverMaterialIndex === index && draggedMaterialIndex !== index,
+                    }"
+                    :draggable="canEditMaterial"
+                    @dragstart="handleMaterialDragStart($event, index)"
+                    @dragover="handleMaterialDragOver($event, index)"
+                    @drop="handleMaterialDrop($event, index)"
+                    @dragend="handleMaterialDragEnd"
                   >
                     <button
                       type="button"
                       role="tab"
                       :aria-selected="selectedMaterialIndex === index"
+                      :aria-describedby="
+                        canEditMaterial ? 'material-reorder-instructions' : undefined
+                      "
                       :class="{ active: selectedMaterialIndex === index }"
                       @click="selectedMaterialIndex = index"
+                      @keydown="handleMaterialKeydown($event, index)"
                     >
                       자료 {{ index + 1 }}
                     </button>
-                    <div class="material-order-actions">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        type="button"
-                        :aria-label="`자료 ${index + 1} 앞으로 이동`"
-                        :disabled="!canEditMaterial || index === 0"
-                        @click="moveMaterial(index, -1)"
-                      >
-                        ←
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        type="button"
-                        :aria-label="`자료 ${index + 1} 뒤로 이동`"
-                        :disabled="!canEditMaterial || index === draftMaterials.length - 1"
-                        @click="moveMaterial(index, 1)"
-                      >
-                        →
-                      </Button>
-                    </div>
                   </div>
                 </div>
+                <p id="material-reorder-instructions" class="sr-only">
+                  드래그 앤 드롭으로 순서를 변경할 수 있습니다. 키보드에서는 Alt와 좌우 방향키를
+                  사용하세요.
+                </p>
                 <p class="sr-only" aria-live="polite">{{ reorderAnnouncement }}</p>
               </div>
 
@@ -800,6 +853,25 @@ function confirmReloadLatest(): void {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--white);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+.material-tab-item[draggable='true'] {
+  cursor: grab;
+}
+.material-tab-item[draggable='true']:active {
+  cursor: grabbing;
+}
+.material-tab-item.dragging {
+  opacity: 0.45;
+}
+.material-tab-item.drag-over {
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 2px var(--primary-100);
+  transform: translateY(-1px);
 }
 .material-tabs button[role='tab'] {
   padding: 7px 10px;
@@ -816,13 +888,6 @@ function confirmReloadLatest(): void {
 }
 .material-tab-item:has(button[role='tab'].active) {
   border-color: var(--primary-500);
-}
-.material-order-actions {
-  display: flex;
-  border-left: 1px solid var(--border);
-}
-.material-order-actions button {
-  border-radius: 0;
 }
 .material-form {
   display: grid;
