@@ -66,22 +66,6 @@ export class ApiTrainingRepository implements TrainingRepository {
     }
   }
 
-  getExpectedWords(
-    studentId: number,
-    trainingId: number,
-    options: Parameters<TrainingRepository['getExpectedWords']>[2] = {},
-  ) {
-    return this.api.getExpectedWords(studentId, trainingId, options)
-  }
-
-  addExpectedWord(studentId: number, trainingId: number, wordName: string) {
-    return this.api.addExpectedWord(studentId, trainingId, wordName)
-  }
-
-  deleteExpectedWord(studentId: number, trainingId: number, wordId: number) {
-    return this.api.deleteExpectedWord(studentId, trainingId, wordId)
-  }
-
   generateTraining(studentId: number, trainingId: number) {
     return this.api.generateTraining(studentId, trainingId)
   }

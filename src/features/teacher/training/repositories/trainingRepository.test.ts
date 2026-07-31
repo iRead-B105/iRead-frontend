@@ -13,9 +13,6 @@ function api(overrides: Partial<TrainingApi> = {}): TrainingApi {
     createCurriculum: vi.fn(),
     getCurriculum: vi.fn(),
     updateCurriculum: vi.fn(),
-    getExpectedWords: vi.fn().mockResolvedValue([]),
-    addExpectedWord: vi.fn().mockResolvedValue(undefined),
-    deleteExpectedWord: vi.fn().mockResolvedValue(undefined),
     generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
     getTrainingDetail: vi.fn(),
     getLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
@@ -124,9 +121,7 @@ describe('ApiTrainingRepository', () => {
   it('교안 조회 응답과 저장 요청이 정확히 5개가 아니면 API 경계에서 거부한다', async () => {
     const getLessonMaterial = vi.fn().mockResolvedValue({ materials: [] })
     const saveLessonMaterial = vi.fn()
-    const repository = new ApiTrainingRepository(
-      api({ getLessonMaterial, saveLessonMaterial }),
-    )
+    const repository = new ApiTrainingRepository(api({ getLessonMaterial, saveLessonMaterial }))
 
     await expect(repository.getLessonMaterial(1, 101)).rejects.toMatchObject({
       status: 502,
@@ -222,17 +217,6 @@ describe('Training API target contract', () => {
     })
   })
 
-  it('예상 단어의 목표 word 필드를 domain wordName으로 변환한다', async () => {
-    const request = vi.fn().mockResolvedValue({
-      words: [{ wordId: 1, word: '사과' }],
-    })
-    const trainingApi = createTrainingApi(request)
-
-    await expect(trainingApi.getExpectedWords(1, 101)).resolves.toEqual([
-      { wordId: 1, wordName: '사과' },
-    ])
-  })
-
   it('실제 studentId와 trainingId로 AI 교안 생성을 요청한다', async () => {
     const generatedData = {
       schemaVersion: 2,
@@ -278,16 +262,13 @@ describe('Training API target contract', () => {
       editable: true,
       materials,
     }
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce(document)
-      .mockResolvedValueOnce({
-        trainingId: 101,
-        revision: 4,
-        savedAt: '2026-07-31T14:30:00+09:00',
-        source: 'MANUAL',
-        materials,
-      })
+    const request = vi.fn().mockResolvedValueOnce(document).mockResolvedValueOnce({
+      trainingId: 101,
+      revision: 4,
+      savedAt: '2026-07-31T14:30:00+09:00',
+      source: 'MANUAL',
+      materials,
+    })
     const trainingApi = createTrainingApi(request)
     const saveCommand = {
       revision: 3,
@@ -306,11 +287,7 @@ describe('Training API target contract', () => {
       source: 'MANUAL',
     })
 
-    expect(request).toHaveBeenNthCalledWith(
-      1,
-      '/api/admin/training/7/101/lesson-material',
-      {},
-    )
+    expect(request).toHaveBeenNthCalledWith(1, '/api/admin/training/7/101/lesson-material', {})
     expect(request).toHaveBeenNthCalledWith(2, '/api/admin/training/7/101/lesson-material', {
       method: 'PUT',
       body: JSON.stringify(saveCommand),
@@ -511,44 +488,19 @@ describe('MockTrainingRepository', () => {
     expect(updated.trainings.map((training) => training.trainingId)).toEqual([
       103, 101, 102, 1_000, 1_001,
     ])
-    await expect(repository.getExpectedWords(1, 101)).resolves.toEqual([
-      { wordId: 1001, wordName: '꽃' },
-      { wordId: 1002, wordName: '낮' },
-    ])
-    await expect(repository.getExpectedWords(1, 102)).resolves.toEqual([
-      { wordId: 1003, wordName: '옷' },
-    ])
   })
 
-  it('반복 시행별 예상 단어를 독립적으로 관리하고 중복을 거부한다', async () => {
+  it('준비 전 훈련의 AI 교안을 생성하고 상태를 시작 전으로 전환한다', async () => {
     const repository = new MockTrainingRepository()
 
-    await repository.addExpectedWord(1, 101, '  별  ')
-
-    await expect(repository.getExpectedWords(1, 101)).resolves.toContainEqual(
-      expect.objectContaining({ wordName: '별' }),
-    )
-    await expect(repository.getExpectedWords(1, 102)).resolves.toEqual([
-      { wordId: 1003, wordName: '옷' },
-    ])
-    await expect(repository.addExpectedWord(1, 101, '별')).rejects.toMatchObject({
-      status: 400,
-      code: 'DUPLICATE_EXPECTED_WORD',
-    })
-    await expect(repository.getTrainingDetail(1, 101)).resolves.toMatchObject({
+    await expect(repository.getTrainingDetail(1, 102)).resolves.toMatchObject({
       generatedData: null,
       status: 'NOT_READY',
     })
 
-    const generatedData = await repository.generateTraining(1, 101)
-    expect(generatedData.questions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          problem: expect.objectContaining({ targetText: '별' }),
-        }),
-      ]),
-    )
-    await expect(repository.getTrainingDetail(1, 101)).resolves.toMatchObject({
+    const generatedData = await repository.generateTraining(1, 102)
+    expect(generatedData.questions).toHaveLength(5)
+    await expect(repository.getTrainingDetail(1, 102)).resolves.toMatchObject({
       generatedData,
       status: 'NOT_STARTED',
     })
@@ -559,9 +511,11 @@ describe('MockTrainingRepository', () => {
     const document = await repository.getLessonMaterial(1, 101)
     const first = document.materials[0]
     expect(first).toBeDefined()
+    const reorderedMaterials = [...document.materials].reverse()
+    const expectedSecondActivityName = reorderedMaterials[1]?.presentation.activityName
     const command = {
       revision: document.revision,
-      materials: document.materials.map((material, index) => ({
+      materials: reorderedMaterials.map((material, index) => ({
         questionNo: index + 1,
         questionType: material.questionType,
         presentation: {
@@ -576,9 +530,12 @@ describe('MockTrainingRepository', () => {
     const saved = await repository.saveLessonMaterial(1, 101, command)
     expect(saved.revision).toBe(document.revision + 1)
     expect(saved.materials[0]?.presentation.activityName).toBe('수정한 활동 이름')
+    expect(saved.materials[1]?.presentation.activityName).toBe(expectedSecondActivityName)
+    expect(saved.materials.map((material) => material.questionNo)).toEqual([1, 2, 3, 4, 5])
     const reloaded = await repository.getLessonMaterial(1, 101)
     expect(reloaded.revision).toBe(saved.revision)
     expect(reloaded.materials[0]?.presentation.activityName).toBe('수정한 활동 이름')
+    expect(reloaded.materials[1]?.presentation.activityName).toBe(expectedSecondActivityName)
     await expect(repository.saveLessonMaterial(1, 101, command)).rejects.toMatchObject({
       status: 409,
       code: 'LESSON_MATERIAL_REVISION_CONFLICT',

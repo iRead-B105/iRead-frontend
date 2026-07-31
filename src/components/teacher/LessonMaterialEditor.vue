@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import MaterialEditorHost from '@/components/teacher/lesson-material/MaterialEditorHost.vue'
 import MaterialPreviewHost from '@/components/teacher/lesson-material/MaterialPreviewHost.vue'
@@ -16,17 +16,21 @@ import {
   validateLessonMaterialItem,
   type CurriculumTraining,
   type EditableLessonMaterialItem,
-  type ExpectedWord,
   type LessonMaterialDocument,
+  type LessonMaterialFieldError,
   type LessonMaterialPresentation,
+  type LessonMaterialSaveIssue,
   type SaveLessonMaterialRequest,
   type TrainingDetail,
   type TrainingRequestStatus,
 } from '@/features/teacher/training'
 
 interface MaterialDraft {
+  clientKey: string
   questionNo: number
   questionType: string
+  responseType: string
+  requiredInputs: readonly string[]
   presentation: LessonMaterialPresentation
   content: Record<string, unknown>
   answer: Record<string, unknown>
@@ -37,18 +41,17 @@ const props = withDefaults(
     open?: boolean
     training: CurriculumTraining
     attemptLabel: string
-    expectedWords: readonly ExpectedWord[]
     detail: TrainingDetail | null
     lessonMaterial: LessonMaterialDocument | null
-    expectedWordsStatus: TrainingRequestStatus
     detailStatus: TrainingRequestStatus
     lessonMaterialStatus: TrainingRequestStatus
     lessonMaterialSaveStatus: TrainingRequestStatus
+    lessonMaterialSaveIssue: LessonMaterialSaveIssue | null
+    lessonMaterialFieldErrors: readonly LessonMaterialFieldError[]
+    lessonMaterialRemoteChange: boolean
     materialGenerationStatus: TrainingRequestStatus
     requiresRegeneration: boolean
-    isMutating: boolean
     isSavingLessonMaterial: boolean
-    expectedWordError: string | null
     detailError: string | null
     lessonMaterialError: string | null
     lessonMaterialSaveError: string | null
@@ -60,58 +63,44 @@ const props = withDefaults(
 const emit = defineEmits<{
   close: []
   'update:open': [open: boolean]
-  addWord: [wordName: string]
-  deleteWord: [wordId: number]
   regenerate: []
   retry: []
+  reloadLatest: []
+  editingStateChange: [hasChanges: boolean]
+  fieldEdited: [path: string]
   save: [request: SaveLessonMaterialRequest]
 }>()
 
-const newWord = ref('')
-const submittedWord = ref<string | null>(null)
-const wordPendingDeletion = ref<ExpectedWord | null>(null)
 const closePending = ref(false)
+const reloadPending = ref(false)
 const selectedMaterialIndex = ref(0)
 const draftMaterials = ref<MaterialDraft[]>([])
 const editorInputError = ref<string | null>(null)
+const reorderAnnouncement = ref('')
 
-const normalizedWord = computed(() => newWord.value.trim())
-const canEditExpectedWords = computed(
-  () => props.training.status === 'NOT_READY' || props.training.status === 'NOT_STARTED',
-)
 const canEditMaterial = computed(
   () =>
     Boolean(props.lessonMaterial?.editable) &&
     props.lessonMaterialStatus === 'success' &&
     !props.isSavingLessonMaterial,
 )
-const willRequireRegenerationAfterChange = computed(
-  () => props.training.status === 'NOT_STARTED',
-)
 const isGenerating = computed(() => props.materialGenerationStatus === 'loading')
-const isBusy = computed(() => props.isMutating || isGenerating.value)
 const canGenerate = computed(
-  () =>
-    props.requiresRegeneration &&
-    props.detailStatus === 'success' &&
-    props.expectedWordsStatus === 'success' &&
-    !isBusy.value,
+  () => props.requiresRegeneration && props.detailStatus === 'success' && !isGenerating.value,
 )
 const selectedDraft = computed(() => draftMaterials.value[selectedMaterialIndex.value] ?? null)
-const selectedPolicy = computed(
-  () => props.lessonMaterial?.materials[selectedMaterialIndex.value] ?? null,
-)
+const selectedPolicy = computed(() => selectedDraft.value)
 const selectedDefinition = computed(() =>
-  selectedDraft.value
-    ? getLessonMaterialEditorDefinition(selectedDraft.value.questionType)
-    : null,
+  selectedDraft.value ? getLessonMaterialEditorDefinition(selectedDraft.value.questionType) : null,
 )
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
-function toDraft(item: EditableLessonMaterialItem): MaterialDraft {
+function toDraft(
+  item: EditableLessonMaterialItem,
+): Omit<MaterialDraft, 'clientKey' | 'responseType' | 'requiredInputs'> {
   return {
     questionNo: item.questionNo,
     questionType: item.questionType,
@@ -149,9 +138,7 @@ const hasChanges = computed(
 const materialIssues = computed(() =>
   draftMaterials.value.map((material) => validateLessonMaterialItem(material)),
 )
-const selectedIssues = computed(
-  () => materialIssues.value[selectedMaterialIndex.value] ?? [],
-)
+const selectedIssues = computed(() => materialIssues.value[selectedMaterialIndex.value] ?? [])
 const materialValidationError = computed(() => {
   if (!props.lessonMaterial || props.lessonMaterialStatus !== 'success') return null
   if (draftMaterials.value.length !== LESSON_MATERIAL_COUNT) {
@@ -170,11 +157,22 @@ const materialValidationError = computed(() => {
   return issue ? `${invalidMaterialIndex + 1}번 자료: ${issue.message}` : null
 })
 const canSave = computed(
-  () => canEditMaterial.value && hasChanges.value && !materialValidationError.value,
+  () =>
+    canEditMaterial.value &&
+    hasChanges.value &&
+    !materialValidationError.value &&
+    !props.lessonMaterialRemoteChange &&
+    props.lessonMaterialSaveIssue !== 'revision-conflict',
 )
 
 function resetDraft(document: LessonMaterialDocument | null): void {
-  draftMaterials.value = document?.materials.map((item) => toDraft(editableItem(item))) ?? []
+  draftMaterials.value =
+    document?.materials.map((item, index) => ({
+      ...toDraft(editableItem(item)),
+      clientKey: `${document.revision}-${item.questionNo}-${index}`,
+      responseType: item.responseType,
+      requiredInputs: [...item.requiredInputs],
+    })) ?? []
   selectedMaterialIndex.value = Math.min(
     selectedMaterialIndex.value,
     Math.max(0, draftMaterials.value.length - 1),
@@ -183,64 +181,42 @@ function resetDraft(document: LessonMaterialDocument | null): void {
 }
 
 watch(
-  () => props.lessonMaterial,
-  (document) => resetDraft(document),
-  { immediate: true, deep: true },
+  () =>
+    props.lessonMaterial
+      ? `${props.lessonMaterial.trainingId}:${props.lessonMaterial.revision}`
+      : null,
+  () => resetDraft(props.lessonMaterial),
+  { immediate: true },
 )
 
 watch(selectedMaterialIndex, () => {
   editorInputError.value = null
 })
 
-watch(
-  () => props.expectedWords,
-  (words) => {
-    if (submittedWord.value && words.some((word) => word.wordName === submittedWord.value)) {
-      newWord.value = ''
-      submittedWord.value = null
-    }
-    if (
-      wordPendingDeletion.value &&
-      !words.some((word) => word.wordId === wordPendingDeletion.value?.wordId)
-    ) {
-      wordPendingDeletion.value = null
-    }
-  },
-  { deep: true },
-)
+watch(hasChanges, (changed) => emit('editingStateChange', changed), { immediate: true })
 
-const wordValidationError = computed(() => {
-  if (!newWord.value) return null
-  if (!normalizedWord.value) return '공백만 입력할 수 없습니다.'
-  if (normalizedWord.value.length > 50) return '예상 단어는 최대 50자입니다.'
-  if (props.expectedWords.some((word) => word.wordName === normalizedWord.value)) {
-    return '이미 추가한 예상 단어입니다.'
-  }
-  return null
-})
-const canAddWord = computed(
-  () =>
-    Boolean(normalizedWord.value) &&
-    !wordValidationError.value &&
-    canEditExpectedWords.value &&
-    !isBusy.value,
-)
+onBeforeUnmount(() => emit('editingStateChange', false))
 
-function addWord(): void {
-  if (!canAddWord.value) return
-  submittedWord.value = normalizedWord.value
-  emit('addWord', normalizedWord.value)
+function materialPath(index: number, section?: string, key?: string): string {
+  const suffix = [section, key].filter(Boolean).join('.')
+  return `materials[${index}]${suffix ? `.${suffix}` : ''}`
 }
 
-function confirmDeleteWord(): void {
-  if (!wordPendingDeletion.value || !canEditExpectedWords.value || isBusy.value) return
-  emit('deleteWord', wordPendingDeletion.value.wordId)
+function errorsForPath(path: string): readonly LessonMaterialFieldError[] {
+  return props.lessonMaterialFieldErrors.filter(
+    (error) => error.path === path || error.path.startsWith(`${path}.`),
+  )
 }
+
+const selectedServerErrors = computed(() =>
+  errorsForPath(materialPath(selectedMaterialIndex.value)),
+)
 
 function updatePresentation(key: keyof LessonMaterialPresentation, value: string): void {
   const material = selectedDraft.value
   if (!material || !canEditMaterial.value) return
   material.presentation = { ...material.presentation, [key]: value }
+  emit('fieldEdited', materialPath(selectedMaterialIndex.value, 'presentation', key))
 }
 
 function updateField(section: 'content' | 'answer', key: string, value: unknown): void {
@@ -252,6 +228,21 @@ function updateField(section: 'content' | 'answer', key: string, value: unknown)
   )
   if (!field || field.readonly) return
   material[section] = { ...material[section], [key]: value }
+  emit('fieldEdited', materialPath(selectedMaterialIndex.value, section, key))
+}
+
+function moveMaterial(index: number, offset: -1 | 1): void {
+  if (!canEditMaterial.value) return
+  const target = index + offset
+  if (target < 0 || target >= draftMaterials.value.length) return
+  const next = [...draftMaterials.value]
+  const [moved] = next.splice(index, 1)
+  if (!moved) return
+  next.splice(target, 0, moved)
+  draftMaterials.value = next
+  selectedMaterialIndex.value = target
+  reorderAnnouncement.value = `자료 ${index + 1}을(를) ${target + 1}번 위치로 이동했습니다.`
+  emit('fieldEdited', 'materials')
 }
 
 function saveMaterial(): void {
@@ -269,6 +260,7 @@ function requestClose(): void {
 }
 
 function completeClose(): void {
+  emit('editingStateChange', false)
   emit('update:open', false)
   emit('close')
 }
@@ -280,6 +272,19 @@ function confirmClose(): void {
 
 function handleDialogOpen(open: boolean): void {
   if (!open) requestClose()
+}
+
+function requestReloadLatest(): void {
+  if (hasChanges.value) {
+    reloadPending.value = true
+    return
+  }
+  emit('reloadLatest')
+}
+
+function confirmReloadLatest(): void {
+  reloadPending.value = false
+  emit('reloadLatest')
 }
 </script>
 
@@ -307,6 +312,23 @@ function handleDialogOpen(open: boolean): void {
           </div>
         </header>
 
+        <div
+          v-if="lessonMaterialRemoteChange || lessonMaterialSaveIssue === 'revision-conflict'"
+          class="remote-change-notice"
+          role="alert"
+        >
+          <div>
+            <strong>서버의 교안이 변경되었습니다.</strong>
+            <span
+              >작성 중인 내용은 유지했습니다. 최신 교안을 불러오면 현재 수정 내용이
+              사라집니다.</span
+            >
+          </div>
+          <Button variant="outline" type="button" @click="requestReloadLatest">
+            최신 교안 불러오기
+          </Button>
+        </div>
+
         <div class="editor-workspace">
           <section class="edit-panel" aria-labelledby="material-edit-title">
             <header class="section-header">
@@ -321,23 +343,52 @@ function handleDialogOpen(open: boolean): void {
             </p>
             <div v-else-if="lessonMaterialStatus === 'error'" class="section-error" role="alert">
               <p>{{ lessonMaterialError }}</p>
-              <Button variant="outline" size="sm" type="button" @click="emit('retry')">다시 시도</Button>
+              <Button variant="outline" size="sm" type="button" @click="emit('retry')"
+                >다시 시도</Button
+              >
             </div>
             <template v-else-if="lessonMaterial">
               <div class="material-toolbar">
                 <div class="material-tabs" role="tablist" aria-label="학습 자료 선택">
-                  <button
+                  <div
                     v-for="(material, index) in draftMaterials"
-                    :key="`${material.questionType}-${index}`"
-                    type="button"
-                    role="tab"
-                    :aria-selected="selectedMaterialIndex === index"
-                    :class="{ active: selectedMaterialIndex === index }"
-                    @click="selectedMaterialIndex = index"
+                    :key="material.clientKey"
+                    class="material-tab-item"
                   >
-                    자료 {{ index + 1 }}
-                  </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      :aria-selected="selectedMaterialIndex === index"
+                      :class="{ active: selectedMaterialIndex === index }"
+                      @click="selectedMaterialIndex = index"
+                    >
+                      자료 {{ index + 1 }}
+                    </button>
+                    <div class="material-order-actions">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        type="button"
+                        :aria-label="`자료 ${index + 1} 앞으로 이동`"
+                        :disabled="!canEditMaterial || index === 0"
+                        @click="moveMaterial(index, -1)"
+                      >
+                        ←
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        type="button"
+                        :aria-label="`자료 ${index + 1} 뒤로 이동`"
+                        :disabled="!canEditMaterial || index === draftMaterials.length - 1"
+                        @click="moveMaterial(index, 1)"
+                      >
+                        →
+                      </Button>
+                    </div>
+                  </div>
                 </div>
+                <p class="sr-only" aria-live="polite">{{ reorderAnnouncement }}</p>
               </div>
 
               <div v-if="selectedDraft" class="material-form">
@@ -376,77 +427,152 @@ function handleDialogOpen(open: boolean): void {
                   <legend>화면 표시</legend>
                   <label>
                     활동 이름
-                    <Input :model-value="selectedDraft.presentation.activityName" @update:model-value="updatePresentation('activityName', String($event))" />
+                    <Input
+                      :model-value="selectedDraft.presentation.activityName"
+                      :aria-invalid="
+                        errorsForPath(
+                          materialPath(selectedMaterialIndex, 'presentation', 'activityName'),
+                        ).length > 0
+                      "
+                      @update:model-value="updatePresentation('activityName', String($event))"
+                    />
+                    <small
+                      v-for="error in errorsForPath(
+                        materialPath(selectedMaterialIndex, 'presentation', 'activityName'),
+                      )"
+                      :key="`${error.path}-${error.reason}`"
+                      class="field-error"
+                      role="alert"
+                    >
+                      {{ error.message }}
+                    </small>
                   </label>
                   <label class="wide-field">
                     활동 지시문
-                    <textarea :value="selectedDraft.presentation.instruction" rows="2" @input="updatePresentation('instruction', ($event.target as HTMLTextAreaElement).value)" />
+                    <textarea
+                      :value="selectedDraft.presentation.instruction"
+                      :aria-invalid="
+                        errorsForPath(
+                          materialPath(selectedMaterialIndex, 'presentation', 'instruction'),
+                        ).length > 0
+                      "
+                      rows="2"
+                      @input="
+                        updatePresentation(
+                          'instruction',
+                          ($event.target as HTMLTextAreaElement).value,
+                        )
+                      "
+                    />
+                    <small
+                      v-for="error in errorsForPath(
+                        materialPath(selectedMaterialIndex, 'presentation', 'instruction'),
+                      )"
+                      :key="`${error.path}-${error.reason}`"
+                      class="field-error"
+                      role="alert"
+                    >
+                      {{ error.message }}
+                    </small>
                   </label>
                   <label class="wide-field">
                     힌트
-                    <textarea :value="selectedDraft.presentation.hint" rows="2" @input="updatePresentation('hint', ($event.target as HTMLTextAreaElement).value)" />
+                    <textarea
+                      :value="selectedDraft.presentation.hint"
+                      :aria-invalid="
+                        errorsForPath(materialPath(selectedMaterialIndex, 'presentation', 'hint'))
+                          .length > 0
+                      "
+                      rows="2"
+                      @input="
+                        updatePresentation('hint', ($event.target as HTMLTextAreaElement).value)
+                      "
+                    />
+                    <small
+                      v-for="error in errorsForPath(
+                        materialPath(selectedMaterialIndex, 'presentation', 'hint'),
+                      )"
+                      :key="`${error.path}-${error.reason}`"
+                      class="field-error"
+                      role="alert"
+                    >
+                      {{ error.message }}
+                    </small>
                   </label>
                   <label>
                     정답 피드백
-                    <Input :model-value="selectedDraft.presentation.correctFeedback" @update:model-value="updatePresentation('correctFeedback', String($event))" />
+                    <Input
+                      :model-value="selectedDraft.presentation.correctFeedback"
+                      :aria-invalid="
+                        errorsForPath(
+                          materialPath(selectedMaterialIndex, 'presentation', 'correctFeedback'),
+                        ).length > 0
+                      "
+                      @update:model-value="updatePresentation('correctFeedback', String($event))"
+                    />
+                    <small
+                      v-for="error in errorsForPath(
+                        materialPath(selectedMaterialIndex, 'presentation', 'correctFeedback'),
+                      )"
+                      :key="`${error.path}-${error.reason}`"
+                      class="field-error"
+                      role="alert"
+                    >
+                      {{ error.message }}
+                    </small>
                   </label>
                   <label>
                     재시도 피드백
-                    <Input :model-value="selectedDraft.presentation.retryFeedback" @update:model-value="updatePresentation('retryFeedback', String($event))" />
+                    <Input
+                      :model-value="selectedDraft.presentation.retryFeedback"
+                      :aria-invalid="
+                        errorsForPath(
+                          materialPath(selectedMaterialIndex, 'presentation', 'retryFeedback'),
+                        ).length > 0
+                      "
+                      @update:model-value="updatePresentation('retryFeedback', String($event))"
+                    />
+                    <small
+                      v-for="error in errorsForPath(
+                        materialPath(selectedMaterialIndex, 'presentation', 'retryFeedback'),
+                      )"
+                      :key="`${error.path}-${error.reason}`"
+                      class="field-error"
+                      role="alert"
+                    >
+                      {{ error.message }}
+                    </small>
                   </label>
                 </fieldset>
 
                 <MaterialEditorHost
                   :material="selectedDraft"
                   :disabled="!canEditMaterial"
+                  :field-errors="selectedServerErrors"
                   @update-field="updateField"
                   @editor-error="editorInputError = $event"
                 />
 
-                <div v-if="selectedIssues.length" class="validation-summary" role="alert">
+                <div
+                  v-if="selectedIssues.length || selectedServerErrors.length"
+                  class="validation-summary"
+                  role="alert"
+                >
                   <strong>자료 {{ selectedMaterialIndex + 1 }} 확인 필요</strong>
                   <ul>
                     <li v-for="issue in selectedIssues" :key="`${issue.path}-${issue.message}`">
                       {{ issue.message }}
                     </li>
+                    <li
+                      v-for="error in selectedServerErrors"
+                      :key="`${error.path}-${error.reason}`"
+                    >
+                      {{ error.message }}
+                    </li>
                   </ul>
                 </div>
               </div>
             </template>
-
-            <details class="word-settings">
-              <summary>AI 재생성 설정 · 예상 단어 {{ expectedWords.length }}개</summary>
-              <form class="word-form" @submit.prevent="addWord">
-                <label for="expected-word">새 예상 단어</label>
-                <div>
-                  <Input
-                    id="expected-word"
-                    v-model="newWord"
-                    maxlength="51"
-                    autocomplete="off"
-                    placeholder="최대 50자"
-                    :disabled="!canEditExpectedWords || isBusy"
-                    :aria-invalid="Boolean(wordValidationError)"
-                  />
-                  <Button type="submit" :disabled="!canAddWord">추가</Button>
-                </div>
-                <small :class="{ error: wordValidationError }">{{ wordValidationError ?? `${normalizedWord.length}/50자` }}</small>
-              </form>
-              <p v-if="expectedWordsStatus === 'loading'" class="section-state">예상 단어를 불러오는 중입니다.</p>
-              <div v-else-if="expectedWordsStatus === 'error'" class="section-error" role="alert">
-                <p>{{ expectedWordError }}</p>
-                <Button variant="outline" size="sm" type="button" @click="emit('retry')">다시 시도</Button>
-              </div>
-              <ul v-else class="word-list">
-                <li v-for="word in expectedWords" :key="word.wordId">
-                  <span>{{ word.wordName }}</span>
-                  <Button variant="ghost" size="icon-sm" type="button" :aria-label="`${word.wordName} 예상 단어 삭제`" :disabled="!canEditExpectedWords || isBusy" @click="wordPendingDeletion = word">×</Button>
-                </li>
-              </ul>
-              <p v-if="expectedWordError && expectedWordsStatus !== 'error'" class="inline-error" role="alert">{{ expectedWordError }}</p>
-              <p v-if="!canEditExpectedWords" class="word-help">진행 중이거나 완료된 훈련은 예상 단어를 변경할 수 없습니다.</p>
-              <p v-else-if="willRequireRegenerationAfterChange" class="word-help">예상 단어를 변경하면 AI 교안 재생성이 필요합니다.</p>
-            </details>
           </section>
 
           <section class="preview-panel" aria-labelledby="preview-title">
@@ -456,13 +582,21 @@ function handleDialogOpen(open: boolean): void {
                 <h3 id="preview-title">아동 화면</h3>
               </div>
               <Badge v-if="requiresRegeneration" variant="destructive">재생성 필요</Badge>
-              <Badge v-else variant="outline">자료 {{ selectedMaterialIndex + 1 }} / {{ draftMaterials.length }}</Badge>
+              <Badge v-else variant="outline"
+                >자료 {{ selectedMaterialIndex + 1 }} / {{ draftMaterials.length }}</Badge
+              >
             </header>
 
-            <div v-if="requiresRegeneration" class="generation-notice" :class="{ error: materialGenerationStatus === 'error' }">
+            <div
+              v-if="requiresRegeneration"
+              class="generation-notice"
+              :class="{ error: materialGenerationStatus === 'error' }"
+            >
               <div>
                 <strong>AI 교안 재생성이 필요합니다.</strong>
-                <span>{{ materialGenerationError ?? '예상 단어 변경 내용을 새 교안에 반영해 주세요.' }}</span>
+                <span>{{
+                  materialGenerationError ?? 'AI가 교안 자료를 생성하면 편집을 시작할 수 있습니다.'
+                }}</span>
               </div>
               <Button type="button" :disabled="!canGenerate" @click="emit('regenerate')">
                 {{ isGenerating ? '생성 중' : 'AI 교안 재생성' }}
@@ -487,10 +621,26 @@ function handleDialogOpen(open: boolean): void {
 
         <footer class="editor-footer">
           <div>
-            <p v-if="materialValidationError" class="inline-error" role="alert">{{ materialValidationError }}</p>
-            <p v-else-if="lessonMaterialSaveError" class="inline-error" role="alert">{{ lessonMaterialSaveError }}</p>
-            <p v-else-if="lessonMaterialSaveStatus === 'success'" class="save-success" role="status">교안이 저장되었습니다.</p>
-            <p v-else>{{ lessonMaterial?.editable ? '수정 내용은 전체 자료 단위로 저장됩니다.' : '현재 훈련은 읽기 전용입니다.' }}</p>
+            <p v-if="materialValidationError" class="inline-error" role="alert">
+              {{ materialValidationError }}
+            </p>
+            <p v-else-if="lessonMaterialSaveError" class="inline-error" role="alert">
+              {{ lessonMaterialSaveError }}
+            </p>
+            <p
+              v-else-if="lessonMaterialSaveStatus === 'success'"
+              class="save-success"
+              role="status"
+            >
+              교안이 저장되었습니다.
+            </p>
+            <p v-else>
+              {{
+                lessonMaterial?.editable
+                  ? '수정 내용은 전체 자료 단위로 저장됩니다.'
+                  : '현재 훈련은 읽기 전용입니다.'
+              }}
+            </p>
           </div>
           <div>
             <Button
@@ -511,20 +661,20 @@ function handleDialogOpen(open: boolean): void {
   </Dialog>
 
   <ConfirmDialog
-    :open="Boolean(wordPendingDeletion)"
-    title="예상 단어를 삭제할까요?"
-    :message="`‘${wordPendingDeletion?.wordName ?? ''}’을(를) ${attemptLabel}에서 삭제합니다.`"
-    confirm-label="단어 삭제"
-    @cancel="wordPendingDeletion = null"
-    @confirm="confirmDeleteWord"
-  />
-  <ConfirmDialog
     :open="closePending"
     title="수정 내용을 취소할까요?"
     message="저장하지 않은 교안 수정 내용이 사라집니다."
     confirm-label="수정 취소"
     @cancel="closePending = false"
     @confirm="confirmClose"
+  />
+  <ConfirmDialog
+    :open="reloadPending"
+    title="최신 교안을 불러올까요?"
+    message="저장하지 않은 교안 수정 내용이 사라지고 서버의 최신 교안으로 교체됩니다."
+    confirm-label="최신 교안 불러오기"
+    @cancel="reloadPending = false"
+    @confirm="confirmReloadLatest"
   />
 </template>
 
@@ -544,7 +694,7 @@ function handleDialogOpen(open: boolean): void {
   border-radius: var(--radius-lg);
   background: var(--white);
   box-shadow: 0 24px 70px rgb(15 23 42 / 22%);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 .editor-header,
 .editor-footer,
@@ -564,6 +714,23 @@ function handleDialogOpen(open: boolean): void {
   z-index: 10;
   border-bottom: 1px solid var(--border);
   background: var(--white);
+}
+.remote-change-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid #fbbf24;
+  background: #fffbeb;
+  padding: 11px 20px;
+  color: #92400e;
+}
+.remote-change-notice div {
+  display: grid;
+  gap: 2px;
+}
+.remote-change-notice span {
+  font-size: 12px;
 }
 .editor-footer {
   z-index: 10;
@@ -622,19 +789,36 @@ function handleDialogOpen(open: boolean): void {
   flex-wrap: wrap;
   gap: 6px;
 }
-.material-tabs button {
-  padding: 7px 10px;
+.material-tab-item {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
+  background: var(--white);
+}
+.material-tabs button[role='tab'] {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 0;
   background: var(--white);
   color: var(--slate-600);
   font-size: 12px;
   font-weight: 700;
 }
-.material-tabs button.active {
-  border-color: var(--primary-500);
+.material-tabs button[role='tab'].active {
   background: var(--primary-50);
   color: var(--primary-800);
+}
+.material-tab-item:has(button[role='tab'].active) {
+  border-color: var(--primary-500);
+}
+.material-order-actions {
+  display: flex;
+  border-left: 1px solid var(--border);
+}
+.material-order-actions button {
+  border-radius: 0;
 }
 .material-form {
   display: grid;
@@ -681,8 +865,7 @@ legend {
   font-weight: 800;
 }
 fieldset label,
-.dynamic-field > label,
-.word-form > label {
+.dynamic-field > label {
   display: grid;
   gap: 6px;
   color: var(--slate-700);
@@ -753,58 +936,13 @@ textarea:focus {
   margin: 0;
   padding-left: 18px;
 }
-.word-settings {
-  margin-top: 18px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px;
-}
-.word-settings summary {
-  cursor: pointer;
-  color: var(--slate-800);
-  font-size: 12px;
-  font-weight: 800;
-}
-.word-form {
-  margin-top: 14px;
-}
-.word-form > div {
-  display: grid;
-  gap: 8px;
-  margin-top: 6px;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-.word-form > small {
-  display: block;
-  margin-top: 5px;
-  color: var(--slate-400);
-  font-size: 10px;
-  text-align: right;
-}
-.word-form > small.error,
 .inline-error {
   color: var(--danger-600);
 }
-.word-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin: 12px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.word-list li {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 5px 4px 10px;
-  border-radius: 999px;
-  background: var(--primary-50);
-  color: var(--primary-800);
+.field-error {
+  color: var(--danger-600);
   font-size: 11px;
-  font-weight: 700;
 }
-.word-help,
 .editor-footer p {
   margin: 8px 0 0;
   color: var(--slate-500);

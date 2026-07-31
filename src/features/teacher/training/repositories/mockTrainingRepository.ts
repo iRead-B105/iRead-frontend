@@ -9,7 +9,6 @@ import {
 import {
   curriculumLogFixtures,
   currentCurriculumFixture,
-  expectedWordFixtures,
   trainingCatalogFixture,
   trainingDetailFixtures,
   trainingLogFixtures,
@@ -20,7 +19,6 @@ import type {
   CurriculumTraining,
   CurriculumTrainingLog,
   DailyCurriculum,
-  ExpectedWord,
   GeneratedTrainingData,
   LessonMaterialDocument,
   SaveCurriculumRequest,
@@ -42,7 +40,6 @@ export interface MockTrainingRepositoryFixtures {
   readonly catalog?: readonly TrainingCatalogItem[]
   readonly curricula?: Readonly<Record<number, DailyCurriculum | null>>
   readonly details?: readonly TrainingDetail[]
-  readonly expectedWords?: Readonly<Record<number, readonly ExpectedWord[]>>
   readonly lessonMaterials?: readonly LessonMaterialDocument[]
   readonly curriculumLogs?: Readonly<
     Record<number, Readonly<Record<TrainingPeriod, readonly CurriculumLog[]>>>
@@ -74,7 +71,6 @@ export class MockTrainingRepository implements TrainingRepository {
   private readonly catalog: readonly TrainingCatalogItem[]
   private readonly curricula = new Map<number, DailyCurriculum | null>()
   private readonly details = new Map<number, TrainingDetail>()
-  private readonly expectedWords = new Map<number, ExpectedWord[]>()
   private readonly lessonMaterials = new Map<number, LessonMaterialDocument>()
   private readonly curriculumLogs = new Map<
     number,
@@ -85,7 +81,6 @@ export class MockTrainingRepository implements TrainingRepository {
   private readonly gazeByTrainingId = new Map<number, GazeAnalysisState>()
   private nextCurriculumId = 300
   private nextTrainingId = 1_000
-  private nextWordId = 10_000
 
   constructor(fixtures: MockTrainingRepositoryFixtures = {}) {
     this.catalog = clone(fixtures.catalog ?? trainingCatalogFixture)
@@ -96,13 +91,6 @@ export class MockTrainingRepository implements TrainingRepository {
     for (const detail of fixtures.details ?? trainingDetailFixtures) {
       this.details.set(detail.trainingId, clone(detail))
       this.nextTrainingId = Math.max(this.nextTrainingId, detail.trainingId + 1)
-    }
-    for (const [trainingId, words] of Object.entries(
-      fixtures.expectedWords ?? expectedWordFixtures,
-    )) {
-      const clonedWords = clone(words) as ExpectedWord[]
-      this.expectedWords.set(Number(trainingId), clonedWords)
-      for (const word of clonedWords) this.nextWordId = Math.max(this.nextWordId, word.wordId + 1)
     }
     for (const document of fixtures.lessonMaterials ?? []) {
       this.lessonMaterials.set(document.trainingId, clone(document))
@@ -192,7 +180,6 @@ export class MockTrainingRepository implements TrainingRepository {
     for (const training of current.trainings) {
       if (!retainedIds.has(training.trainingId)) {
         this.details.delete(training.trainingId)
-        this.expectedWords.delete(training.trainingId)
         this.lessonMaterials.delete(training.trainingId)
       }
     }
@@ -201,58 +188,7 @@ export class MockTrainingRepository implements TrainingRepository {
     return clone(updated)
   }
 
-  async getExpectedWords(studentId: number, trainingId: number, options?: TrainingRequestOptions) {
-    this.assertTrainingBelongsToStudent(studentId, trainingId)
-    assertNotAborted(options)
-    return clone(this.expectedWords.get(trainingId) ?? [])
-  }
-
-  async addExpectedWord(studentId: number, trainingId: number, wordName: string) {
-    this.assertTrainingBelongsToStudent(studentId, trainingId)
-    const normalized = wordName.trim()
-    if (!normalized || normalized.length > 50) {
-      throw new ApiError({
-        status: 400,
-        code: 'INVALID_EXPECTED_WORD',
-        message: '예상 단어는 1자 이상 50자 이하여야 합니다.',
-      })
-    }
-    const words = this.expectedWords.get(trainingId) ?? []
-    if (words.some((word) => word.wordName === normalized)) {
-      throw new ApiError({
-        status: 400,
-        code: 'DUPLICATE_EXPECTED_WORD',
-        message: '이미 추가된 예상 단어입니다.',
-      })
-    }
-    this.expectedWords.set(trainingId, [
-      ...words,
-      { wordId: this.nextWordId++, wordName: normalized },
-    ])
-    this.invalidateGeneratedTraining(trainingId)
-  }
-
-  async deleteExpectedWord(studentId: number, trainingId: number, wordId: number) {
-    this.assertTrainingBelongsToStudent(studentId, trainingId)
-    const words = this.expectedWords.get(trainingId) ?? []
-    if (!words.some((word) => word.wordId === wordId)) {
-      throw new ApiError({
-        status: 404,
-        code: 'EXPECTED_WORD_NOT_FOUND',
-        message: '예상 단어를 찾을 수 없습니다.',
-      })
-    }
-    this.expectedWords.set(
-      trainingId,
-      words.filter((word) => word.wordId !== wordId),
-    )
-    this.invalidateGeneratedTraining(trainingId)
-  }
-
-  async generateTraining(
-    studentId: number,
-    trainingId: number,
-  ): Promise<GeneratedTrainingData> {
+  async generateTraining(studentId: number, trainingId: number): Promise<GeneratedTrainingData> {
     this.assertTrainingBelongsToStudent(studentId, trainingId)
     const detail = this.details.get(trainingId)
     if (!detail) {
@@ -270,15 +206,13 @@ export class MockTrainingRepository implements TrainingRepository {
       })
     }
 
-    const words = this.expectedWords.get(trainingId) ?? []
-    const targets =
-      words.length > 0
-        ? words.map((word) => word.wordName)
-        : [`${detail.name} 연습 ${detail.trainingTemplateId}`]
+    const targets = Array.from(
+      { length: 5 },
+      (_, index) => `${detail.name} 연습 ${detail.trainingTemplateId}-${index + 1}`,
+    )
     const generatedData: GeneratedTrainingData = {
       schemaVersion: 2,
       trainingTemplateId: detail.trainingTemplateId,
-      expectedWords: clone(words),
       questions: targets.map((target, index) => ({
         questionId: index + 1,
         problem: {
@@ -553,7 +487,6 @@ export class MockTrainingRepository implements TrainingRepository {
         status: 'NOT_READY',
       }
       this.ensureTrainingDetail(created, template)
-      this.expectedWords.set(created.trainingId, [])
       return created
     })
   }
@@ -572,16 +505,5 @@ export class MockTrainingRepository implements TrainingRepository {
       result: current?.result ?? null,
       accuracy: current?.accuracy ?? null,
     })
-  }
-
-  private invalidateGeneratedTraining(trainingId: number): void {
-    const detail = this.details.get(trainingId)
-    if (!detail) return
-    this.details.set(trainingId, {
-      ...detail,
-      generatedData: null,
-      status: 'NOT_READY',
-    })
-    this.lessonMaterials.delete(trainingId)
   }
 }

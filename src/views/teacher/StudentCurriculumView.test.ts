@@ -22,9 +22,6 @@ function repository(overrides: Partial<TrainingRepository> = {}): TrainingReposi
     createCurriculum: vi.fn(),
     getCurriculum: vi.fn(),
     updateCurriculum: vi.fn().mockResolvedValue(currentCurriculumFixture),
-    getExpectedWords: vi.fn().mockResolvedValue([]),
-    addExpectedWord: vi.fn().mockResolvedValue(undefined),
-    deleteExpectedWord: vi.fn().mockResolvedValue(undefined),
     generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
     getTrainingDetail: vi.fn().mockResolvedValue(trainingDetailFixtures[0]),
     getLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
@@ -166,8 +163,8 @@ describe('StudentCurriculumView', () => {
   })
 
   it('실제 training ID가 있는 반복 시행에서만 교안 편집을 연다', async () => {
-    const getExpectedWords = vi.fn().mockResolvedValue([{ wordId: 1, wordName: '꽃' }])
-    const { wrapper } = await mountCurriculum(repository({ getExpectedWords }))
+    const getLessonMaterial = vi.fn().mockResolvedValue(undefined as never)
+    const { wrapper } = await mountCurriculum(repository({ getLessonMaterial }))
 
     const editorButtons = wrapper
       .findAll('button')
@@ -176,7 +173,7 @@ describe('StudentCurriculumView', () => {
     await editorButtons[1]?.trigger('click')
     await flushPromises()
 
-    expect(getExpectedWords).toHaveBeenCalledWith(
+    expect(getLessonMaterial).toHaveBeenCalledWith(
       1,
       102,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),

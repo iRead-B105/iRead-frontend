@@ -11,7 +11,6 @@ import type {
   CurriculumStatus,
   DailyCurriculum,
   LessonMaterialDocument,
-  ExpectedWord,
   GeneratedTrainingData,
   SaveCurriculumRequest,
   SaveLessonMaterialRequest,
@@ -60,15 +59,6 @@ interface DailyCurriculumDto {
   readonly curriculumId: number
   readonly status: CurriculumStatus
   readonly trainings: readonly CurriculumTrainingDto[]
-}
-
-interface ExpectedWordDto {
-  readonly wordId: number
-  readonly word: string
-}
-
-interface ExpectedWordsDto {
-  readonly words: readonly ExpectedWordDto[]
 }
 
 interface TrainingDetailDto {
@@ -157,13 +147,6 @@ function mapCurriculum(dto: DailyCurriculumDto): DailyCurriculum {
     trainings: [...dto.trainings]
       .sort((left, right) => left.sequence - right.sequence)
       .map((training) => ({ ...training })),
-  }
-}
-
-function mapExpectedWord(dto: ExpectedWordDto): ExpectedWord {
-  return {
-    wordId: dto.wordId,
-    wordName: dto.word,
   }
 }
 
@@ -287,21 +270,6 @@ export interface TrainingApi {
     curriculumId: number,
     request: SaveCurriculumRequest,
   ) => Promise<void>
-  readonly getExpectedWords: (
-    studentId: number,
-    trainingId: number,
-    options?: TrainingRequestOptions,
-  ) => Promise<readonly ExpectedWord[]>
-  readonly addExpectedWord: (
-    studentId: number,
-    trainingId: number,
-    wordName: string,
-  ) => Promise<void>
-  readonly deleteExpectedWord: (
-    studentId: number,
-    trainingId: number,
-    wordId: number,
-  ) => Promise<void>
   readonly generateTraining: (
     studentId: number,
     trainingId: number,
@@ -388,25 +356,6 @@ export function createTrainingApi(
         method: 'PATCH',
         body: jsonBody(command),
       })
-    },
-    async getExpectedWords(studentId, trainingId, options) {
-      const dto = await request<ExpectedWordsDto>(
-        `/api/admin/training/${studentId}/${trainingId}/expected-word`,
-        requestInit(options),
-      )
-      return dto.words.map(mapExpectedWord)
-    },
-    async addExpectedWord(studentId, trainingId, wordName) {
-      await request<void>(`/api/admin/training/${studentId}/${trainingId}/expected-word`, {
-        method: 'POST',
-        body: jsonBody({ wordName }),
-      })
-    },
-    async deleteExpectedWord(studentId, trainingId, wordId) {
-      await request<void>(
-        `/api/admin/training/${studentId}/${trainingId}/expected-word/${wordId}`,
-        { method: 'DELETE' },
-      )
     },
     async generateTraining(studentId, trainingId) {
       return request<GeneratedTrainingData>(
