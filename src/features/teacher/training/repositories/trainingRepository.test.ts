@@ -120,6 +120,26 @@ describe('ApiTrainingRepository', () => {
       originalError: refreshError,
     })
   })
+
+  it('교안 조회 응답과 저장 요청이 정확히 5개가 아니면 API 경계에서 거부한다', async () => {
+    const getLessonMaterial = vi.fn().mockResolvedValue({ materials: [] })
+    const saveLessonMaterial = vi.fn()
+    const repository = new ApiTrainingRepository(
+      api({ getLessonMaterial, saveLessonMaterial }),
+    )
+
+    await expect(repository.getLessonMaterial(1, 101)).rejects.toMatchObject({
+      status: 502,
+      code: 'LESSON_MATERIAL_CONTRACT_MISMATCH',
+    })
+    await expect(
+      repository.saveLessonMaterial(1, 101, { revision: 1, materials: [] }),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: 'LESSON_MATERIAL_VALIDATION_FAILED',
+    })
+    expect(saveLessonMaterial).not.toHaveBeenCalled()
+  })
 })
 
 describe('Training API target contract', () => {
@@ -243,6 +263,10 @@ describe('Training API target contract', () => {
       content: { audioText: '꽃', choices: ['꽃', '낮'] },
       answer: { answerIndex: 0 },
     }
+    const materials = Array.from({ length: 5 }, (_, index) => ({
+      ...material,
+      questionNo: index + 1,
+    }))
     const document = {
       trainingId: 101,
       trainingTemplateId: 12,
@@ -252,7 +276,7 @@ describe('Training API target contract', () => {
       schemaVersion: 2,
       revision: 3,
       editable: true,
-      materials: [material],
+      materials,
     }
     const request = vi
       .fn()
@@ -262,20 +286,18 @@ describe('Training API target contract', () => {
         revision: 4,
         savedAt: '2026-07-31T14:30:00+09:00',
         source: 'MANUAL',
-        materials: [material],
+        materials,
       })
     const trainingApi = createTrainingApi(request)
     const saveCommand = {
       revision: 3,
-      materials: [
-        {
-          questionNo: 1,
-          questionType: material.questionType,
-          presentation: material.presentation,
-          content: material.content,
-          answer: material.answer,
-        },
-      ],
+      materials: materials.map(({ questionNo, questionType, presentation, content, answer }) => ({
+        questionNo,
+        questionType,
+        presentation,
+        content,
+        answer,
+      })),
     }
 
     await expect(trainingApi.getLessonMaterial(7, 101)).resolves.toBe(document)
@@ -296,6 +318,7 @@ describe('Training API target contract', () => {
     expect(JSON.parse(request.mock.calls[1]?.[1]?.body as string).materials[0]).not.toHaveProperty(
       'requiredInputs',
     )
+    expect(JSON.parse(request.mock.calls[1]?.[1]?.body as string).materials).toHaveLength(5)
   })
 
   it('기간 query로 curriculum log를 조회하고 최신순으로 정렬한다', async () => {

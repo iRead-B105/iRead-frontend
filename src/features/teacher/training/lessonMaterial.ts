@@ -2,18 +2,20 @@ import { ApiError } from '@/lib/api'
 import type {
   CurriculumTraining,
   EditableLessonMaterialItem,
-  LessonMaterialData,
   LessonMaterialDocument,
   LessonMaterialItem,
   LessonMaterialPresentation,
   SaveLessonMaterialRequest,
   TrainingDetail,
 } from './model'
+import {
+  defaultLessonMaterialData,
+  validateLessonMaterialItem,
+} from './lessonMaterialEditor'
 
-export const LESSON_MATERIAL_MIN_COUNT = 1
-export const LESSON_MATERIAL_MAX_COUNT = 5
+export const LESSON_MATERIAL_COUNT = 5
 
-const QUESTION_TYPES = [
+export const LESSON_QUESTION_TYPES = [
   'VOWEL_TRACE',
   'CONSONANT_TRACE',
   'SYLLABLE_TRACE',
@@ -50,7 +52,7 @@ const QUESTION_TYPES = [
   'SHORT_STORY_READING',
 ] as const
 
-export type LessonQuestionType = (typeof QUESTION_TYPES)[number]
+export type LessonQuestionType = (typeof LESSON_QUESTION_TYPES)[number]
 
 const RESPONSE_TYPE_BY_QUESTION_TYPE: Readonly<Record<LessonQuestionType, string>> = {
   VOWEL_TRACE: 'TRACE',
@@ -80,7 +82,7 @@ const RESPONSE_TYPE_BY_QUESTION_TYPE: Readonly<Record<LessonQuestionType, string
   SENTENCE_READING: 'AUDIO',
   SHORT_PASSAGE_READING: 'AUDIO',
   SENTENCE_ASSEMBLY: 'ORDERING',
-  FILL_IN_THE_BLANK: 'DYNAMIC',
+  FILL_IN_THE_BLANK: 'SINGLE_CHOICE',
   IMAGE_SENTENCE_MATCH: 'SINGLE_CHOICE',
   SENTENCE_REPEAT: 'AUDIO',
   WORD_CHAIN_READING: 'AUDIO',
@@ -93,22 +95,11 @@ const REQUIRED_INPUTS_BY_TEMPLATE_ID: Readonly<Record<number, readonly string[]>
   1: ['VOICE', 'GAZE'],
   2: ['VOICE', 'GAZE'],
   3: ['VOICE', 'GAZE'],
-  14: ['VOICE'],
-  15: ['VOICE'],
-  16: ['VOICE'],
-  17: ['VOICE'],
-  18: ['VOICE'],
-  19: ['VOICE'],
-  20: ['VOICE'],
-  21: ['VOICE'],
   22: ['VOICE', 'GAZE'],
   23: ['VOICE', 'GAZE'],
   24: ['VOICE', 'GAZE'],
   25: ['VOICE', 'GAZE'],
   26: ['VOICE', 'GAZE'],
-  27: ['VOICE', 'GAZE'],
-  28: ['VOICE', 'GAZE'],
-  29: ['VOICE', 'GAZE'],
   30: ['VOICE', 'GAZE'],
   31: ['VOICE', 'GAZE'],
   32: ['VOICE', 'GAZE'],
@@ -129,7 +120,7 @@ function stringValue(value: unknown): string {
 }
 
 function questionTypeForTemplate(trainingTemplateId: number): LessonQuestionType {
-  return QUESTION_TYPES[trainingTemplateId - 1] ?? 'WORD_READING'
+  return LESSON_QUESTION_TYPES[trainingTemplateId - 1] ?? 'WORD_READING'
 }
 
 function presentationFrom(
@@ -157,21 +148,35 @@ export function createMockLessonMaterialDocument(
   detail: TrainingDetail,
 ): LessonMaterialDocument {
   const questionType = questionTypeForTemplate(training.trainingTemplateId)
-  const questions = legacyQuestions(detail).slice(0, LESSON_MATERIAL_MAX_COUNT)
-  const sourceQuestions = questions.length > 0 ? questions : [{}]
-  const materials = sourceQuestions.map<LessonMaterialItem>((question, index) => ({
-    questionNo: index + 1,
-    questionType: stringValue(question.questionType) || stringValue(question.type) || questionType,
-    responseType: RESPONSE_TYPE_BY_QUESTION_TYPE[questionType],
-    requiredInputs: REQUIRED_INPUTS_BY_TEMPLATE_ID[training.trainingTemplateId] ?? [],
-    presentation: presentationFrom(question.presentation, training.trainingName, index + 1),
-    content: isRecord(question.content)
-      ? cloneJson(question.content)
+  const questions = legacyQuestions(detail).slice(0, LESSON_MATERIAL_COUNT)
+  const sourceQuestions = Array.from(
+    { length: LESSON_MATERIAL_COUNT },
+    (_, index) => questions[index] ?? {},
+  )
+  const materials = sourceQuestions.map<LessonMaterialItem>((question, index) => {
+    const defaults = defaultLessonMaterialData(questionType)
+    const legacyContent = isRecord(question.content)
+      ? question.content
       : isRecord(question.problem)
-        ? cloneJson(question.problem)
-        : {},
-    answer: isRecord(question.answer) ? cloneJson(question.answer) : {},
-  }))
+        ? question.problem
+        : {}
+    const legacyAnswer = isRecord(question.answer) ? question.answer : {}
+    return {
+      questionNo: index + 1,
+      questionType,
+      responseType: RESPONSE_TYPE_BY_QUESTION_TYPE[questionType],
+      requiredInputs: REQUIRED_INPUTS_BY_TEMPLATE_ID[training.trainingTemplateId] ?? [],
+      presentation: presentationFrom(question.presentation, training.trainingName, index + 1),
+      content: {
+        ...cloneJson(defaults.content),
+        ...cloneJson(legacyContent),
+      },
+      answer: {
+        ...cloneJson(defaults.answer),
+        ...cloneJson(legacyAnswer),
+      },
+    }
+  })
 
   return {
     trainingId: training.trainingId,
@@ -209,6 +214,29 @@ export function cloneLessonMaterialDocument(
   return cloneJson(document)
 }
 
+export function assertLessonMaterialResponseCount<
+  T extends { readonly materials: readonly unknown[] },
+>(response: T): T {
+  if (response.materials.length !== LESSON_MATERIAL_COUNT) {
+    throw new ApiError({
+      status: 502,
+      code: 'LESSON_MATERIAL_CONTRACT_MISMATCH',
+      message: `교안 조회 결과는 정확히 ${LESSON_MATERIAL_COUNT}개 자료여야 합니다.`,
+    })
+  }
+  return response
+}
+
+export function assertLessonMaterialRequestCount(request: SaveLessonMaterialRequest): void {
+  if (request.materials.length !== LESSON_MATERIAL_COUNT) {
+    throw new ApiError({
+      status: 422,
+      code: 'LESSON_MATERIAL_VALIDATION_FAILED',
+      message: `교안 자료는 정확히 ${LESSON_MATERIAL_COUNT}개여야 합니다.`,
+    })
+  }
+}
+
 export function assertSaveLessonMaterialRequest(
   request: SaveLessonMaterialRequest,
   current: LessonMaterialDocument,
@@ -227,16 +255,7 @@ export function assertSaveLessonMaterialRequest(
       message: '교안이 다른 화면에서 변경되었습니다. 최신 교안을 다시 불러와 주세요.',
     })
   }
-  if (
-    request.materials.length < LESSON_MATERIAL_MIN_COUNT ||
-    request.materials.length > LESSON_MATERIAL_MAX_COUNT
-  ) {
-    throw new ApiError({
-      status: 422,
-      code: 'LESSON_MATERIAL_VALIDATION_FAILED',
-      message: `교안 자료는 ${LESSON_MATERIAL_MIN_COUNT}~${LESSON_MATERIAL_MAX_COUNT}개여야 합니다.`,
-    })
-  }
+  assertLessonMaterialRequestCount(request)
 
   const expectedType = current.materials[0]?.questionType
   for (const [index, material] of request.materials.entries()) {
@@ -261,6 +280,14 @@ export function assertSaveLessonMaterialRequest(
         message: `${index + 1}번 자료의 활동 이름과 지시문을 입력해 주세요.`,
       })
     }
+    const issue = validateLessonMaterialItem(material)[0]
+    if (issue) {
+      throw new ApiError({
+        status: 422,
+        code: 'LESSON_MATERIAL_VALIDATION_FAILED',
+        message: `${index + 1}번 자료의 ${issue.message}`,
+      })
+    }
   }
 }
 
@@ -276,37 +303,4 @@ export function normalizeSavedMaterials(
     responseType: policy.responseType,
     requiredInputs: [...policy.requiredInputs],
   }))
-}
-
-export function newEditableMaterialLike(
-  item: LessonMaterialItem,
-  questionNo: number,
-): EditableLessonMaterialItem {
-  const blankValue = (value: unknown): unknown => {
-    if (typeof value === 'string') return ''
-    if (typeof value === 'number') return 0
-    if (typeof value === 'boolean') return false
-    if (Array.isArray(value)) return []
-    if (isRecord(value)) {
-      return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, blankValue(nested)]))
-    }
-    return value
-  }
-  return {
-    questionNo,
-    questionType: item.questionType,
-    presentation: {
-      activityName: `${item.presentation.activityName} ${questionNo}`,
-      instruction: item.presentation.instruction,
-      hint: '',
-      correctFeedback: item.presentation.correctFeedback,
-      retryFeedback: item.presentation.retryFeedback,
-    },
-    content: Object.fromEntries(
-      Object.entries(item.content).map(([key, value]) => [key, blankValue(value)]),
-    ) satisfies LessonMaterialData,
-    answer: Object.fromEntries(
-      Object.entries(item.answer).map(([key, value]) => [key, blankValue(value)]),
-    ) satisfies LessonMaterialData,
-  }
 }

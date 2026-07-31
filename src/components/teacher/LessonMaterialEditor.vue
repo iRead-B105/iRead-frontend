@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import MaterialEditorHost from '@/components/teacher/lesson-material/MaterialEditorHost.vue'
+import MaterialPreviewHost from '@/components/teacher/lesson-material/MaterialPreviewHost.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
-  LESSON_MATERIAL_MAX_COUNT,
-  LESSON_MATERIAL_MIN_COUNT,
+  LESSON_MATERIAL_COUNT,
   editableItem,
-  newEditableMaterialLike,
+  getLessonMaterialEditorDefinition,
+  lessonMaterialCategoryLabel,
   trainingStatusLabel,
+  validateLessonMaterialItem,
   type CurriculumTraining,
   type EditableLessonMaterialItem,
   type ExpectedWord,
@@ -29,29 +32,34 @@ interface MaterialDraft {
   answer: Record<string, unknown>
 }
 
-const props = defineProps<{
-  training: CurriculumTraining
-  attemptLabel: string
-  expectedWords: readonly ExpectedWord[]
-  detail: TrainingDetail | null
-  lessonMaterial: LessonMaterialDocument | null
-  expectedWordsStatus: TrainingRequestStatus
-  detailStatus: TrainingRequestStatus
-  lessonMaterialStatus: TrainingRequestStatus
-  lessonMaterialSaveStatus: TrainingRequestStatus
-  materialGenerationStatus: TrainingRequestStatus
-  requiresRegeneration: boolean
-  isMutating: boolean
-  isSavingLessonMaterial: boolean
-  expectedWordError: string | null
-  detailError: string | null
-  lessonMaterialError: string | null
-  lessonMaterialSaveError: string | null
-  materialGenerationError: string | null
-}>()
+const props = withDefaults(
+  defineProps<{
+    open?: boolean
+    training: CurriculumTraining
+    attemptLabel: string
+    expectedWords: readonly ExpectedWord[]
+    detail: TrainingDetail | null
+    lessonMaterial: LessonMaterialDocument | null
+    expectedWordsStatus: TrainingRequestStatus
+    detailStatus: TrainingRequestStatus
+    lessonMaterialStatus: TrainingRequestStatus
+    lessonMaterialSaveStatus: TrainingRequestStatus
+    materialGenerationStatus: TrainingRequestStatus
+    requiresRegeneration: boolean
+    isMutating: boolean
+    isSavingLessonMaterial: boolean
+    expectedWordError: string | null
+    detailError: string | null
+    lessonMaterialError: string | null
+    lessonMaterialSaveError: string | null
+    materialGenerationError: string | null
+  }>(),
+  { open: true },
+)
 
 const emit = defineEmits<{
   close: []
+  'update:open': [open: boolean]
   addWord: [wordName: string]
   deleteWord: [wordId: number]
   regenerate: []
@@ -59,41 +67,13 @@ const emit = defineEmits<{
   save: [request: SaveLessonMaterialRequest]
 }>()
 
-const FIELD_LABELS: Readonly<Record<string, string>> = {
-  activityName: '활동 이름',
-  instruction: '활동 지시문',
-  hint: '힌트',
-  correctFeedback: '정답 피드백',
-  retryFeedback: '재시도 피드백',
-  targetText: '제시 내용',
-  audioText: '재생 문구',
-  targetAudioText: 'TTS 재생 문구',
-  choices: '선택지',
-  sentenceChoices: '문장 선택지',
-  wordChoices: '낱말 선택지',
-  initialChoices: '초성 선택지',
-  medialChoices: '중성 선택지',
-  finalChoices: '종성 선택지',
-  answerIndex: '정답 위치',
-  correctText: '정답 기준 문구',
-  result: '완성 정답',
-  imagePrompt: '이미지 생성 설명',
-  imageUrl: '이미지 주소',
-  imageAssetKey: '이미지 에셋 키',
-  audioUrl: '음성 파일 주소',
-  audioAssetKey: '음성 에셋 키',
-  traceAssetKey: '따라쓰기 에셋 키',
-}
-
 const newWord = ref('')
 const submittedWord = ref<string | null>(null)
 const wordPendingDeletion = ref<ExpectedWord | null>(null)
-const materialPendingDeletion = ref<number | null>(null)
 const closePending = ref(false)
 const selectedMaterialIndex = ref(0)
 const draftMaterials = ref<MaterialDraft[]>([])
-const complexTexts = ref<Record<string, string>>({})
-const complexErrors = ref<Record<string, string>>({})
+const editorInputError = ref<string | null>(null)
 
 const normalizedWord = computed(() => newWord.value.trim())
 const canEditExpectedWords = computed(
@@ -120,6 +100,11 @@ const canGenerate = computed(
 const selectedDraft = computed(() => draftMaterials.value[selectedMaterialIndex.value] ?? null)
 const selectedPolicy = computed(
   () => props.lessonMaterial?.materials[selectedMaterialIndex.value] ?? null,
+)
+const selectedDefinition = computed(() =>
+  selectedDraft.value
+    ? getLessonMaterialEditorDefinition(selectedDraft.value.questionType)
+    : null,
 )
 
 function cloneJson<T>(value: T): T {
@@ -161,22 +146,28 @@ const savedRequest = computed(() =>
 const hasChanges = computed(
   () => JSON.stringify(requestFromDraft()) !== JSON.stringify(savedRequest.value),
 )
+const materialIssues = computed(() =>
+  draftMaterials.value.map((material) => validateLessonMaterialItem(material)),
+)
+const selectedIssues = computed(
+  () => materialIssues.value[selectedMaterialIndex.value] ?? [],
+)
 const materialValidationError = computed(() => {
   if (!props.lessonMaterial || props.lessonMaterialStatus !== 'success') return null
-  if (
-    draftMaterials.value.length < LESSON_MATERIAL_MIN_COUNT ||
-    draftMaterials.value.length > LESSON_MATERIAL_MAX_COUNT
-  ) {
-    return `학습 자료는 ${LESSON_MATERIAL_MIN_COUNT}~${LESSON_MATERIAL_MAX_COUNT}개로 구성해 주세요.`
+  if (draftMaterials.value.length !== LESSON_MATERIAL_COUNT) {
+    return `학습 자료는 정확히 ${LESSON_MATERIAL_COUNT}개로 구성되어야 합니다.`
   }
-  if (Object.keys(complexErrors.value).length > 0) {
-    return 'JSON 형식이 올바르지 않은 입력란을 확인해 주세요.'
-  }
+  if (editorInputError.value) return editorInputError.value
   const invalidIndex = draftMaterials.value.findIndex(
     (material) =>
       !material.presentation.activityName.trim() || !material.presentation.instruction.trim(),
   )
-  return invalidIndex >= 0 ? `${invalidIndex + 1}번 자료의 활동 이름과 지시문을 입력해 주세요.` : null
+  if (invalidIndex >= 0) {
+    return `${invalidIndex + 1}번 자료의 활동 이름과 지시문을 입력해 주세요.`
+  }
+  const invalidMaterialIndex = materialIssues.value.findIndex((issues) => issues.length > 0)
+  const issue = invalidMaterialIndex >= 0 ? materialIssues.value[invalidMaterialIndex]?.[0] : null
+  return issue ? `${invalidMaterialIndex + 1}번 자료: ${issue.message}` : null
 })
 const canSave = computed(
   () => canEditMaterial.value && hasChanges.value && !materialValidationError.value,
@@ -188,8 +179,7 @@ function resetDraft(document: LessonMaterialDocument | null): void {
     selectedMaterialIndex.value,
     Math.max(0, draftMaterials.value.length - 1),
   )
-  complexTexts.value = {}
-  complexErrors.value = {}
+  editorInputError.value = null
 }
 
 watch(
@@ -197,6 +187,10 @@ watch(
   (document) => resetDraft(document),
   { immediate: true, deep: true },
 )
+
+watch(selectedMaterialIndex, () => {
+  editorInputError.value = null
+})
 
 watch(
   () => props.expectedWords,
@@ -243,47 +237,6 @@ function confirmDeleteWord(): void {
   emit('deleteWord', wordPendingDeletion.value.wordId)
 }
 
-function addMaterial(): void {
-  const source = props.lessonMaterial?.materials[0]
-  if (!source || !canEditMaterial.value || draftMaterials.value.length >= LESSON_MATERIAL_MAX_COUNT) {
-    return
-  }
-  draftMaterials.value.push(toDraft(newEditableMaterialLike(source, draftMaterials.value.length + 1)))
-  selectedMaterialIndex.value = draftMaterials.value.length - 1
-}
-
-function confirmDeleteMaterial(): void {
-  if (
-    materialPendingDeletion.value === null ||
-    !canEditMaterial.value ||
-    draftMaterials.value.length <= LESSON_MATERIAL_MIN_COUNT
-  ) {
-    return
-  }
-  draftMaterials.value.splice(materialPendingDeletion.value, 1)
-  draftMaterials.value.forEach((material, index) => {
-    material.questionNo = index + 1
-  })
-  selectedMaterialIndex.value = Math.min(
-    selectedMaterialIndex.value,
-    draftMaterials.value.length - 1,
-  )
-  materialPendingDeletion.value = null
-}
-
-function moveMaterial(offset: -1 | 1): void {
-  const from = selectedMaterialIndex.value
-  const to = from + offset
-  if (!canEditMaterial.value || to < 0 || to >= draftMaterials.value.length) return
-  const [moved] = draftMaterials.value.splice(from, 1)
-  if (!moved) return
-  draftMaterials.value.splice(to, 0, moved)
-  draftMaterials.value.forEach((material, index) => {
-    material.questionNo = index + 1
-  })
-  selectedMaterialIndex.value = to
-}
-
 function updatePresentation(key: keyof LessonMaterialPresentation, value: string): void {
   const material = selectedDraft.value
   if (!material || !canEditMaterial.value) return
@@ -292,83 +245,13 @@ function updatePresentation(key: keyof LessonMaterialPresentation, value: string
 
 function updateField(section: 'content' | 'answer', key: string, value: unknown): void {
   const material = selectedDraft.value
-  if (!material || !canEditMaterial.value || isProtectedField(key)) return
-  material[section] = { ...material[section], [key]: value }
-}
-
-function updateArrayValue(
-  section: 'content' | 'answer',
-  key: string,
-  index: number,
-  value: string,
-): void {
-  const current = selectedDraft.value?.[section][key]
-  if (!Array.isArray(current)) return
-  const next = [...current]
-  next[index] = value
-  updateField(section, key, next)
-}
-
-function addArrayValue(section: 'content' | 'answer', key: string): void {
-  const current = selectedDraft.value?.[section][key]
-  if (!Array.isArray(current)) return
-  updateField(section, key, [...current, ''])
-}
-
-function deleteArrayValue(section: 'content' | 'answer', key: string, index: number): void {
-  const current = selectedDraft.value?.[section][key]
-  if (!Array.isArray(current)) return
-  updateField(
-    section,
-    key,
-    current.filter((_, candidateIndex) => candidateIndex !== index),
+  if (!material || !canEditMaterial.value) return
+  const definition = getLessonMaterialEditorDefinition(material.questionType)
+  const field = definition?.[section === 'content' ? 'contentFields' : 'answerFields'].find(
+    (candidate) => candidate.key === key,
   )
-}
-
-function complexKey(section: 'content' | 'answer', key: string): string {
-  return `${selectedMaterialIndex.value}:${section}:${key}`
-}
-
-function complexText(section: 'content' | 'answer', key: string, value: unknown): string {
-  return complexTexts.value[complexKey(section, key)] ?? JSON.stringify(value, null, 2)
-}
-
-function updateComplexField(
-  section: 'content' | 'answer',
-  key: string,
-  event: Event,
-): void {
-  const value = (event.target as HTMLTextAreaElement).value
-  const id = complexKey(section, key)
-  complexTexts.value = { ...complexTexts.value, [id]: value }
-  try {
-    const parsed = JSON.parse(value)
-    const remaining = { ...complexErrors.value }
-    delete remaining[id]
-    complexErrors.value = remaining
-    updateField(section, key, parsed)
-  } catch {
-    complexErrors.value = { ...complexErrors.value, [id]: '올바른 JSON 형식으로 입력해 주세요.' }
-  }
-}
-
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'string')
-}
-
-function isProtectedField(key: string): boolean {
-  return /^(imagePrompt|imageUrl|imageAssetKey|audioUrl|audioAssetKey|traceAssetKey)$/i.test(key)
-}
-
-function labelFor(key: string): string {
-  return FIELD_LABELS[key] ?? key
-}
-
-function displayValue(value: unknown): string {
-  if (Array.isArray(value)) return value.join(' · ')
-  if (typeof value === 'object' && value !== null) return JSON.stringify(value)
-  if (value === null || value === undefined || value === '') return '입력 없음'
-  return String(value)
+  if (!field || field.readonly) return
+  material[section] = { ...material[section], [key]: value }
 }
 
 function saveMaterial(): void {
@@ -382,20 +265,31 @@ function requestClose(): void {
     closePending.value = true
     return
   }
+  completeClose()
+}
+
+function completeClose(): void {
+  emit('update:open', false)
   emit('close')
 }
 
 function confirmClose(): void {
   closePending.value = false
-  emit('close')
+  completeClose()
+}
+
+function handleDialogOpen(open: boolean): void {
+  if (!open) requestClose()
 }
 </script>
 
 <template>
-  <Dialog :open="true" @update:open="(open) => !open && requestClose()">
+  <Dialog :open="props.open" @update:open="handleDialogOpen">
     <DialogContent
       class="material-dialog !max-w-none !gap-0 !overflow-hidden !bg-transparent !p-0 !ring-0"
       :show-close-button="false"
+      @escape-key-down.prevent="requestClose"
+      @pointer-down-outside.prevent
     >
       <div class="material-editor">
         <header class="editor-header">
@@ -410,9 +304,6 @@ function confirmClose(): void {
           </div>
           <div class="editor-header__actions">
             <Badge variant="secondary">{{ trainingStatusLabel(training.status) }}</Badge>
-            <Button variant="ghost" size="icon" type="button" aria-label="교안 편집 닫기" @click="requestClose">
-              ×
-            </Button>
           </div>
         </header>
 
@@ -423,16 +314,6 @@ function confirmClose(): void {
                 <p>{{ canEditMaterial ? '편집 가능' : '읽기 전용' }}</p>
                 <h3 id="material-edit-title">학습 자료</h3>
               </div>
-              <Button
-                v-if="lessonMaterial"
-                variant="outline"
-                size="sm"
-                type="button"
-                :disabled="!canEditMaterial || draftMaterials.length >= LESSON_MATERIAL_MAX_COUNT"
-                @click="addMaterial"
-              >
-                + 자료 추가
-              </Button>
             </header>
 
             <p v-if="lessonMaterialStatus === 'loading'" class="section-state" role="status">
@@ -457,30 +338,29 @@ function confirmClose(): void {
                     자료 {{ index + 1 }}
                   </button>
                 </div>
-                <div class="order-actions">
-                  <Button variant="outline" size="sm" type="button" :disabled="!canEditMaterial || selectedMaterialIndex === 0" @click="moveMaterial(-1)">
-                    이전
-                  </Button>
-                  <Button variant="outline" size="sm" type="button" :disabled="!canEditMaterial || selectedMaterialIndex >= draftMaterials.length - 1" @click="moveMaterial(1)">
-                    다음
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    type="button"
-                    :disabled="!canEditMaterial || draftMaterials.length <= LESSON_MATERIAL_MIN_COUNT"
-                    @click="materialPendingDeletion = selectedMaterialIndex"
-                  >
-                    삭제
-                  </Button>
-                </div>
               </div>
 
               <div v-if="selectedDraft" class="material-form">
                 <div class="policy-row">
                   <div>
-                    <small>문항 유형</small>
-                    <strong>{{ selectedDraft.questionType }}</strong>
+                    <small>학습 분류</small>
+                    <strong>
+                      {{
+                        selectedDefinition
+                          ? lessonMaterialCategoryLabel(selectedDefinition.category)
+                          : '확인 중'
+                      }}
+                    </strong>
+                  </div>
+                  <div>
+                    <small>행동 방식</small>
+                    <strong>
+                      {{
+                        selectedDefinition
+                          ? `${selectedDefinition.editorCode} ${selectedDefinition.editorLabel}`
+                          : selectedDraft.questionType
+                      }}
+                    </strong>
                   </div>
                   <div>
                     <small>응답 방식</small>
@@ -516,71 +396,21 @@ function confirmClose(): void {
                   </label>
                 </fieldset>
 
-                <fieldset
-                  v-for="section in (['content', 'answer'] as const)"
-                  :key="section"
+                <MaterialEditorHost
+                  :material="selectedDraft"
                   :disabled="!canEditMaterial"
-                >
-                  <legend>{{ section === 'content' ? '문항 내용' : '정답 기준' }}</legend>
-                  <p v-if="Object.keys(selectedDraft[section]).length === 0" class="empty-fields">
-                    이 자료에는 아직 {{ section === 'content' ? '문항 내용' : '정답 기준' }} 필드가 없습니다.
-                  </p>
-                  <div
-                    v-for="[key, value] in Object.entries(selectedDraft[section])"
-                    :key="key"
-                    class="dynamic-field wide-field"
-                  >
-                    <label :for="`${section}-${key}`">{{ labelFor(key) }}</label>
-                    <div v-if="isProtectedField(key)" :id="`${section}-${key}`" class="readonly-value">
-                      {{ displayValue(value) }}
-                      <small>Backend 또는 미디어 정책이 관리하는 읽기 전용 값입니다.</small>
-                    </div>
-                    <div v-else-if="isStringArray(value)" class="array-field">
-                      <div v-for="(choice, choiceIndex) in value" :key="choiceIndex">
-                        <Input
-                          :id="choiceIndex === 0 ? `${section}-${key}` : undefined"
-                          :model-value="choice"
-                          :aria-label="`${labelFor(key)} ${choiceIndex + 1}`"
-                          @update:model-value="updateArrayValue(section, key, choiceIndex, String($event))"
-                        />
-                        <Button variant="ghost" size="icon-sm" type="button" :aria-label="`${labelFor(key)} ${choiceIndex + 1} 삭제`" @click="deleteArrayValue(section, key, choiceIndex)">×</Button>
-                      </div>
-                      <Button variant="outline" size="sm" type="button" @click="addArrayValue(section, key)">+ 항목 추가</Button>
-                    </div>
-                    <Input
-                      v-else-if="typeof value === 'string'"
-                      :id="`${section}-${key}`"
-                      :model-value="value"
-                      @update:model-value="updateField(section, key, String($event))"
-                    />
-                    <Input
-                      v-else-if="typeof value === 'number'"
-                      :id="`${section}-${key}`"
-                      type="number"
-                      :model-value="String(value)"
-                      @update:model-value="updateField(section, key, Number($event))"
-                    />
-                    <input
-                      v-else-if="typeof value === 'boolean'"
-                      :id="`${section}-${key}`"
-                      type="checkbox"
-                      :checked="value"
-                      @change="updateField(section, key, ($event.target as HTMLInputElement).checked)"
-                    />
-                    <div v-else>
-                      <textarea
-                        :id="`${section}-${key}`"
-                        :value="complexText(section, key, value)"
-                        rows="5"
-                        :aria-invalid="Boolean(complexErrors[complexKey(section, key)])"
-                        @input="updateComplexField(section, key, $event)"
-                      />
-                      <small v-if="complexErrors[complexKey(section, key)]" class="inline-error" role="alert">
-                        {{ complexErrors[complexKey(section, key)] }}
-                      </small>
-                    </div>
-                  </div>
-                </fieldset>
+                  @update-field="updateField"
+                  @editor-error="editorInputError = $event"
+                />
+
+                <div v-if="selectedIssues.length" class="validation-summary" role="alert">
+                  <strong>자료 {{ selectedMaterialIndex + 1 }} 확인 필요</strong>
+                  <ul>
+                    <li v-for="issue in selectedIssues" :key="`${issue.path}-${issue.message}`">
+                      {{ issue.message }}
+                    </li>
+                  </ul>
+                </div>
               </div>
             </template>
 
@@ -644,29 +474,12 @@ function confirmClose(): void {
                 <span>iRead 학습</span>
                 <small>{{ selectedDraft?.questionType ?? '자료 없음' }}</small>
               </div>
-              <div v-if="selectedDraft" class="preview-content">
-                <small>{{ training.unitName }}</small>
-                <h4>{{ selectedDraft.presentation.activityName || training.trainingName }}</h4>
-                <p>{{ selectedDraft.presentation.instruction || '활동 지시문을 입력해 주세요.' }}</p>
-                <div class="preview-card">
-                  <dl>
-                    <template v-for="[key, value] in Object.entries(selectedDraft.content)" :key="key">
-                      <dt>{{ labelFor(key) }}</dt>
-                      <dd>{{ displayValue(value) }}</dd>
-                    </template>
-                  </dl>
-                  <p v-if="selectedDraft.presentation.hint" class="preview-hint">힌트 · {{ selectedDraft.presentation.hint }}</p>
-                </div>
-                <details class="answer-preview">
-                  <summary>정답 기준 확인</summary>
-                  <dl>
-                    <template v-for="[key, value] in Object.entries(selectedDraft.answer)" :key="key">
-                      <dt>{{ labelFor(key) }}</dt>
-                      <dd>{{ displayValue(value) }}</dd>
-                    </template>
-                  </dl>
-                </details>
-              </div>
+              <MaterialPreviewHost
+                v-if="selectedDraft"
+                class="preview-content"
+                :material="selectedDraft"
+                :unit-name="training.unitName"
+              />
               <div v-else class="preview-empty">표시할 교안 자료가 없습니다.</div>
             </div>
           </section>
@@ -680,7 +493,14 @@ function confirmClose(): void {
             <p v-else>{{ lessonMaterial?.editable ? '수정 내용은 전체 자료 단위로 저장됩니다.' : '현재 훈련은 읽기 전용입니다.' }}</p>
           </div>
           <div>
-            <Button variant="outline" type="button" @click="requestClose">취소</Button>
+            <Button
+              data-test="material-editor-footer-back"
+              variant="outline"
+              type="button"
+              @click="requestClose"
+            >
+              커리큘럼으로 돌아가기
+            </Button>
             <Button type="button" :disabled="!canSave" @click="saveMaterial">
               {{ isSavingLessonMaterial ? '저장 중' : '교안 저장' }}
             </Button>
@@ -699,14 +519,6 @@ function confirmClose(): void {
     @confirm="confirmDeleteWord"
   />
   <ConfirmDialog
-    :open="materialPendingDeletion !== null"
-    title="학습 자료를 삭제할까요?"
-    :message="`자료 ${(materialPendingDeletion ?? 0) + 1}을 교안에서 삭제합니다.`"
-    confirm-label="자료 삭제"
-    @cancel="materialPendingDeletion = null"
-    @confirm="confirmDeleteMaterial"
-  />
-  <ConfirmDialog
     :open="closePending"
     title="수정 내용을 취소할까요?"
     message="저장하지 않은 교안 수정 내용이 사라집니다."
@@ -717,13 +529,14 @@ function confirmClose(): void {
 </template>
 
 <style scoped>
-.material-dialog {
+:global(.material-dialog) {
   width: min(1180px, calc(100vw - 32px));
   height: min(820px, calc(100dvh - 32px));
   max-width: 1180px;
   max-height: calc(100dvh - 32px);
 }
 .material-editor {
+  position: relative;
   display: grid;
   height: 100%;
   overflow: hidden;
@@ -737,7 +550,6 @@ function confirmClose(): void {
 .editor-footer,
 .section-header,
 .material-toolbar,
-.order-actions,
 .editor-header__actions {
   display: flex;
   align-items: center;
@@ -749,15 +561,17 @@ function confirmClose(): void {
   padding: 16px 20px;
 }
 .editor-header {
+  z-index: 10;
   border-bottom: 1px solid var(--border);
+  background: var(--white);
 }
 .editor-footer {
+  z-index: 10;
   border-top: 1px solid var(--border);
   background: var(--white);
 }
 .editor-footer > div:last-child,
-.editor-header__actions,
-.order-actions {
+.editor-header__actions {
   display: flex;
   gap: 8px;
 }
@@ -830,7 +644,7 @@ function confirmClose(): void {
 .policy-row {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 .policy-row > div {
   display: grid;
@@ -922,6 +736,22 @@ textarea:focus {
 .empty-fields {
   color: var(--slate-500);
   font-size: 10px;
+}
+.validation-summary {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #fecaca;
+  border-radius: 9px;
+  background: #fef2f2;
+  padding: 11px 12px;
+  color: #b91c1c;
+  font-size: 11px;
+}
+.validation-summary ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 18px;
 }
 .word-settings {
   margin-top: 18px;
@@ -1127,7 +957,7 @@ dd {
   }
 }
 @media (max-width: 600px) {
-  .material-dialog {
+  :global(.material-dialog) {
     width: calc(100vw - 12px);
     height: calc(100dvh - 12px);
     max-height: calc(100dvh - 12px);

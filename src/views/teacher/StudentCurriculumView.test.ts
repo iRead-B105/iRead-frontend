@@ -11,6 +11,7 @@ import {
 } from '@/features/teacher/training'
 import { ApiError } from '@/lib/api'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import LessonMaterialEditor from '@/components/teacher/LessonMaterialEditor.vue'
 import { useTrainingStore } from '@/stores/training'
 import StudentCurriculumView from './StudentCurriculumView.vue'
 
@@ -184,6 +185,12 @@ describe('StudentCurriculumView', () => {
     expect(wrapper.text()).toContain('읽기 전용')
     expect(wrapper.text()).not.toContain('자료 추가')
     expect(wrapper.text()).not.toContain('훈련 기본 정보')
+
+    const editor = wrapper.findComponent(LessonMaterialEditor)
+    expect(editor.exists()).toBe(true)
+    editor.vm.$emit('update:open', false)
+    await flushPromises()
+    expect(wrapper.findComponent(LessonMaterialEditor).exists()).toBe(false)
   })
 
   it('성취도 null을 0%가 아니라 미수행 평가 기록 없음으로 표시한다', async () => {

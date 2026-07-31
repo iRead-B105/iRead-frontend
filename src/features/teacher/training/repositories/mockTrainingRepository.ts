@@ -1,6 +1,7 @@
 import { ApiError } from '@/lib/api'
 import { trainingGazeFixtures, type GazeAnalysisState } from '@/features/teacher/gaze'
 import {
+  assertLessonMaterialResponseCount,
   assertSaveLessonMaterialRequest,
   createMockLessonMaterialDocument,
   normalizeSavedMaterials,
@@ -320,7 +321,7 @@ export class MockTrainingRepository implements TrainingRepository {
     this.assertTrainingBelongsToStudent(studentId, trainingId)
     assertNotAborted(options)
     const existing = this.lessonMaterials.get(trainingId)
-    if (existing) return clone(existing)
+    if (existing) return clone(assertLessonMaterialResponseCount(existing))
 
     const training = this.currentTraining(studentId, trainingId)
     const detail = this.details.get(trainingId)
