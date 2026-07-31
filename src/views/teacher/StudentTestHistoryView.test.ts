@@ -38,8 +38,21 @@ async function mountHistory(
         plugins: [pinia, router],
         stubs: {
           ChartPanel: {
-            props: ['ariaLabel'],
-            template: '<div data-test="metric-chart">{{ ariaLabel }}</div>',
+            props: {
+              ariaLabel: String,
+              option: Object,
+              animated: Boolean,
+            },
+            computed: {
+              seriesNames() {
+                return this.option.series.map((series: { name: string }) => series.name).join(', ')
+              },
+              seriesTypes() {
+                return this.option.series.map((series: { type: string }) => series.type).join(', ')
+              },
+            },
+            template:
+              '<div data-test="metric-chart">{{ ariaLabel }} {{ seriesNames }} {{ seriesTypes }} {{ animated }}</div>',
           },
         },
       },
@@ -86,6 +99,11 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('시선 이탈 횟수')
     expect(wrapper.text()).toContain('발음 점수')
     expect(wrapper.findAll('[data-test="metric-chart"]')).toHaveLength(1)
+    expect(wrapper.get('[data-test="metric-chart"]').text()).toContain('bar, line')
+    expect(wrapper.get('[data-test="metric-chart"]').text()).toContain('true')
+    expect(wrapper.findAll('[data-metric-key="overallScore"].highlighted')).toHaveLength(
+      wrapper.findAll('.detail-card').length,
+    )
 
     await wrapper.get<HTMLSelectElement>('#comparison-test').setValue('1008')
     await flushPromises()

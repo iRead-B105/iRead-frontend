@@ -238,123 +238,125 @@ function questionStatusClass(question: TrainingQuestionResult): string {
       </Card>
 
       <div class="history-grid">
-        <Card class="curriculum-card">
-          <header class="section-heading">
-            <div>
-              <h2>완료 커리큘럼</h2>
-            </div>
-          </header>
+        <Card class="history-selection-card" data-test="history-selection-card">
+          <section class="history-selection-section curriculum-section">
+            <header class="section-heading">
+              <div>
+                <h2>완료 커리큘럼</h2>
+              </div>
+            </header>
 
-          <AsyncStatePanel
-            v-if="curriculumLogsStatus === 'loading' && curriculumLogs.length === 0"
-            kind="loading"
-            message="완료된 커리큘럼을 불러오는 중입니다."
-            compact
-          />
-          <AsyncStatePanel
-            v-else-if="curriculumLogsStatus === 'error' && curriculumLogs.length === 0"
-            :kind="curriculumLogsErrorKind"
-            title="완료된 커리큘럼을 불러오지 못했습니다"
-            :message="curriculumLogsError ?? '잠시 후 다시 시도해 주세요.'"
-            :retry-label="curriculumLogsUiError?.retryable ? '다시 불러오기' : undefined"
-            compact
-            @retry="trainingStore.retryHistory()"
-          />
-          <AsyncStatePanel
-            v-else-if="curriculumLogsStatus === 'success' && curriculumLogs.length === 0"
-            kind="empty"
-            message="선택한 기간에 완료된 커리큘럼이 없습니다."
-            compact
-          />
-          <div v-else class="curriculum-list">
             <AsyncStatePanel
-              v-if="curriculumLogsStatus === 'error'"
+              v-if="curriculumLogsStatus === 'loading' && curriculumLogs.length === 0"
+              kind="loading"
+              message="완료된 커리큘럼을 불러오는 중입니다."
+              compact
+            />
+            <AsyncStatePanel
+              v-else-if="curriculumLogsStatus === 'error' && curriculumLogs.length === 0"
               :kind="curriculumLogsErrorKind"
-              title="최신 이력을 불러오지 못했습니다"
-              :message="`${curriculumLogsError ?? '잠시 후 다시 시도해 주세요.'} 이전 이력을 계속 표시합니다.`"
+              title="완료된 커리큘럼을 불러오지 못했습니다"
+              :message="curriculumLogsError ?? '잠시 후 다시 시도해 주세요.'"
               :retry-label="curriculumLogsUiError?.retryable ? '다시 불러오기' : undefined"
               compact
               @retry="trainingStore.retryHistory()"
             />
             <AsyncStatePanel
-              v-else-if="curriculumLogsStatus === 'loading'"
-              kind="loading"
-              message="최신 이력을 확인하는 동안 이전 이력을 표시합니다."
+              v-else-if="curriculumLogsStatus === 'success' && curriculumLogs.length === 0"
+              kind="empty"
+              message="선택한 기간에 완료된 커리큘럼이 없습니다."
               compact
             />
-            <Button
-              v-for="curriculum in curriculumLogs"
-              :key="curriculum.curriculumId"
-              variant="ghost"
-              type="button"
-              class="curriculum-row"
-              :class="{ active: curriculum.curriculumId === selectedCurriculumId }"
-              :aria-pressed="curriculum.curriculumId === selectedCurriculumId"
-              @click="selectCurriculum(curriculum)"
-            >
-              <span>
-                <strong>{{ formatDate(curriculum.date) }}</strong>
-                <small>{{ curriculum.trainings.length }}개 훈련</small>
-              </span>
-              <b>{{ formatAccuracy(curriculum.achievement) }}</b>
-            </Button>
-          </div>
-        </Card>
-
-        <Card class="training-list-card">
-          <header class="section-heading">
-            <div>
-              <h2>커리큘럼별 훈련</h2>
-              <p>
-                {{
-                  selectedCurriculumLog
-                    ? `${formatDate(selectedCurriculumLog.date)} 완료`
-                    : '커리큘럼을 선택해 주세요.'
-                }}
-              </p>
+            <div v-else class="curriculum-list">
+              <AsyncStatePanel
+                v-if="curriculumLogsStatus === 'error'"
+                :kind="curriculumLogsErrorKind"
+                title="최신 이력을 불러오지 못했습니다"
+                :message="`${curriculumLogsError ?? '잠시 후 다시 시도해 주세요.'} 이전 이력을 계속 표시합니다.`"
+                :retry-label="curriculumLogsUiError?.retryable ? '다시 불러오기' : undefined"
+                compact
+                @retry="trainingStore.retryHistory()"
+              />
+              <AsyncStatePanel
+                v-else-if="curriculumLogsStatus === 'loading'"
+                kind="loading"
+                message="최신 이력을 확인하는 동안 이전 이력을 표시합니다."
+                compact
+              />
+              <Button
+                v-for="curriculum in curriculumLogs"
+                :key="curriculum.curriculumId"
+                variant="ghost"
+                type="button"
+                class="curriculum-row"
+                :class="{ active: curriculum.curriculumId === selectedCurriculumId }"
+                :aria-pressed="curriculum.curriculumId === selectedCurriculumId"
+                @click="selectCurriculum(curriculum)"
+              >
+                <span>
+                  <strong>{{ formatDate(curriculum.date) }}</strong>
+                  <small>{{ curriculum.trainings.length }}개 훈련</small>
+                </span>
+                <b>{{ formatAccuracy(curriculum.achievement) }}</b>
+              </Button>
             </div>
-          </header>
+          </section>
 
-          <AsyncStatePanel
-            v-if="trainingLogStatus === 'loading'"
-            kind="loading"
-            message="훈련 목록을 불러오는 중입니다."
-            compact
-          />
-          <AsyncStatePanel
-            v-else-if="trainingLogStatus === 'error'"
-            kind="error"
-            title="훈련 목록을 불러오지 못했습니다"
-            :message="trainingLogError ?? '잠시 후 다시 시도해 주세요.'"
-            retry-label="다시 불러오기"
-            compact
-            @retry="retrySelectedCurriculum"
-          />
-          <AsyncStatePanel
-            v-else-if="!trainingLog?.trainings.length"
-            kind="empty"
-            message="선택한 커리큘럼에 표시할 훈련이 없습니다."
-            compact
-          />
-          <div v-else class="training-list">
-            <Button
-              v-for="(training, index) in trainingLog.trainings"
-              :key="training.trainingId"
-              variant="ghost"
-              type="button"
-              class="training-row"
-              :class="{ active: training.trainingId === selectedHistoryTrainingId }"
-              :aria-pressed="training.trainingId === selectedHistoryTrainingId"
-              @click="selectTraining(training)"
-            >
-              <span class="sequence">{{ index + 1 }}</span>
-              <span class="training-name">
-                <strong>{{ training.trainingName }}</strong>
-                <small>{{ formatDateTime(training.finishedAt ?? training.startedAt) }}</small>
-              </span>
-              <b>{{ formatAccuracy(training.accuracy) }}</b>
-            </Button>
-          </div>
+          <section class="history-selection-section training-section">
+            <header class="section-heading">
+              <div>
+                <h2>커리큘럼별 훈련</h2>
+                <p>
+                  {{
+                    selectedCurriculumLog
+                      ? `${formatDate(selectedCurriculumLog.date)} 완료`
+                      : '커리큘럼을 선택해 주세요.'
+                  }}
+                </p>
+              </div>
+            </header>
+
+            <AsyncStatePanel
+              v-if="trainingLogStatus === 'loading'"
+              kind="loading"
+              message="훈련 목록을 불러오는 중입니다."
+              compact
+            />
+            <AsyncStatePanel
+              v-else-if="trainingLogStatus === 'error'"
+              kind="error"
+              title="훈련 목록을 불러오지 못했습니다"
+              :message="trainingLogError ?? '잠시 후 다시 시도해 주세요.'"
+              retry-label="다시 불러오기"
+              compact
+              @retry="retrySelectedCurriculum"
+            />
+            <AsyncStatePanel
+              v-else-if="!trainingLog?.trainings.length"
+              kind="empty"
+              message="선택한 커리큘럼에 표시할 훈련이 없습니다."
+              compact
+            />
+            <div v-else class="training-list">
+              <Button
+                v-for="(training, index) in trainingLog.trainings"
+                :key="training.trainingId"
+                variant="ghost"
+                type="button"
+                class="training-row"
+                :class="{ active: training.trainingId === selectedHistoryTrainingId }"
+                :aria-pressed="training.trainingId === selectedHistoryTrainingId"
+                @click="selectTraining(training)"
+              >
+                <span class="sequence">{{ index + 1 }}</span>
+                <span class="training-name">
+                  <strong>{{ training.trainingName }}</strong>
+                  <small>{{ formatDateTime(training.finishedAt ?? training.startedAt) }}</small>
+                </span>
+                <b>{{ formatAccuracy(training.accuracy) }}</b>
+              </Button>
+            </div>
+          </section>
         </Card>
 
         <Card class="statistics-card accuracy-card">
@@ -580,17 +582,36 @@ function questionStatusClass(question: TrainingQuestionResult): string {
   display: grid;
   align-items: start;
   gap: 20px;
-  grid-template-columns: minmax(240px, 0.7fr) minmax(300px, 0.9fr) minmax(360px, 1.2fr);
+  grid-template-columns: minmax(560px, 1.6fr) minmax(360px, 1fr);
 }
 
-.curriculum-card,
-.training-list-card,
+.history-selection-card,
 .statistics-card,
 .detail-card {
   min-width: 0;
   gap: 0;
-  padding: 20px;
   border-radius: var(--radius-lg);
+}
+
+.history-selection-card {
+  display: grid;
+  overflow: hidden;
+  padding: 0;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(300px, 1.15fr);
+}
+
+.history-selection-section {
+  min-width: 0;
+  padding: 20px;
+}
+
+.history-selection-section + .history-selection-section {
+  border-inline-start: 1px solid var(--border);
+}
+
+.statistics-card,
+.detail-card {
+  padding: 20px;
 }
 
 .detail-card {
@@ -913,14 +934,13 @@ dd {
 
 @container (max-width: 1050px) {
   .history-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .statistics-card {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 }
-
 @container (max-width: 720px) {
   .history-grid,
   .detail-metrics,
@@ -933,8 +953,19 @@ dd {
     grid-column: auto;
   }
 
-  .curriculum-card,
-  .training-list-card,
+  .history-selection-card {
+    grid-template-columns: 1fr;
+  }
+
+  .history-selection-section {
+    padding: 16px;
+  }
+
+  .history-selection-section + .history-selection-section {
+    border-block-start: 1px solid var(--border);
+    border-inline-start: 0;
+  }
+
   .statistics-card,
   .detail-card {
     padding: 16px;
