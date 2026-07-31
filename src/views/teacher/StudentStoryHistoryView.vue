@@ -277,15 +277,6 @@ function retryGaze(): void {
           "
         >
           <template v-if="selectedStory">
-            <div class="story-detail-heading">
-              <div>
-                <p>선택한 이야기</p>
-                <h2 id="story-detail-title">{{ selectedStory.title }}</h2>
-              </div>
-              <time :datetime="selectedStory.activityAt">
-                최근 활동 {{ formatStoryActivityAt(selectedStory.activityAt) }}
-              </time>
-            </div>
             <div class="story-detail-summary">
               <dl>
                 <div>
@@ -429,8 +420,7 @@ function retryGaze(): void {
   border-bottom: 1px solid var(--slate-200);
 }
 
-.story-selector-heading,
-.story-detail-heading {
+.story-selector-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -438,20 +428,15 @@ function retryGaze(): void {
 }
 
 .story-selector-heading h2,
-.story-detail-heading h2,
-.story-selector-heading p,
-.story-detail-heading p {
+.story-selector-heading p {
   margin: 0;
 }
 
-.story-selector-heading h2,
-.story-detail-heading h2 {
+.story-selector-heading h2 {
   font-size: 18px;
 }
 
-.story-selector-heading p,
-.story-detail-heading p,
-.story-detail-heading time {
+.story-selector-heading p {
   margin-top: 3px;
   color: var(--slate-500);
   font-size: 12px;
@@ -556,11 +541,6 @@ function retryGaze(): void {
   min-width: 0;
   align-content: start;
   padding-top: 24px;
-}
-
-.story-detail-heading {
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--slate-200);
 }
 
 .story-detail-shell > :deep(.async-state-panel) {
@@ -678,7 +658,6 @@ function retryGaze(): void {
     flex: 1;
   }
 
-  .story-detail-heading,
   .story-selector-heading {
     flex-direction: column;
   }
