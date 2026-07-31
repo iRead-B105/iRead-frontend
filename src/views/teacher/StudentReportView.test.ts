@@ -106,10 +106,11 @@ describe('StudentReportView', () => {
     expect(wrapper.text()).toContain('훈련 시선 추이')
     expect(wrapper.text()).toContain('검사 시선 추이')
     expect(wrapper.text()).toContain('교수자 의견')
+    expect(wrapper.text()).toContain('완료된 학습 데이터를 기준으로 생성된 보고서입니다.')
     expect(wrapper.find('[aria-label="교수자 의견"]').exists()).toBe(true)
-    expect(
-      (wrapper.get('[aria-label="교수자 의견"]').element as HTMLTextAreaElement).value,
-    ).toBe(useReportStore(pinia).teacherMemoDraft)
+    expect((wrapper.get('[aria-label="교수자 의견"]').element as HTMLTextAreaElement).value).toBe(
+      useReportStore(pinia).teacherMemoDraft,
+    )
     expect(wrapper.text()).toContain('변화를 비교하려면 두 건 이상의 결과가 필요합니다.')
     expect(wrapper.text()).not.toContain('내부 메모에서 불러오기')
     expect(wrapper.text()).not.toContain('학습 판단')
