@@ -5,13 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRealtimeFreshnessStore } from '@/stores/realtimeFreshness'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
+import { useTrainingStore } from '@/stores/training'
 import { installTeacherRealtimeSync } from './installTeacherRealtimeSync'
 
 interface CapturedRealtimeOptions {
   readonly onEvent: (event: {
     eventId: string
     studentId: number
-    resource: 'STUDENT'
+    resource: 'STUDENT' | 'TRAINING'
     resourceId: number | null
     changeType: string
     occurredAt: string
@@ -63,6 +64,11 @@ async function setup() {
       {
         path: '/teacher/students/:id/report',
         name: 'student-report',
+        component: { template: '<div />' },
+      },
+      {
+        path: '/teacher/students/:id/curriculum',
+        name: 'student-curriculum',
         component: { template: '<div />' },
       },
     ],
@@ -162,6 +168,38 @@ describe('installTeacherRealtimeSync', () => {
     })
     await vi.advanceTimersByTimeAsync(3_000)
     expect(freshness.warningVisible).toBe(false)
+    stop()
+  })
+
+  it('교안 CONTENT_UPDATED는 커리큘럼 전체 재조회 대신 편집 충돌 보호 경로로 처리한다', async () => {
+    const { pinia, router, students } = await setup()
+    await router.push('/teacher/students/2001/curriculum')
+    const training = useTrainingStore(pinia)
+    const loadForStudent = vi.spyOn(training, 'loadForStudent').mockResolvedValue()
+    const handleLessonMaterialContentUpdated = vi
+      .spyOn(training, 'handleLessonMaterialContentUpdated')
+      .mockResolvedValue(true)
+    vi.spyOn(students, 'loadList').mockImplementation(async () => {
+      students.listStatus = 'success'
+    })
+    vi.spyOn(students, 'loadSummary').mockImplementation(async () => {
+      students.summaryStatus = 'success'
+    })
+    const stop = installTeacherRealtimeSync(pinia, router)
+    const options = realtimeHarness.options as CapturedRealtimeOptions
+
+    await options.onEvent({
+      eventId: 'event-content-updated',
+      studentId: 2001,
+      resource: 'TRAINING',
+      resourceId: 101,
+      changeType: 'CONTENT_UPDATED',
+      occurredAt: '2026-07-31T10:00:00+09:00',
+      version: 1,
+    })
+
+    expect(handleLessonMaterialContentUpdated).toHaveBeenCalledWith(2001, 101)
+    expect(loadForStudent).not.toHaveBeenCalled()
     stop()
   })
 })

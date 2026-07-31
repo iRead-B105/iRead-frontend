@@ -2,7 +2,6 @@ import type {
   CurriculumLog,
   CurriculumTrainingLog,
   DailyCurriculum,
-  ExpectedWord,
   TrainingCatalogItem,
   TrainingDetail,
   TrainingPeriod,
@@ -251,15 +250,6 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
     accuracy: null,
   },
 ]
-
-export const expectedWordFixtures: Readonly<Record<number, readonly ExpectedWord[]>> = {
-  101: [
-    { wordId: 1001, wordName: '꽃' },
-    { wordId: 1002, wordName: '낮' },
-  ],
-  102: [{ wordId: 1003, wordName: '옷' }],
-  103: [],
-}
 
 const thirtyDayCurriculumLogs: readonly CurriculumLog[] = [
   {

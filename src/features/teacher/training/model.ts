@@ -43,11 +43,6 @@ export interface SaveCurriculumRequest {
   readonly trainingTemplateIds: readonly TrainingTemplateId[]
 }
 
-export interface ExpectedWord {
-  readonly wordId: number
-  readonly wordName: string
-}
-
 export interface TrainingDetail {
   readonly trainingId: TrainingInstanceId
   readonly trainingTemplateId: TrainingTemplateId
@@ -111,6 +106,18 @@ export interface SavedLessonMaterial {
   readonly source: 'MANUAL'
   readonly materials: readonly LessonMaterialItem[]
 }
+
+export interface LessonMaterialFieldError {
+  readonly path: string
+  readonly reason: string
+  readonly message: string
+}
+
+export type LessonMaterialSaveIssue =
+  | 'revision-conflict'
+  | 'not-editable'
+  | 'validation'
+  | 'network'
 
 export interface TrainingQuestionResult {
   readonly questionNumber: number

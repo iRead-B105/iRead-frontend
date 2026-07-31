@@ -29,27 +29,25 @@ const {
   selectedTrainingId,
   selectedTemplate,
   selectedTraining,
-  selectedExpectedWords,
   selectedTrainingDetail,
   selectedLessonMaterial,
-  expectedWordsByTrainingId,
   catalogStatus,
   curriculumStatus,
   curriculumSynchronizationStatus,
-  expectedWordsStatus,
   detailStatus,
   lessonMaterialStatus,
   lessonMaterialSaveStatus,
+  lessonMaterialSaveIssue,
+  lessonMaterialFieldErrors,
+  lessonMaterialRemoteChange,
   materialGenerationStatus,
   requiresMaterialRegeneration,
   isSavingCurriculum,
   curriculumSaveConflict,
   isRefreshingCurriculumConflict,
-  isMutatingExpectedWord,
   isSavingLessonMaterial,
   catalogError,
   curriculumError,
-  expectedWordError,
   detailError,
   lessonMaterialError,
   lessonMaterialSaveError,
@@ -369,6 +367,7 @@ function confirmDraftDeletion(): void {
   if (!draftPendingDeletion.value) return
   trainingStore.removeDraftItem(draftPendingDeletion.value.key)
   draftPendingDeletion.value = null
+  trainingStore.setLessonMaterialEditingState(null)
   materialEditorOpen.value = false
 }
 
@@ -394,19 +393,12 @@ async function retryCurriculumSynchronization(): Promise<void> {
 }
 
 function closeMaterialEditor(): void {
+  trainingStore.setLessonMaterialEditingState(null)
   materialEditorOpen.value = false
 }
 
 async function refreshCurriculumAfterConflict(): Promise<void> {
   await trainingStore.refreshCurriculumAfterConflict()
-}
-
-async function addExpectedWord(wordName: string): Promise<void> {
-  await trainingStore.addExpectedWord(wordName)
-}
-
-async function deleteExpectedWord(wordId: number): Promise<void> {
-  await trainingStore.deleteExpectedWord(wordId)
 }
 
 async function regenerateMaterial(): Promise<void> {
@@ -421,16 +413,27 @@ async function saveLessonMaterial(
   }
 }
 
+function handleLessonMaterialEditingState(hasLocalChanges: boolean): void {
+  trainingStore.setLessonMaterialEditingState(
+    materialEditorOpen.value ? selectedTrainingId.value : null,
+    hasLocalChanges,
+  )
+}
+
+function clearLessonMaterialFieldError(path: string): void {
+  trainingStore.clearLessonMaterialFieldError(path)
+}
+
+async function reloadLatestLessonMaterial(): Promise<void> {
+  if (await trainingStore.reloadSelectedLessonMaterial()) {
+    trainingStore.setLessonMaterialEditingState(selectedTrainingId.value, false)
+  }
+}
+
 function deletionMessage(): string {
   const item = draftPendingDeletion.value
   if (!item) return ''
-  const wordCount =
-    item.trainingId === null ? 0 : (expectedWordsByTrainingId.value[item.trainingId]?.length ?? 0)
-  const warning =
-    wordCount > 0
-      ? ` 이 시행에 저장된 예상 단어 ${wordCount}개도 커리큘럼 저장 시 함께 제거됩니다.`
-      : ''
-  return `${attemptLabel(item)}을(를) 다음 회차에서 제거합니다.${warning}`
+  return `${attemptLabel(item)}을(를) 다음 회차에서 제거합니다.`
 }
 </script>
 
@@ -814,27 +817,27 @@ function deletionMessage(): string {
       v-model:open="materialEditorOpen"
       :training="selectedTraining"
       :attempt-label="selectedAttemptLabel"
-      :expected-words="selectedExpectedWords"
       :detail="selectedTrainingDetail"
       :lesson-material="selectedLessonMaterial"
-      :expected-words-status="expectedWordsStatus"
       :detail-status="detailStatus"
       :lesson-material-status="lessonMaterialStatus"
       :lesson-material-save-status="lessonMaterialSaveStatus"
+      :lesson-material-save-issue="lessonMaterialSaveIssue"
+      :lesson-material-field-errors="lessonMaterialFieldErrors"
+      :lesson-material-remote-change="lessonMaterialRemoteChange"
       :material-generation-status="materialGenerationStatus"
       :requires-regeneration="requiresMaterialRegeneration"
-      :is-mutating="isMutatingExpectedWord"
       :is-saving-lesson-material="isSavingLessonMaterial"
-      :expected-word-error="expectedWordError"
       :detail-error="detailError"
       :lesson-material-error="lessonMaterialError"
       :lesson-material-save-error="lessonMaterialSaveError"
       :material-generation-error="materialGenerationError"
       @close="closeMaterialEditor"
-      @add-word="addExpectedWord"
-      @delete-word="deleteExpectedWord"
       @regenerate="regenerateMaterial"
       @retry="retryResources"
+      @reload-latest="reloadLatestLessonMaterial"
+      @editing-state-change="handleLessonMaterialEditingState"
+      @field-edited="clearLessonMaterialFieldError"
       @save="saveLessonMaterial"
     />
   </div>

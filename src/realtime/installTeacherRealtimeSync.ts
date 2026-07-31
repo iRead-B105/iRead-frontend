@@ -195,10 +195,49 @@ export function installTeacherRealtimeSync(pinia: Pinia, router: Router): () => 
     }
   }
 
+  const refreshLessonMaterialContent = async (
+    studentId: number,
+    trainingId: number,
+  ): Promise<void> => {
+    if (!session.authenticated || document.visibilityState !== 'visible') return
+    const context = syncFreshnessContext()
+    const contextKey = context?.key ?? null
+    const globalGeneration =
+      contextKey !== null ? freshness.beginRefresh('global', contextKey) : null
+    const visibleGeneration =
+      contextKey !== null ? freshness.beginRefresh('visible', contextKey) : null
+    const [globalSucceeded, visibleSucceeded] = await Promise.all([
+      refreshGlobalStudents(),
+      training.handleLessonMaterialContentUpdated(studentId, trainingId),
+    ])
+    if (contextKey === null) return
+    if (globalSucceeded) {
+      freshness.markRefreshSuccess('global', contextKey, globalGeneration)
+    } else {
+      freshness.markRefreshFailure('global', contextKey, globalGeneration)
+    }
+    if (visibleSucceeded) {
+      freshness.markRefreshSuccess('visible', contextKey, visibleGeneration)
+    } else {
+      freshness.markRefreshFailure('visible', contextKey, visibleGeneration)
+    }
+  }
+
   const handleEvent = async (event: RealtimeEvent): Promise<void> => {
     const previousVersion = lastVersionByStudent.get(event.studentId) ?? 0
     if (event.version <= previousVersion) return
     lastVersionByStudent.set(event.studentId, event.version)
+
+    if (
+      event.resource === 'TRAINING' &&
+      event.changeType === 'CONTENT_UPDATED' &&
+      event.resourceId !== null &&
+      String(router.currentRoute.value.name) === 'student-curriculum' &&
+      routeStudentId(router) === event.studentId
+    ) {
+      await refreshLessonMaterialContent(event.studentId, event.resourceId)
+      return
+    }
 
     await refreshCurrentContext({
       requestedStudentId: event.studentId,

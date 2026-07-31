@@ -25,9 +25,6 @@ function repository(overrides: Partial<TrainingRepository> = {}): TrainingReposi
     createCurriculum: vi.fn(),
     getCurriculum: vi.fn(),
     updateCurriculum: vi.fn(),
-    getExpectedWords: vi.fn().mockResolvedValue([]),
-    addExpectedWord: vi.fn().mockResolvedValue(undefined),
-    deleteExpectedWord: vi.fn().mockResolvedValue(undefined),
     generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
     getTrainingDetail: vi.fn(),
     getLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
@@ -221,7 +218,6 @@ describe('Training store', () => {
     const updateCurriculum = vi
       .fn()
       .mockRejectedValueOnce(new CurriculumSynchronizationError(new Error('network')))
-    const addExpectedWord = vi.fn().mockResolvedValue(undefined)
     const store = useTrainingStore()
     store.setRepository(
       repository({
@@ -234,7 +230,6 @@ describe('Training store', () => {
         ]),
         getCurrentCurriculum,
         updateCurriculum,
-        addExpectedWord,
         getTrainingDetail: vi.fn().mockResolvedValue({
           trainingId: 101,
           trainingTemplateId: 11,
@@ -260,8 +255,6 @@ describe('Training store', () => {
     expect(store.curriculumSynchronizationStatus).toBe('required')
     expect(store.canEditCurriculum).toBe(false)
     expect(store.selectedTrainingId).toBeNull()
-    await expect(store.addExpectedWord('가')).resolves.toBe(false)
-    expect(addExpectedWord).not.toHaveBeenCalled()
     await expect(store.saveCurriculum()).resolves.toBe(false)
     expect(updateCurriculum).toHaveBeenCalledTimes(1)
 
@@ -377,75 +370,25 @@ describe('Training store', () => {
     expect(store.savedCurriculum?.curriculumId).toBe(2)
   })
 
-  it('예상 단어 mutation 실패 시 기존 목록을 유지한다', async () => {
-    const mock = new MockTrainingRepository()
-    const store = useTrainingStore()
-    store.setRepository(mock)
-    await store.loadForStudent(1)
-    await store.selectDraftItem(1, 'training-101')
-    const previousWords = [...store.selectedExpectedWords]
-
-    await expect(store.addExpectedWord('꽃')).resolves.toBe(false)
-
-    expect(store.selectedExpectedWords).toEqual(previousWords)
-    expect(store.expectedWordError).toContain('이미 추가된')
-  })
-
-  it('예상 단어는 준비 전·시작 전만 수정하고 진행 중 상태에서는 repository 호출을 막는다', async () => {
-    const mock = new MockTrainingRepository()
-    const addExpectedWord = vi.spyOn(mock, 'addExpectedWord')
-    const deleteExpectedWord = vi.spyOn(mock, 'deleteExpectedWord')
-    const store = useTrainingStore()
-    store.setRepository(mock)
-    await store.loadForStudent(1)
-    await store.selectDraftItem(1, 'training-101')
-
-    expect(store.selectedTraining?.status).toBe('NOT_STARTED')
-    expect(store.canEditExpectedWords).toBe(true)
-    await expect(store.addExpectedWord('별')).resolves.toBe(true)
-    expect(addExpectedWord).toHaveBeenCalledTimes(1)
-
-    const detail = store.selectedTrainingDetail
-    expect(detail).not.toBeNull()
-    store.trainingDetailById = {
-      ...store.trainingDetailById,
-      101: { ...detail!, status: 'IN_PROGRESS' },
-    }
-
-    expect(store.selectedTraining?.status).toBe('IN_PROGRESS')
-    expect(store.canEditExpectedWords).toBe(false)
-    await expect(store.addExpectedWord('달')).resolves.toBe(false)
-    await expect(store.deleteExpectedWord(1001)).resolves.toBe(false)
-    expect(addExpectedWord).toHaveBeenCalledTimes(1)
-    expect(deleteExpectedWord).not.toHaveBeenCalled()
-  })
-
-  it('예상 단어 변경 후 AI 교안을 재생성하고 실제 응답으로 미리보기를 갱신한다', async () => {
+  it('준비 전 훈련의 AI 교안을 재생성하고 실제 응답으로 미리보기를 갱신한다', async () => {
     const mock = new MockTrainingRepository()
     const generateTraining = vi.spyOn(mock, 'generateTraining')
     const store = useTrainingStore()
     store.setRepository(mock)
     await store.loadForStudent(1)
-    await store.selectDraftItem(1, 'training-101')
+    await store.selectDraftItem(1, 'training-102')
 
-    await expect(store.addExpectedWord('별')).resolves.toBe(true)
     expect(store.requiresMaterialRegeneration).toBe(true)
     expect(store.selectedTrainingDetail?.status).toBe('NOT_READY')
 
     await expect(store.regenerateSelectedTraining()).resolves.toBe(true)
 
-    expect(generateTraining).toHaveBeenCalledWith(1, 101)
+    expect(generateTraining).toHaveBeenCalledWith(1, 102)
     expect(store.materialGenerationStatus).toBe('success')
     expect(store.materialGenerationError).toBeNull()
     expect(store.requiresMaterialRegeneration).toBe(false)
     expect(store.selectedTrainingDetail?.status).toBe('NOT_STARTED')
-    expect(store.selectedTrainingDetail?.generatedData?.questions).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          problem: expect.objectContaining({ targetText: '별' }),
-        }),
-      ]),
-    )
+    expect(store.selectedTrainingDetail?.generatedData?.questions).toHaveLength(5)
   })
 
   it('교안 저장 성공 응답으로 같은 화면 문서의 revision과 자료를 교체한다', async () => {
@@ -478,7 +421,177 @@ describe('Training store', () => {
     )
   })
 
-  it('reset이 커리큘럼·예상 단어·선택 상태를 모두 비운다', async () => {
+  it('교안 revision 충돌은 서버 기준과 편집 상태를 유지하고 최신 조회를 요구한다', async () => {
+    const mock = new MockTrainingRepository()
+    vi.spyOn(mock, 'saveLessonMaterial').mockRejectedValue(
+      new ApiError({
+        status: 409,
+        code: 'LESSON_MATERIAL_REVISION_CONFLICT',
+        message: '교안이 변경되었습니다.',
+      }),
+    )
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadForStudent(1)
+    const document = store.selectedLessonMaterial
+    expect(document).not.toBeNull()
+    if (!document) return
+    store.setLessonMaterialEditingState(document.trainingId, true)
+
+    await expect(
+      store.saveSelectedLessonMaterial({
+        revision: document.revision,
+        materials: document.materials,
+      }),
+    ).resolves.toBe(false)
+
+    expect(store.selectedLessonMaterial?.revision).toBe(document.revision)
+    expect(store.lessonMaterialSaveIssue).toBe('revision-conflict')
+    expect(store.lessonMaterialRemoteChange).toBe(true)
+    expect(store.lessonMaterialHasLocalChanges).toBe(true)
+  })
+
+  it('편집 불가 응답은 서버 자료를 유지한 채 교안을 읽기 전용으로 전환한다', async () => {
+    const mock = new MockTrainingRepository()
+    vi.spyOn(mock, 'saveLessonMaterial').mockRejectedValue(
+      new ApiError({
+        status: 409,
+        code: 'TRAINING_NOT_EDITABLE',
+        message: '수정할 수 없습니다.',
+      }),
+    )
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadForStudent(1)
+    const document = store.selectedLessonMaterial
+    expect(document).not.toBeNull()
+    if (!document) return
+
+    await store.saveSelectedLessonMaterial({
+      revision: document.revision,
+      materials: document.materials,
+    })
+
+    expect(store.lessonMaterialSaveIssue).toBe('not-editable')
+    expect(store.selectedLessonMaterial?.editable).toBe(false)
+    expect(store.selectedLessonMaterial?.materials).toEqual(document.materials)
+  })
+
+  it('교안 검증 오류의 path와 message를 필드 오류로 보존하고 수정 시 제거한다', async () => {
+    const mock = new MockTrainingRepository()
+    vi.spyOn(mock, 'saveLessonMaterial').mockRejectedValue(
+      new ApiError({
+        status: 422,
+        code: 'LESSON_MATERIAL_VALIDATION_FAILED',
+        message: '검증에 실패했습니다.',
+        responseBody: {
+          error: {
+            code: 'LESSON_MATERIAL_VALIDATION_FAILED',
+            message: '검증에 실패했습니다.',
+            details: {
+              errors: [
+                {
+                  path: 'materials[0].presentation.activityName',
+                  reason: 'NOT_BLANK',
+                  message: '활동 이름을 입력해 주세요.',
+                },
+              ],
+            },
+          },
+        },
+      }),
+    )
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadForStudent(1)
+    const document = store.selectedLessonMaterial
+    expect(document).not.toBeNull()
+    if (!document) return
+
+    await store.saveSelectedLessonMaterial({
+      revision: document.revision,
+      materials: document.materials,
+    })
+
+    expect(store.lessonMaterialSaveIssue).toBe('validation')
+    expect(store.lessonMaterialFieldErrors).toEqual([
+      {
+        path: 'materials[0].presentation.activityName',
+        reason: 'NOT_BLANK',
+        message: '활동 이름을 입력해 주세요.',
+      },
+    ])
+
+    store.clearLessonMaterialFieldError('materials[0].presentation.activityName')
+    expect(store.lessonMaterialFieldErrors).toEqual([])
+  })
+
+  it('네트워크 저장 실패는 마지막 서버 revision과 자료 및 편집 상태를 유지한다', async () => {
+    const mock = new MockTrainingRepository()
+    vi.spyOn(mock, 'saveLessonMaterial').mockRejectedValue(new Error('network'))
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadForStudent(1)
+    const document = store.selectedLessonMaterial
+    expect(document).not.toBeNull()
+    if (!document) return
+    store.setLessonMaterialEditingState(document.trainingId, true)
+
+    await expect(
+      store.saveSelectedLessonMaterial({
+        revision: document.revision,
+        materials: document.materials,
+      }),
+    ).resolves.toBe(false)
+
+    expect(store.lessonMaterialSaveIssue).toBe('network')
+    expect(store.selectedLessonMaterial?.revision).toBe(document.revision)
+    expect(store.selectedLessonMaterial?.materials).toEqual(document.materials)
+    expect(store.lessonMaterialHasLocalChanges).toBe(true)
+  })
+
+  it('CONTENT_UPDATED는 수정 초안을 덮어쓰지 않고 revision 차이가 있을 때만 알린다', async () => {
+    const mock = new MockTrainingRepository()
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadForStudent(1)
+    const local = store.selectedLessonMaterial
+    expect(local).not.toBeNull()
+    if (!local) return
+    store.setLessonMaterialEditingState(local.trainingId, true)
+
+    await expect(store.handleLessonMaterialContentUpdated(1, local.trainingId)).resolves.toBe(true)
+    expect(store.lessonMaterialRemoteChange).toBe(false)
+
+    const remote = await mock.saveLessonMaterial(1, local.trainingId, {
+      revision: local.revision,
+      materials: local.materials.map((material, index) => ({
+        questionNo: index + 1,
+        questionType: material.questionType,
+        presentation: {
+          ...material.presentation,
+          activityName: index === 0 ? '원격 수정 활동' : material.presentation.activityName,
+        },
+        content: material.content,
+        answer: material.answer,
+      })),
+    })
+
+    await expect(store.handleLessonMaterialContentUpdated(1, local.trainingId)).resolves.toBe(true)
+    expect(store.selectedLessonMaterial?.revision).toBe(local.revision)
+    expect(store.lessonMaterialRemoteChange).toBe(true)
+    expect(store.lessonMaterialRemoteRevision).toBe(remote.revision)
+
+    store.setLessonMaterialEditingState(local.trainingId, false)
+    await store.handleLessonMaterialContentUpdated(1, local.trainingId)
+    expect(store.selectedLessonMaterial?.revision).toBe(remote.revision)
+    expect(store.selectedLessonMaterial?.materials[0]?.presentation.activityName).toBe(
+      '원격 수정 활동',
+    )
+    expect(store.lessonMaterialRemoteChange).toBe(false)
+  })
+
+  it('reset이 커리큘럼·교안·선택 상태를 모두 비운다', async () => {
     const store = useTrainingStore()
     store.setRepository(new MockTrainingRepository())
     await store.loadForStudent(1)
@@ -490,7 +603,7 @@ describe('Training store', () => {
     expect(store.catalog).toEqual([])
     expect(store.savedCurriculum).toBeNull()
     expect(store.selectedTrainingId).toBeNull()
-    expect(store.expectedWordsByTrainingId).toEqual({})
+    expect(store.lessonMaterialByTrainingId).toEqual({})
   })
 
   it('기본 30일 이력에서 최신 커리큘럼과 첫 실제 훈련을 선택한다', async () => {

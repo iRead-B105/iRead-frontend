@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import {
   getLessonMaterialEditorDefinition,
   type EditableLessonMaterialItem,
+  type LessonMaterialFieldError,
   type LessonMaterialEditorCode,
   type LessonMaterialFieldDefinition,
 } from '@/features/teacher/training'
@@ -14,6 +15,7 @@ const props = defineProps<{
   material: EditableLessonMaterialItem
   editorCode: LessonMaterialEditorCode
   disabled: boolean
+  fieldErrors: readonly LessonMaterialFieldError[]
 }>()
 
 const emit = defineEmits<{
@@ -42,7 +44,24 @@ function valueFor(section: 'content' | 'answer', key: string): unknown {
   return props.material[section][key]
 }
 
-function update(section: 'content' | 'answer', field: LessonMaterialFieldDefinition, value: unknown): void {
+function errorsFor(
+  section: 'content' | 'answer',
+  key: string,
+): readonly LessonMaterialFieldError[] {
+  const path = `.${section}.${key}`
+  return props.fieldErrors.filter(
+    (error) =>
+      error.path.endsWith(path) ||
+      error.path.includes(`${path}.`) ||
+      error.path.includes(`${path}[`),
+  )
+}
+
+function update(
+  section: 'content' | 'answer',
+  field: LessonMaterialFieldDefinition,
+  value: unknown,
+): void {
   if (props.disabled || field.readonly) return
   emit('updateField', section, field.key, value)
 }
@@ -108,10 +127,7 @@ function updateListItem(
   update(section, field, items)
 }
 
-function addListItem(
-  section: 'content' | 'answer',
-  field: LessonMaterialFieldDefinition,
-): void {
+function addListItem(section: 'content' | 'answer', field: LessonMaterialFieldDefinition): void {
   const items = listValue(valueFor(section, field.key))
   update(section, field, [...items, ''])
 }
@@ -171,11 +187,7 @@ function updateJson(
       <p>{{ definition.childAction }}</p>
     </header>
 
-    <fieldset
-      v-for="section in (['content', 'answer'] as const)"
-      :key="section"
-      :disabled="disabled"
-    >
+    <fieldset v-for="section in ['content', 'answer'] as const" :key="section" :disabled="disabled">
       <legend>{{ section === 'content' ? '문항 내용' : '정답·평가 기준' }}</legend>
       <div
         v-for="field in definition[section === 'content' ? 'contentFields' : 'answerFields']"
@@ -187,7 +199,9 @@ function updateJson(
 
         <div v-if="field.readonly" :id="fieldId(section, field.key)" class="readonly-field">
           <span>{{ textValue(valueFor(section, field.key)) || '서버 값 없음' }}</span>
-          <small>{{ field.help ?? 'Backend 또는 미디어 정책이 관리하는 읽기 전용 값입니다.' }}</small>
+          <small>{{
+            field.help ?? 'Backend 또는 미디어 정책이 관리하는 읽기 전용 값입니다.'
+          }}</small>
         </div>
 
         <textarea
@@ -282,6 +296,14 @@ function updateJson(
         </div>
 
         <small v-if="field.help && !field.readonly" class="field-help">{{ field.help }}</small>
+        <small
+          v-for="error in errorsFor(section, field.key)"
+          :key="`${error.path}-${error.reason}`"
+          class="field-error"
+          role="alert"
+        >
+          {{ error.message }}
+        </small>
       </div>
     </fieldset>
   </div>

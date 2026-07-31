@@ -2,7 +2,6 @@ import type {
   CurriculumLog,
   CurriculumTrainingLog,
   DailyCurriculum,
-  ExpectedWord,
   GeneratedTrainingData,
   LessonMaterialDocument,
   SaveCurriculumRequest,
@@ -88,21 +87,6 @@ export interface TrainingRepository {
     curriculumId: number,
     request: SaveCurriculumRequest,
   ) => Promise<DailyCurriculum>
-  readonly getExpectedWords: (
-    studentId: number,
-    trainingId: number,
-    options?: TrainingRequestOptions,
-  ) => Promise<readonly ExpectedWord[]>
-  readonly addExpectedWord: (
-    studentId: number,
-    trainingId: number,
-    wordName: string,
-  ) => Promise<void>
-  readonly deleteExpectedWord: (
-    studentId: number,
-    trainingId: number,
-    wordId: number,
-  ) => Promise<void>
   readonly generateTraining: (
     studentId: number,
     trainingId: number,

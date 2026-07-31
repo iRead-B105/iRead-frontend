@@ -11,8 +11,9 @@ import {
   type CurriculumDraftItem,
   type CurriculumTrainingLog,
   type DailyCurriculum,
-  type ExpectedWord,
   type LessonMaterialDocument,
+  type LessonMaterialFieldError,
+  type LessonMaterialSaveIssue,
   type SaveLessonMaterialRequest,
   type TrainingCatalogItem,
   type TrainingDetail,
@@ -37,11 +38,6 @@ function errorMessage(error: unknown, fallback: string): string {
           message: '시작된 커리큘럼은 수정할 수 없습니다.',
           retryable: false,
         },
-        DUPLICATE_EXPECTED_WORD: {
-          message: '이미 추가된 예상 단어입니다.',
-          action: 'edit-input',
-          retryable: false,
-        },
       },
     })?.message ?? fallback
   )
@@ -53,6 +49,29 @@ function historyErrorMessage(error: unknown, fallback: string): string {
   if (error.status === 403) return '이 학습자의 훈련 기록을 볼 권한이 없습니다.'
   if (error.status === 404) return '요청한 훈련 기록을 찾을 수 없습니다.'
   return mapCommonError(error)?.message ?? fallback
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function lessonMaterialValidationErrors(error: unknown): readonly LessonMaterialFieldError[] {
+  if (!isApiError(error) || !isRecord(error.responseBody)) return []
+  const errorBody = isRecord(error.responseBody.error) ? error.responseBody.error : null
+  const details = errorBody && isRecord(errorBody.details) ? errorBody.details : null
+  const errors = details && Array.isArray(details.errors) ? details.errors : []
+
+  return errors.flatMap((candidate) => {
+    if (!isRecord(candidate)) return []
+    if (typeof candidate.path !== 'string' || typeof candidate.message !== 'string') return []
+    return [
+      {
+        path: candidate.path,
+        reason: typeof candidate.reason === 'string' ? candidate.reason : 'INVALID',
+        message: candidate.message,
+      },
+    ]
+  })
 }
 
 function draftFromCurriculum(curriculum: DailyCurriculum | null): CurriculumDraftItem[] {
@@ -76,26 +95,28 @@ export const useTrainingStore = defineStore('training', () => {
   const selectedTemplateId = ref<number | null>(null)
   const selectedDraftItemKey = ref<string | null>(null)
   const selectedTrainingId = ref<number | null>(null)
-  const expectedWordsByTrainingId = ref<Record<number, readonly ExpectedWord[]>>({})
   const trainingDetailById = ref<Record<number, TrainingDetail>>({})
   const lessonMaterialByTrainingId = ref<Record<number, LessonMaterialDocument>>({})
 
   const catalogStatus = ref<TrainingRequestStatus>('idle')
   const curriculumStatus = ref<TrainingRequestStatus>('idle')
-  const expectedWordsStatus = ref<TrainingRequestStatus>('idle')
   const detailStatus = ref<TrainingRequestStatus>('idle')
   const lessonMaterialStatus = ref<TrainingRequestStatus>('idle')
   const lessonMaterialSaveStatus = ref<TrainingRequestStatus>('idle')
+  const lessonMaterialSaveIssue = ref<LessonMaterialSaveIssue | null>(null)
+  const lessonMaterialFieldErrors = ref<readonly LessonMaterialFieldError[]>([])
+  const lessonMaterialRemoteChange = ref(false)
+  const lessonMaterialRemoteRevision = ref<number | null>(null)
+  const lessonMaterialEditingTrainingId = ref<number | null>(null)
+  const lessonMaterialHasLocalChanges = ref(false)
   const materialGenerationStatus = ref<TrainingRequestStatus>('idle')
   const curriculumSynchronizationStatus = ref<CurriculumSynchronizationStatus>('refreshing')
   const isSavingCurriculum = ref(false)
   const curriculumSaveConflict = ref(false)
   const isRefreshingCurriculumConflict = ref(false)
-  const isMutatingExpectedWord = ref(false)
   const isSavingLessonMaterial = ref(false)
   const catalogError = ref<string | null>(null)
   const curriculumError = ref<string | null>(null)
-  const expectedWordError = ref<string | null>(null)
   const detailError = ref<string | null>(null)
   const lessonMaterialError = ref<string | null>(null)
   const lessonMaterialSaveError = ref<string | null>(null)
@@ -164,12 +185,6 @@ export const useTrainingStore = defineStore('training', () => {
     const detail = trainingDetailById.value[training.trainingId]
     return detail ? { ...training, status: detail.status } : training
   })
-  const selectedExpectedWords = computed(
-    () =>
-      (selectedTrainingId.value === null
-        ? []
-        : expectedWordsByTrainingId.value[selectedTrainingId.value]) ?? [],
-  )
   const selectedTrainingDetail = computed(
     () =>
       (selectedTrainingId.value === null
@@ -187,12 +202,6 @@ export const useTrainingStore = defineStore('training', () => {
       curriculumSynchronizationStatus.value === 'synced' &&
       !curriculumSaveConflict.value &&
       (savedCurriculum.value === null || savedCurriculum.value.status === 'NOT_STARTED'),
-  )
-  const canEditExpectedWords = computed(
-    () =>
-      curriculumSynchronizationStatus.value === 'synced' &&
-      (selectedTraining.value?.status === 'NOT_READY' ||
-        selectedTraining.value?.status === 'NOT_STARTED'),
   )
   const requiresMaterialRegeneration = computed(
     () => selectedTrainingDetail.value?.status === 'NOT_READY',
@@ -233,25 +242,27 @@ export const useTrainingStore = defineStore('training', () => {
     selectedTemplateId.value = null
     selectedDraftItemKey.value = null
     selectedTrainingId.value = null
-    expectedWordsByTrainingId.value = {}
     trainingDetailById.value = {}
     lessonMaterialByTrainingId.value = {}
     catalogStatus.value = 'loading'
     curriculumStatus.value = 'loading'
-    expectedWordsStatus.value = 'idle'
     detailStatus.value = 'idle'
     lessonMaterialStatus.value = 'idle'
     lessonMaterialSaveStatus.value = 'idle'
+    lessonMaterialSaveIssue.value = null
+    lessonMaterialFieldErrors.value = []
+    lessonMaterialRemoteChange.value = false
+    lessonMaterialRemoteRevision.value = null
+    lessonMaterialEditingTrainingId.value = null
+    lessonMaterialHasLocalChanges.value = false
     materialGenerationStatus.value = 'idle'
     curriculumSynchronizationStatus.value = 'refreshing'
     isSavingCurriculum.value = false
     curriculumSaveConflict.value = false
     isRefreshingCurriculumConflict.value = false
-    isMutatingExpectedWord.value = false
     isSavingLessonMaterial.value = false
     catalogError.value = null
     curriculumError.value = null
-    expectedWordError.value = null
     detailError.value = null
     lessonMaterialError.value = null
     lessonMaterialSaveError.value = null
@@ -332,9 +343,6 @@ export const useTrainingStore = defineStore('training', () => {
     const removed = draftItems.value[index]
     draftItems.value = draftItems.value.filter((item) => item.key !== key)
     if (removed?.trainingId !== null && removed?.trainingId !== undefined) {
-      const { [removed.trainingId]: _removedWords, ...remainingWords } =
-        expectedWordsByTrainingId.value
-      expectedWordsByTrainingId.value = remainingWords
       const { [removed.trainingId]: _removedDetail, ...remainingDetails } = trainingDetailById.value
       trainingDetailById.value = remainingDetails
       const { [removed.trainingId]: _removedMaterial, ...remainingMaterials } =
@@ -368,15 +376,17 @@ export const useTrainingStore = defineStore('training', () => {
     resourceGeneration += 1
     selectedDraftItemKey.value = null
     selectedTrainingId.value = null
-    expectedWordsByTrainingId.value = {}
     trainingDetailById.value = {}
     lessonMaterialByTrainingId.value = {}
-    expectedWordsStatus.value = 'idle'
     detailStatus.value = 'idle'
     lessonMaterialStatus.value = 'idle'
     lessonMaterialSaveStatus.value = 'idle'
-    isMutatingExpectedWord.value = false
-    expectedWordError.value = null
+    lessonMaterialSaveIssue.value = null
+    lessonMaterialFieldErrors.value = []
+    lessonMaterialRemoteChange.value = false
+    lessonMaterialRemoteRevision.value = null
+    lessonMaterialEditingTrainingId.value = null
+    lessonMaterialHasLocalChanges.value = false
     detailError.value = null
     lessonMaterialError.value = null
     lessonMaterialSaveError.value = null
@@ -551,14 +561,18 @@ export const useTrainingStore = defineStore('training', () => {
     materialGenerationStatus.value = 'idle'
     materialGenerationError.value = null
     lessonMaterialSaveStatus.value = 'idle'
+    lessonMaterialSaveIssue.value = null
+    lessonMaterialFieldErrors.value = []
+    lessonMaterialRemoteChange.value = false
+    lessonMaterialRemoteRevision.value = null
+    lessonMaterialEditingTrainingId.value = null
+    lessonMaterialHasLocalChanges.value = false
     lessonMaterialSaveError.value = null
     if (item.trainingId === null) {
       resourceController?.abort()
       resourceGeneration += 1
-      expectedWordsStatus.value = 'idle'
       detailStatus.value = 'idle'
       lessonMaterialStatus.value = 'idle'
-      expectedWordError.value = null
       detailError.value = null
       lessonMaterialError.value = null
       return
@@ -580,28 +594,14 @@ export const useTrainingStore = defineStore('training', () => {
     const controller = new AbortController()
     resourceController = controller
     const generation = ++resourceGeneration
-    expectedWordsStatus.value = 'loading'
     detailStatus.value = 'loading'
     lessonMaterialStatus.value = 'loading'
-    expectedWordError.value = null
+    lessonMaterialSaveIssue.value = null
+    lessonMaterialFieldErrors.value = []
+    lessonMaterialRemoteChange.value = false
+    lessonMaterialRemoteRevision.value = null
     detailError.value = null
     lessonMaterialError.value = null
-
-    const expectedWordsRequest = repository.value
-      .getExpectedWords(studentId, trainingId, { signal: controller.signal })
-      .then((words) => {
-        if (generation !== resourceGeneration || selectedTrainingId.value !== trainingId) return
-        expectedWordsByTrainingId.value = {
-          ...expectedWordsByTrainingId.value,
-          [trainingId]: [...words],
-        }
-        expectedWordsStatus.value = 'success'
-      })
-      .catch((error: unknown) => {
-        if (isAbortError(error) || generation !== resourceGeneration) return
-        expectedWordsStatus.value = 'error'
-        expectedWordError.value = errorMessage(error, '예상 단어를 불러오지 못했습니다.')
-      })
 
     const detailRequest = repository.value
       .getTrainingDetail(studentId, trainingId, { signal: controller.signal })
@@ -632,79 +632,138 @@ export const useTrainingStore = defineStore('training', () => {
       .catch((error: unknown) => {
         if (isAbortError(error) || generation !== resourceGeneration) return
         lessonMaterialStatus.value = 'error'
-        lessonMaterialError.value = errorMessage(
-          error,
-          '교안 편집 자료를 불러오지 못했습니다.',
-        )
+        lessonMaterialError.value = errorMessage(error, '교안 편집 자료를 불러오지 못했습니다.')
       })
 
-    await Promise.all([expectedWordsRequest, detailRequest, lessonMaterialRequest])
+    await Promise.all([detailRequest, lessonMaterialRequest])
     if (generation === resourceGeneration) resourceController = null
   }
 
-  async function addExpectedWord(wordName: string): Promise<boolean> {
+  function setLessonMaterialEditingState(trainingId: number | null, hasLocalChanges = false): void {
+    lessonMaterialEditingTrainingId.value = trainingId
+    lessonMaterialHasLocalChanges.value = trainingId !== null && hasLocalChanges
+  }
+
+  function clearLessonMaterialFieldError(path: string): void {
+    if (!path) return
+    if (path === 'materials') {
+      lessonMaterialFieldErrors.value = []
+      return
+    }
+    lessonMaterialFieldErrors.value = lessonMaterialFieldErrors.value.filter(
+      (error) =>
+        error.path !== path &&
+        !error.path.startsWith(`${path}.`) &&
+        !error.path.startsWith(`${path}[`),
+    )
+  }
+
+  async function reloadSelectedLessonMaterial(): Promise<boolean> {
     const studentId = currentStudentId.value
     const trainingId = selectedTrainingId.value
-    if (
-      studentId === null ||
-      trainingId === null ||
-      !canEditExpectedWords.value ||
-      isMutatingExpectedWord.value
-    ) {
-      return false
-    }
-    const normalized = wordName.trim()
-    if (!normalized || normalized.length > 50) {
-      expectedWordError.value = '예상 단어는 1자 이상 50자 이하여야 합니다.'
-      return false
-    }
-    if (selectedExpectedWords.value.some((word) => word.wordName === normalized)) {
-      expectedWordError.value = '이미 추가된 예상 단어입니다.'
-      return false
-    }
+    if (studentId === null || trainingId === null) return false
 
-    isMutatingExpectedWord.value = true
-    expectedWordError.value = null
+    lessonMaterialStatus.value = 'loading'
+    lessonMaterialError.value = null
     try {
-      await repository.value.addExpectedWord(studentId, trainingId, normalized)
-      materialGenerationStatus.value = 'idle'
-      materialGenerationError.value = null
-      await loadSelectedTrainingResources(studentId, trainingId)
+      const document = await repository.value.getLessonMaterial(studentId, trainingId)
+      if (selectedTrainingId.value !== trainingId || currentStudentId.value !== studentId) {
+        return false
+      }
+      lessonMaterialByTrainingId.value = {
+        ...lessonMaterialByTrainingId.value,
+        [trainingId]: document,
+      }
+      lessonMaterialStatus.value = 'success'
+      lessonMaterialSaveStatus.value = 'idle'
+      lessonMaterialSaveIssue.value = null
+      lessonMaterialSaveError.value = null
+      lessonMaterialFieldErrors.value = []
+      lessonMaterialRemoteChange.value = false
+      lessonMaterialRemoteRevision.value = null
+      lessonMaterialHasLocalChanges.value = false
       return true
     } catch (error) {
-      expectedWordError.value = errorMessage(error, '예상 단어를 추가하지 못했습니다.')
+      lessonMaterialStatus.value = 'error'
+      lessonMaterialError.value = errorMessage(error, '최신 교안을 불러오지 못했습니다.')
       return false
-    } finally {
-      isMutatingExpectedWord.value = false
     }
   }
 
-  async function deleteExpectedWord(wordId: number): Promise<boolean> {
-    const studentId = currentStudentId.value
-    const trainingId = selectedTrainingId.value
-    if (
-      studentId === null ||
-      trainingId === null ||
-      !canEditExpectedWords.value ||
-      isMutatingExpectedWord.value
-    ) {
-      return false
+  async function handleLessonMaterialContentUpdated(
+    studentId: number,
+    trainingId: number,
+  ): Promise<boolean> {
+    if (currentStudentId.value !== studentId) return true
+
+    const selectedId = selectedTrainingId.value
+    const hadCurriculumChanges = hasChanges.value
+    const requests: Promise<unknown>[] = []
+    let succeeded = true
+
+    requests.push(
+      repository.value
+        .getCurrentCurriculum(studentId)
+        .then((curriculum) => {
+          if (currentStudentId.value !== studentId) return
+          savedCurriculum.value = curriculum
+          if (!hadCurriculumChanges) replaceDraftFromSaved(selectedId)
+          curriculumStatus.value = 'success'
+          curriculumSynchronizationStatus.value = 'synced'
+        })
+        .catch((error: unknown) => {
+          succeeded = false
+          curriculumStatus.value = 'error'
+          curriculumError.value = errorMessage(error, '최신 커리큘럼을 불러오지 못했습니다.')
+        }),
+    )
+
+    if (selectedId === trainingId) {
+      lessonMaterialStatus.value = 'loading'
+      lessonMaterialError.value = null
+      requests.push(
+        Promise.all([
+          repository.value.getTrainingDetail(studentId, trainingId),
+          repository.value.getLessonMaterial(studentId, trainingId),
+        ])
+          .then(([detail, document]) => {
+            if (currentStudentId.value !== studentId || selectedTrainingId.value !== trainingId) {
+              return
+            }
+            trainingDetailById.value = {
+              ...trainingDetailById.value,
+              [trainingId]: detail,
+            }
+            detailStatus.value = 'success'
+            const hasProtectedDraft =
+              lessonMaterialEditingTrainingId.value === trainingId &&
+              lessonMaterialHasLocalChanges.value
+            const currentRevision = lessonMaterialByTrainingId.value[trainingId]?.revision ?? null
+            if (hasProtectedDraft && currentRevision !== document.revision) {
+              lessonMaterialRemoteChange.value = true
+              lessonMaterialRemoteRevision.value = document.revision
+            } else if (!hasProtectedDraft) {
+              lessonMaterialByTrainingId.value = {
+                ...lessonMaterialByTrainingId.value,
+                [trainingId]: document,
+              }
+              lessonMaterialRemoteChange.value = false
+              lessonMaterialRemoteRevision.value = null
+              lessonMaterialSaveIssue.value = null
+              lessonMaterialFieldErrors.value = []
+            }
+            lessonMaterialStatus.value = 'success'
+          })
+          .catch((error: unknown) => {
+            succeeded = false
+            lessonMaterialStatus.value = 'error'
+            lessonMaterialError.value = errorMessage(error, '최신 교안을 불러오지 못했습니다.')
+          }),
+      )
     }
 
-    isMutatingExpectedWord.value = true
-    expectedWordError.value = null
-    try {
-      await repository.value.deleteExpectedWord(studentId, trainingId, wordId)
-      materialGenerationStatus.value = 'idle'
-      materialGenerationError.value = null
-      await loadSelectedTrainingResources(studentId, trainingId)
-      return true
-    } catch (error) {
-      expectedWordError.value = errorMessage(error, '예상 단어를 삭제하지 못했습니다.')
-      return false
-    } finally {
-      isMutatingExpectedWord.value = false
-    }
+    await Promise.all(requests)
+    return succeeded
   }
 
   async function regenerateSelectedTraining(): Promise<boolean> {
@@ -744,9 +803,7 @@ export const useTrainingStore = defineStore('training', () => {
     }
   }
 
-  async function saveSelectedLessonMaterial(
-    request: SaveLessonMaterialRequest,
-  ): Promise<boolean> {
+  async function saveSelectedLessonMaterial(request: SaveLessonMaterialRequest): Promise<boolean> {
     const studentId = currentStudentId.value
     const trainingId = selectedTrainingId.value
     const current = selectedLessonMaterial.value
@@ -761,6 +818,8 @@ export const useTrainingStore = defineStore('training', () => {
 
     isSavingLessonMaterial.value = true
     lessonMaterialSaveStatus.value = 'loading'
+    lessonMaterialSaveIssue.value = null
+    lessonMaterialFieldErrors.value = []
     lessonMaterialSaveError.value = null
     try {
       const saved = await repository.value.saveLessonMaterial(studentId, trainingId, request)
@@ -773,10 +832,39 @@ export const useTrainingStore = defineStore('training', () => {
         },
       }
       lessonMaterialSaveStatus.value = 'success'
+      lessonMaterialRemoteChange.value = false
+      lessonMaterialRemoteRevision.value = null
+      lessonMaterialHasLocalChanges.value = false
       return true
     } catch (error) {
       lessonMaterialSaveStatus.value = 'error'
-      lessonMaterialSaveError.value = errorMessage(error, '교안 수정 내용을 저장하지 못했습니다.')
+      if (isApiError(error) && error.code === 'LESSON_MATERIAL_REVISION_CONFLICT') {
+        lessonMaterialSaveIssue.value = 'revision-conflict'
+        lessonMaterialRemoteChange.value = true
+        lessonMaterialSaveError.value =
+          '다른 화면에서 교안이 변경되었습니다. 작성 중인 내용을 확인한 뒤 최신 교안을 불러와 주세요.'
+      } else if (isApiError(error) && error.code === 'TRAINING_NOT_EDITABLE') {
+        lessonMaterialSaveIssue.value = 'not-editable'
+        lessonMaterialByTrainingId.value = {
+          ...lessonMaterialByTrainingId.value,
+          [trainingId]: { ...current, editable: false },
+        }
+        lessonMaterialSaveError.value =
+          '진행 중이거나 완료된 훈련으로 변경되어 더 이상 교안을 저장할 수 없습니다.'
+      } else if (isApiError(error) && error.code === 'LESSON_MATERIAL_VALIDATION_FAILED') {
+        lessonMaterialSaveIssue.value = 'validation'
+        lessonMaterialFieldErrors.value = lessonMaterialValidationErrors(error)
+        lessonMaterialSaveError.value =
+          lessonMaterialFieldErrors.value.length > 0
+            ? '입력한 교안 내용에서 확인이 필요한 항목이 있습니다.'
+            : errorMessage(error, '교안 입력값을 다시 확인해 주세요.')
+      } else {
+        lessonMaterialSaveIssue.value = 'network'
+        lessonMaterialSaveError.value = errorMessage(
+          error,
+          '네트워크 문제로 교안을 저장하지 못했습니다. 작성 내용은 유지됩니다.',
+        )
+      }
       return false
     } finally {
       isSavingLessonMaterial.value = false
@@ -1128,25 +1216,27 @@ export const useTrainingStore = defineStore('training', () => {
     selectedTemplateId.value = null
     selectedDraftItemKey.value = null
     selectedTrainingId.value = null
-    expectedWordsByTrainingId.value = {}
     trainingDetailById.value = {}
     lessonMaterialByTrainingId.value = {}
     catalogStatus.value = 'idle'
     curriculumStatus.value = 'idle'
-    expectedWordsStatus.value = 'idle'
     detailStatus.value = 'idle'
     lessonMaterialStatus.value = 'idle'
     lessonMaterialSaveStatus.value = 'idle'
+    lessonMaterialSaveIssue.value = null
+    lessonMaterialFieldErrors.value = []
+    lessonMaterialRemoteChange.value = false
+    lessonMaterialRemoteRevision.value = null
+    lessonMaterialEditingTrainingId.value = null
+    lessonMaterialHasLocalChanges.value = false
     materialGenerationStatus.value = 'idle'
     curriculumSynchronizationStatus.value = 'refreshing'
     isSavingCurriculum.value = false
     curriculumSaveConflict.value = false
     isRefreshingCurriculumConflict.value = false
-    isMutatingExpectedWord.value = false
     isSavingLessonMaterial.value = false
     catalogError.value = null
     curriculumError.value = null
-    expectedWordError.value = null
     detailError.value = null
     lessonMaterialError.value = null
     lessonMaterialSaveError.value = null
@@ -1186,35 +1276,35 @@ export const useTrainingStore = defineStore('training', () => {
     selectedTemplate,
     selectedDraftItem,
     selectedTraining,
-    selectedExpectedWords,
     selectedTrainingDetail,
     selectedLessonMaterial,
-    expectedWordsByTrainingId,
     trainingDetailById,
     lessonMaterialByTrainingId,
     catalogStatus,
     curriculumStatus,
-    expectedWordsStatus,
     detailStatus,
     lessonMaterialStatus,
     lessonMaterialSaveStatus,
+    lessonMaterialSaveIssue,
+    lessonMaterialFieldErrors,
+    lessonMaterialRemoteChange,
+    lessonMaterialRemoteRevision,
+    lessonMaterialEditingTrainingId,
+    lessonMaterialHasLocalChanges,
     materialGenerationStatus,
     curriculumSynchronizationStatus,
     isSavingCurriculum,
     curriculumSaveConflict,
     isRefreshingCurriculumConflict,
-    isMutatingExpectedWord,
     isSavingLessonMaterial,
     catalogError,
     curriculumError,
-    expectedWordError,
     detailError,
     lessonMaterialError,
     lessonMaterialSaveError,
     materialGenerationError,
     hasChanges,
     canEditCurriculum,
-    canEditExpectedWords,
     requiresMaterialRegeneration,
     historyStudentId,
     period,
@@ -1252,8 +1342,10 @@ export const useTrainingStore = defineStore('training', () => {
     retryCurriculumSynchronization,
     selectDraftItem,
     loadSelectedTrainingResources,
-    addExpectedWord,
-    deleteExpectedWord,
+    setLessonMaterialEditingState,
+    clearLessonMaterialFieldError,
+    reloadSelectedLessonMaterial,
+    handleLessonMaterialContentUpdated,
     regenerateSelectedTraining,
     saveSelectedLessonMaterial,
     loadHistoryForStudent,
