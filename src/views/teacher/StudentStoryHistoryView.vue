@@ -4,10 +4,9 @@ import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
-import StoryBranchesTab from '@/components/teacher/story/StoryBranchesTab.vue'
-import StoryContentTab from '@/components/teacher/story/StoryContentTab.vue'
-import StoryGazeTab from '@/components/teacher/story/StoryGazeTab.vue'
-import StoryImagesTab from '@/components/teacher/story/StoryImagesTab.vue'
+import StoryPageAnalysisPanel from '@/components/teacher/story/StoryPageAnalysisPanel.vue'
+import StoryPageNavigator from '@/components/teacher/story/StoryPageNavigator.vue'
+import StoryPagePreview from '@/components/teacher/story/StoryPagePreview.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -18,7 +17,6 @@ import {
   storyGazeStatusLabel,
   storyReadingStatusLabel,
   storyStatusLabel,
-  type StoryDetailTab,
   type StoryHistoryItem,
 } from '@/features/teacher/story'
 import { useStoryHistoryStore } from '@/stores/storyHistory'
@@ -40,9 +38,12 @@ const {
   totalPages,
   selectedStory,
   selectedStoryId,
-  activeTab,
+  currentPageNo,
   currentDetail,
   currentGazeAnalysis,
+  selectedPage,
+  selectedPageMetric,
+  pageMetricContractError,
   listStatus,
   detailStatus,
   gazeStatus,
@@ -52,12 +53,6 @@ const {
   listUiError,
   hasFilters,
 } = storeToRefs(storyStore)
-const detailTabs: readonly { id: StoryDetailTab; label: string }[] = [
-  { id: 'gaze', label: '시선 분석' },
-  { id: 'content', label: '이야기 내용' },
-  { id: 'branches', label: '분기 기록' },
-  { id: 'images', label: '생성 이미지' },
-]
 const studentId = computed(() => parseStudentId(route.params.id))
 const invalidStudentId = computed(() => studentId.value === null)
 const listErrorKind = computed(() => asyncStateKind(listUiError.value))
@@ -86,9 +81,7 @@ async function applyFilters(): Promise<void> {
     const normalized = normalizeStoryHistoryQuery({
       from: filterFrom.value || undefined,
       to: filterTo.value || undefined,
-      storyTemplateId: filterTemplateId.value
-        ? Number(filterTemplateId.value)
-        : undefined,
+      storyTemplateId: filterTemplateId.value ? Number(filterTemplateId.value) : undefined,
       page: 0,
       size: query.value.size,
     })
@@ -96,8 +89,7 @@ async function applyFilters(): Promise<void> {
     storyStore.setFilters(normalized)
     await storyStore.loadList(id)
   } catch (error) {
-    filterError.value =
-      error instanceof Error ? error.message : '조회 조건을 다시 확인해 주세요.'
+    filterError.value = error instanceof Error ? error.message : '조회 조건을 다시 확인해 주세요.'
   }
 }
 
@@ -138,7 +130,6 @@ function retryGaze(): void {
   if (id === null || storyId === null) return
   void storyStore.loadGazeAnalysis(id, storyId)
 }
-
 </script>
 
 <template>
@@ -311,68 +302,55 @@ function retryGaze(): void {
                 </div>
               </dl>
             </div>
-            <div class="story-detail-tabs" role="tablist" aria-label="이야기 상세 정보">
-              <button
-                v-for="tab in detailTabs"
-                :id="`story-tab-${tab.id}`"
-                :key="tab.id"
-                type="button"
-                role="tab"
-                :aria-selected="activeTab === tab.id"
-                :aria-controls="`story-tabpanel-${tab.id}`"
-                :tabindex="activeTab === tab.id ? 0 : -1"
-                :class="{ 'is-active': activeTab === tab.id }"
-                @click="storyStore.setActiveTab(tab.id)"
+            <div class="story-page-detail">
+              <p
+                v-if="detailStatus === 'loading' && currentDetail"
+                class="story-detail-updating"
+                role="status"
               >
-                {{ tab.label }}
-              </button>
-            </div>
-            <div
-              :id="`story-tabpanel-${activeTab}`"
-              class="story-detail-tabpanel"
-              role="tabpanel"
-              :aria-labelledby="`story-tab-${activeTab}`"
-            >
-              <StoryGazeTab
-                v-if="activeTab === 'gaze'"
-                :story-status="selectedStory.gazeAnalysisStatus"
-                :analysis="currentGazeAnalysis"
-                :request-status="gazeStatus"
-                :error="gazeError"
-                @retry="retryGaze"
+                최신 이야기 페이지를 불러오고 있습니다.
+              </p>
+              <AsyncStatePanel
+                v-if="detailStatus === 'loading' && !currentDetail"
+                kind="loading"
+                message="이야기 페이지를 불러오고 있습니다."
+                compact
               />
-              <template v-else>
-                <p
-                  v-if="detailStatus === 'loading' && currentDetail"
-                  class="story-detail-updating"
-                  role="status"
-                >
-                  최신 상세 내용을 불러오고 있습니다.
-                </p>
+              <AsyncStatePanel
+                v-else-if="detailStatus === 'error' && !currentDetail"
+                kind="error"
+                :message="detailError ?? '이야기 상세를 불러오지 못했습니다.'"
+                retry-label="다시 불러오기"
+                compact
+                @retry="retryDetail"
+              />
+              <template v-else-if="currentDetail">
                 <AsyncStatePanel
-                  v-if="detailStatus === 'loading' && !currentDetail"
-                  kind="loading"
-                  message="이야기 상세를 불러오고 있습니다."
+                  v-if="currentDetail.totalPages === 0 || !selectedPage"
+                  kind="empty"
+                  title="표시할 이야기 페이지가 없어요"
+                  message="이야기 본문이 생성되면 이곳에서 페이지별 기록을 확인할 수 있습니다."
                   compact
                 />
-                <AsyncStatePanel
-                  v-else-if="detailStatus === 'error'"
-                  kind="error"
-                  :message="detailError ?? '이야기 상세를 불러오지 못했습니다.'"
-                  retry-label="다시 불러오기"
-                  compact
-                  @retry="retryDetail"
-                />
-                <template v-else-if="currentDetail">
-                  <StoryContentTab
-                    v-if="activeTab === 'content'"
-                    :detail="currentDetail"
+                <template v-else>
+                  <div class="story-page-layout">
+                    <StoryPagePreview :page="selectedPage" />
+                    <StoryPageAnalysisPanel
+                      :story-status="selectedStory.gazeAnalysisStatus"
+                      :analysis="currentGazeAnalysis"
+                      :metric="selectedPageMetric"
+                      :request-status="gazeStatus"
+                      :error="gazeError"
+                      :contract-error="pageMetricContractError"
+                      @retry="retryGaze"
+                    />
+                  </div>
+                  <StoryPageNavigator
+                    :current-page-no="currentPageNo"
+                    :total-pages="currentDetail.totalPages"
+                    @previous="storyStore.goToPreviousPage"
+                    @next="storyStore.goToNextPage"
                   />
-                  <StoryBranchesTab
-                    v-else-if="activeTab === 'branches'"
-                    :detail="currentDetail"
-                  />
-                  <StoryImagesTab v-else :detail="currentDetail" />
                 </template>
               </template>
             </div>
@@ -620,61 +598,28 @@ function retryGaze(): void {
   font-weight: 700;
 }
 
-.story-detail-tabs {
-  display: grid;
-  margin-top: 20px;
-  border-bottom: 1px solid var(--slate-200);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.story-detail-tabs button {
-  position: relative;
-  min-height: 46px;
-  border: 0;
-  background: transparent;
-  color: var(--slate-500);
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.story-detail-tabs button::after {
-  position: absolute;
-  right: 12px;
-  bottom: -1px;
-  left: 12px;
-  height: 2px;
-  border-radius: 999px 999px 0 0;
-  background: transparent;
-  content: '';
-}
-
-.story-detail-tabs button:hover {
-  color: var(--slate-800);
-}
-
-.story-detail-tabs button.is-active {
-  color: var(--primary-700);
-}
-
-.story-detail-tabs button.is-active::after {
-  background: var(--primary-600);
-}
-
-.story-detail-tabpanel {
+.story-page-detail {
   display: grid;
   min-height: 430px;
-  padding-top: 18px;
-  animation: story-tab-fade 140ms ease-out;
+  gap: 18px;
+  padding-top: 20px;
 }
 
-.story-detail-tabpanel > :deep(.async-state-panel) {
+.story-page-detail > :deep(.async-state-panel) {
   min-height: 220px;
 }
 
+.story-page-layout {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.85fr);
+  animation: story-page-fade 140ms ease-out;
+}
+
 .story-detail-updating {
-  margin: 0 0 10px;
+  margin: 0;
   padding: 8px 10px;
   border-radius: var(--radius-sm);
   background: var(--primary-50);
@@ -682,7 +627,7 @@ function retryGaze(): void {
   font-size: 11px;
 }
 
-@keyframes story-tab-fade {
+@keyframes story-page-fade {
   from {
     opacity: 0.45;
     transform: translateY(2px);
@@ -695,7 +640,7 @@ function retryGaze(): void {
 
 @media (prefers-reduced-motion: reduce) {
   .story-title-tab,
-  .story-detail-tabpanel {
+  .story-page-layout {
     animation: none;
     transition: none;
   }
@@ -708,6 +653,10 @@ function retryGaze(): void {
 
   .story-filter-actions {
     justify-content: flex-end;
+  }
+
+  .story-page-layout {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -741,11 +690,6 @@ function retryGaze(): void {
 
   .story-detail-summary dl {
     grid-template-columns: 1fr;
-  }
-
-  .story-detail-tabs {
-    overflow-x: auto;
-    grid-template-columns: repeat(4, minmax(112px, 1fr));
   }
 }
 </style>

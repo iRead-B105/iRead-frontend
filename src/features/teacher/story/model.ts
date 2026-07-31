@@ -2,7 +2,6 @@ export type StoryStatus = 'IN_PROGRESS' | 'COMPLETED' | 'DELETED'
 export type StoryReadingStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'
 export type StoryGazeAnalysisStatus = 'NOT_COLLECTED' | 'RUNNING' | 'AVAILABLE' | 'FAILED'
 export type StoryImageGenerationStatus = 'NOT_REQUESTED' | 'PENDING' | 'AVAILABLE' | 'FAILED'
-export type StoryDetailTab = 'gaze' | 'content' | 'branches' | 'images'
 
 export interface StoryTemplateOption {
   readonly storyTemplateId: number
@@ -45,52 +44,51 @@ export interface StoryHistoryList {
   readonly totalPages: number
 }
 
-export interface StoryLine {
-  readonly lineId: number
-  readonly lineOrder: number
-  readonly lineText: string
-  readonly requiresBranchInput: boolean
-  readonly readAt: string | null
-}
-
-export interface StoryScene {
-  readonly sceneId: number
-  readonly sequenceNo: number
-  readonly imageUrl: string | null
-  readonly imageGenerationStatus: StoryImageGenerationStatus
-  readonly lines: readonly StoryLine[]
-}
-
-export interface StoryBranch {
+export interface StoryBranchRecord {
   readonly choiceId: number
-  readonly branchLineId: number
   readonly promptText: string
   readonly transcript: string
   readonly createdAt: string
 }
 
-export interface StoryDetail {
-  readonly story: StoryHistoryItem
-  readonly scenes: readonly StoryScene[]
-  readonly branches: readonly StoryBranch[]
+export interface StoryPage {
+  readonly pageNo: number
+  readonly storyLineId: number
+  readonly sceneId: number
+  readonly sceneOrder: number
+  readonly lineOrder: number
+  readonly backgroundImageUrl: string | null
+  readonly backgroundImagePosition: string
+  readonly imageGenerationStatus: StoryImageGenerationStatus
+  readonly textLines: readonly string[]
+  readonly requiresBranchInput: boolean
+  readonly readAt: string | null
+  readonly branchRecord: StoryBranchRecord | null
 }
 
-export interface StorySentenceGazeMetric {
+export interface StoryDetail {
+  readonly story: StoryHistoryItem
+  readonly pages: readonly StoryPage[]
+  readonly totalPages: number
+}
+
+export interface StoryPageGazeRegression {
+  readonly fromTokenIndex: number
+  readonly toTokenIndex: number
+  readonly offsetMs: number
+}
+
+export interface StoryPageGazeMetric {
   readonly storyLineId: number
-  readonly sequenceNo: number
+  readonly pageNo: number
   readonly surfaceText: string
   readonly dwellDurationMs: number
   readonly fixationCount: number
+  readonly regressionCount: number
+  readonly averageFixationTimeMs: number | null
   readonly firstGazeOffsetMs: number
   readonly lastGazeOffsetMs: number
-}
-
-export interface StoryGazeRegression {
-  readonly fromTargetIndex: number
-  readonly fromTokenIndex: number
-  readonly toTargetIndex: number
-  readonly toTokenIndex: number
-  readonly offsetMs: number
+  readonly regressions: readonly StoryPageGazeRegression[]
 }
 
 export interface StoryGazeAnalysisMeta {
@@ -110,8 +108,7 @@ export interface StoryGazeAnalysis {
   readonly totalVisitedCount: number
   readonly reverseReadCount: number
   readonly avgVisitedDurationMs: number | null
-  readonly sentenceMetrics: readonly StorySentenceGazeMetric[]
-  readonly regressions: readonly StoryGazeRegression[]
+  readonly pageMetrics: readonly StoryPageGazeMetric[]
   readonly analysisMeta: StoryGazeAnalysisMeta | null
 }
 

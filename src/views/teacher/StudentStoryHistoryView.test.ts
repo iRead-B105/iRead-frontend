@@ -2,10 +2,7 @@ import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  StoryHistoryList,
-  StoryRepository,
-} from '@/features/teacher/story'
+import type { StoryHistoryList, StoryRepository } from '@/features/teacher/story'
 import { MockStoryRepository } from '@/features/teacher/story'
 import { useStoryHistoryStore } from '@/stores/storyHistory'
 import StudentStoryHistoryView from './StudentStoryHistoryView.vue'
@@ -51,8 +48,23 @@ function repository(
     listHistory,
     getDetail: vi.fn().mockResolvedValue({
       story,
-      scenes: [],
-      branches: [],
+      pages: [
+        {
+          pageNo: 1,
+          storyLineId: 7201,
+          sceneId: 7101,
+          sceneOrder: 1,
+          lineOrder: 1,
+          backgroundImageUrl: '/images/story-scene-forest.svg',
+          backgroundImagePosition: 'center',
+          imageGenerationStatus: 'AVAILABLE',
+          textLines: ['별빛이 내려앉은 숲에서 토끼가 길을 찾아요.'],
+          requiresBranchInput: false,
+          readAt: '2026-07-30T16:40:10+09:00',
+          branchRecord: null,
+        },
+      ],
+      totalPages: 1,
     }),
     getGazeAnalysis: vi.fn().mockResolvedValue({
       gazeSessionId: 7401,
@@ -64,8 +76,20 @@ function repository(
       totalVisitedCount: 42,
       reverseReadCount: 5,
       avgVisitedDurationMs: 914,
-      sentenceMetrics: [],
-      regressions: [],
+      pageMetrics: [
+        {
+          storyLineId: 7201,
+          pageNo: 1,
+          surfaceText: '별빛이 내려앉은 숲에서 토끼가 길을 찾아요.',
+          dwellDurationMs: 6_200,
+          fixationCount: 7,
+          regressionCount: 1,
+          averageFixationTimeMs: 886,
+          firstGazeOffsetMs: 120,
+          lastGazeOffsetMs: 6_320,
+          regressions: [],
+        },
+      ],
       analysisMeta: null,
     }),
   }
@@ -117,38 +141,46 @@ describe('StudentStoryHistoryView', () => {
     expect(wrapper.get('.story-workspace').classes()).toContain('story-workspace')
   })
 
-  it('시선 분석을 기본으로 네 탭을 정해진 순서와 단일 패널로 표시한다', async () => {
-    const { wrapper } = await mountView(new MockStoryRepository({ delayMs: 0 }))
+  it('상세 탭 없이 이야기 페이지와 선택 페이지 시선 분석을 동시에 표시한다', async () => {
+    const mockRepository = new MockStoryRepository({ delayMs: 0 })
+    const getDetail = vi.spyOn(mockRepository, 'getDetail')
+    const getGazeAnalysis = vi.spyOn(mockRepository, 'getGazeAnalysis')
+    const { wrapper } = await mountView(mockRepository)
     expect(wrapper.findAll('.story-title-tab')).toHaveLength(3)
 
     await wrapper.get('.story-title-tab').trigger('click')
     await flushPromises()
 
-    const tabs = wrapper.findAll('.story-detail-tabs [role="tab"]')
-    expect(tabs.map((tab) => tab.text())).toEqual([
-      '시선 분석',
-      '이야기 내용',
-      '분기 기록',
-      '생성 이미지',
-    ])
-    expect(tabs[0]?.attributes('aria-selected')).toBe('true')
-    expect(wrapper.findAll('.story-detail-tabpanel[role="tabpanel"]')).toHaveLength(1)
-    expect(wrapper.text()).toContain('문장별 시선 분석')
+    expect(wrapper.find('.story-detail-tabs').exists()).toBe(false)
+    expect(wrapper.find('.story-page-layout').exists()).toBe(true)
+    expect(wrapper.get('.story-reader-scene img').attributes('src')).toBe(
+      '/images/story-scene-forest.svg',
+    )
     expect(wrapper.text()).toContain('별빛이 내려앉은 숲에서 토끼가 길을 찾아요.')
+    expect(wrapper.text()).toContain('시선 분석 기록')
+    expect(wrapper.text()).toContain('6.2초')
+    expect(wrapper.get('.story-page-navigator').text()).toContain('1')
+    expect(wrapper.get('.story-page-navigator').text()).toContain('12')
 
-    await tabs[1]!.trigger('click')
-    expect(wrapper.text()).toContain('1번째 장면')
-    expect(wrapper.text()).toContain('분기 문장')
-    expect(wrapper.text()).not.toContain('문장별 시선 분석')
+    const nextButton = wrapper
+      .findAll('.story-page-navigator button')
+      .find((button) => button.text() === '다음 페이지')!
+    await nextButton.trigger('click')
+    expect(wrapper.text()).toContain('반짝이는 나뭇잎이 토끼에게 북쪽을 가리켰어요.')
+    expect(wrapper.text()).toContain('7.4초')
 
-    await wrapper.findAll('.story-detail-tabs [role="tab"]')[2]!.trigger('click')
+    await nextButton.trigger('click')
+    await nextButton.trigger('click')
     expect(wrapper.text()).toContain('토끼가 먼저 누구에게 도움을 요청하면 좋을까?')
     expect(wrapper.text()).toContain('별을 잘 아는 부엉이에게 물어보면 좋겠어요.')
-
-    await wrapper.findAll('.story-detail-tabs [role="tab"]')[3]!.trigger('click')
-    expect(wrapper.findAll('.story-image-frame img')).toHaveLength(2)
-    expect(wrapper.text()).toContain('이미지 생성 중')
-    expect(wrapper.text()).toContain('이미지 생성 실패')
+    expect(wrapper.find('.story-page-preview .story-branch-record').exists()).toBe(true)
+    expect(wrapper.find('.story-page-analysis .story-branch-record').exists()).toBe(false)
+    expect(wrapper.get('.story-reader-scene img').attributes('src')).toBe(
+      '/images/story-scene-owl.svg',
+    )
+    expect(wrapper.text()).toContain('9.1초')
+    expect(getDetail).toHaveBeenCalledTimes(1)
+    expect(getGazeAnalysis).toHaveBeenCalledTimes(1)
   })
 
   it('시선 상태가 AVAILABLE이 아니면 시선 상세를 요청하지 않는다', async () => {

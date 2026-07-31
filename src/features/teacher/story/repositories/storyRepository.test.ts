@@ -84,18 +84,16 @@ describe('Story API target contract', () => {
     const detail = await storyApi.getDetail(1, 6801, { signal: controller.signal })
     const gaze = await storyApi.getGazeAnalysis(1, 6801, { signal: controller.signal })
 
-    expect(request).toHaveBeenNthCalledWith(
-      1,
-      '/api/admin/student/1/story-history/6801',
-      { signal: controller.signal },
+    expect(request).toHaveBeenNthCalledWith(1, '/api/admin/student/1/story-history/6801', {
+      signal: controller.signal,
+    })
+    expect(request).toHaveBeenNthCalledWith(2, '/api/admin/story/1/6801/gaze-analysis', {
+      signal: controller.signal,
+    })
+    expect(detail.pages.map((page) => page.pageNo)).toEqual(
+      Array.from({ length: 12 }, (_, index) => index + 1),
     )
-    expect(request).toHaveBeenNthCalledWith(
-      2,
-      '/api/admin/story/1/6801/gaze-analysis',
-      { signal: controller.signal },
-    )
-    expect(detail.scenes.map((scene) => scene.sequenceNo)).toEqual([1, 2, 3, 4])
-    expect(gaze.sentenceMetrics.map((metric) => metric.sequenceNo)).toEqual([1, 2, 4])
+    expect(gaze.pageMetrics.map((metric) => metric.pageNo)).toEqual([1, 2, 4])
   })
 })
 
@@ -138,7 +136,9 @@ describe('MockStoryRepository', () => {
     const gaze = await repository.getGazeAnalysis(1, 6801)
 
     expect(detail.story.storyId).toBe(6801)
-    expect(detail.scenes.map((scene) => scene.sequenceNo)).toEqual([1, 2, 3, 4])
+    expect(detail.pages.map((page) => page.pageNo)).toEqual(
+      Array.from({ length: 12 }, (_, index) => index + 1),
+    )
     expect(gaze.totalVisitedCount).toBe(42)
   })
 
@@ -149,11 +149,9 @@ describe('MockStoryRepository', () => {
       const studentId = Number(studentIdText)
       for (const story of stories) {
         const detail = await repository.getDetail(studentId, story.storyId)
-        const lines = detail.scenes.flatMap((scene) => scene.lines)
-
-        expect(lines, `storyId=${story.storyId}`).toHaveLength(story.totalLineCount)
+        expect(detail.pages, `storyId=${story.storyId}`).toHaveLength(story.totalLineCount)
         expect(
-          lines.filter((line) => line.readAt !== null),
+          detail.pages.filter((page) => page.readAt !== null),
           `storyId=${story.storyId}`,
         ).toHaveLength(story.readLineCount)
       }

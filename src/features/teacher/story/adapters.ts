@@ -1,17 +1,16 @@
 import type {
-  StoryBranch,
+  StoryBranchRecord,
   StoryDetail,
   StoryGazeAnalysisStatus,
   StoryGazeAnalysis,
   StoryGazeAnalysisMeta,
-  StoryGazeRegression,
   StoryHistoryItem,
   StoryHistoryList,
   StoryImageGenerationStatus,
-  StoryLine,
+  StoryPage,
+  StoryPageGazeMetric,
+  StoryPageGazeRegression,
   StoryReadingStatus,
-  StoryScene,
-  StorySentenceGazeMetric,
   StoryStatus,
   StoryTemplateOption,
 } from './model'
@@ -50,52 +49,51 @@ export interface StoryHistoryListDto {
   readonly totalPages: number
 }
 
-export interface StoryLineDto {
-  readonly lineId: number
-  readonly lineOrder: number
-  readonly lineText: string
-  readonly requiresBranchInput: boolean
-  readonly readAt: string | null
-}
-
-export interface StorySceneDto {
-  readonly sceneId: number
-  readonly sequenceNo: number
-  readonly imageUrl: string | null
-  readonly imageGenerationStatus: StoryImageGenerationStatus
-  readonly lines: readonly StoryLineDto[]
-}
-
-export interface StoryBranchDto {
+export interface StoryBranchRecordDto {
   readonly choiceId: number
-  readonly branchLineId: number
   readonly promptText: string
   readonly transcript: string
   readonly createdAt: string
 }
 
-export interface StoryDetailDto {
-  readonly story: StorySummaryDto
-  readonly scenes: readonly StorySceneDto[]
-  readonly branches: readonly StoryBranchDto[]
+export interface StoryPageDto {
+  readonly pageNo: number
+  readonly storyLineId: number
+  readonly sceneId: number
+  readonly sceneOrder: number
+  readonly lineOrder: number
+  readonly backgroundImageUrl: string | null
+  readonly backgroundImagePosition: string | null
+  readonly imageGenerationStatus: StoryImageGenerationStatus
+  readonly textLines: readonly string[] | null
+  readonly requiresBranchInput: boolean
+  readonly readAt: string | null
+  readonly branchRecord: StoryBranchRecordDto | null
 }
 
-export interface StorySentenceGazeMetricDto {
+export interface StoryDetailDto {
+  readonly story: StorySummaryDto
+  readonly pages: readonly StoryPageDto[] | null
+  readonly totalPages: number
+}
+
+export interface StoryPageGazeRegressionDto {
+  readonly fromTokenIndex: number
+  readonly toTokenIndex: number
+  readonly offsetMs: number
+}
+
+export interface StoryPageGazeMetricDto {
   readonly storyLineId: number
-  readonly sequenceNo: number
+  readonly pageNo: number
   readonly surfaceText: string
   readonly dwellDurationMs: number
   readonly fixationCount: number
+  readonly regressionCount: number
+  readonly averageFixationTimeMs: number | null
   readonly firstGazeOffsetMs: number
   readonly lastGazeOffsetMs: number
-}
-
-export interface StoryGazeRegressionDto {
-  readonly fromTargetIndex: number
-  readonly fromTokenIndex: number
-  readonly toTargetIndex: number
-  readonly toTokenIndex: number
-  readonly offsetMs: number
+  readonly regressions: readonly StoryPageGazeRegressionDto[] | null
 }
 
 export interface StoryGazeAnalysisMetaDto {
@@ -115,8 +113,7 @@ export interface StoryGazeAnalysisDto {
   readonly dwellCount: number
   readonly regressionCount: number
   readonly averageFixationTime: number | null
-  readonly sentenceMetrics: readonly StorySentenceGazeMetricDto[] | null
-  readonly regressions: readonly StoryGazeRegressionDto[] | null
+  readonly pageMetrics: readonly StoryPageGazeMetricDto[] | null
   readonly analysisMeta: StoryGazeAnalysisMetaDto | null
 }
 
@@ -167,32 +164,35 @@ export function mapStoryHistoryList(dto: StoryHistoryListDto): StoryHistoryList 
   }
 }
 
-function mapStoryLine(dto: StoryLineDto): StoryLine {
+function mapStoryBranchRecord(dto: StoryBranchRecordDto): StoryBranchRecord {
   return { ...dto }
 }
 
-function mapStoryScene(dto: StorySceneDto): StoryScene {
-  const imageUrl = nullableUrl(dto.imageUrl)
+function mapStoryPage(dto: StoryPageDto): StoryPage {
+  const backgroundImageUrl = nullableUrl(dto.backgroundImageUrl)
   const validImage =
-    (dto.imageGenerationStatus === 'AVAILABLE' && imageUrl !== null) ||
-    (dto.imageGenerationStatus !== 'AVAILABLE' && imageUrl === null)
+    (dto.imageGenerationStatus === 'AVAILABLE' && backgroundImageUrl !== null) ||
+    (dto.imageGenerationStatus !== 'AVAILABLE' && backgroundImageUrl === null)
   if (!validImage) {
     throw new TypeError(
-      `[이야기 상세 API] 장면 ${dto.sceneId}의 이미지 상태와 URL 조합이 올바르지 않습니다.`,
+      `[이야기 상세 API] ${dto.pageNo}페이지의 이미지 상태와 URL 조합이 올바르지 않습니다.`,
     )
   }
 
   return {
+    pageNo: dto.pageNo,
+    storyLineId: dto.storyLineId,
     sceneId: dto.sceneId,
-    sequenceNo: dto.sequenceNo,
-    imageUrl,
+    sceneOrder: dto.sceneOrder,
+    lineOrder: dto.lineOrder,
+    backgroundImageUrl,
+    backgroundImagePosition: dto.backgroundImagePosition?.trim() || 'center',
     imageGenerationStatus: dto.imageGenerationStatus,
-    lines: [...dto.lines].sort((left, right) => left.lineOrder - right.lineOrder).map(mapStoryLine),
+    textLines: [...(dto.textLines ?? [])],
+    requiresBranchInput: dto.requiresBranchInput,
+    readAt: dto.readAt,
+    branchRecord: dto.branchRecord === null ? null : mapStoryBranchRecord(dto.branchRecord),
   }
-}
-
-function mapStoryBranch(dto: StoryBranchDto): StoryBranch {
-  return { ...dto }
 }
 
 export function mapStoryDetail(dto: StoryDetailDto): StoryDetail {
@@ -200,21 +200,45 @@ export function mapStoryDetail(dto: StoryDetailDto): StoryDetail {
   if (story === null) {
     throw new TypeError('[이야기 상세 API] 삭제된 이야기는 상세 응답에 포함할 수 없습니다.')
   }
+
+  const pages = [...(dto.pages ?? [])]
+    .sort(
+      (left, right) =>
+        left.pageNo - right.pageNo ||
+        left.sceneOrder - right.sceneOrder ||
+        left.lineOrder - right.lineOrder ||
+        left.storyLineId - right.storyLineId,
+    )
+    .map(mapStoryPage)
+
+  if (dto.totalPages !== pages.length) {
+    throw new TypeError('[이야기 상세 API] 전체 페이지 수가 페이지 목록과 일치하지 않습니다.')
+  }
+  pages.forEach((page, index) => {
+    if (page.pageNo !== index + 1) {
+      throw new TypeError('[이야기 상세 API] 페이지 번호가 1부터 연속적이지 않습니다.')
+    }
+  })
+  if (new Set(pages.map((page) => page.storyLineId)).size !== pages.length) {
+    throw new TypeError('[이야기 상세 API] 한 문장이 여러 페이지에 중복되었습니다.')
+  }
+
   return {
     story,
-    scenes: [...dto.scenes]
-      .sort((left, right) => left.sequenceNo - right.sequenceNo)
-      .map(mapStoryScene),
-    branches: dto.branches.map(mapStoryBranch),
+    pages,
+    totalPages: dto.totalPages,
   }
 }
 
-function mapSentenceMetric(dto: StorySentenceGazeMetricDto): StorySentenceGazeMetric {
+function mapPageRegression(dto: StoryPageGazeRegressionDto): StoryPageGazeRegression {
   return { ...dto }
 }
 
-function mapRegression(dto: StoryGazeRegressionDto): StoryGazeRegression {
-  return { ...dto }
+function mapPageMetric(dto: StoryPageGazeMetricDto): StoryPageGazeMetric {
+  return {
+    ...dto,
+    regressions: (dto.regressions ?? []).map(mapPageRegression),
+  }
 }
 
 function mapAnalysisMeta(dto: StoryGazeAnalysisMetaDto): StoryGazeAnalysisMeta {
@@ -237,10 +261,9 @@ export function mapStoryGazeAnalysis(dto: StoryGazeAnalysisDto): StoryGazeAnalys
     totalVisitedCount: aggregate.analysis.totalVisitedCount,
     reverseReadCount: aggregate.analysis.reverseReadCount,
     avgVisitedDurationMs: aggregate.analysis.avgVisitedDurationMs,
-    sentenceMetrics: [...(dto.sentenceMetrics ?? [])]
-      .sort((left, right) => left.sequenceNo - right.sequenceNo)
-      .map(mapSentenceMetric),
-    regressions: (dto.regressions ?? []).map(mapRegression),
+    pageMetrics: [...(dto.pageMetrics ?? [])]
+      .sort((left, right) => left.pageNo - right.pageNo)
+      .map(mapPageMetric),
     analysisMeta: dto.analysisMeta === null ? null : mapAnalysisMeta(dto.analysisMeta),
   }
 }
