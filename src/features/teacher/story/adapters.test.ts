@@ -1,23 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import { mapStoryDetail, mapStoryGazeAnalysis } from './adapters'
-import {
-  storyDetailFixturesById,
-  storyGazeFixturesByStoryId,
-} from './fixtures'
+import { storyDetailFixturesById, storyGazeFixturesByStoryId } from './fixtures'
 
 describe('story detail adapters', () => {
-  it('장면·문장·문장별 시선 지표를 표시 순서로 정렬한다', () => {
+  it('이야기 페이지와 페이지별 시선 지표를 페이지 번호순으로 정렬한다', () => {
     const detailFixture = storyDetailFixturesById[6801]!
     const gazeFixture = storyGazeFixturesByStoryId[6801]!
     const detail = mapStoryDetail({
       ...detailFixture,
-      scenes: [...detailFixture.scenes].reverse(),
+      pages: [...(detailFixture.pages ?? [])].reverse(),
     })
     const gaze = mapStoryGazeAnalysis(gazeFixture)
 
-    expect(detail.scenes.map((scene) => scene.sequenceNo)).toEqual([1, 2, 3, 4])
-    expect(detail.scenes[0]?.lines.map((line) => line.lineOrder)).toEqual([1, 2, 3])
-    expect(gaze.sentenceMetrics.map((metric) => metric.sequenceNo)).toEqual([1, 2, 4])
+    expect(detail.pages.map((page) => page.pageNo)).toEqual(
+      Array.from({ length: 12 }, (_, index) => index + 1),
+    )
+    expect(detail.pages[0]).toMatchObject({
+      storyLineId: 7201,
+      backgroundImagePosition: 'center',
+      textLines: ['별빛이 내려앉은 숲에서 토끼가 길을 찾아요.'],
+    })
+    expect(gaze.pageMetrics.map((metric) => metric.pageNo)).toEqual([1, 2, 4])
     expect(gaze).toMatchObject({
       totalVisitedDurationMs: 38_400,
       totalVisitedCount: 42,
@@ -26,17 +29,25 @@ describe('story detail adapters', () => {
     })
   })
 
-  it('nullable 시선 배열은 빈 배열로 정규화한다', () => {
+  it('nullable 페이지 시선 배열과 내부 역행 배열은 빈 배열로 정규화한다', () => {
     const gaze = mapStoryGazeAnalysis({
       ...storyGazeFixturesByStoryId[6801]!,
-      sentenceMetrics: null,
-      regressions: null,
+      pageMetrics: null,
       analysisMeta: null,
     })
+    const metric = mapStoryGazeAnalysis({
+      ...storyGazeFixturesByStoryId[6801]!,
+      pageMetrics: [
+        {
+          ...storyGazeFixturesByStoryId[6801]!.pageMetrics![0]!,
+          regressions: null,
+        },
+      ],
+    })
 
-    expect(gaze.sentenceMetrics).toEqual([])
-    expect(gaze.regressions).toEqual([])
+    expect(gaze.pageMetrics).toEqual([])
     expect(gaze.analysisMeta).toBeNull()
+    expect(metric.pageMetrics[0]?.regressions).toEqual([])
   })
 
   it.each([
@@ -44,19 +55,38 @@ describe('story detail adapters', () => {
     ['미요청 URL 존재', 'NOT_REQUESTED', '/scene.png'],
     ['생성 중 URL 존재', 'PENDING', '/scene.png'],
     ['실패 URL 존재', 'FAILED', '/scene.png'],
-  ] as const)('%s 조합을 계약 위반으로 처리한다', (_, imageGenerationStatus, imageUrl) => {
+  ] as const)(
+    '%s 조합을 계약 위반으로 처리한다',
+    (_, imageGenerationStatus, backgroundImageUrl) => {
+      const fixture = storyDetailFixturesById[6801]!
+      expect(() =>
+        mapStoryDetail({
+          ...fixture,
+          pages: [
+            {
+              ...fixture.pages![0]!,
+              imageGenerationStatus,
+              backgroundImageUrl,
+            },
+          ],
+          totalPages: 1,
+        }),
+      ).toThrow('이미지 상태와 URL 조합이 올바르지 않습니다')
+    },
+  )
+
+  it('전체 페이지 수와 연속 페이지 번호가 맞지 않으면 계약 위반으로 처리한다', () => {
     const fixture = storyDetailFixturesById[6801]!
+
+    expect(() => mapStoryDetail({ ...fixture, totalPages: 99 })).toThrow(
+      '전체 페이지 수가 페이지 목록과 일치하지 않습니다',
+    )
     expect(() =>
       mapStoryDetail({
         ...fixture,
-        scenes: [
-          {
-            ...fixture.scenes[0]!,
-            imageGenerationStatus,
-            imageUrl,
-          },
-        ],
+        pages: [{ ...fixture.pages![0]!, pageNo: 2 }],
+        totalPages: 1,
       }),
-    ).toThrow('이미지 상태와 URL 조합이 올바르지 않습니다')
+    ).toThrow('페이지 번호가 1부터 연속적이지 않습니다')
   })
 })

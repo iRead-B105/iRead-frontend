@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   StoryDetail,
   StoryGazeAnalysis,
+  StoryHistoryItem,
   StoryHistoryList,
   StoryRepository,
 } from '@/features/teacher/story'
@@ -44,6 +45,72 @@ function result(storyId: number, title = `이야기 ${storyId}`): StoryHistoryLi
   }
 }
 
+function storyDetail(story: StoryHistoryItem): StoryDetail {
+  return {
+    story,
+    pages: [
+      {
+        pageNo: 1,
+        storyLineId: story.storyId * 10 + 1,
+        sceneId: story.storyId * 100 + 1,
+        sceneOrder: 1,
+        lineOrder: 1,
+        backgroundImageUrl: '/images/story-scene-forest.svg',
+        backgroundImagePosition: 'center',
+        imageGenerationStatus: 'AVAILABLE',
+        textLines: [`${story.title} 첫 페이지`],
+        requiresBranchInput: false,
+        readAt: '2026-07-30T10:00:00+09:00',
+        branchRecord: null,
+      },
+      {
+        pageNo: 2,
+        storyLineId: story.storyId * 10 + 2,
+        sceneId: story.storyId * 100 + 1,
+        sceneOrder: 1,
+        lineOrder: 2,
+        backgroundImageUrl: '/images/story-scene-forest.svg',
+        backgroundImagePosition: 'center',
+        imageGenerationStatus: 'AVAILABLE',
+        textLines: [`${story.title} 두 번째 페이지`],
+        requiresBranchInput: false,
+        readAt: '2026-07-30T10:00:10+09:00',
+        branchRecord: null,
+      },
+    ],
+    totalPages: 2,
+  }
+}
+
+function gazeAnalysis(story: StoryHistoryItem): StoryGazeAnalysis {
+  return {
+    gazeSessionId: 1,
+    gazeAnalysisId: 2,
+    calibrationStatus: 'SUCCESS',
+    startedAt: '2026-07-30T10:00:00+09:00',
+    endedAt: '2026-07-30T10:01:00+09:00',
+    totalVisitedDurationMs: 1_000,
+    totalVisitedCount: 2,
+    reverseReadCount: 0,
+    avgVisitedDurationMs: 500,
+    pageMetrics: [
+      {
+        storyLineId: story.storyId * 10 + 1,
+        pageNo: 1,
+        surfaceText: `${story.title} 첫 페이지`,
+        dwellDurationMs: 1_000,
+        fixationCount: 2,
+        regressionCount: 0,
+        averageFixationTimeMs: 500,
+        firstGazeOffsetMs: 10,
+        lastGazeOffsetMs: 1_010,
+        regressions: [],
+      },
+    ],
+    analysisMeta: null,
+  }
+}
+
 function repository(
   listHistory: StoryRepository['listHistory'] = vi.fn().mockResolvedValue(result(6801)),
   overrides: Partial<StoryRepository> = {},
@@ -69,7 +136,7 @@ describe('story history store', () => {
     setActivePinia(createPinia())
   })
 
-  it('필터 변경 시 첫 페이지와 이야기 선택을 초기화한다', async () => {
+  it('필터 변경 시 첫 목록 페이지와 이야기·이야기 페이지 선택을 초기화한다', async () => {
     const store = useStoryHistoryStore()
     store.setRepository(repository())
     await store.loadList(1)
@@ -89,6 +156,7 @@ describe('story history store', () => {
       page: 0,
     })
     expect(store.selectedStoryId).toBeNull()
+    expect(store.currentPageNo).toBe(1)
   })
 
   it('목록 성공 후 첫 이야기를 자동 선택하지 않는다', async () => {
@@ -141,36 +209,22 @@ describe('story history store', () => {
     expect(store.stories).toHaveLength(1)
   })
 
-  it('시선 결과가 AVAILABLE인 이야기만 상세과 시선을 함께 요청하고 탭을 유지한다', async () => {
+  it('AVAILABLE인 이야기만 시선을 요청하고 이야기 변경 시 첫 페이지로 초기화한다', async () => {
     const first = result(6801)
     const secondStory = {
       ...result(6802).stories[0]!,
       gazeAnalysisStatus: 'NOT_COLLECTED' as const,
     }
     const listResult = { ...first, stories: [...first.stories, secondStory], totalElements: 2 }
-    const getDetail = vi.fn<StoryRepository['getDetail']>().mockImplementation(
-      async (_studentId, storyId) => ({
-        story: listResult.stories.find((story) => story.storyId === storyId)!,
-        scenes: [],
-        branches: [],
-      }),
-    )
+    const getDetail = vi
+      .fn<StoryRepository['getDetail']>()
+      .mockImplementation(async (_studentId, storyId) => {
+        const story = listResult.stories.find((item) => item.storyId === storyId)!
+        return storyDetail(story)
+      })
     const getGazeAnalysis = vi
       .fn<StoryRepository['getGazeAnalysis']>()
-      .mockResolvedValue({
-        gazeSessionId: 1,
-        gazeAnalysisId: 2,
-        calibrationStatus: 'SUCCESS',
-        startedAt: '2026-07-30T10:00:00+09:00',
-        endedAt: '2026-07-30T10:01:00+09:00',
-        totalVisitedDurationMs: 1_000,
-        totalVisitedCount: 2,
-        reverseReadCount: 0,
-        avgVisitedDurationMs: 500,
-        sentenceMetrics: [],
-        regressions: [],
-        analysisMeta: null,
-      })
+      .mockResolvedValue(gazeAnalysis(first.stories[0]!))
     const store = useStoryHistoryStore()
     store.setRepository(
       repository(vi.fn().mockResolvedValue(listResult), { getDetail, getGazeAnalysis }),
@@ -178,14 +232,76 @@ describe('story history store', () => {
     await store.loadList(1)
 
     await store.selectAndLoad(1, 6801)
-    store.setActiveTab('content')
+    store.goToNextPage()
+    expect(store.currentPageNo).toBe(2)
     await store.selectAndLoad(1, 6802)
 
     expect(getDetail).toHaveBeenCalledTimes(2)
     expect(getGazeAnalysis).toHaveBeenCalledTimes(1)
-    expect(store.activeTab).toBe('content')
+    expect(store.currentPageNo).toBe(1)
     expect(store.currentDetail?.story.storyId).toBe(6802)
     expect(store.currentGazeAnalysis).toBeNull()
+  })
+
+  it('페이지 이동은 API를 다시 호출하지 않고 선택 페이지와 지표만 변경한다', async () => {
+    const list = result(6801)
+    const story = list.stories[0]!
+    const getDetail = vi.fn().mockResolvedValue(storyDetail(story))
+    const getGazeAnalysis = vi.fn().mockResolvedValue({
+      ...gazeAnalysis(story),
+      pageMetrics: [
+        ...gazeAnalysis(story).pageMetrics,
+        {
+          ...gazeAnalysis(story).pageMetrics[0]!,
+          storyLineId: story.storyId * 10 + 2,
+          pageNo: 2,
+          surfaceText: `${story.title} 두 번째 페이지`,
+        },
+      ],
+    })
+    const store = useStoryHistoryStore()
+    store.setRepository(repository(vi.fn().mockResolvedValue(list), { getDetail, getGazeAnalysis }))
+    await store.loadList(1)
+    await store.selectAndLoad(1, 6801)
+
+    store.goToNextPage()
+
+    expect(store.currentPageNo).toBe(2)
+    expect(store.selectedPage?.storyLineId).toBe(68_012)
+    expect(store.selectedPageMetric?.pageNo).toBe(2)
+    expect(getDetail).toHaveBeenCalledTimes(1)
+    expect(getGazeAnalysis).toHaveBeenCalledTimes(1)
+
+    store.goToNextPage()
+    expect(store.currentPageNo).toBe(2)
+    store.goToPreviousPage()
+    store.goToPreviousPage()
+    expect(store.currentPageNo).toBe(1)
+  })
+
+  it('페이지 번호 또는 문장 식별자만 겹치는 지표는 계약 불일치로 구분한다', async () => {
+    const list = result(6801)
+    const story = list.stories[0]!
+    const store = useStoryHistoryStore()
+    store.setRepository(
+      repository(vi.fn().mockResolvedValue(list), {
+        getDetail: vi.fn().mockResolvedValue(storyDetail(story)),
+        getGazeAnalysis: vi.fn().mockResolvedValue({
+          ...gazeAnalysis(story),
+          pageMetrics: [
+            {
+              ...gazeAnalysis(story).pageMetrics[0]!,
+              storyLineId: 999_999,
+            },
+          ],
+        }),
+      }),
+    )
+    await store.loadList(1)
+    await store.selectAndLoad(1, 6801)
+
+    expect(store.selectedPageMetric).toBeNull()
+    expect(store.pageMetricContractError).toContain('연결 정보가 일치하지 않습니다')
   })
 
   it('빠른 이야기 전환에서 늦은 상세 응답을 현재 화면에 반영하지 않는다', async () => {
@@ -213,9 +329,9 @@ describe('story history store', () => {
 
     const firstLoad = store.selectAndLoad(1, 6801)
     const secondLoad = store.selectAndLoad(1, 6802)
-    secondDetail.resolve({ story: stories[1]!, scenes: [], branches: [] })
+    secondDetail.resolve(storyDetail(stories[1]!))
     await secondLoad
-    firstDetail.resolve({ story: stories[0]!, scenes: [], branches: [] })
+    firstDetail.resolve(storyDetail(stories[0]!))
     await firstLoad
 
     expect(store.selectedStoryId).toBe(6802)
@@ -223,20 +339,8 @@ describe('story history store', () => {
   })
 
   it('상세 요청 실패가 목록·선택·성공한 시선 결과를 제거하지 않는다', async () => {
-    const gaze: StoryGazeAnalysis = {
-      gazeSessionId: 1,
-      gazeAnalysisId: 2,
-      calibrationStatus: 'SUCCESS',
-      startedAt: '2026-07-30T10:00:00+09:00',
-      endedAt: '2026-07-30T10:01:00+09:00',
-      totalVisitedDurationMs: 1_000,
-      totalVisitedCount: 2,
-      reverseReadCount: 0,
-      avgVisitedDurationMs: 500,
-      sentenceMetrics: [],
-      regressions: [],
-      analysisMeta: null,
-    }
+    const story = result(6801).stories[0]!
+    const gaze = gazeAnalysis(story)
     const store = useStoryHistoryStore()
     store.setRepository(
       repository(undefined, {

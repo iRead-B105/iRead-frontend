@@ -4,7 +4,6 @@ import {
   DEFAULT_STORY_HISTORY_PAGE_SIZE,
   storyRepository,
   type StoryDetail,
-  type StoryDetailTab,
   type StoryGazeAnalysis,
   type StoryHistoryItem,
   type StoryHistoryQuery,
@@ -56,7 +55,7 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
   const totalElements = ref(0)
   const totalPages = ref(0)
   const selectedStoryId = ref<number | null>(null)
-  const activeTab = ref<StoryDetailTab>('gaze')
+  const currentPageNo = ref(1)
 
   const detail = ref<StoryDetail | null>(null)
   const detailStudentId = ref<number | null>(null)
@@ -95,8 +94,31 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
       ? gazeAnalysis.value
       : null,
   )
-  const hasFilters = computed(
-    () => Boolean(query.from || query.to || query.storyTemplateId !== undefined),
+  const selectedPage = computed(
+    () => currentDetail.value?.pages.find((page) => page.pageNo === currentPageNo.value) ?? null,
+  )
+  const selectedPageMetric = computed(() => {
+    const page = selectedPage.value
+    if (!page) return null
+    return (
+      currentGazeAnalysis.value?.pageMetrics.find(
+        (metric) => metric.pageNo === page.pageNo && metric.storyLineId === page.storyLineId,
+      ) ?? null
+    )
+  })
+  const pageMetricContractError = computed(() => {
+    const page = selectedPage.value
+    const analysis = currentGazeAnalysis.value
+    if (!page || !analysis || selectedPageMetric.value) return null
+    const hasConflictingMetric = analysis.pageMetrics.some(
+      (metric) => metric.pageNo === page.pageNo || metric.storyLineId === page.storyLineId,
+    )
+    return hasConflictingMetric
+      ? '페이지 정보와 시선 분석 결과의 연결 정보가 일치하지 않습니다.'
+      : null
+  })
+  const hasFilters = computed(() =>
+    Boolean(query.from || query.to || query.storyTemplateId !== undefined),
   )
 
   function abortSelectionRequests(): void {
@@ -108,9 +130,10 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     gazeController = null
   }
 
-  function clearSelection(options: { resetTab?: boolean; clearCachedData?: boolean } = {}): void {
+  function clearSelection(options: { clearCachedData?: boolean } = {}): void {
     abortSelectionRequests()
     selectedStoryId.value = null
+    currentPageNo.value = 1
     detailStatus.value = 'idle'
     gazeStatus.value = 'idle'
     detailError.value = null
@@ -124,7 +147,6 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
       gazeStudentId.value = null
       gazeStoryId.value = null
     }
-    if (options.resetTab) activeTab.value = 'gaze'
   }
 
   function clearStudentData(): void {
@@ -155,18 +177,13 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     clearSelection()
   }
 
-  function setActiveTab(tab: StoryDetailTab): void {
-    activeTab.value = tab
-  }
-
   function selectStory(storyId: number | null): void {
     const nextStoryId =
-      storyId !== null && stories.value.some((story) => story.storyId === storyId)
-        ? storyId
-        : null
+      storyId !== null && stories.value.some((story) => story.storyId === storyId) ? storyId : null
     if (selectedStoryId.value === nextStoryId) return
     abortSelectionRequests()
     selectedStoryId.value = nextStoryId
+    currentPageNo.value = 1
     detailStatus.value = nextStoryId === null ? 'idle' : 'loading'
     gazeStatus.value = 'idle'
     detailError.value = null
@@ -245,6 +262,9 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
       }
       detail.value = result
       detailStudentId.value = nextStudentId
+      if (!result.pages.some((page) => page.pageNo === currentPageNo.value)) {
+        currentPageNo.value = result.pages[0]?.pageNo ?? 1
+      }
       detailStatus.value = 'success'
     } catch (error) {
       if (isAbortError(error) || requestSequence !== detailSequence) return
@@ -354,6 +374,21 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     await loadSelectedStory(nextStudentId, nextStoryId)
   }
 
+  function setCurrentPage(pageNo: number): void {
+    if (!Number.isInteger(pageNo)) return
+    const pageExists = currentDetail.value?.pages.some((page) => page.pageNo === pageNo)
+    if (!pageExists) return
+    currentPageNo.value = pageNo
+  }
+
+  function goToPreviousPage(): void {
+    setCurrentPage(currentPageNo.value - 1)
+  }
+
+  function goToNextPage(): void {
+    setCurrentPage(currentPageNo.value + 1)
+  }
+
   function reset(): void {
     listSequence += 1
     listController?.abort()
@@ -365,7 +400,6 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     query.page = 0
     query.size = DEFAULT_STORY_HISTORY_PAGE_SIZE
     clearStudentData()
-    activeTab.value = 'gaze'
     listStatus.value = 'idle'
   }
 
@@ -377,9 +411,12 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     totalPages,
     selectedStoryId,
     selectedStory,
-    activeTab,
+    currentPageNo,
     currentDetail,
     currentGazeAnalysis,
+    selectedPage,
+    selectedPageMetric,
+    pageMetricContractError,
     listStatus,
     detailStatus,
     gazeStatus,
@@ -393,7 +430,9 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     setRepository,
     setFilters,
     setPage,
-    setActiveTab,
+    setCurrentPage,
+    goToPreviousPage,
+    goToNextPage,
     selectStory,
     selectAndLoad,
     loadList,
