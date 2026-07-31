@@ -769,11 +769,13 @@ function confirmReloadLatest(): void {
 }
 .editor-header {
   z-index: 10;
+  grid-row: 1;
   border-bottom: 1px solid var(--border);
   background: var(--white);
 }
 .remote-change-notice {
   display: flex;
+  grid-row: 2;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
@@ -791,6 +793,7 @@ function confirmReloadLatest(): void {
 }
 .editor-footer {
   z-index: 10;
+  grid-row: 4;
   border-top: 1px solid var(--border);
   background: var(--white);
 }
@@ -824,6 +827,7 @@ function confirmReloadLatest(): void {
 }
 .editor-workspace {
   display: grid;
+  grid-row: 3;
   min-height: 0;
   grid-template-columns: minmax(480px, 1.15fr) minmax(360px, 0.85fr);
 }
