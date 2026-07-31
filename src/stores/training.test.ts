@@ -30,6 +30,8 @@ function repository(overrides: Partial<TrainingRepository> = {}): TrainingReposi
     deleteExpectedWord: vi.fn().mockResolvedValue(undefined),
     generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
     getTrainingDetail: vi.fn(),
+    getLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
+    saveLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
     getCurriculumLogs: vi.fn().mockResolvedValue([]),
     getTrainingLog: vi.fn(),
     getStatistics: vi.fn(),
@@ -443,6 +445,36 @@ describe('Training store', () => {
           problem: expect.objectContaining({ targetText: '별' }),
         }),
       ]),
+    )
+  })
+
+  it('교안 저장 성공 응답으로 같은 화면 문서의 revision과 자료를 교체한다', async () => {
+    const store = useTrainingStore()
+    store.setRepository(new MockTrainingRepository())
+    await store.loadForStudent(1)
+    const document = store.selectedLessonMaterial
+    expect(document).not.toBeNull()
+    if (!document) return
+
+    const saved = await store.saveSelectedLessonMaterial({
+      revision: document.revision,
+      materials: document.materials.map((material, index) => ({
+        questionNo: index + 1,
+        questionType: material.questionType,
+        presentation: {
+          ...material.presentation,
+          activityName: index === 0 ? '교수자 수정 활동' : material.presentation.activityName,
+        },
+        content: material.content,
+        answer: material.answer,
+      })),
+    })
+
+    expect(saved).toBe(true)
+    expect(store.lessonMaterialSaveStatus).toBe('success')
+    expect(store.selectedLessonMaterial?.revision).toBe(document.revision + 1)
+    expect(store.selectedLessonMaterial?.materials[0]?.presentation.activityName).toBe(
+      '교수자 수정 활동',
     )
   })
 

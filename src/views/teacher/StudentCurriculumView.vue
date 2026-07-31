@@ -31,22 +31,28 @@ const {
   selectedTraining,
   selectedExpectedWords,
   selectedTrainingDetail,
+  selectedLessonMaterial,
   expectedWordsByTrainingId,
   catalogStatus,
   curriculumStatus,
   curriculumSynchronizationStatus,
   expectedWordsStatus,
   detailStatus,
+  lessonMaterialStatus,
+  lessonMaterialSaveStatus,
   materialGenerationStatus,
   requiresMaterialRegeneration,
   isSavingCurriculum,
   curriculumSaveConflict,
   isRefreshingCurriculumConflict,
   isMutatingExpectedWord,
+  isSavingLessonMaterial,
   catalogError,
   curriculumError,
   expectedWordError,
   detailError,
+  lessonMaterialError,
+  lessonMaterialSaveError,
   materialGenerationError,
   hasChanges,
   draftTrainingIds,
@@ -401,6 +407,14 @@ async function deleteExpectedWord(wordId: number): Promise<void> {
 
 async function regenerateMaterial(): Promise<void> {
   await trainingStore.regenerateSelectedTraining()
+}
+
+async function saveLessonMaterial(
+  request: Parameters<typeof trainingStore.saveSelectedLessonMaterial>[0],
+): Promise<void> {
+  if (await trainingStore.saveSelectedLessonMaterial(request)) {
+    showSaved()
+  }
 }
 
 function deletionMessage(): string {
@@ -797,19 +811,26 @@ function deletionMessage(): string {
       :attempt-label="selectedAttemptLabel"
       :expected-words="selectedExpectedWords"
       :detail="selectedTrainingDetail"
+      :lesson-material="selectedLessonMaterial"
       :expected-words-status="expectedWordsStatus"
       :detail-status="detailStatus"
+      :lesson-material-status="lessonMaterialStatus"
+      :lesson-material-save-status="lessonMaterialSaveStatus"
       :material-generation-status="materialGenerationStatus"
       :requires-regeneration="requiresMaterialRegeneration"
       :is-mutating="isMutatingExpectedWord"
+      :is-saving-lesson-material="isSavingLessonMaterial"
       :expected-word-error="expectedWordError"
       :detail-error="detailError"
+      :lesson-material-error="lessonMaterialError"
+      :lesson-material-save-error="lessonMaterialSaveError"
       :material-generation-error="materialGenerationError"
       @close="materialEditorOpen = false"
       @add-word="addExpectedWord"
       @delete-word="deleteExpectedWord"
       @regenerate="regenerateMaterial"
       @retry="retryResources"
+      @save="saveLessonMaterial"
     />
   </div>
 </template>

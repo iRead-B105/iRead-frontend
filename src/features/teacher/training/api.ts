@@ -10,9 +10,12 @@ import type {
   CurriculumTrainingLog,
   CurriculumStatus,
   DailyCurriculum,
+  LessonMaterialDocument,
   ExpectedWord,
   GeneratedTrainingData,
   SaveCurriculumRequest,
+  SaveLessonMaterialRequest,
+  SavedLessonMaterial,
   TrainingCatalogItem,
   TrainingDetail,
   TrainingDownload,
@@ -308,6 +311,16 @@ export interface TrainingApi {
     trainingId: number,
     options?: TrainingRequestOptions,
   ) => Promise<TrainingDetail>
+  readonly getLessonMaterial: (
+    studentId: number,
+    trainingId: number,
+    options?: TrainingRequestOptions,
+  ) => Promise<LessonMaterialDocument>
+  readonly saveLessonMaterial: (
+    studentId: number,
+    trainingId: number,
+    command: SaveLessonMaterialRequest,
+  ) => Promise<SavedLessonMaterial>
   readonly getCurriculumLogs: (
     studentId: number,
     period: TrainingPeriod,
@@ -407,6 +420,21 @@ export function createTrainingApi(
         requestInit(options),
       )
       return mapTrainingDetail(dto)
+    },
+    async getLessonMaterial(studentId, trainingId, options) {
+      return request<LessonMaterialDocument>(
+        `/api/admin/training/${studentId}/${trainingId}/lesson-material`,
+        requestInit(options),
+      )
+    },
+    async saveLessonMaterial(studentId, trainingId, command) {
+      return request<SavedLessonMaterial>(
+        `/api/admin/training/${studentId}/${trainingId}/lesson-material`,
+        {
+          method: 'PUT',
+          body: jsonBody(command),
+        },
+      )
     },
     async getCurriculumLogs(studentId, period, options) {
       const { from, to } = resolveHistoryDateRange(period, now())
