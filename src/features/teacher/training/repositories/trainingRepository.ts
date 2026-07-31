@@ -4,7 +4,10 @@ import type {
   DailyCurriculum,
   ExpectedWord,
   GeneratedTrainingData,
+  LessonMaterialDocument,
   SaveCurriculumRequest,
+  SaveLessonMaterialRequest,
+  SavedLessonMaterial,
   TrainingCatalogItem,
   TrainingDetail,
   TrainingDownload,
@@ -109,6 +112,16 @@ export interface TrainingRepository {
     trainingId: number,
     options?: TrainingRequestOptions,
   ) => Promise<TrainingDetail>
+  readonly getLessonMaterial: (
+    studentId: number,
+    trainingId: number,
+    options?: TrainingRequestOptions,
+  ) => Promise<LessonMaterialDocument>
+  readonly saveLessonMaterial: (
+    studentId: number,
+    trainingId: number,
+    request: SaveLessonMaterialRequest,
+  ) => Promise<SavedLessonMaterial>
   readonly getCurriculumLogs: (
     studentId: number,
     period: TrainingPeriod,

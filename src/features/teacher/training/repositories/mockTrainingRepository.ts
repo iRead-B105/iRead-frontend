@@ -1,6 +1,11 @@
 import { ApiError } from '@/lib/api'
 import { trainingGazeFixtures, type GazeAnalysisState } from '@/features/teacher/gaze'
 import {
+  assertSaveLessonMaterialRequest,
+  createMockLessonMaterialDocument,
+  normalizeSavedMaterials,
+} from '../lessonMaterial'
+import {
   curriculumLogFixtures,
   currentCurriculumFixture,
   expectedWordFixtures,
@@ -16,7 +21,10 @@ import type {
   DailyCurriculum,
   ExpectedWord,
   GeneratedTrainingData,
+  LessonMaterialDocument,
   SaveCurriculumRequest,
+  SaveLessonMaterialRequest,
+  SavedLessonMaterial,
   TrainingCatalogItem,
   TrainingDetail,
   TrainingExportFormat,
@@ -34,6 +42,7 @@ export interface MockTrainingRepositoryFixtures {
   readonly curricula?: Readonly<Record<number, DailyCurriculum | null>>
   readonly details?: readonly TrainingDetail[]
   readonly expectedWords?: Readonly<Record<number, readonly ExpectedWord[]>>
+  readonly lessonMaterials?: readonly LessonMaterialDocument[]
   readonly curriculumLogs?: Readonly<
     Record<number, Readonly<Record<TrainingPeriod, readonly CurriculumLog[]>>>
   >
@@ -65,6 +74,7 @@ export class MockTrainingRepository implements TrainingRepository {
   private readonly curricula = new Map<number, DailyCurriculum | null>()
   private readonly details = new Map<number, TrainingDetail>()
   private readonly expectedWords = new Map<number, ExpectedWord[]>()
+  private readonly lessonMaterials = new Map<number, LessonMaterialDocument>()
   private readonly curriculumLogs = new Map<
     number,
     Readonly<Record<TrainingPeriod, readonly CurriculumLog[]>>
@@ -92,6 +102,9 @@ export class MockTrainingRepository implements TrainingRepository {
       const clonedWords = clone(words) as ExpectedWord[]
       this.expectedWords.set(Number(trainingId), clonedWords)
       for (const word of clonedWords) this.nextWordId = Math.max(this.nextWordId, word.wordId + 1)
+    }
+    for (const document of fixtures.lessonMaterials ?? []) {
+      this.lessonMaterials.set(document.trainingId, clone(document))
     }
     for (const [studentId, logs] of Object.entries(
       fixtures.curriculumLogs ?? curriculumLogFixtures,
@@ -179,6 +192,7 @@ export class MockTrainingRepository implements TrainingRepository {
       if (!retainedIds.has(training.trainingId)) {
         this.details.delete(training.trainingId)
         this.expectedWords.delete(training.trainingId)
+        this.lessonMaterials.delete(training.trainingId)
       }
     }
     const updated: DailyCurriculum = { ...current, trainings }
@@ -280,6 +294,7 @@ export class MockTrainingRepository implements TrainingRepository {
       generatedData,
       status: 'NOT_STARTED',
     })
+    this.lessonMaterials.delete(trainingId)
     return clone(generatedData)
   }
 
@@ -295,6 +310,73 @@ export class MockTrainingRepository implements TrainingRepository {
       })
     }
     return clone(detail)
+  }
+
+  async getLessonMaterial(
+    studentId: number,
+    trainingId: number,
+    options?: TrainingRequestOptions,
+  ): Promise<LessonMaterialDocument> {
+    this.assertTrainingBelongsToStudent(studentId, trainingId)
+    assertNotAborted(options)
+    const existing = this.lessonMaterials.get(trainingId)
+    if (existing) return clone(existing)
+
+    const training = this.currentTraining(studentId, trainingId)
+    const detail = this.details.get(trainingId)
+    if (!training || !detail) {
+      throw new ApiError({
+        status: 404,
+        code: 'TRAINING_NOT_FOUND',
+        message: '해당 학습자의 훈련을 찾을 수 없습니다.',
+      })
+    }
+    const created = createMockLessonMaterialDocument(training, detail)
+    this.lessonMaterials.set(trainingId, created)
+    return clone(created)
+  }
+
+  async saveLessonMaterial(
+    studentId: number,
+    trainingId: number,
+    request: SaveLessonMaterialRequest,
+  ): Promise<SavedLessonMaterial> {
+    const current = await this.getLessonMaterial(studentId, trainingId)
+    assertSaveLessonMaterialRequest(request, current)
+    const materials = normalizeSavedMaterials(request, current)
+    const revision = current.revision + 1
+    const savedAt = new Date().toISOString()
+    const updated: LessonMaterialDocument = {
+      ...current,
+      revision,
+      materials,
+    }
+    this.lessonMaterials.set(trainingId, updated)
+
+    const detail = this.details.get(trainingId)
+    if (detail) {
+      this.details.set(trainingId, {
+        ...detail,
+        generatedData: {
+          schemaVersion: updated.schemaVersion,
+          questions: materials.map((material) => ({
+            questionNo: material.questionNo,
+            type: material.questionType,
+            presentation: clone(material.presentation),
+            content: clone(material.content),
+            answer: clone(material.answer),
+          })),
+        },
+      })
+    }
+
+    return clone({
+      trainingId,
+      revision,
+      savedAt,
+      source: 'MANUAL',
+      materials,
+    })
   }
 
   async getCurriculumLogs(
@@ -433,6 +515,14 @@ export class MockTrainingRepository implements TrainingRepository {
     }
   }
 
+  private currentTraining(studentId: number, trainingId: number): CurriculumTraining | null {
+    return (
+      this.curricula
+        .get(studentId)
+        ?.trainings.find((training) => training.trainingId === trainingId) ?? null
+    )
+  }
+
   private materializeTrainings(
     previous: readonly CurriculumTraining[],
     templateIds: readonly number[],
@@ -491,5 +581,6 @@ export class MockTrainingRepository implements TrainingRepository {
       generatedData: null,
       status: 'NOT_READY',
     })
+    this.lessonMaterials.delete(trainingId)
   }
 }

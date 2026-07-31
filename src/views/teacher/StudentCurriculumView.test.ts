@@ -26,6 +26,8 @@ function repository(overrides: Partial<TrainingRepository> = {}): TrainingReposi
     deleteExpectedWord: vi.fn().mockResolvedValue(undefined),
     generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
     getTrainingDetail: vi.fn().mockResolvedValue(trainingDetailFixtures[0]),
+    getLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
+    saveLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
     getCurriculumLogs: vi.fn().mockResolvedValue([]),
     getTrainingLog: vi.fn(),
     getStatistics: vi.fn(),

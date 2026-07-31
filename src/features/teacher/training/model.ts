@@ -10,6 +10,7 @@ export type TrainingExportFormat = 'CSV' | 'JSON'
 
 export type TrainingForm = Readonly<Record<string, unknown>>
 export type GeneratedTrainingData = Readonly<Record<string, unknown>>
+export type LessonMaterialData = Readonly<Record<string, unknown>>
 
 export interface TrainingCatalogItem {
   readonly trainingTemplateId: TrainingTemplateId
@@ -58,6 +59,57 @@ export interface TrainingDetail {
   readonly finishedAt: string | null
   readonly result: TrainingResult | null
   readonly accuracy: number | null
+}
+
+export interface LessonMaterialPresentation {
+  readonly activityName: string
+  readonly instruction: string
+  readonly hint: string
+  readonly correctFeedback: string
+  readonly retryFeedback: string
+}
+
+export interface LessonMaterialItem {
+  readonly questionNo: number
+  readonly questionType: string
+  readonly responseType: string
+  readonly requiredInputs: readonly string[]
+  readonly presentation: LessonMaterialPresentation
+  readonly content: LessonMaterialData
+  readonly answer: LessonMaterialData
+}
+
+export interface EditableLessonMaterialItem {
+  readonly questionNo: number
+  readonly questionType: string
+  readonly presentation: LessonMaterialPresentation
+  readonly content: LessonMaterialData
+  readonly answer: LessonMaterialData
+}
+
+export interface LessonMaterialDocument {
+  readonly trainingId: TrainingInstanceId
+  readonly trainingTemplateId: TrainingTemplateId
+  readonly trainingName: string
+  readonly unitName: string
+  readonly status: TrainingStatus
+  readonly schemaVersion: number
+  readonly revision: number
+  readonly editable: boolean
+  readonly materials: readonly LessonMaterialItem[]
+}
+
+export interface SaveLessonMaterialRequest {
+  readonly revision: number
+  readonly materials: readonly EditableLessonMaterialItem[]
+}
+
+export interface SavedLessonMaterial {
+  readonly trainingId: TrainingInstanceId
+  readonly revision: number
+  readonly savedAt: string
+  readonly source: 'MANUAL'
+  readonly materials: readonly LessonMaterialItem[]
 }
 
 export interface TrainingQuestionResult {

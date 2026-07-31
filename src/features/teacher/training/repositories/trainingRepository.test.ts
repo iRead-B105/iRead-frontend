@@ -18,6 +18,8 @@ function api(overrides: Partial<TrainingApi> = {}): TrainingApi {
     deleteExpectedWord: vi.fn().mockResolvedValue(undefined),
     generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
     getTrainingDetail: vi.fn(),
+    getLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
+    saveLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
     getCurriculumLogs: vi.fn().mockResolvedValue([]),
     getTrainingLog: vi.fn(),
     getStatistics: vi.fn(),
@@ -223,6 +225,77 @@ describe('Training API target contract', () => {
     expect(request).toHaveBeenCalledWith('/api/admin/training/7/101/generate', {
       method: 'POST',
     })
+  })
+
+  it('교안 조회와 저장이 문서에 정의된 같은 lesson-material 경로를 사용한다', async () => {
+    const material = {
+      questionNo: 1,
+      questionType: 'FINAL_CONSONANT_COMPARISON',
+      responseType: 'SINGLE_CHOICE',
+      requiredInputs: [],
+      presentation: {
+        activityName: '받침 비교',
+        instruction: '끝소리를 비교해 보세요.',
+        hint: '',
+        correctFeedback: '잘했어요.',
+        retryFeedback: '다시 들어 보세요.',
+      },
+      content: { audioText: '꽃', choices: ['꽃', '낮'] },
+      answer: { answerIndex: 0 },
+    }
+    const document = {
+      trainingId: 101,
+      trainingTemplateId: 12,
+      trainingName: '서로 다른 받침 음절 비교하기',
+      unitName: '소리 듣고 고르기',
+      status: 'NOT_STARTED' as const,
+      schemaVersion: 2,
+      revision: 3,
+      editable: true,
+      materials: [material],
+    }
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(document)
+      .mockResolvedValueOnce({
+        trainingId: 101,
+        revision: 4,
+        savedAt: '2026-07-31T14:30:00+09:00',
+        source: 'MANUAL',
+        materials: [material],
+      })
+    const trainingApi = createTrainingApi(request)
+    const saveCommand = {
+      revision: 3,
+      materials: [
+        {
+          questionNo: 1,
+          questionType: material.questionType,
+          presentation: material.presentation,
+          content: material.content,
+          answer: material.answer,
+        },
+      ],
+    }
+
+    await expect(trainingApi.getLessonMaterial(7, 101)).resolves.toBe(document)
+    await expect(trainingApi.saveLessonMaterial(7, 101, saveCommand)).resolves.toMatchObject({
+      revision: 4,
+      source: 'MANUAL',
+    })
+
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/training/7/101/lesson-material',
+      {},
+    )
+    expect(request).toHaveBeenNthCalledWith(2, '/api/admin/training/7/101/lesson-material', {
+      method: 'PUT',
+      body: JSON.stringify(saveCommand),
+    })
+    expect(JSON.parse(request.mock.calls[1]?.[1]?.body as string).materials[0]).not.toHaveProperty(
+      'requiredInputs',
+    )
   })
 
   it('기간 query로 curriculum log를 조회하고 최신순으로 정렬한다', async () => {
@@ -455,6 +528,37 @@ describe('MockTrainingRepository', () => {
     await expect(repository.getTrainingDetail(1, 101)).resolves.toMatchObject({
       generatedData,
       status: 'NOT_STARTED',
+    })
+  })
+
+  it('교안 전체 저장 후 순서와 revision을 유지하고 오래된 저장은 거부한다', async () => {
+    const repository = new MockTrainingRepository()
+    const document = await repository.getLessonMaterial(1, 101)
+    const first = document.materials[0]
+    expect(first).toBeDefined()
+    const command = {
+      revision: document.revision,
+      materials: document.materials.map((material, index) => ({
+        questionNo: index + 1,
+        questionType: material.questionType,
+        presentation: {
+          ...material.presentation,
+          activityName: index === 0 ? '수정한 활동 이름' : material.presentation.activityName,
+        },
+        content: material.content,
+        answer: material.answer,
+      })),
+    }
+
+    const saved = await repository.saveLessonMaterial(1, 101, command)
+    expect(saved.revision).toBe(document.revision + 1)
+    expect(saved.materials[0]?.presentation.activityName).toBe('수정한 활동 이름')
+    const reloaded = await repository.getLessonMaterial(1, 101)
+    expect(reloaded.revision).toBe(saved.revision)
+    expect(reloaded.materials[0]?.presentation.activityName).toBe('수정한 활동 이름')
+    await expect(repository.saveLessonMaterial(1, 101, command)).rejects.toMatchObject({
+      status: 409,
+      code: 'LESSON_MATERIAL_REVISION_CONFLICT',
     })
   })
 

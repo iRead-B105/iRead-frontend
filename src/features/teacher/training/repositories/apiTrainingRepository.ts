@@ -90,6 +90,22 @@ export class ApiTrainingRepository implements TrainingRepository {
     return this.api.getTrainingDetail(studentId, trainingId, options)
   }
 
+  getLessonMaterial(
+    studentId: number,
+    trainingId: number,
+    options: Parameters<TrainingRepository['getLessonMaterial']>[2] = {},
+  ) {
+    return this.api.getLessonMaterial(studentId, trainingId, options)
+  }
+
+  saveLessonMaterial(
+    studentId: number,
+    trainingId: number,
+    request: Parameters<TrainingRepository['saveLessonMaterial']>[2],
+  ) {
+    return this.api.saveLessonMaterial(studentId, trainingId, request)
+  }
+
   getCurriculumLogs(
     studentId: number,
     period: Parameters<TrainingRepository['getCurriculumLogs']>[1],

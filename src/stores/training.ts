@@ -12,6 +12,8 @@ import {
   type CurriculumTrainingLog,
   type DailyCurriculum,
   type ExpectedWord,
+  type LessonMaterialDocument,
+  type SaveLessonMaterialRequest,
   type TrainingCatalogItem,
   type TrainingDetail,
   type TrainingDownload,
@@ -76,21 +78,27 @@ export const useTrainingStore = defineStore('training', () => {
   const selectedTrainingId = ref<number | null>(null)
   const expectedWordsByTrainingId = ref<Record<number, readonly ExpectedWord[]>>({})
   const trainingDetailById = ref<Record<number, TrainingDetail>>({})
+  const lessonMaterialByTrainingId = ref<Record<number, LessonMaterialDocument>>({})
 
   const catalogStatus = ref<TrainingRequestStatus>('idle')
   const curriculumStatus = ref<TrainingRequestStatus>('idle')
   const expectedWordsStatus = ref<TrainingRequestStatus>('idle')
   const detailStatus = ref<TrainingRequestStatus>('idle')
+  const lessonMaterialStatus = ref<TrainingRequestStatus>('idle')
+  const lessonMaterialSaveStatus = ref<TrainingRequestStatus>('idle')
   const materialGenerationStatus = ref<TrainingRequestStatus>('idle')
   const curriculumSynchronizationStatus = ref<CurriculumSynchronizationStatus>('refreshing')
   const isSavingCurriculum = ref(false)
   const curriculumSaveConflict = ref(false)
   const isRefreshingCurriculumConflict = ref(false)
   const isMutatingExpectedWord = ref(false)
+  const isSavingLessonMaterial = ref(false)
   const catalogError = ref<string | null>(null)
   const curriculumError = ref<string | null>(null)
   const expectedWordError = ref<string | null>(null)
   const detailError = ref<string | null>(null)
+  const lessonMaterialError = ref<string | null>(null)
+  const lessonMaterialSaveError = ref<string | null>(null)
   const materialGenerationError = ref<string | null>(null)
 
   const historyStudentId = ref<number | null>(null)
@@ -168,6 +176,12 @@ export const useTrainingStore = defineStore('training', () => {
         ? null
         : trainingDetailById.value[selectedTrainingId.value]) ?? null,
   )
+  const selectedLessonMaterial = computed(
+    () =>
+      (selectedTrainingId.value === null
+        ? null
+        : lessonMaterialByTrainingId.value[selectedTrainingId.value]) ?? null,
+  )
   const canEditCurriculum = computed(
     () =>
       curriculumSynchronizationStatus.value === 'synced' &&
@@ -221,20 +235,26 @@ export const useTrainingStore = defineStore('training', () => {
     selectedTrainingId.value = null
     expectedWordsByTrainingId.value = {}
     trainingDetailById.value = {}
+    lessonMaterialByTrainingId.value = {}
     catalogStatus.value = 'loading'
     curriculumStatus.value = 'loading'
     expectedWordsStatus.value = 'idle'
     detailStatus.value = 'idle'
+    lessonMaterialStatus.value = 'idle'
+    lessonMaterialSaveStatus.value = 'idle'
     materialGenerationStatus.value = 'idle'
     curriculumSynchronizationStatus.value = 'refreshing'
     isSavingCurriculum.value = false
     curriculumSaveConflict.value = false
     isRefreshingCurriculumConflict.value = false
     isMutatingExpectedWord.value = false
+    isSavingLessonMaterial.value = false
     catalogError.value = null
     curriculumError.value = null
     expectedWordError.value = null
     detailError.value = null
+    lessonMaterialError.value = null
+    lessonMaterialSaveError.value = null
     materialGenerationError.value = null
   }
 
@@ -317,6 +337,9 @@ export const useTrainingStore = defineStore('training', () => {
       expectedWordsByTrainingId.value = remainingWords
       const { [removed.trainingId]: _removedDetail, ...remainingDetails } = trainingDetailById.value
       trainingDetailById.value = remainingDetails
+      const { [removed.trainingId]: _removedMaterial, ...remainingMaterials } =
+        lessonMaterialByTrainingId.value
+      lessonMaterialByTrainingId.value = remainingMaterials
     }
     const next = draftItems.value[Math.min(index, draftItems.value.length - 1)] ?? null
     selectedDraftItemKey.value = next?.key ?? null
@@ -347,11 +370,16 @@ export const useTrainingStore = defineStore('training', () => {
     selectedTrainingId.value = null
     expectedWordsByTrainingId.value = {}
     trainingDetailById.value = {}
+    lessonMaterialByTrainingId.value = {}
     expectedWordsStatus.value = 'idle'
     detailStatus.value = 'idle'
+    lessonMaterialStatus.value = 'idle'
+    lessonMaterialSaveStatus.value = 'idle'
     isMutatingExpectedWord.value = false
     expectedWordError.value = null
     detailError.value = null
+    lessonMaterialError.value = null
+    lessonMaterialSaveError.value = null
   }
 
   function requireCurriculumSynchronization(): void {
@@ -522,13 +550,17 @@ export const useTrainingStore = defineStore('training', () => {
     selectedTrainingId.value = item.trainingId
     materialGenerationStatus.value = 'idle'
     materialGenerationError.value = null
+    lessonMaterialSaveStatus.value = 'idle'
+    lessonMaterialSaveError.value = null
     if (item.trainingId === null) {
       resourceController?.abort()
       resourceGeneration += 1
       expectedWordsStatus.value = 'idle'
       detailStatus.value = 'idle'
+      lessonMaterialStatus.value = 'idle'
       expectedWordError.value = null
       detailError.value = null
+      lessonMaterialError.value = null
       return
     }
     await loadSelectedTrainingResources(studentId, item.trainingId)
@@ -550,8 +582,10 @@ export const useTrainingStore = defineStore('training', () => {
     const generation = ++resourceGeneration
     expectedWordsStatus.value = 'loading'
     detailStatus.value = 'loading'
+    lessonMaterialStatus.value = 'loading'
     expectedWordError.value = null
     detailError.value = null
+    lessonMaterialError.value = null
 
     const expectedWordsRequest = repository.value
       .getExpectedWords(studentId, trainingId, { signal: controller.signal })
@@ -585,7 +619,26 @@ export const useTrainingStore = defineStore('training', () => {
         detailError.value = errorMessage(error, '훈련 미리보기를 불러오지 못했습니다.')
       })
 
-    await Promise.all([expectedWordsRequest, detailRequest])
+    const lessonMaterialRequest = repository.value
+      .getLessonMaterial(studentId, trainingId, { signal: controller.signal })
+      .then((document) => {
+        if (generation !== resourceGeneration || selectedTrainingId.value !== trainingId) return
+        lessonMaterialByTrainingId.value = {
+          ...lessonMaterialByTrainingId.value,
+          [trainingId]: document,
+        }
+        lessonMaterialStatus.value = 'success'
+      })
+      .catch((error: unknown) => {
+        if (isAbortError(error) || generation !== resourceGeneration) return
+        lessonMaterialStatus.value = 'error'
+        lessonMaterialError.value = errorMessage(
+          error,
+          '교안 편집 자료를 불러오지 못했습니다.',
+        )
+      })
+
+    await Promise.all([expectedWordsRequest, detailRequest, lessonMaterialRequest])
     if (generation === resourceGeneration) resourceController = null
   }
 
@@ -680,15 +733,53 @@ export const useTrainingStore = defineStore('training', () => {
             status: 'NOT_STARTED',
           },
         }
-      } else {
-        await loadSelectedTrainingResources(studentId, trainingId)
       }
+      await loadSelectedTrainingResources(studentId, trainingId)
       materialGenerationStatus.value = 'success'
       return true
     } catch (error) {
       materialGenerationStatus.value = 'error'
       materialGenerationError.value = errorMessage(error, 'AI 교안을 생성하지 못했습니다.')
       return false
+    }
+  }
+
+  async function saveSelectedLessonMaterial(
+    request: SaveLessonMaterialRequest,
+  ): Promise<boolean> {
+    const studentId = currentStudentId.value
+    const trainingId = selectedTrainingId.value
+    const current = selectedLessonMaterial.value
+    if (
+      studentId === null ||
+      trainingId === null ||
+      !current?.editable ||
+      isSavingLessonMaterial.value
+    ) {
+      return false
+    }
+
+    isSavingLessonMaterial.value = true
+    lessonMaterialSaveStatus.value = 'loading'
+    lessonMaterialSaveError.value = null
+    try {
+      const saved = await repository.value.saveLessonMaterial(studentId, trainingId, request)
+      lessonMaterialByTrainingId.value = {
+        ...lessonMaterialByTrainingId.value,
+        [trainingId]: {
+          ...current,
+          revision: saved.revision,
+          materials: [...saved.materials],
+        },
+      }
+      lessonMaterialSaveStatus.value = 'success'
+      return true
+    } catch (error) {
+      lessonMaterialSaveStatus.value = 'error'
+      lessonMaterialSaveError.value = errorMessage(error, '교안 수정 내용을 저장하지 못했습니다.')
+      return false
+    } finally {
+      isSavingLessonMaterial.value = false
     }
   }
 
@@ -1039,20 +1130,26 @@ export const useTrainingStore = defineStore('training', () => {
     selectedTrainingId.value = null
     expectedWordsByTrainingId.value = {}
     trainingDetailById.value = {}
+    lessonMaterialByTrainingId.value = {}
     catalogStatus.value = 'idle'
     curriculumStatus.value = 'idle'
     expectedWordsStatus.value = 'idle'
     detailStatus.value = 'idle'
+    lessonMaterialStatus.value = 'idle'
+    lessonMaterialSaveStatus.value = 'idle'
     materialGenerationStatus.value = 'idle'
     curriculumSynchronizationStatus.value = 'refreshing'
     isSavingCurriculum.value = false
     curriculumSaveConflict.value = false
     isRefreshingCurriculumConflict.value = false
     isMutatingExpectedWord.value = false
+    isSavingLessonMaterial.value = false
     catalogError.value = null
     curriculumError.value = null
     expectedWordError.value = null
     detailError.value = null
+    lessonMaterialError.value = null
+    lessonMaterialSaveError.value = null
     materialGenerationError.value = null
     historyStudentId.value = null
     period.value = '30d'
@@ -1091,22 +1188,29 @@ export const useTrainingStore = defineStore('training', () => {
     selectedTraining,
     selectedExpectedWords,
     selectedTrainingDetail,
+    selectedLessonMaterial,
     expectedWordsByTrainingId,
     trainingDetailById,
+    lessonMaterialByTrainingId,
     catalogStatus,
     curriculumStatus,
     expectedWordsStatus,
     detailStatus,
+    lessonMaterialStatus,
+    lessonMaterialSaveStatus,
     materialGenerationStatus,
     curriculumSynchronizationStatus,
     isSavingCurriculum,
     curriculumSaveConflict,
     isRefreshingCurriculumConflict,
     isMutatingExpectedWord,
+    isSavingLessonMaterial,
     catalogError,
     curriculumError,
     expectedWordError,
     detailError,
+    lessonMaterialError,
+    lessonMaterialSaveError,
     materialGenerationError,
     hasChanges,
     canEditCurriculum,
@@ -1151,6 +1255,7 @@ export const useTrainingStore = defineStore('training', () => {
     addExpectedWord,
     deleteExpectedWord,
     regenerateSelectedTraining,
+    saveSelectedLessonMaterial,
     loadHistoryForStudent,
     setHistoryPeriod,
     retryHistory,
