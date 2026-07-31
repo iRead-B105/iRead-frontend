@@ -4,6 +4,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import type {
   CurriculumTraining,
   LessonMaterialDocument,
+  SaveLessonMaterialRequest,
   TrainingDetail,
 } from '@/features/teacher/training'
 import LessonMaterialEditor from './LessonMaterialEditor.vue'
@@ -44,23 +45,21 @@ function mountEditor(
     schemaVersion: 2,
     revision: 3,
     editable: status === 'NOT_READY' || status === 'NOT_STARTED',
-    materials: [
-      {
-        questionNo: 1,
-        questionType: 'FINAL_CONSONANT_COMPARISON',
-        responseType: 'SINGLE_CHOICE',
-        requiredInputs: [],
-        presentation: {
-          activityName: '받침 소리 비교',
-          instruction: '끝소리가 같은 낱말을 골라 보세요.',
-          hint: '낱말의 끝소리에 집중해요.',
-          correctFeedback: '잘했어요.',
-          retryFeedback: '다시 들어 보세요.',
-        },
-        content: { audioText: '꽃', choices: ['꽃', '낮', '산'] },
-        answer: { answerIndex: 0 },
+    materials: Array.from({ length: 5 }, (_, index) => ({
+      questionNo: index + 1,
+      questionType: 'FINAL_CONSONANT_COMPARISON',
+      responseType: 'SINGLE_CHOICE',
+      requiredInputs: [],
+      presentation: {
+        activityName: `받침 소리 비교 ${index + 1}`,
+        instruction: '끝소리가 같은 낱말을 골라 보세요.',
+        hint: '낱말의 끝소리에 집중해요.',
+        correctFeedback: '잘했어요.',
+        retryFeedback: '다시 들어 보세요.',
       },
-    ],
+      content: { audioText: '꽃', choices: ['꽃', '낮', '산'] },
+      answer: { answerIndex: 0 },
+    })),
   }
 
   return mount(LessonMaterialEditor, {
@@ -107,16 +106,15 @@ describe('LessonMaterialEditor', () => {
       .find((button) => button.text() === '교안 저장')
       ?.trigger('click')
 
-    const request = wrapper.emitted('save')?.[0]?.[0]
-    expect(request).toMatchObject({
-      revision: 3,
-      materials: [
-        {
-          questionNo: 1,
-          questionType: 'FINAL_CONSONANT_COMPARISON',
-          presentation: { activityName: '수정한 활동 이름' },
-        },
-      ],
+    const request = wrapper.emitted('save')?.[0]?.[0] as SaveLessonMaterialRequest | undefined
+    expect(request).toBeDefined()
+    if (!request) return
+    expect(request).toMatchObject({ revision: 3 })
+    expect(request.materials).toHaveLength(5)
+    expect(request.materials[0]).toMatchObject({
+      questionNo: 1,
+      questionType: 'FINAL_CONSONANT_COMPARISON',
+      presentation: { activityName: '수정한 활동 이름' },
     })
     expect(request).not.toHaveProperty('materials.0.responseType')
     expect(request).not.toHaveProperty('materials.0.requiredInputs')
@@ -132,15 +130,23 @@ describe('LessonMaterialEditor', () => {
     ).toBeDefined()
   })
 
-  it('자료를 추가해도 기존 문항 유형을 유지한다', async () => {
+  it('자료 5개를 모두 표시하고 추가·삭제·순서 변경을 제공하지 않는다', async () => {
     const wrapper = mountEditor('NOT_STARTED')
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('자료 추가'))
-      ?.trigger('click')
+    const materialTabs = wrapper.findAll('[role="tab"]')
 
-    expect(wrapper.text()).toContain('자료 2 / 2')
-    expect(wrapper.text()).toContain('FINAL_CONSONANT_COMPARISON')
+    expect(materialTabs).toHaveLength(5)
+    expect(materialTabs.map((tab) => tab.text())).toEqual([
+      '자료 1',
+      '자료 2',
+      '자료 3',
+      '자료 4',
+      '자료 5',
+    ])
+    expect(wrapper.text()).not.toContain('자료 추가')
+    expect(wrapper.text()).not.toContain('자료 삭제')
+
+    await materialTabs[4]?.trigger('click')
+    expect(wrapper.text()).toContain('자료 5 / 5')
   })
 
   it('재생성 필요 상태에서 기존 AI 재생성 동작을 유지한다', async () => {
@@ -166,5 +172,33 @@ describe('LessonMaterialEditor', () => {
     await flushPromises()
 
     expect(wrapper.emitted('deleteWord')).toEqual([[1]])
+  })
+
+  it('하단 돌아가기 버튼으로 커리큘럼 화면 복귀 이벤트를 전달한다', async () => {
+    const wrapper = mountEditor('NOT_STARTED')
+
+    await wrapper.get('[data-test="material-editor-footer-back"]').trigger('click')
+
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.emitted('update:open')).toEqual([[false]])
+  })
+
+  it('수정 내용이 있으면 복귀 전에 취소 확인을 거친다', async () => {
+    const wrapper = mountEditor('NOT_STARTED')
+    await wrapper.find('fieldset input').setValue('수정한 활동')
+
+    await wrapper.get('[data-test="material-editor-footer-back"]').trigger('click')
+    const confirmDialog = wrapper
+      .findAllComponents(ConfirmDialog)
+      .find((dialog) => dialog.props('title') === '수정 내용을 취소할까요?')
+
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(confirmDialog?.props('open')).toBe(true)
+
+    confirmDialog?.vm.$emit('confirm')
+    await flushPromises()
+
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.emitted('update:open')).toEqual([[false]])
   })
 })

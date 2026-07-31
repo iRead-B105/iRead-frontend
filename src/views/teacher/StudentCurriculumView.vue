@@ -393,6 +393,10 @@ async function retryCurriculumSynchronization(): Promise<void> {
   await trainingStore.retryCurriculumSynchronization()
 }
 
+function closeMaterialEditor(): void {
+  materialEditorOpen.value = false
+}
+
 async function refreshCurriculumAfterConflict(): Promise<void> {
   await trainingStore.refreshCurriculumAfterConflict()
 }
@@ -807,6 +811,7 @@ function deletionMessage(): string {
 
     <LessonMaterialEditor
       v-if="materialEditorOpen && selectedTraining"
+      v-model:open="materialEditorOpen"
       :training="selectedTraining"
       :attempt-label="selectedAttemptLabel"
       :expected-words="selectedExpectedWords"
@@ -825,7 +830,7 @@ function deletionMessage(): string {
       :lesson-material-error="lessonMaterialError"
       :lesson-material-save-error="lessonMaterialSaveError"
       :material-generation-error="materialGenerationError"
-      @close="materialEditorOpen = false"
+      @close="closeMaterialEditor"
       @add-word="addExpectedWord"
       @delete-word="deleteExpectedWord"
       @regenerate="regenerateMaterial"

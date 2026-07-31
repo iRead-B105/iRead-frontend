@@ -2,6 +2,10 @@ import { isApiError } from '@/lib/api'
 import { isGazeAnalysisNotFoundError } from '@/features/teacher/gaze'
 import { createTrainingApi, type TrainingApi } from '../api'
 import {
+  assertLessonMaterialRequestCount,
+  assertLessonMaterialResponseCount,
+} from '../lessonMaterial'
+import {
   assertSaveCurriculumRequest,
   CurriculumSynchronizationError,
   type TrainingRepository,
@@ -90,20 +94,23 @@ export class ApiTrainingRepository implements TrainingRepository {
     return this.api.getTrainingDetail(studentId, trainingId, options)
   }
 
-  getLessonMaterial(
+  async getLessonMaterial(
     studentId: number,
     trainingId: number,
     options: Parameters<TrainingRepository['getLessonMaterial']>[2] = {},
   ) {
-    return this.api.getLessonMaterial(studentId, trainingId, options)
+    const document = await this.api.getLessonMaterial(studentId, trainingId, options)
+    return assertLessonMaterialResponseCount(document)
   }
 
-  saveLessonMaterial(
+  async saveLessonMaterial(
     studentId: number,
     trainingId: number,
     request: Parameters<TrainingRepository['saveLessonMaterial']>[2],
   ) {
-    return this.api.saveLessonMaterial(studentId, trainingId, request)
+    assertLessonMaterialRequestCount(request)
+    const saved = await this.api.saveLessonMaterial(studentId, trainingId, request)
+    return assertLessonMaterialResponseCount(saved)
   }
 
   getCurriculumLogs(
