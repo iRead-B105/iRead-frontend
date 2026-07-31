@@ -580,7 +580,7 @@ function questionStatusClass(question: TrainingQuestionResult): string {
 
 .history-grid {
   display: grid;
-  align-items: start;
+  align-items: stretch;
   gap: 20px;
   grid-template-columns: minmax(560px, 1.6fr) minmax(360px, 1fr);
 }
