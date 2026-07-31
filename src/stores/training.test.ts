@@ -56,6 +56,33 @@ beforeEach(() => {
 })
 
 describe('Training store', () => {
+  it('keeps rendered history data during a same-student background refresh', async () => {
+    const mock = new MockTrainingRepository()
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadHistoryForStudent(1)
+
+    const previousLogs = store.curriculumLogs
+    const previousCurriculumId = store.selectedCurriculumId
+    const previousTrainingLog = store.trainingLog
+    const previousTrainingId = store.selectedHistoryTrainingId
+    const previousDetail = store.historyTrainingDetail
+    const pendingLogs = deferred<Array<(typeof previousLogs)[number]>>()    vi.spyOn(mock, 'getCurriculumLogs').mockReturnValueOnce(pendingLogs.promise)
+    const refresh = store.loadHistoryForStudent(1)
+
+    expect(store.curriculumLogsStatus).toBe('success')
+    expect(store.curriculumLogs).toBe(previousLogs)
+    expect(store.selectedCurriculumId).toBe(previousCurriculumId)
+    expect(store.trainingLog).toBe(previousTrainingLog)
+    expect(store.selectedHistoryTrainingId).toBe(previousTrainingId)
+    expect(store.historyTrainingDetail).toBe(previousDetail)
+
+    pendingLogs.resolve([...previousLogs])
+    await refresh
+    expect(store.selectedCurriculumId).toBe(previousCurriculumId)
+    expect(store.selectedHistoryTrainingId).toBe(previousTrainingId)
+  })
+
   it('훈련 목록을 sequence로 재정렬하지 않고 백엔드 배열 순서를 유지한다', async () => {
     const store = useTrainingStore()
     store.setRepository(

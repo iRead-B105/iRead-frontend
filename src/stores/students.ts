@@ -170,7 +170,7 @@ export const useStudentStore = defineStore('students', () => {
     listController?.abort()
     const controller = new AbortController()
     listController = controller
-    listStatus.value = 'loading'
+    if (students.value.length === 0) listStatus.value = 'loading'
     listError.value = null
     listUiError.value = null
 
@@ -205,7 +205,7 @@ export const useStudentStore = defineStore('students', () => {
     summaryController?.abort()
     const controller = new AbortController()
     summaryController = controller
-    summaryStatus.value = 'loading'
+    if (summary.value === null) summaryStatus.value = 'loading'
     summaryError.value = null
 
     try {
@@ -305,9 +305,11 @@ export const useStudentStore = defineStore('students', () => {
   async function loadDetail(studentId: number): Promise<StudentDetail | null> {
     const requestSequence = (detailSequences.get(studentId) ?? 0) + 1
     detailSequences.set(studentId, requestSequence)
-    detailStatus.value = 'loading'
+    if (!detailsById.value[studentId]) {
+      detailStatus.value = 'loading'
+      detailStatusById.value = { ...detailStatusById.value, [studentId]: 'loading' }
+    }
     detailError.value = null
-    detailStatusById.value = { ...detailStatusById.value, [studentId]: 'loading' }
     detailErrorById.value = { ...detailErrorById.value, [studentId]: null }
     detailErrorStatusById.value = {
       ...detailErrorStatusById.value,
@@ -354,9 +356,11 @@ export const useStudentStore = defineStore('students', () => {
   async function loadLearningSummary(studentId: number): Promise<StudentLearningSummary | null> {
     const requestSequence = (learningSummarySequences.get(studentId) ?? 0) + 1
     learningSummarySequences.set(studentId, requestSequence)
-    learningSummaryStatusById.value = {
-      ...learningSummaryStatusById.value,
-      [studentId]: 'loading',
+    if (!learningSummaryById.value[studentId]) {
+      learningSummaryStatusById.value = {
+        ...learningSummaryStatusById.value,
+        [studentId]: 'loading',
+      }
     }
     learningSummaryErrorById.value = {
       ...learningSummaryErrorById.value,
@@ -405,9 +409,11 @@ export const useStudentStore = defineStore('students', () => {
   ): Promise<readonly StudentLearningEvent[] | null> {
     const requestSequence = (learningEventsSequences.get(studentId) ?? 0) + 1
     learningEventsSequences.set(studentId, requestSequence)
-    learningEventsStatusById.value = {
-      ...learningEventsStatusById.value,
-      [studentId]: 'loading',
+    if (learningEventsById.value[studentId] === undefined) {
+      learningEventsStatusById.value = {
+        ...learningEventsStatusById.value,
+        [studentId]: 'loading',
+      }
     }
     learningEventsErrorById.value = {
       ...learningEventsErrorById.value,

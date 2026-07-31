@@ -206,7 +206,7 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     listController?.abort()
     const controller = new AbortController()
     listController = controller
-    listStatus.value = 'loading'
+    if (stories.value.length === 0) listStatus.value = 'loading'
     listError.value = null
     listUiError.value = null
 
@@ -245,7 +245,7 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     detailController?.abort()
     const controller = new AbortController()
     detailController = controller
-    detailStatus.value = 'loading'
+    if (currentDetail.value === null) detailStatus.value = 'loading'
     detailError.value = null
     detailUiError.value = null
 
@@ -309,7 +309,7 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     gazeController?.abort()
     const controller = new AbortController()
     gazeController = controller
-    gazeStatus.value = 'loading'
+    if (currentGazeAnalysis.value === null) gazeStatus.value = 'loading'
     gazeError.value = null
     gazeUiError.value = null
 

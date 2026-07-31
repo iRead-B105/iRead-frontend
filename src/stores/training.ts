@@ -998,12 +998,18 @@ export const useTrainingStore = defineStore('training', () => {
   }
 
   async function loadHistoryForStudent(studentId: number): Promise<void> {
+    const isBackgroundRefresh = historyStudentId.value === studentId
     abortHistoryRequests()
     historyGeneration += 1
     historyCurriculumGeneration += 1
     historyDetailGeneration += 1
     historyGazeGeneration += 1
-    clearHistoryState(studentId, true)
+    if (isBackgroundRefresh) {
+      curriculumLogsError.value = null
+      curriculumLogsUiError.value = null
+    } else {
+      clearHistoryState(studentId, true)
+    }
     await loadCurriculumLogs(studentId)
   }
 
@@ -1040,7 +1046,7 @@ export const useTrainingStore = defineStore('training', () => {
     historyController = controller
     const generation = historyGeneration
     const requestedPeriod = period.value
-    curriculumLogsStatus.value = 'loading'
+    if (curriculumLogs.value.length === 0) curriculumLogsStatus.value = 'loading'
     curriculumLogsError.value = null
     try {
       const logs = await repository.value.getCurriculumLogs(studentId, requestedPeriod, {
@@ -1053,11 +1059,16 @@ export const useTrainingStore = defineStore('training', () => {
       ) {
         return
       }
+      const retainedCurriculumId = selectedCurriculumId.value
       curriculumLogs.value = [...logs].sort(
         (left, right) =>
           right.date.localeCompare(left.date) || right.curriculumId - left.curriculumId,
       )
-      selectedCurriculumId.value = curriculumLogs.value[0]?.curriculumId ?? null
+      selectedCurriculumId.value = curriculumLogs.value.some(
+        (item) => item.curriculumId === retainedCurriculumId,
+      )
+        ? retainedCurriculumId
+        : (curriculumLogs.value[0]?.curriculumId ?? null)
       curriculumLogsStatus.value = 'success'
       if (selectedCurriculumId.value !== null) {
         await loadHistoryCurriculum(studentId, selectedCurriculumId.value)
@@ -1099,6 +1110,8 @@ export const useTrainingStore = defineStore('training', () => {
   }
 
   async function loadHistoryCurriculum(studentId: number, curriculumId: number): Promise<void> {
+    const isBackgroundRefresh =
+      selectedCurriculumId.value === curriculumId && trainingLog.value !== null
     historyCurriculumController?.abort()
     historyDetailController?.abort()
     historyGazeController?.abort()
@@ -1108,15 +1121,17 @@ export const useTrainingStore = defineStore('training', () => {
     historyDetailGeneration += 1
     historyGazeGeneration += 1
     selectedCurriculumId.value = curriculumId
-    trainingLog.value = null
-    statistics.value = null
-    selectedHistoryTrainingId.value = null
-    historyTrainingDetail.value = null
-    historyGazeAnalysis.value = null
-    trainingLogStatus.value = 'loading'
-    statisticsStatus.value = 'loading'
-    historyDetailStatus.value = 'idle'
-    historyGazeStatus.value = 'idle'
+    if (!isBackgroundRefresh) {
+      trainingLog.value = null
+      statistics.value = null
+      selectedHistoryTrainingId.value = null
+      historyTrainingDetail.value = null
+      historyGazeAnalysis.value = null
+      trainingLogStatus.value = 'loading'
+      statisticsStatus.value = 'loading'
+      historyDetailStatus.value = 'idle'
+      historyGazeStatus.value = 'idle'
+    }
     trainingLogError.value = null
     statisticsError.value = null
     historyDetailError.value = null
@@ -1196,8 +1211,7 @@ export const useTrainingStore = defineStore('training', () => {
     const controller = new AbortController()
     historyDetailController = controller
     const generation = ++historyDetailGeneration
-    historyTrainingDetail.value = null
-    historyDetailStatus.value = 'loading'
+    if (historyTrainingDetail.value === null) historyDetailStatus.value = 'loading'
     historyDetailError.value = null
     exportError.value = null
     try {
@@ -1232,8 +1246,7 @@ export const useTrainingStore = defineStore('training', () => {
     const controller = new AbortController()
     historyGazeController = controller
     const generation = ++historyGazeGeneration
-    historyGazeAnalysis.value = null
-    historyGazeStatus.value = 'loading'
+    if (historyGazeAnalysis.value === null) historyGazeStatus.value = 'loading'
     historyGazeError.value = null
     try {
       const state = await repository.value.getGazeAnalysis(studentId, trainingId, {
