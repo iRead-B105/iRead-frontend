@@ -1,122 +1,126 @@
-import type { TestDetail, TestListItem } from './model'
+import type { TestDetail, TestListItem, TestQuestionResult } from './model'
 
-export const testListFixtures: Readonly<Record<number, readonly TestListItem[]>> = {
-  1: [
-    { testId: 1_011, date: '2026-07-24' },
-    { testId: 1_008, date: '2026-06-28' },
-    { testId: 1_005, date: '2026-05-30' },
-    { testId: 1_004, date: '2026-05-30' },
-  ],
-  2: [{ testId: 2_001, date: '2026-07-18' }],
-  3: [],
-  4: [
-    { testId: 4_002, date: '2026-07-10' },
-    { testId: 4_001, date: '2026-06-12' },
-  ],
-  5: [{ testId: 5_001, date: '2026-07-18' }],
+function questions(scores: readonly number[]): readonly TestQuestionResult[] {
+  const tracks = [
+    ['PHONOLOGICAL_AWARENESS', '음운 인식'],
+    ['SHORT_TEXT', '짧은 글'],
+    ['FLUENCY', '유창성'],
+  ] as const
+  return scores.map((score, index) => {
+    const track = tracks[Math.floor(index / 3)]!
+    const voice = index >= 6
+    return {
+      testId: 11_001 + index,
+      sequenceNo: index + 1,
+      trackCode: track[0],
+      questionType: voice ? 'VOICE' : index % 2 === 0 ? 'SINGLE_CHOICE' : 'DIRECT_INPUT',
+      question: `${track[1]} ${index + 1}번 문항`,
+      responseType: voice ? 'VOICE' : index % 2 === 0 ? 'SINGLE_CHOICE' : 'TEXT',
+      selectedAnswer: score >= 80 ? `학습자 답 ${index + 1}` : `오답 ${index + 1}`,
+      correctAnswer: `학습자 답 ${index + 1}`,
+      correct: score >= 80,
+      score,
+      pronunciationScore: voice ? score : null,
+      solvingTimeSeconds: index === 1 ? 0 : 12 + index,
+      gazeDepartureCount: index === 2 ? 0 : index % 3,
+    }
+  })
+}
+
+function detail(
+  id: number,
+  completedAt: string,
+  overallScore: number | null,
+  scores: readonly number[],
+  dailyCurriculumId: number | null = null,
+): TestDetail {
+  const questionResults = questions(scores).map((question) => ({
+    ...question,
+    testId: id * 10 + question.sequenceNo,
+  }))
+  const areaScores = ['음운 인식', '짧은 글', '유창성'].map((title, index) => {
+    const area = scores.slice(index * 3, index * 3 + 3)
+    return {
+      trackCode: ['PHONOLOGICAL_AWARENESS', 'SHORT_TEXT', 'FLUENCY'][index]!,
+      title,
+      score:
+        area.length === 0
+          ? null
+          : Math.round((area.reduce((sum, value) => sum + value, 0) / area.length) * 10) / 10,
+      completedQuestions: area.length,
+      totalQuestions: 3,
+    }
+  })
+  const gazeValues = questionResults
+    .map((question) => question.gazeDepartureCount)
+    .filter((value): value is number => value !== null)
+  const pronunciationValues = questionResults
+    .map((question) => question.pronunciationScore)
+    .filter((value): value is number => value !== null)
+  return {
+    testCurriculumId: id,
+    status: 'COMPLETED',
+    createdAt: completedAt,
+    completedAt,
+    completedQuestions: scores.length,
+    totalQuestions: scores.length,
+    overallScore,
+    areaScores,
+    solvingTimeSeconds: questionResults.reduce(
+      (sum, question) => sum + (question.solvingTimeSeconds ?? 0),
+      0,
+    ),
+    gazeDepartureCount: gazeValues.reduce((sum, value) => sum + value, 0),
+    pronunciationScore:
+      pronunciationValues.length === 0
+        ? null
+        : Math.round(
+            (pronunciationValues.reduce((sum, value) => sum + value, 0) /
+              pronunciationValues.length) *
+              10,
+          ) / 10,
+    questions: questionResults,
+    recommendationStatus: dailyCurriculumId === null ? 'PENDING' : 'COMPLETED',
+    recommendationError: null,
+    recommendationLastAttemptAt: completedAt,
+    recommendationRetryCount: 0,
+    dailyCurriculumId,
+    contentGenerationStatus: null,
+    teacherReviewStatus: null,
+  }
 }
 
 export const testDetailFixtures: readonly TestDetail[] = [
-  {
-    testId: 1_011,
-    date: '2026-07-24',
-    readingTimeSeconds: 92,
-    solvingTimeSeconds: 168,
-    accuracy: 86,
-    gazeDepartureCount: 2,
-    questions: [
-      {
-        questionNumber: 1,
-        question: '글의 중심 생각으로 알맞은 것은 무엇인가요?',
-        isCorrect: true,
-        correctAnswer: '친구를 배려하는 마음',
-        selectedAnswer: '친구를 배려하는 마음',
-      },
-      {
-        questionNumber: 2,
-        question: '주인공이 마지막에 한 행동은 무엇인가요?',
-        isCorrect: false,
-        correctAnswer: '친구에게 우산을 건넸다',
-        selectedAnswer: '혼자 집으로 돌아갔다',
-      },
-      {
-        questionNumber: 3,
-        question: null,
-        isCorrect: null,
-        correctAnswer: null,
-        selectedAnswer: null,
-      },
-    ],
-  },
-  {
-    testId: 1_008,
-    date: '2026-06-28',
-    readingTimeSeconds: 110,
-    solvingTimeSeconds: 185,
-    accuracy: 78,
-    gazeDepartureCount: 5,
-    questions: [
-      {
-        questionNumber: 1,
-        question: '글의 중심 생각으로 알맞은 것은 무엇인가요?',
-        isCorrect: true,
-        correctAnswer: '친구를 배려하는 마음',
-        selectedAnswer: '친구를 배려하는 마음',
-      },
-    ],
-  },
-  {
-    testId: 1_005,
-    date: '2026-05-30',
-    readingTimeSeconds: 132,
-    solvingTimeSeconds: 210,
-    accuracy: 70,
-    gazeDepartureCount: 8,
-    questions: [],
-  },
-  {
-    testId: 1_004,
-    date: '2026-05-30',
-    readingTimeSeconds: 0,
-    solvingTimeSeconds: 0,
-    accuracy: 0,
-    gazeDepartureCount: 0,
-    questions: [],
-  },
-  {
-    testId: 2_001,
-    date: '2026-07-18',
-    readingTimeSeconds: 105,
-    solvingTimeSeconds: 175,
-    accuracy: 82,
-    gazeDepartureCount: null,
-    questions: [],
-  },
-  {
-    testId: 4_002,
-    date: '2026-07-10',
-    readingTimeSeconds: null,
-    solvingTimeSeconds: null,
-    accuracy: null,
-    gazeDepartureCount: null,
-    questions: [],
-  },
-  {
-    testId: 4_001,
-    date: '2026-06-12',
-    readingTimeSeconds: 145,
-    solvingTimeSeconds: 230,
-    accuracy: 69,
-    gazeDepartureCount: 4,
-    questions: [],
-  },
-  {
-    testId: 5_001,
-    date: '2026-07-18',
-    readingTimeSeconds: 80,
-    solvingTimeSeconds: 140,
-    accuracy: 92,
-    gazeDepartureCount: 1,
-    questions: [],
-  },
+  detail(1_011, '2026-07-24T10:30:00', 86, [100, 80, 80, 100, 60, 80, 90, 80, 84], 201),
+  detail(1_008, '2026-06-28T11:20:00', 78, [80, 80, 70, 80, 70, 80, 90, 70, 82], 189),
+  detail(1_005, '2026-05-30T09:10:00', 70, [60, 70, 80, 70, 60, 80, 70, 70, 70]),
+  detail(1_004, '2026-04-30T09:00:00', 0, [0, 0, 0, 0, 0, 0, 0, 0, 0]),
+  detail(2_001, '2026-07-18T13:00:00', 82, [80, 80, 90, 80, 80, 80, 90, 80, 78]),
 ]
+
+function listItem(item: TestDetail): TestListItem {
+  const {
+    testCurriculumId,
+    status,
+    createdAt,
+    completedAt,
+    completedQuestions,
+    totalQuestions,
+    overallScore,
+  } = item
+  return {
+    testCurriculumId,
+    status,
+    createdAt,
+    completedAt,
+    completedQuestions,
+    totalQuestions,
+    overallScore,
+  }
+}
+
+export const testListFixtures: Readonly<Record<number, readonly TestListItem[]>> = {
+  1: testDetailFixtures.slice(0, 4).map(listItem),
+  2: [listItem(testDetailFixtures[4]!)],
+  3: [],
+}

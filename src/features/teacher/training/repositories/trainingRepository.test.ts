@@ -13,6 +13,7 @@ function api(overrides: Partial<TrainingApi> = {}): TrainingApi {
     createCurriculum: vi.fn(),
     getCurriculum: vi.fn(),
     updateCurriculum: vi.fn(),
+    completeCurriculumReview: vi.fn(),
     generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
     getTrainingDetail: vi.fn(),
     getLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
@@ -89,26 +90,26 @@ describe('ApiTrainingRepository', () => {
     await expect(invalidRepository.getGazeAnalysis(1, 10)).rejects.toBe(trainingNotFound)
   })
 
-  it('PATCH 성공 후 현재 커리큘럼을 재조회하고 재조회 실패를 구분한다', async () => {
+  it('PATCH 성공 후 같은 커리큘럼을 재조회하고 재조회 실패를 구분한다', async () => {
     const updated = {
       curriculumId: 10,
       status: 'NOT_STARTED' as const,
       trainings: [],
     }
     const updateCurriculum = vi.fn().mockResolvedValue(undefined)
-    const getCurrentCurriculum = vi.fn().mockResolvedValue(updated)
-    const repository = new ApiTrainingRepository(api({ updateCurriculum, getCurrentCurriculum }))
+    const getCurriculum = vi.fn().mockResolvedValue(updated)
+    const repository = new ApiTrainingRepository(api({ updateCurriculum, getCurriculum }))
     const request = { trainingTemplateIds: [11, 12, 13, 14, 11] }
 
     await expect(repository.updateCurriculum(1, 10, request)).resolves.toBe(updated)
     expect(updateCurriculum).toHaveBeenCalledWith(1, 10, request)
-    expect(getCurrentCurriculum).toHaveBeenCalledWith(1, {})
+    expect(getCurriculum).toHaveBeenCalledWith(1, 10, {})
 
     const refreshError = new Error('refresh failed')
     const failedRepository = new ApiTrainingRepository(
       api({
         updateCurriculum,
-        getCurrentCurriculum: vi.fn().mockRejectedValue(refreshError),
+        getCurriculum: vi.fn().mockRejectedValue(refreshError),
       }),
     )
     await expect(failedRepository.updateCurriculum(1, 10, request)).rejects.toMatchObject({
@@ -249,6 +250,32 @@ describe('Training API target contract', () => {
     expect(request).toHaveBeenNthCalledWith(2, '/api/admin/training/1/10', {
       method: 'PATCH',
       body: JSON.stringify({ trainingTemplateIds: [14, 13, 12, 11, 11] }),
+    })
+  })
+
+  it('추천 출처와 검수 상태를 보존하고 최종 검수 API를 호출한다', async () => {
+    const curriculum = {
+      curriculumId: 201,
+      status: 'NOT_STARTED' as const,
+      sourceTestCurriculumId: 1_011,
+      reviewStatus: 'REVIEW_REQUIRED' as const,
+      reviewedByTeacherId: null,
+      reviewedAt: null,
+      trainings: [],
+    }
+    const reviewed = {
+      curriculumId: 201,
+      reviewStatus: 'REVIEW_COMPLETED' as const,
+      reviewedByTeacherId: 7,
+      reviewedAt: '2026-08-01T19:00:00',
+    }
+    const request = vi.fn().mockResolvedValueOnce(curriculum).mockResolvedValueOnce(reviewed)
+    const trainingApi = createTrainingApi(request)
+
+    await expect(trainingApi.getCurriculum(1, 201)).resolves.toMatchObject(curriculum)
+    await expect(trainingApi.completeCurriculumReview(1, 201)).resolves.toEqual(reviewed)
+    expect(request).toHaveBeenNthCalledWith(2, '/api/admin/training/1/201/review-complete', {
+      method: 'POST',
     })
   })
 

@@ -1,5 +1,6 @@
 import type {
   CurriculumLog,
+  CurriculumReviewResult,
   CurriculumTrainingLog,
   DailyCurriculum,
   GeneratedTrainingData,
@@ -87,6 +88,10 @@ export interface TrainingRepository {
     curriculumId: number,
     request: SaveCurriculumRequest,
   ) => Promise<DailyCurriculum>
+  readonly completeCurriculumReview: (
+    studentId: number,
+    curriculumId: number,
+  ) => Promise<CurriculumReviewResult>
   readonly generateTraining: (
     studentId: number,
     trainingId: number,

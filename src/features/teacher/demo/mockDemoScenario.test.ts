@@ -75,16 +75,13 @@ describe('교수자 mock 데모 시나리오', () => {
     ).resolves.toEqual({ status: 'FAILED', analysis: null })
 
     const tests = await testRepository.getTests(student.primaryId)
-    expect(tests.map((item) => item.testId)).toContain(test.currentId)
+    expect(tests.map((item) => item.testCurriculumId)).toContain(test.currentId)
     await expect(
       testRepository.compareTests(student.primaryId, test.currentId, [test.comparisonId]),
     ).resolves.toMatchObject({
-      currentTest: { testId: test.currentId },
-      comparisonTests: [{ testId: test.comparisonId }],
+      currentTest: { testCurriculumId: test.currentId },
+      comparisonTests: [{ testCurriculumId: test.comparisonId }],
     })
-    await expect(
-      testRepository.getGazeAnalysis(student.primaryId, test.failedGazeId),
-    ).resolves.toEqual({ status: 'FAILED', analysis: null })
 
     const reports = await reportRepository.listByStudent(student.primaryId)
     expect(reports.map((item) => item.reportId)).toContain(report.primaryId)

@@ -110,6 +110,7 @@ export const useTrainingStore = defineStore('training', () => {
   const lessonMaterialEditingTrainingId = ref<number | null>(null)
   const lessonMaterialHasLocalChanges = ref(false)
   const materialGenerationStatus = ref<TrainingRequestStatus>('idle')
+  const reviewCompletionStatus = ref<TrainingRequestStatus>('idle')
   const curriculumSynchronizationStatus = ref<CurriculumSynchronizationStatus>('refreshing')
   const isSavingCurriculum = ref(false)
   const curriculumSaveConflict = ref(false)
@@ -121,6 +122,8 @@ export const useTrainingStore = defineStore('training', () => {
   const lessonMaterialError = ref<string | null>(null)
   const lessonMaterialSaveError = ref<string | null>(null)
   const materialGenerationError = ref<string | null>(null)
+  const reviewCompletionError = ref<string | null>(null)
+  const requestedCurriculumId = ref<number | null>(null)
 
   const historyStudentId = ref<number | null>(null)
   const period = ref<TrainingPeriod>('30d')
@@ -203,6 +206,20 @@ export const useTrainingStore = defineStore('training', () => {
       !curriculumSaveConflict.value &&
       (savedCurriculum.value === null || savedCurriculum.value.status === 'NOT_STARTED'),
   )
+  const canCompleteReview = computed(
+    () =>
+      savedCurriculum.value?.sourceTestCurriculumId != null &&
+      savedCurriculum.value.reviewStatus === 'REVIEW_REQUIRED' &&
+      savedCurriculum.value.status === 'NOT_STARTED' &&
+      curriculumSynchronizationStatus.value === 'synced' &&
+      !hasChanges.value &&
+      !lessonMaterialHasLocalChanges.value &&
+      !isSavingCurriculum.value &&
+      !isSavingLessonMaterial.value &&
+      materialGenerationStatus.value !== 'loading' &&
+      reviewCompletionStatus.value !== 'loading' &&
+      curriculumStatus.value === 'success',
+  )
   const requiresMaterialRegeneration = computed(
     () => selectedTrainingDetail.value?.status === 'NOT_READY',
   )
@@ -256,6 +273,7 @@ export const useTrainingStore = defineStore('training', () => {
     lessonMaterialEditingTrainingId.value = null
     lessonMaterialHasLocalChanges.value = false
     materialGenerationStatus.value = 'idle'
+    reviewCompletionStatus.value = 'idle'
     curriculumSynchronizationStatus.value = 'refreshing'
     isSavingCurriculum.value = false
     curriculumSaveConflict.value = false
@@ -267,9 +285,20 @@ export const useTrainingStore = defineStore('training', () => {
     lessonMaterialError.value = null
     lessonMaterialSaveError.value = null
     materialGenerationError.value = null
+    reviewCompletionError.value = null
   }
 
-  async function loadForStudent(studentId: number): Promise<void> {
+  function getRequestedCurriculum(
+    studentId: number,
+    options?: Parameters<TrainingRepository['getCurriculum']>[2],
+  ) {
+    const curriculumId = requestedCurriculumId.value
+    return curriculumId === null
+      ? repository.value.getCurrentCurriculum(studentId, options)
+      : repository.value.getCurriculum(studentId, curriculumId, options)
+  }
+
+  async function loadForStudent(studentId: number, curriculumId: number | null = null): Promise<void> {
     loadController?.abort()
     synchronizationController?.abort()
     synchronizationController = null
@@ -278,6 +307,7 @@ export const useTrainingStore = defineStore('training', () => {
     loadController = controller
     const generation = ++loadGeneration
     resourceGeneration += 1
+    requestedCurriculumId.value = curriculumId
     clearStudentState(studentId)
 
     const catalogRequest = repository.value
@@ -294,8 +324,7 @@ export const useTrainingStore = defineStore('training', () => {
         catalogError.value = errorMessage(error, '전체 훈련 목록을 불러오지 못했습니다.')
       })
 
-    const curriculumRequest = repository.value
-      .getCurrentCurriculum(studentId, { signal: controller.signal })
+    const curriculumRequest = getRequestedCurriculum(studentId, { signal: controller.signal })
       .then((curriculum) => {
         if (generation !== loadGeneration) return
         savedCurriculum.value = curriculum
@@ -468,7 +497,7 @@ export const useTrainingStore = defineStore('training', () => {
     isRefreshingCurriculumConflict.value = true
     curriculumError.value = null
     try {
-      const curriculum = await repository.value.getCurrentCurriculum(studentId, {
+      const curriculum = await getRequestedCurriculum(studentId, {
         signal: controller.signal,
       })
       if (generation !== loadGeneration || currentStudentId.value !== studentId) return false
@@ -517,7 +546,7 @@ export const useTrainingStore = defineStore('training', () => {
     curriculumSynchronizationStatus.value = 'refreshing'
     curriculumError.value = null
     try {
-      const curriculum = await repository.value.getCurrentCurriculum(studentId, {
+      const curriculum = await getRequestedCurriculum(studentId, {
         signal: controller.signal,
       })
       if (generation !== loadGeneration || currentStudentId.value !== studentId) return false
@@ -695,6 +724,8 @@ export const useTrainingStore = defineStore('training', () => {
     trainingId: number,
   ): Promise<boolean> {
     if (currentStudentId.value !== studentId) return true
+    const curriculumId = savedCurriculum.value?.curriculumId ?? requestedCurriculumId.value
+    if (curriculumId === null) return false
 
     const selectedId = selectedTrainingId.value
     const hadCurriculumChanges = hasChanges.value
@@ -703,7 +734,7 @@ export const useTrainingStore = defineStore('training', () => {
 
     requests.push(
       repository.value
-        .getCurrentCurriculum(studentId)
+        .getCurriculum(studentId, curriculumId)
         .then((curriculum) => {
           if (currentStudentId.value !== studentId) return
           savedCurriculum.value = curriculum
@@ -714,6 +745,7 @@ export const useTrainingStore = defineStore('training', () => {
         .catch((error: unknown) => {
           succeeded = false
           curriculumStatus.value = 'error'
+          curriculumSynchronizationStatus.value = 'required'
           curriculumError.value = errorMessage(error, '최신 커리큘럼을 불러오지 못했습니다.')
         }),
     )
@@ -793,7 +825,7 @@ export const useTrainingStore = defineStore('training', () => {
           },
         }
       }
-      await loadSelectedTrainingResources(studentId, trainingId)
+      await handleLessonMaterialContentUpdated(studentId, trainingId)
       materialGenerationStatus.value = 'success'
       return true
     } catch (error) {
@@ -835,6 +867,7 @@ export const useTrainingStore = defineStore('training', () => {
       lessonMaterialRemoteChange.value = false
       lessonMaterialRemoteRevision.value = null
       lessonMaterialHasLocalChanges.value = false
+      await handleLessonMaterialContentUpdated(studentId, trainingId)
       return true
     } catch (error) {
       lessonMaterialSaveStatus.value = 'error'
@@ -868,6 +901,63 @@ export const useTrainingStore = defineStore('training', () => {
       return false
     } finally {
       isSavingLessonMaterial.value = false
+    }
+  }
+
+  async function completeCurriculumReview(): Promise<boolean> {
+    const studentId = currentStudentId.value
+    const curriculum = savedCurriculum.value
+    if (studentId === null || curriculum === null || !canCompleteReview.value) return false
+
+    reviewCompletionStatus.value = 'loading'
+    reviewCompletionError.value = null
+    let reviewCompleted = false
+    try {
+      const result = await repository.value.completeCurriculumReview(
+        studentId,
+        curriculum.curriculumId,
+      )
+      reviewCompleted = true
+      if (
+        currentStudentId.value !== studentId ||
+        savedCurriculum.value?.curriculumId !== curriculum.curriculumId
+      ) {
+        return false
+      }
+      savedCurriculum.value = {
+        ...savedCurriculum.value,
+        reviewStatus: result.reviewStatus,
+        reviewedByTeacherId: result.reviewedByTeacherId,
+        reviewedAt: result.reviewedAt,
+      }
+      const latest = await repository.value.getCurriculum(studentId, curriculum.curriculumId)
+      if (
+        currentStudentId.value !== studentId ||
+        savedCurriculum.value?.curriculumId !== curriculum.curriculumId
+      ) {
+        return false
+      }
+      savedCurriculum.value = latest
+      replaceDraftFromSaved(selectedTrainingId.value)
+      reviewCompletionStatus.value = 'success'
+      return true
+    } catch (error) {
+      reviewCompletionStatus.value = 'error'
+      if (reviewCompleted) {
+        curriculumSynchronizationStatus.value = 'required'
+        reviewCompletionError.value =
+          '최종 검수는 완료됐지만 최신 상태를 불러오지 못했습니다. 최신 내용을 다시 확인해 주세요.'
+      } else if (isApiError(error) && error.status === 403) {
+        reviewCompletionError.value = '이 학습자의 추천 커리큘럼을 검수할 권한이 없습니다.'
+      } else if (isApiError(error) && error.status === 404) {
+        reviewCompletionError.value = '추천 커리큘럼을 찾을 수 없습니다.'
+      } else if (isApiError(error) && error.status === 409) {
+        reviewCompletionError.value =
+          '서버의 커리큘럼 상태가 변경되었습니다. 최신 내용을 다시 불러온 뒤 검수해 주세요.'
+      } else {
+        reviewCompletionError.value = errorMessage(error, '최종 검수를 완료하지 못했습니다.')
+      }
+      return false
     }
   }
 
@@ -1230,6 +1320,7 @@ export const useTrainingStore = defineStore('training', () => {
     lessonMaterialEditingTrainingId.value = null
     lessonMaterialHasLocalChanges.value = false
     materialGenerationStatus.value = 'idle'
+    reviewCompletionStatus.value = 'idle'
     curriculumSynchronizationStatus.value = 'refreshing'
     isSavingCurriculum.value = false
     curriculumSaveConflict.value = false
@@ -1241,6 +1332,8 @@ export const useTrainingStore = defineStore('training', () => {
     lessonMaterialError.value = null
     lessonMaterialSaveError.value = null
     materialGenerationError.value = null
+    reviewCompletionError.value = null
+    requestedCurriculumId.value = null
     historyStudentId.value = null
     period.value = '30d'
     curriculumLogs.value = []
@@ -1292,6 +1385,7 @@ export const useTrainingStore = defineStore('training', () => {
     lessonMaterialEditingTrainingId,
     lessonMaterialHasLocalChanges,
     materialGenerationStatus,
+    reviewCompletionStatus,
     curriculumSynchronizationStatus,
     isSavingCurriculum,
     curriculumSaveConflict,
@@ -1303,8 +1397,10 @@ export const useTrainingStore = defineStore('training', () => {
     lessonMaterialError,
     lessonMaterialSaveError,
     materialGenerationError,
+    reviewCompletionError,
     hasChanges,
     canEditCurriculum,
+    canCompleteReview,
     requiresMaterialRegeneration,
     historyStudentId,
     period,
@@ -1348,6 +1444,7 @@ export const useTrainingStore = defineStore('training', () => {
     handleLessonMaterialContentUpdated,
     regenerateSelectedTraining,
     saveSelectedLessonMaterial,
+    completeCurriculumReview,
     loadHistoryForStudent,
     setHistoryPeriod,
     retryHistory,

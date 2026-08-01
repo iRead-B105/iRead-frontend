@@ -143,6 +143,10 @@ export class MockTrainingRepository implements TrainingRepository {
     const curriculum: DailyCurriculum = {
       curriculumId: this.nextCurriculumId++,
       status: 'NOT_STARTED',
+      sourceTestCurriculumId: null,
+      reviewStatus: 'NOT_REQUIRED',
+      reviewedByTeacherId: null,
+      reviewedAt: null,
       trainings: this.materializeTrainings([], request.trainingTemplateIds),
     }
     this.curricula.set(studentId, curriculum)
@@ -183,9 +187,56 @@ export class MockTrainingRepository implements TrainingRepository {
         this.lessonMaterials.delete(training.trainingId)
       }
     }
-    const updated: DailyCurriculum = { ...current, trainings }
+    const updated: DailyCurriculum = {
+      ...current,
+      reviewStatus:
+        current.sourceTestCurriculumId == null ? 'NOT_REQUIRED' : 'REGENERATION_REQUIRED',
+      reviewedByTeacherId: null,
+      reviewedAt: null,
+      trainings,
+    }
     this.curricula.set(studentId, updated)
     return clone(updated)
+  }
+
+  async completeCurriculumReview(studentId: number, curriculumId: number) {
+    const current = await this.getCurriculum(studentId, curriculumId)
+    if (current.sourceTestCurriculumId == null) {
+      throw new ApiError({
+        status: 409,
+        code: 'CURRICULUM_REVIEW_NOT_REQUIRED',
+        message: '실력 도전 추천 커리큘럼만 최종 검수할 수 있습니다.',
+      })
+    }
+    if (current.reviewStatus === 'REVIEW_COMPLETED') {
+      return {
+        curriculumId,
+        reviewStatus: 'REVIEW_COMPLETED' as const,
+        reviewedByTeacherId: current.reviewedByTeacherId ?? 1,
+        reviewedAt: current.reviewedAt ?? new Date().toISOString(),
+      }
+    }
+    if (current.reviewStatus !== 'REVIEW_REQUIRED') {
+      throw new ApiError({
+        status: 409,
+        code: 'CURRICULUM_NOT_REVIEWABLE',
+        message: '모든 추천 교안이 준비된 뒤 최종 검수할 수 있습니다.',
+      })
+    }
+    const reviewedAt = new Date().toISOString()
+    const updated: DailyCurriculum = {
+      ...current,
+      reviewStatus: 'REVIEW_COMPLETED',
+      reviewedByTeacherId: 1,
+      reviewedAt,
+    }
+    this.curricula.set(studentId, updated)
+    return {
+      curriculumId,
+      reviewStatus: 'REVIEW_COMPLETED' as const,
+      reviewedByTeacherId: 1,
+      reviewedAt,
+    }
   }
 
   async generateTraining(studentId: number, trainingId: number): Promise<GeneratedTrainingData> {
