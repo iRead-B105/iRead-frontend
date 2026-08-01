@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatTestChange,
+  formatTestAnswer,
   formatTestPercent,
   formatTestScore,
   formatTestSeconds,
@@ -14,6 +15,13 @@ describe('test presenters', () => {
     expect(formatTestPercent(0)).toBe('0%')
     expect(formatTestSeconds(null)).toBe('-')
     expect(formatTestSeconds(0)).toBe('0초')
+  })
+
+  it('선택형·배열·객체 제출 결과를 손실 없이 읽을 수 있는 문자열로 표시한다', () => {
+    expect(formatTestAnswer(null)).toBe('-')
+    expect(formatTestAnswer(0)).toBe('0')
+    expect(formatTestAnswer(['ㄱ', 'ㅏ'])).toBe('ㄱ, ㅏ')
+    expect(formatTestAnswer({ transcript: '나비' })).toBe('{"transcript":"나비"}')
   })
 
   it('서버 변화량을 그대로 표시하고 null에서는 비교 없음으로 표시한다', () => {

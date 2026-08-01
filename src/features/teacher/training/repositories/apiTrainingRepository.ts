@@ -57,14 +57,14 @@ export class ApiTrainingRepository implements TrainingRepository {
     assertSaveCurriculumRequest(request)
     await this.api.updateCurriculum(studentId, curriculumId, request)
     try {
-      const curriculum = await this.getCurrentCurriculum(studentId)
-      if (curriculum === null) {
-        throw new Error('저장된 현재 커리큘럼을 찾을 수 없습니다.')
-      }
-      return curriculum
+      return await this.getCurriculum(studentId, curriculumId)
     } catch (error) {
       throw new CurriculumSynchronizationError(error)
     }
+  }
+
+  completeCurriculumReview(studentId: number, curriculumId: number) {
+    return this.api.completeCurriculumReview(studentId, curriculumId)
   }
 
   generateTraining(studentId: number, trainingId: number) {

@@ -1,244 +1,150 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
-import { createTestApi, type TestApi } from '../api'
+import { createTestApi } from '../api'
 import { ApiTestRepository } from './apiTestRepository'
 import { MockTestRepository } from './mockTestRepository'
-import { assertTestComparisonSelection, type TestRepository } from './testRepository'
+import { assertTestComparisonSelection } from './testRepository'
+
+function detailDto(id = 11) {
+  return {
+    testCurriculumId: id,
+    status: 'COMPLETED',
+    createdAt: '2026-07-24T10:00:00',
+    completedAt: '2026-07-24T10:30:00',
+    completedQuestions: 9,
+    totalQuestions: 9,
+    overallScore: 0,
+    areaScores: [
+      {
+        trackCode: 'PHONOLOGICAL_AWARENESS',
+        title: '음운 인식',
+        score: 0,
+        completedQuestions: 3,
+        totalQuestions: 3,
+      },
+    ],
+    solvingTimeSeconds: 0,
+    questions: [
+      {
+        testId: 102,
+        sequenceNo: 2,
+        trackCode: 'PHONOLOGICAL_AWARENESS',
+        questionType: 'VOICE',
+        question: '둘째 문항',
+        responseType: 'VOICE',
+        selectedAnswer: { transcript: '나비' },
+        correctAnswer: '나비',
+        correct: true,
+        score: 0,
+        pronunciationScore: 0,
+        solvingTimeSeconds: 0,
+        gazeDepartureCount: 0,
+      },
+      {
+        testId: 101,
+        sequenceNo: 1,
+        trackCode: 'PHONOLOGICAL_AWARENESS',
+        questionType: 'SINGLE_CHOICE',
+        question: '첫째 문항',
+        responseType: 'SINGLE_CHOICE',
+        selectedAnswer: null,
+        correctAnswer: ['가', '나'],
+        correct: null,
+        score: null,
+        pronunciationScore: null,
+        solvingTimeSeconds: null,
+        gazeDepartureCount: null,
+      },
+    ],
+    recommendationStatus: 'COMPLETED',
+    recommendationRetryCount: 0,
+    dailyCurriculumId: 201,
+  }
+}
 
 describe('Test API', () => {
-  it('Backend 관리자 응답의 questions가 비어 있으면 Web도 빈 문항 목록을 유지한다', async () => {
+  it('검사 목록을 testCurriculumId 단위로 최신 완료 시각순 정렬한다', async () => {
     const request = vi.fn().mockResolvedValue({
-      currentTest: {
-        testId: 11,
-        date: '2026-07-24',
-        questions: [],
-      },
-      comparisonTests: [],
-    })
-    const api = createTestApi(request)
-
-    const result = await api.compareTests(1, 11, [])
-
-    expect(result.currentTest.testId).toBe(11)
-    expect(result.currentTest.questions).toEqual([])
-  })
-
-  it('비교 검사가 0건이면 comparisonTestIds query를 생략한다', async () => {
-    const request = vi.fn().mockResolvedValue({
-      currentTest: {
-        testId: 11,
-        date: '2026-07-24',
-        readingTimeSeconds: 0,
-        solvingTimeSeconds: null,
-        accuracy: 0,
-        gazeDepartureCount: 0,
-        questions: [],
-      },
-      comparisonTests: [],
-    })
-    const api = createTestApi(request)
-
-    const result = await api.compareTests(1, 11, [])
-
-    expect(request).toHaveBeenCalledWith('/api/admin/test/1/compare?currentTestId=11', {})
-    expect(result.currentTest).toMatchObject({
-      readingTimeSeconds: 0,
-      solvingTimeSeconds: null,
-      accuracy: 0,
-      gazeDepartureCount: 0,
-    })
-  })
-
-  it('비교 검사 ID를 선택 순서대로 반복 query에 추가한다', async () => {
-    const request = vi.fn().mockResolvedValue({
-      currentTest: { testId: 11, date: '2026-07-24' },
-      comparisonTests: [],
-    })
-    const api = createTestApi(request)
-
-    await api.compareTests(1, 11, [9, 7])
-
-    expect(request).toHaveBeenCalledWith(
-      '/api/admin/test/1/compare?currentTestId=11&comparisonTestIds=9&comparisonTestIds=7',
-      {},
-    )
-  })
-
-  it('완료 검사 목록을 날짜와 testId 기준으로 안정 정렬한다', async () => {
-    const request = vi.fn().mockResolvedValue({
-      testHistory: [
-        { testId: 2, date: '2026-06-01' },
-        { testId: 1, date: '2026-07-01' },
-        { testId: 3, date: '2026-07-01' },
+      curriculums: [
+        { ...detailDto(2), completedAt: '2026-06-01T10:00:00' },
+        { ...detailDto(1), completedAt: '2026-07-01T10:00:00' },
+        { ...detailDto(3), completedAt: '2026-07-01T10:00:00' },
       ],
     })
     const api = createTestApi(request)
 
-    await expect(api.getTests(1)).resolves.toEqual([
-      { testId: 3, date: '2026-07-01' },
-      { testId: 1, date: '2026-07-01' },
-      { testId: 2, date: '2026-06-01' },
-    ])
+    const result = await api.getTests(7)
+
+    expect(request).toHaveBeenCalledWith('/api/admin/test/7/curriculums', {})
+    expect(result.map((item) => item.testCurriculumId)).toEqual([3, 1, 2])
   })
 
-  it('완료 검사가 없으면 빈 testHistory를 빈 목록으로 반환한다', async () => {
-    const request = vi.fn().mockResolvedValue({ testHistory: [] })
+  it('상세 9문항 계약을 순서대로 변환하고 null과 실제 0을 유지한다', async () => {
+    const request = vi.fn().mockResolvedValue(detailDto())
     const api = createTestApi(request)
 
-    await expect(api.getTests(1)).resolves.toEqual([])
+    const result = await api.getTest(7, 11)
+
+    expect(request).toHaveBeenCalledWith('/api/admin/test/7/curriculums/11', {})
+    expect(result.questions.map((question) => question.sequenceNo)).toEqual([1, 2])
+    expect(result.questions[0]).toMatchObject({ score: null, gazeDepartureCount: null })
+    expect(result.questions[1]).toMatchObject({ score: 0, gazeDepartureCount: 0 })
+    expect(result.overallScore).toBe(0)
+    expect(result.solvingTimeSeconds).toBe(0)
   })
 
-  it('실제 gazeDepartureCount를 ViewModel로 변환하고 null과 0을 구분한다', async () => {
-    const request = vi.fn().mockResolvedValue({
-      currentTest: {
-        testId: 11,
-        date: '2026-07-24',
-        gazeDepartureCount: 0,
-      },
-      comparisonTests: [{ testId: 9, date: '2026-06-24', gazeDepartureCount: null }],
-    })
-    const api = createTestApi(request)
+  it('문항별 시선 이탈은 측정된 값만 합하고 발음 점수는 측정 문항만 평균낸다', async () => {
+    const request = vi.fn().mockResolvedValue(detailDto())
+    const result = await createTestApi(request).getTest(7, 11)
 
-    const result = await api.compareTests(1, 11, [9])
-
-    expect(result.currentTest.gazeDepartureCount).toBe(0)
-    expect(result.comparisonTests[0]?.gazeDepartureCount).toBeNull()
-  })
-
-  it('실제 studentId와 testId로 시선 분석 상태를 조회한다', async () => {
-    const request = vi.fn().mockResolvedValue({
-      gazeSessionId: 61,
-      gazeAnalysisId: 71,
-      totalDwellTime: 1_500,
-      dwellCount: 4,
-      regressionCount: 1,
-      averageFixationTime: null,
-    })
-    const api = createTestApi(request)
-
-    await expect(api.getGazeAnalysis(3, 1011)).resolves.toMatchObject({
-      status: 'AVAILABLE',
-      analysis: { avgVisitedDurationMs: null },
-    })
-    expect(request).toHaveBeenCalledWith('/api/admin/test/3/1011/gaze-analysis', {})
+    expect(result.gazeDepartureCount).toBe(0)
+    expect(result.pronunciationScore).toBe(0)
   })
 })
 
 describe('Test Repository', () => {
-  it('시선 분석 결과 없음 404만 NO_DATA로 변환한다', async () => {
-    const testApi = (error: ApiError): TestApi => ({
-      getTests: vi.fn().mockResolvedValue([]),
-      compareTests: vi.fn(),
-      getGazeAnalysis: vi.fn().mockRejectedValue(error),
-    })
-    const noAnalysis = new ApiError({
-      status: 404,
-      code: 'RESOURCE_NOT_FOUND',
-      message: '시선 분석 결과를 찾을 수 없습니다.',
-    })
-    const noAnalysisRepository = new ApiTestRepository(testApi(noAnalysis))
-
-    await expect(noAnalysisRepository.getGazeAnalysis(1, 11)).resolves.toEqual({
-      status: 'NO_DATA',
-      analysis: null,
-    })
-
-    const testNotFound = new ApiError({
-      status: 404,
-      code: 'RESOURCE_NOT_FOUND',
-      message: '테스트를 찾을 수 없습니다.',
-    })
-    const invalidRepository = new ApiTestRepository(testApi(testNotFound))
-    await expect(invalidRepository.getGazeAnalysis(1, 11)).rejects.toBe(testNotFound)
-  })
-
-  it('Mock에서 최신 검사를 기본 목록 첫 항목으로 제공하고 단일 상세를 반환한다', async () => {
+  it('비교할 검사 커리큘럼 상세을 각각 현재 상세 API로 조회한다', async () => {
     const repository = new MockTestRepository()
+    const compare = await repository.compareTests(1, 1_011, [1_008, 1_005])
 
-    const tests = await repository.getTests(1)
-    const comparison = await repository.compareTests(1, tests[0]!.testId, [])
-
-    expect(tests.map((test) => test.testId)).toEqual([1_011, 1_008, 1_005, 1_004])
-    expect(comparison.currentTest.testId).toBe(1_011)
-    expect(comparison.comparisonTests).toEqual([])
+    expect(compare.currentTest.testCurriculumId).toBe(1_011)
+    expect(compare.comparisonTests.map((item) => item.testCurriculumId)).toEqual([1_008, 1_005])
   })
 
-  it('비교 검사 순서를 유지하고 null과 0을 구분한다', async () => {
-    const repository = new MockTestRepository()
+  it('Api Repository가 현재·비교 상세의 요청 순서를 유지한다', async () => {
+    const getTest = vi.fn().mockImplementation((_studentId: number, id: number) =>
+      Promise.resolve({
+        ...detailDto(id),
+        areaScores: [],
+        gazeDepartureCount: 0,
+        pronunciationScore: 0,
+      }),
+    )
+    const repository = new ApiTestRepository({ getTests: vi.fn(), getTest })
 
-    const comparison = await repository.compareTests(1, 1_011, [1_004, 1_005])
+    const result = await repository.compareTests(1, 11, [9, 7])
 
-    expect(comparison.comparisonTests.map((test) => test.testId)).toEqual([1_004, 1_005])
-    expect(comparison.comparisonTests[0]).toMatchObject({
-      readingTimeSeconds: 0,
-      accuracy: 0,
-      gazeDepartureCount: 0,
-    })
-    expect(comparison.comparisonTests[1]?.gazeDepartureCount).toBe(8)
+    expect(getTest.mock.calls.map((call) => call[1])).toEqual([11, 9, 7])
+    expect(result.comparisonTests.map((item) => item.testCurriculumId)).toEqual([9, 7])
   })
 
-  it('기준 중복·비교 중복·세 번째 비교 검사를 Repository에서 차단한다', () => {
+  it('기준 중복·비교 중복·세 번째 비교 검사를 차단한다', () => {
     const cases: Array<readonly [readonly number[], string]> = [
       [[11], 'CURRENT_TEST_DUPLICATED'],
       [[9, 9], 'DUPLICATE_COMPARISON_TEST'],
       [[9, 8, 7], 'TOO_MANY_COMPARISON_TESTS'],
     ]
-
-    for (const [comparisonIds, code] of cases) {
-      try {
-        assertTestComparisonSelection(1, 11, comparisonIds)
-        throw new Error('오류가 발생해야 합니다.')
-      } catch (error) {
-        expect(error).toBeInstanceOf(ApiError)
-        expect((error as ApiError).code).toBe(code)
-      }
+    for (const [ids, code] of cases) {
+      expect(() => assertTestComparisonSelection(1, 11, ids)).toThrowError(
+        expect.objectContaining({ code }) as ApiError,
+      )
     }
   })
 
-  it('다른 학습자의 검사 ID는 404로 거부한다', async () => {
-    const repository: TestRepository = new MockTestRepository()
-
-    await expect(repository.compareTests(2, 1_011, [])).rejects.toMatchObject({
+  it('다른 학습자의 검사 커리큘럼 ID는 404로 거부한다', async () => {
+    await expect(new MockTestRepository().getTest(2, 1_011)).rejects.toMatchObject({
       status: 404,
-      code: 'TEST_NOT_FOUND',
-    })
-  })
-
-  it('검사별 AVAILABLE·NO_DATA·FAILED 시선 상태를 그대로 반환한다', async () => {
-    const repository = new MockTestRepository()
-
-    await expect(repository.getGazeAnalysis(1, 1_011)).resolves.toMatchObject({
-      status: 'AVAILABLE',
-    })
-    await expect(repository.getGazeAnalysis(1, 1_008)).resolves.toEqual({
-      status: 'NO_DATA',
-      analysis: null,
-    })
-    await expect(repository.getGazeAnalysis(1, 1_005)).resolves.toEqual({
-      status: 'FAILED',
-      analysis: null,
-    })
-    await expect(repository.getGazeAnalysis(2, 1_011)).rejects.toMatchObject({
-      status: 404,
-    })
-  })
-
-  it('Mock 부분 실패 Fixture로 상세·시선 요청 오류를 독립 재현한다', async () => {
-    const repository = new MockTestRepository({
-      failedDetailTestIds: [1_005],
-      failedGazeTestIds: [1_008],
-    })
-
-    await expect(repository.compareTests(1, 1_005, [])).rejects.toMatchObject({
-      status: 500,
-      code: 'MOCK_TEST_DETAIL_FAILURE',
-    })
-    await expect(repository.getGazeAnalysis(1, 1_008)).rejects.toMatchObject({
-      status: 500,
-      code: 'MOCK_TEST_GAZE_FAILURE',
-    })
-    await expect(repository.compareTests(1, 1_011, [])).resolves.toMatchObject({
-      currentTest: { testId: 1_011 },
+      code: 'TEST_CURRICULUM_NOT_FOUND',
     })
   })
 })

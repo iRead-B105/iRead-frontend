@@ -115,7 +115,7 @@ export function installTeacherRealtimeSync(pinia: Pinia, router: Router): () => 
         request = tests.loadForStudent(studentId)
         succeeded = () =>
           tests.listStatus === 'success' &&
-          hasResolvedWithoutError(tests.comparisonStatus, tests.trendStatus, tests.gazeStatus)
+          hasResolvedWithoutError(tests.comparisonStatus, tests.trendStatus)
         break
       case 'student-story-history':
         request = stories.loadList(studentId).then(() => {

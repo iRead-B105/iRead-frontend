@@ -22,6 +22,7 @@ function repository(overrides: Partial<TrainingRepository> = {}): TrainingReposi
     createCurriculum: vi.fn(),
     getCurriculum: vi.fn(),
     updateCurriculum: vi.fn().mockResolvedValue(currentCurriculumFixture),
+    completeCurriculumReview: vi.fn(),
     generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
     getTrainingDetail: vi.fn().mockResolvedValue(trainingDetailFixtures[0]),
     getLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
@@ -391,5 +392,98 @@ describe('StudentCurriculumView', () => {
     expect(store.draftItems.some((item) => item.key === target.key)).toBe(false)
     expect(wrapper.text()).toContain('2회 시행')
     expect(wrapper.text()).toContain('훈련을 3개 더 추가해 총 5개로 구성해야 합니다.')
+  })
+
+  it('검사 결과에서 지정한 추천 커리큘럼의 상태를 표시하고 최종 검수를 완료한다', async () => {
+    const recommended: DailyCurriculum = {
+      ...currentCurriculumFixture,
+      sourceTestCurriculumId: 1_011,
+      reviewStatus: 'REVIEW_REQUIRED',
+      trainings: currentCurriculumFixture.trainings.map((training) => ({
+        ...training,
+        status: 'NOT_STARTED' as const,
+      })),
+    }
+    const reviewed = {
+      ...recommended,
+      reviewStatus: 'REVIEW_COMPLETED' as const,
+      reviewedByTeacherId: 7,
+      reviewedAt: '2026-08-01T19:00:00',
+    }
+    const getCurriculum = vi
+      .fn()
+      .mockResolvedValueOnce(recommended)
+      .mockResolvedValueOnce(reviewed)
+    const completeCurriculumReview = vi.fn().mockResolvedValue({
+      curriculumId: 201,
+      reviewStatus: 'REVIEW_COMPLETED',
+      reviewedByTeacherId: 7,
+      reviewedAt: '2026-08-01T19:00:00',
+    })
+    const { wrapper } = await mountCurriculum(
+      repository({ getCurriculum, completeCurriculumReview }),
+      '/teacher/students/1/curriculum?curriculumId=201',
+    )
+
+    expect(getCurriculum).toHaveBeenCalledWith(
+      1,
+      201,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(wrapper.text()).toContain('실력 도전 #1011 추천')
+    expect(wrapper.text()).toContain('최종 검수 필요')
+
+    await buttonWithText(wrapper, '최종 검수 완료')?.trigger('click')
+    await flushPromises()
+    const reviewDialog = wrapper
+      .findAllComponents(ConfirmDialog)
+      .find((dialog) => dialog.props('title').includes('최종 검수'))
+    expect(reviewDialog?.props('open')).toBe(true)
+    reviewDialog?.vm.$emit('confirm')
+    await flushPromises()
+
+    expect(completeCurriculumReview).toHaveBeenCalledWith(1, 201)
+    expect(wrapper.text()).toContain('최신 검수 내용이 아동용 앱에 제공될 수 있습니다.')
+  })
+
+  it('저장하지 않은 변경 사항이 있으면 최종 검수 버튼을 비활성화한다', async () => {
+    const recommended: DailyCurriculum = {
+      ...currentCurriculumFixture,
+      sourceTestCurriculumId: 1_011,
+      reviewStatus: 'REVIEW_REQUIRED',
+      trainings: currentCurriculumFixture.trainings.map((training) => ({
+        ...training,
+        status: 'NOT_STARTED' as const,
+      })),
+    }
+    const { wrapper, store } = await mountCurriculum(
+      repository({ getCurriculum: vi.fn().mockResolvedValue(recommended) }),
+      '/teacher/students/1/curriculum?curriculumId=201',
+    )
+
+    store.removeDraftItem(store.draftItems[0]!.key)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('저장하지 않은 변경 사항이 있어 최종 검수를 완료할 수 없습니다.')
+    expect(buttonWithText(wrapper, '최종 검수 완료')?.attributes('disabled')).toBeDefined()
+  })
+
+  it.each([
+    ['GENERATION_PENDING', 'AI 콘텐츠 생성 대기'],
+    ['REVIEW_REQUIRED', '최종 검수 필요'],
+    ['REGENERATION_REQUIRED', 'AI 콘텐츠 재생성 필요'],
+    ['REVIEW_COMPLETED', '최종 검수 완료'],
+  ] as const)('추천 커리큘럼 %s 상태를 %s로 표시한다', async (reviewStatus, label) => {
+    const recommended: DailyCurriculum = {
+      ...currentCurriculumFixture,
+      sourceTestCurriculumId: 1_011,
+      reviewStatus,
+    }
+    const { wrapper } = await mountCurriculum(
+      repository({ getCurriculum: vi.fn().mockResolvedValue(recommended) }),
+      '/teacher/students/1/curriculum?curriculumId=201',
+    )
+
+    expect(wrapper.find('.review-panel').text()).toContain(label)
   })
 })

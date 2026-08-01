@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CurriculumSynchronizationError,
+  currentCurriculumFixture,
   MockTrainingRepository,
   type DailyCurriculum,
   type TrainingRepository,
@@ -25,8 +26,20 @@ function repository(overrides: Partial<TrainingRepository> = {}): TrainingReposi
     createCurriculum: vi.fn(),
     getCurriculum: vi.fn(),
     updateCurriculum: vi.fn(),
+    completeCurriculumReview: vi.fn(),
     generateTraining: vi.fn().mockResolvedValue({ questions: [] }),
-    getTrainingDetail: vi.fn(),
+    getTrainingDetail: vi.fn().mockResolvedValue({
+      trainingId: 101,
+      trainingTemplateId: 12,
+      name: '테스트 훈련',
+      form: null,
+      generatedData: { questions: [] },
+      status: 'NOT_STARTED',
+      startedAt: null,
+      finishedAt: null,
+      result: null,
+      accuracy: null,
+    }),
     getLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
     saveLessonMaterial: vi.fn().mockResolvedValue(undefined as never),
     getCurriculumLogs: vi.fn().mockResolvedValue([]),
@@ -777,5 +790,140 @@ describe('Training store', () => {
     expect(json?.fileName).toBe('training-901-mock.json')
     expect(store.exportError).toBeNull()
     expect(store.exportingFormat).toBeNull()
+  })
+
+  it('검사 결과에서 전달한 curriculumId로 정확한 추천 커리큘럼을 조회한다', async () => {
+    const recommended: DailyCurriculum = {
+      ...currentCurriculumFixture,
+      curriculumId: 201,
+      sourceTestCurriculumId: 1_011,
+      reviewStatus: 'REVIEW_REQUIRED',
+      trainings: currentCurriculumFixture.trainings.map((training) => ({
+        ...training,
+        status: 'NOT_STARTED' as const,
+      })),
+    }
+    const getCurrentCurriculum = vi.fn()
+    const getCurriculum = vi.fn().mockResolvedValue(recommended)
+    const store = useTrainingStore()
+    store.setRepository(repository({ getCurrentCurriculum, getCurriculum }))
+
+    await store.loadForStudent(1, 201)
+
+    expect(getCurrentCurriculum).not.toHaveBeenCalled()
+    expect(getCurriculum).toHaveBeenCalledWith(
+      1,
+      201,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(store.savedCurriculum?.sourceTestCurriculumId).toBe(1_011)
+  })
+
+  it('저장된 최신 교안에 대해서만 최종 검수를 완료하고 응답 상태를 반영한다', async () => {
+    const recommended: DailyCurriculum = {
+      ...currentCurriculumFixture,
+      sourceTestCurriculumId: 1_011,
+      reviewStatus: 'REVIEW_REQUIRED',
+      trainings: currentCurriculumFixture.trainings.map((training) => ({
+        ...training,
+        status: 'NOT_STARTED' as const,
+      })),
+    }
+    const completeCurriculumReview = vi.fn().mockResolvedValue({
+      curriculumId: 201,
+      reviewStatus: 'REVIEW_COMPLETED',
+      reviewedByTeacherId: 7,
+      reviewedAt: '2026-08-01T19:00:00',
+    })
+    const reviewed = {
+      ...recommended,
+      reviewStatus: 'REVIEW_COMPLETED' as const,
+      reviewedByTeacherId: 7,
+      reviewedAt: '2026-08-01T19:00:00',
+    }
+    const getCurriculum = vi
+      .fn()
+      .mockResolvedValueOnce(recommended)
+      .mockResolvedValueOnce(reviewed)
+    const store = useTrainingStore()
+    store.setRepository(
+      repository({
+        getCurriculum,
+        completeCurriculumReview,
+      }),
+    )
+    await store.loadForStudent(1, 201)
+
+    expect(store.canCompleteReview).toBe(true)
+    await expect(store.completeCurriculumReview()).resolves.toBe(true)
+
+    expect(completeCurriculumReview).toHaveBeenCalledWith(1, 201)
+    expect(getCurriculum).toHaveBeenLastCalledWith(1, 201)
+    expect(store.savedCurriculum?.reviewStatus).toBe('REVIEW_COMPLETED')
+    expect(store.savedCurriculum?.reviewedByTeacherId).toBe(7)
+    expect(store.reviewCompletionStatus).toBe('success')
+  })
+
+  it('저장하지 않은 커리큘럼 변경과 409 충돌에서 최종 검수를 차단한다', async () => {
+    const recommended: DailyCurriculum = {
+      ...currentCurriculumFixture,
+      sourceTestCurriculumId: 1_011,
+      reviewStatus: 'REVIEW_REQUIRED',
+      trainings: currentCurriculumFixture.trainings.map((training) => ({
+        ...training,
+        status: 'NOT_STARTED' as const,
+      })),
+    }
+    const completeCurriculumReview = vi.fn().mockRejectedValue(
+      new ApiError({ status: 409, code: 'CURRICULUM_NOT_REVIEWABLE', message: 'conflict' }),
+    )
+    const store = useTrainingStore()
+    store.setRepository(
+      repository({
+        getCurriculum: vi.fn().mockResolvedValue(recommended),
+        completeCurriculumReview,
+      }),
+    )
+    await store.loadForStudent(1, 201)
+    store.removeDraftItem(store.draftItems[0]!.key)
+
+    expect(store.canCompleteReview).toBe(false)
+    await expect(store.completeCurriculumReview()).resolves.toBe(false)
+    expect(completeCurriculumReview).not.toHaveBeenCalled()
+
+    store.discardDraft()
+    await expect(store.completeCurriculumReview()).resolves.toBe(false)
+    expect(store.reviewCompletionError).toContain('최신 내용을 다시 불러온 뒤')
+  })
+
+  it.each([
+    [403, 'FORBIDDEN', '검수할 권한이 없습니다.'],
+    [404, 'CURRICULUM_NOT_FOUND', '추천 커리큘럼을 찾을 수 없습니다.'],
+  ])('최종 검수 %i 오류를 교수자가 이해할 수 있는 안내로 변환한다', async (status, code, message) => {
+    const recommended: DailyCurriculum = {
+      ...currentCurriculumFixture,
+      sourceTestCurriculumId: 1_011,
+      reviewStatus: 'REVIEW_REQUIRED',
+      trainings: currentCurriculumFixture.trainings.map((training) => ({
+        ...training,
+        status: 'NOT_STARTED' as const,
+      })),
+    }
+    const store = useTrainingStore()
+    store.setRepository(
+      repository({
+        getCurriculum: vi.fn().mockResolvedValue(recommended),
+        completeCurriculumReview: vi.fn().mockRejectedValue(
+          new ApiError({ status, code, message: 'internal details' }),
+        ),
+      }),
+    )
+    await store.loadForStudent(1, 201)
+
+    await expect(store.completeCurriculumReview()).resolves.toBe(false)
+
+    expect(store.reviewCompletionStatus).toBe('error')
+    expect(store.reviewCompletionError).toContain(message)
+    expect(store.reviewCompletionError).not.toContain('internal')
   })
 })

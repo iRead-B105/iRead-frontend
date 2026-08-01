@@ -9,6 +9,8 @@ import type {
   CurriculumLog,
   CurriculumTrainingLog,
   CurriculumStatus,
+  CurriculumReviewResult,
+  CurriculumReviewStatus,
   DailyCurriculum,
   LessonMaterialDocument,
   GeneratedTrainingData,
@@ -58,7 +60,18 @@ interface CurriculumTrainingDto {
 interface DailyCurriculumDto {
   readonly curriculumId: number
   readonly status: CurriculumStatus
+  readonly sourceTestCurriculumId?: number | null
+  readonly reviewStatus?: CurriculumReviewStatus | null
+  readonly reviewedByTeacherId?: number | null
+  readonly reviewedAt?: string | null
   readonly trainings: readonly CurriculumTrainingDto[]
+}
+
+interface CurriculumReviewResultDto {
+  readonly curriculumId: number
+  readonly reviewStatus: CurriculumReviewStatus
+  readonly reviewedByTeacherId?: number | null
+  readonly reviewedAt?: string | null
 }
 
 interface TrainingDetailDto {
@@ -144,6 +157,10 @@ function mapCurriculum(dto: DailyCurriculumDto): DailyCurriculum {
   return {
     curriculumId: dto.curriculumId,
     status: dto.status,
+    sourceTestCurriculumId: dto.sourceTestCurriculumId ?? null,
+    reviewStatus: dto.reviewStatus ?? 'NOT_REQUIRED',
+    reviewedByTeacherId: dto.reviewedByTeacherId ?? null,
+    reviewedAt: dto.reviewedAt ?? null,
     trainings: [...dto.trainings]
       .sort((left, right) => left.sequence - right.sequence)
       .map((training) => ({ ...training })),
@@ -270,6 +287,10 @@ export interface TrainingApi {
     curriculumId: number,
     request: SaveCurriculumRequest,
   ) => Promise<void>
+  readonly completeCurriculumReview: (
+    studentId: number,
+    curriculumId: number,
+  ) => Promise<CurriculumReviewResult>
   readonly generateTraining: (
     studentId: number,
     trainingId: number,
@@ -356,6 +377,18 @@ export function createTrainingApi(
         method: 'PATCH',
         body: jsonBody(command),
       })
+    },
+    async completeCurriculumReview(studentId, curriculumId) {
+      const dto = await request<CurriculumReviewResultDto>(
+        `/api/admin/training/${studentId}/${curriculumId}/review-complete`,
+        { method: 'POST' },
+      )
+      return {
+        curriculumId: dto.curriculumId,
+        reviewStatus: dto.reviewStatus,
+        reviewedByTeacherId: dto.reviewedByTeacherId ?? null,
+        reviewedAt: dto.reviewedAt ?? null,
+      }
     },
     async generateTraining(studentId, trainingId) {
       return request<GeneratedTrainingData>(
