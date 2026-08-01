@@ -81,6 +81,10 @@ const metricCharts = computed(() =>
     const values = displayedDetails.value.map((detail) => testMetricValue(detail, metric.key))
     const average = averageTestMetric(trendDetails.value, metric.key)
     const option: EChartsOption = {
+      animationDuration: 520,
+      animationDurationUpdate: 240,
+      animationEasing: 'cubicOut',
+      animationEasingUpdate: 'cubicOut',
       tooltip: {
         trigger: 'axis',
         valueFormatter: (value) => (value == null ? '-' : `${value}${metric.unit}`),
@@ -117,6 +121,23 @@ const metricCharts = computed(() =>
                   lineStyle: { color: chartColors.amber, width: 2, type: 'dashed' },
                   data: [{ name: '전체 평균', yAxis: average.value }],
                 },
+        },
+        {
+          name: `${metric.label} ??`,
+          type: 'line',
+          data: values,
+          smooth: 0.2,
+          symbol: 'circle',
+          symbolSize: 8,
+          silent: true,
+          tooltip: { show: false },
+          lineStyle: { color: chartColors.ink, width: 3 },
+          itemStyle: {
+            color: chartColors.white,
+            borderColor: chartColors.ink,
+            borderWidth: 2,
+          },
+          z: 3,
         },
       ],
     }
@@ -349,6 +370,7 @@ function openRecommendedCurriculum(): void {
             <ChartPanel
               v-if="selectedMetricChart"
               :option="selectedMetricChart.option"
+              animated
               height="280px"
               :aria-label="`${selectedMetricChart.label} 검사 커리큘럼 비교 차트`"
               :summary="`${selectedMetricChart.label} 전체 평균 ${selectedMetricChart.average.value ?? '측정값 없음'}`"

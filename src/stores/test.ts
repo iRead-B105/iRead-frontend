@@ -122,7 +122,14 @@ export const useTestStore = defineStore('test', () => {
     const generation = ++listGeneration
     comparisonGeneration += 1
     trendGeneration += 1
-    clearState(nextStudentId)
+    const isRefresh = studentId.value === nextStudentId
+    if (isRefresh) {
+      if (tests.value.length === 0) listStatus.value = 'loading'
+      listError.value = null
+      listUiError.value = null
+    } else {
+      clearState(nextStudentId)
+    }
     const controller = new AbortController()
     listController = controller
     try {
@@ -255,7 +262,7 @@ export const useTestStore = defineStore('test', () => {
     const controller = new AbortController()
     comparisonController = controller
     const generation = ++comparisonGeneration
-    comparisonStatus.value = 'loading'
+    if (comparisonResult.value === null) comparisonStatus.value = 'loading'
     comparisonError.value = null
     try {
       const result = await repository.value.compareTests(
@@ -290,11 +297,12 @@ export const useTestStore = defineStore('test', () => {
     const controller = new AbortController()
     trendController = controller
     const generation = ++trendGeneration
-    trendStatus.value = 'loading'
+    const requestedTests = [...tests.value]
+    if (trendDetails.value.length === 0) trendStatus.value = 'loading'
     trendError.value = null
     trendFailedCount.value = 0
     const results = await Promise.allSettled(
-      tests.value.map((test) => {
+      requestedTests.map((test) => {
         const cached = detailCache.get(cacheKey(currentStudentId, test.testCurriculumId))
         return cached
           ? Promise.resolve(cached)
