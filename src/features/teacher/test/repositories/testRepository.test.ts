@@ -6,6 +6,23 @@ import { MockTestRepository } from './mockTestRepository'
 import { assertTestComparisonSelection, type TestRepository } from './testRepository'
 
 describe('Test API', () => {
+  it('Backend 관리자 응답의 questions가 비어 있으면 Web도 빈 문항 목록을 유지한다', async () => {
+    const request = vi.fn().mockResolvedValue({
+      currentTest: {
+        testId: 11,
+        date: '2026-07-24',
+        questions: [],
+      },
+      comparisonTests: [],
+    })
+    const api = createTestApi(request)
+
+    const result = await api.compareTests(1, 11, [])
+
+    expect(result.currentTest.testId).toBe(11)
+    expect(result.currentTest.questions).toEqual([])
+  })
+
   it('비교 검사가 0건이면 comparisonTestIds query를 생략한다', async () => {
     const request = vi.fn().mockResolvedValue({
       currentTest: {
