@@ -12,7 +12,7 @@ export interface MockTestRepositoryFixtures {
   readonly testsByStudent?: Readonly<Record<number, readonly TestListItem[]>>
   readonly details?: readonly TestDetail[]
   readonly forbiddenStudentIds?: readonly number[]
-  readonly failedDetailTestCurriculumIds?: readonly number[]
+  readonly failedDetailTestCurriculumIds?: readonly string[]
 }
 
 function clone<T>(value: T): T {
@@ -23,11 +23,15 @@ function assertNotAborted(options?: TestRequestOptions): void {
   options?.signal?.throwIfAborted()
 }
 
+function compareDecimalIdsDescending(left: string, right: string): number {
+  return right.length - left.length || right.localeCompare(left)
+}
+
 export class MockTestRepository implements TestRepository {
   private readonly testsByStudent: Readonly<Record<number, readonly TestListItem[]>>
-  private readonly details = new Map<number, TestDetail>()
+  private readonly details = new Map<string, TestDetail>()
   private readonly forbiddenStudentIds: ReadonlySet<number>
-  private readonly failedDetailIds: ReadonlySet<number>
+  private readonly failedDetailIds: ReadonlySet<string>
 
   constructor(fixtures: MockTestRepositoryFixtures = {}) {
     this.testsByStudent = clone(fixtures.testsByStudent ?? testListFixtures)
@@ -46,14 +50,15 @@ export class MockTestRepository implements TestRepository {
         (left, right) =>
           (right.completedAt ?? right.createdAt).localeCompare(
             left.completedAt ?? left.createdAt,
-          ) || right.testCurriculumId - left.testCurriculumId,
+          ) ||
+          compareDecimalIdsDescending(left.testCurriculumId, right.testCurriculumId),
       ),
     )
   }
 
   async getTest(
     studentId: number,
-    testCurriculumId: number,
+    testCurriculumId: string,
     options?: TestRequestOptions,
   ) {
     this.assertStudentAccess(studentId)
@@ -82,8 +87,8 @@ export class MockTestRepository implements TestRepository {
 
   async compareTests(
     studentId: number,
-    currentTestCurriculumId: number,
-    comparisonTestCurriculumIds: readonly number[],
+    currentTestCurriculumId: string,
+    comparisonTestCurriculumIds: readonly string[],
     options?: TestRequestOptions,
   ) {
     assertTestComparisonSelection(

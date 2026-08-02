@@ -3,7 +3,7 @@ export type TestRequestStatus = 'idle' | 'loading' | 'success' | 'error'
 export type TestCurriculumStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | string
 
 export interface TestListItem {
-  readonly testCurriculumId: number
+  readonly testCurriculumId: string
   readonly status: TestCurriculumStatus
   readonly createdAt: string
   readonly completedAt: string | null
@@ -23,7 +23,7 @@ export interface TestAreaScore {
 export type TestAnswer = unknown
 
 export interface TestQuestionResult {
-  readonly testId: number
+  readonly testId: string
   readonly sequenceNo: number
   readonly trackCode: string
   readonly questionType: string

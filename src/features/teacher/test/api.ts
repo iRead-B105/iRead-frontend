@@ -10,7 +10,7 @@ import type { TestRequestOptions } from './repositories/testRepository'
 export type TestApiRequest = <T>(endpoint: string, init?: RequestInit) => Promise<T>
 
 interface TestListItemDto {
-  readonly testCurriculumId: number
+  readonly testCurriculumId: string
   readonly status: string
   readonly createdAt: string
   readonly completedAt?: string | null
@@ -32,7 +32,7 @@ interface TestAreaScoreDto {
 }
 
 interface TestQuestionResultDto {
-  readonly testId: number
+  readonly testId: string
   readonly sequenceNo: number
   readonly trackCode: string
   readonly questionType: string
@@ -62,6 +62,10 @@ interface TestDetailDto extends TestListItemDto {
 
 function requestInit(options?: TestRequestOptions): RequestInit {
   return options?.signal ? { signal: options.signal } : {}
+}
+
+function compareDecimalIdsDescending(left: string, right: string): number {
+  return right.length - left.length || right.localeCompare(left)
 }
 
 function mapListItem(dto: TestListItemDto): TestListItem {
@@ -117,7 +121,10 @@ function averageMeasured(values: readonly (number | null)[]): number | null {
 
 function mapDetail(dto: TestDetailDto): TestDetail {
   const questions = [...(dto.questions ?? [])]
-    .sort((left, right) => left.sequenceNo - right.sequenceNo || left.testId - right.testId)
+    .sort(
+      (left, right) =>
+        left.sequenceNo - right.sequenceNo || left.testId.localeCompare(right.testId),
+    )
     .map(mapQuestion)
   return {
     ...mapListItem(dto),
@@ -143,7 +150,7 @@ export interface TestApi {
   ) => Promise<readonly TestListItem[]>
   readonly getTest: (
     studentId: number,
-    testCurriculumId: number,
+    testCurriculumId: string,
     options?: TestRequestOptions,
   ) => Promise<TestDetail>
 }
@@ -160,7 +167,8 @@ export function createTestApi(request: TestApiRequest = apiRequest): TestApi {
           (left, right) =>
             (right.completedAt ?? right.createdAt).localeCompare(
               left.completedAt ?? left.createdAt,
-            ) || right.testCurriculumId - left.testCurriculumId,
+            ) ||
+            compareDecimalIdsDescending(left.testCurriculumId, right.testCurriculumId),
         )
         .map(mapListItem)
     },

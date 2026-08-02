@@ -78,7 +78,7 @@ describe('StudentTestHistoryView', () => {
   it('검사 커리큘럼 한 건에 3개 영역과 실제 9문항 제출 결과를 표시한다', async () => {
     const { wrapper, store } = await mountHistory(new MockTestRepository())
 
-    expect(store.currentTestCurriculumId).toBe(1_011)
+    expect(store.currentTestCurriculumId).toBe('1011')
     expect(wrapper.text()).toContain('실력 도전 #1011')
     expect(wrapper.text()).toContain('영역별 점수')
     expect(wrapper.text()).toContain('음운 인식')
@@ -88,6 +88,8 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('제출 답안')
     expect(wrapper.text()).toContain('발음 점수')
     expect(wrapper.text()).toContain('9/9')
+    expect(wrapper.text()).toContain('AI 콘텐츠 생성 완료')
+    expect(wrapper.text()).toContain('최종 검수 필요')
   })
 
   it('전체 점수·풀이 시간·시선 이탈·발음 점수를 검사 단위로 비교한다', async () => {

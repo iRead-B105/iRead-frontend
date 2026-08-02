@@ -257,7 +257,7 @@ describe('Training API target contract', () => {
     const curriculum = {
       curriculumId: 201,
       status: 'NOT_STARTED' as const,
-      sourceTestCurriculumId: 1_011,
+      sourceTestCurriculumId: '1011',
       reviewStatus: 'REVIEW_REQUIRED' as const,
       reviewedByTeacherId: null,
       reviewedAt: null,

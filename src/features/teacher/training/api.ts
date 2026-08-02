@@ -60,7 +60,7 @@ interface CurriculumTrainingDto {
 interface DailyCurriculumDto {
   readonly curriculumId: number
   readonly status: CurriculumStatus
-  readonly sourceTestCurriculumId?: number | null
+  readonly sourceTestCurriculumId?: string | null
   readonly reviewStatus?: CurriculumReviewStatus | null
   readonly reviewedByTeacherId?: number | null
   readonly reviewedAt?: string | null

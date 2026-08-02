@@ -38,14 +38,14 @@ describe('Test store', () => {
     await store.loadForStudent(1)
 
     expect(store.tests.map((test) => test.testCurriculumId)).toEqual([
-      1_011, 1_008, 1_005, 1_004,
+      '1011', '1008', '1005', '1004',
     ])
-    expect(store.currentTestCurriculumId).toBe(1_011)
+    expect(store.currentTestCurriculumId).toBe('1011')
     expect(store.comparisonTestCurriculumIds).toEqual([])
     expect(store.comparisonResult?.currentTest.questions).toHaveLength(9)
     expect(compareTests).toHaveBeenCalledWith(
       1,
-      1_011,
+      '1011',
       [],
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
@@ -56,16 +56,16 @@ describe('Test store', () => {
     store.setRepository(new MockTestRepository())
     await store.loadForStudent(1)
 
-    await expect(store.addComparisonTest(1, 1_008)).resolves.toBe(true)
-    await expect(store.addComparisonTest(1, 1_005)).resolves.toBe(true)
-    await expect(store.addComparisonTest(1, 1_004)).resolves.toBe(false)
-    expect(store.comparisonTestCurriculumIds).toEqual([1_008, 1_005])
+    await expect(store.addComparisonTest(1, '1008')).resolves.toBe(true)
+    await expect(store.addComparisonTest(1, '1005')).resolves.toBe(true)
+    await expect(store.addComparisonTest(1, '1004')).resolves.toBe(false)
+    expect(store.comparisonTestCurriculumIds).toEqual(['1008', '1005'])
 
-    await expect(store.removeComparisonTest(1, 1_008)).resolves.toBe(true)
-    expect(store.comparisonTestCurriculumIds).toEqual([1_005])
+    await expect(store.removeComparisonTest(1, '1008')).resolves.toBe(true)
+    expect(store.comparisonTestCurriculumIds).toEqual(['1005'])
     expect(
       store.comparisonResult?.comparisonTests.map((test) => test.testCurriculumId),
-    ).toEqual([1_005])
+    ).toEqual(['1005'])
   })
 
   it('검사 목록 재조회 실패 시 이전 결과를 유지한다', async () => {
@@ -99,7 +99,7 @@ describe('Test store', () => {
   })
 
   it('전체 검사 상세 일부가 실패해도 성공 결과만 평균에 유지한다', async () => {
-    const mock = new MockTestRepository({ failedDetailTestCurriculumIds: [1_005] })
+    const mock = new MockTestRepository({ failedDetailTestCurriculumIds: ['1005'] })
     const store = useTestStore()
     store.setRepository(mock)
 
@@ -108,7 +108,7 @@ describe('Test store', () => {
     expect(store.trendStatus).toBe('success')
     expect(store.trendFailedCount).toBe(1)
     expect(store.trendDetails.map((detail) => detail.testCurriculumId)).toEqual([
-      1_004, 1_008, 1_011,
+      '1004', '1008', '1011',
     ])
     expect(store.trendError).toContain('일부 검사 상세 1건')
   })
@@ -117,7 +117,7 @@ describe('Test store', () => {
     const oldDetail = deferred<TestDetail>()
     const mock = new MockTestRepository()
     const compareTests = vi.fn().mockImplementation(async (studentId, id, ids, options) => {
-      if (id === 1_008) {
+      if (id === '1008') {
         return { currentTest: await oldDetail.promise, comparisonTests: [] }
       }
       return mock.compareTests(studentId, id, ids, options)
@@ -134,13 +134,13 @@ describe('Test store', () => {
     )
     await store.loadForStudent(1)
 
-    const oldRequest = store.selectCurrentTest(1, 1_008)
-    await store.selectCurrentTest(1, 1_005)
-    oldDetail.resolve(await mock.getTest(1, 1_008))
+    const oldRequest = store.selectCurrentTest(1, '1008')
+    await store.selectCurrentTest(1, '1005')
+    oldDetail.resolve(await mock.getTest(1, '1008'))
     await oldRequest
 
-    expect(store.currentTestCurriculumId).toBe(1_005)
-    expect(store.comparisonResult?.currentTest.testCurriculumId).toBe(1_005)
+    expect(store.currentTestCurriculumId).toBe('1005')
+    expect(store.comparisonResult?.currentTest.testCurriculumId).toBe('1005')
   })
 
   it('학습자 변경에서 늦게 끝난 이전 목록 응답을 무시한다', async () => {
@@ -169,7 +169,7 @@ describe('Test store', () => {
     await firstRequest
 
     expect(store.studentId).toBe(2)
-    expect(store.currentTestCurriculumId).toBe(2_001)
+    expect(store.currentTestCurriculumId).toBe('2001')
   })
 
   it('403 오류를 권한 안내로 변환하고 고정 결과를 표시하지 않는다', async () => {

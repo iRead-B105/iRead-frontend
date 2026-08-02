@@ -857,7 +857,7 @@ describe('Training store', () => {
     const recommended: DailyCurriculum = {
       ...currentCurriculumFixture,
       curriculumId: 201,
-      sourceTestCurriculumId: 1_011,
+      sourceTestCurriculumId: '1011',
       reviewStatus: 'REVIEW_REQUIRED',
       trainings: currentCurriculumFixture.trainings.map((training) => ({
         ...training,
@@ -877,13 +877,13 @@ describe('Training store', () => {
       201,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
-    expect(store.savedCurriculum?.sourceTestCurriculumId).toBe(1_011)
+    expect(store.savedCurriculum?.sourceTestCurriculumId).toBe('1011')
   })
 
   it('저장된 최신 교안에 대해서만 최종 검수를 완료하고 응답 상태를 반영한다', async () => {
     const recommended: DailyCurriculum = {
       ...currentCurriculumFixture,
-      sourceTestCurriculumId: 1_011,
+      sourceTestCurriculumId: '1011',
       reviewStatus: 'REVIEW_REQUIRED',
       trainings: currentCurriculumFixture.trainings.map((training) => ({
         ...training,
@@ -925,7 +925,7 @@ describe('Training store', () => {
   it('저장하지 않은 커리큘럼 변경과 409 충돌에서 최종 검수를 차단한다', async () => {
     const recommended: DailyCurriculum = {
       ...currentCurriculumFixture,
-      sourceTestCurriculumId: 1_011,
+      sourceTestCurriculumId: '1011',
       reviewStatus: 'REVIEW_REQUIRED',
       trainings: currentCurriculumFixture.trainings.map((training) => ({
         ...training,
@@ -964,7 +964,7 @@ describe('Training store', () => {
     async (status, code, message) => {
       const recommended: DailyCurriculum = {
         ...currentCurriculumFixture,
-        sourceTestCurriculumId: 1_011,
+        sourceTestCurriculumId: '1011',
         reviewStatus: 'REVIEW_REQUIRED',
         trainings: currentCurriculumFixture.trainings.map((training) => ({
           ...training,
