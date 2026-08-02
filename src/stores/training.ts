@@ -152,6 +152,7 @@ export const useTrainingStore = defineStore('training', () => {
   let loadGeneration = 0
   let resourceGeneration = 0
   let loadController: AbortController | null = null
+  let backgroundRefreshController: AbortController | null = null
   let synchronizationController: AbortController | null = null
   let resourceController: AbortController | null = null
   let historyGeneration = 0
@@ -298,8 +299,13 @@ export const useTrainingStore = defineStore('training', () => {
       : repository.value.getCurriculum(studentId, curriculumId, options)
   }
 
-  async function loadForStudent(studentId: number, curriculumId: number | null = null): Promise<void> {
+  async function loadForStudent(
+    studentId: number,
+    curriculumId: number | null = null,
+  ): Promise<void> {
     loadController?.abort()
+    backgroundRefreshController?.abort()
+    backgroundRefreshController = null
     synchronizationController?.abort()
     synchronizationController = null
     resourceController?.abort()
@@ -346,6 +352,73 @@ export const useTrainingStore = defineStore('training', () => {
     }
   }
 
+  async function refreshForStudent(studentId: number): Promise<boolean> {
+    if (currentStudentId.value !== studentId) {
+      await loadForStudent(studentId)
+      return catalogStatus.value === 'success' && curriculumStatus.value === 'success'
+    }
+
+    backgroundRefreshController?.abort()
+    const controller = new AbortController()
+    backgroundRefreshController = controller
+    const generation = loadGeneration
+    const selectedTemplateBefore = selectedTemplateId.value
+    const selectedTrainingBefore = selectedTrainingId.value
+    const hadCurriculumChanges = hasChanges.value
+    const draftTrainingIdsBefore = [...draftTrainingIds.value]
+
+    try {
+      const [nextCatalog, nextCurriculum] = await Promise.all([
+        repository.value.getCatalog(studentId, { signal: controller.signal }),
+        getRequestedCurriculum(studentId, { signal: controller.signal }),
+      ])
+      if (
+        generation !== loadGeneration ||
+        currentStudentId.value !== studentId ||
+        backgroundRefreshController !== controller
+      ) {
+        return false
+      }
+
+      catalog.value = [...nextCatalog]
+      selectedTemplateId.value =
+        catalog.value.find((item) => item.trainingTemplateId === selectedTemplateBefore)
+          ?.trainingTemplateId ??
+        catalog.value[0]?.trainingTemplateId ??
+        null
+      savedCurriculum.value = nextCurriculum
+      const draftStayedUnchanged =
+        draftTrainingIds.value.length === draftTrainingIdsBefore.length &&
+        draftTrainingIds.value.every((id, index) => id === draftTrainingIdsBefore[index])
+      if (!hadCurriculumChanges && draftStayedUnchanged) {
+        replaceDraftFromSaved(selectedTrainingBefore)
+      }
+      catalogStatus.value = 'success'
+      curriculumStatus.value = 'success'
+      curriculumSynchronizationStatus.value = 'synced'
+      catalogError.value = null
+      curriculumError.value = null
+      return true
+    } catch (error) {
+      if (
+        isAbortError(error) ||
+        generation !== loadGeneration ||
+        currentStudentId.value !== studentId
+      ) {
+        return false
+      }
+      catalogStatus.value = 'error'
+      curriculumStatus.value = 'error'
+      curriculumSynchronizationStatus.value = 'required'
+      catalogError.value = errorMessage(error, '전체 훈련 목록을 새로 고치지 못했습니다.')
+      curriculumError.value = errorMessage(error, '최신 커리큘럼을 불러오지 못했습니다.')
+      return false
+    } finally {
+      if (backgroundRefreshController === controller) {
+        backgroundRefreshController = null
+      }
+    }
+  }
   function selectTemplate(trainingTemplateId: number): void {
     if (!catalog.value.some((item) => item.trainingTemplateId === trainingTemplateId)) return
     selectedTemplateId.value = trainingTemplateId
@@ -1303,6 +1376,8 @@ export const useTrainingStore = defineStore('training', () => {
 
   function reset(): void {
     loadController?.abort()
+    backgroundRefreshController?.abort()
+    backgroundRefreshController = null
     synchronizationController?.abort()
     resourceController?.abort()
     abortHistoryRequests()
@@ -1441,6 +1516,7 @@ export const useTrainingStore = defineStore('training', () => {
     exportError,
     setRepository,
     loadForStudent,
+    refreshForStudent,
     selectTemplate,
     addSelectedTemplate,
     removeDraftItem,
