@@ -20,7 +20,7 @@ function testErrorMessage(error: unknown, fallback: string): string {
   return mapCommonError(error)?.message ?? fallback
 }
 
-function sameIds(left: readonly number[], right: readonly number[]): boolean {
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index])
 }
 
@@ -28,8 +28,8 @@ export const useTestStore = defineStore('test', () => {
   const repository = shallowRef<TestRepository>(testRepository)
   const studentId = ref<number | null>(null)
   const tests = ref<readonly TestListItem[]>([])
-  const currentTestCurriculumId = ref<number | null>(null)
-  const comparisonTestCurriculumIds = ref<readonly number[]>([])
+  const currentTestCurriculumId = ref<string | null>(null)
+  const comparisonTestCurriculumIds = ref<readonly string[]>([])
   const comparisonResult = ref<TestComparison | null>(null)
   const trendDetails = ref<readonly TestDetail[]>([])
   const listStatus = ref<TestRequestStatus>('idle')
@@ -75,7 +75,7 @@ export const useTestStore = defineStore('test', () => {
       comparisonStatus.value !== 'loading',
   )
 
-  function cacheKey(currentStudentId: number, testCurriculumId: number): string {
+  function cacheKey(currentStudentId: number, testCurriculumId: string): string {
     return `${currentStudentId}:${testCurriculumId}`
   }
 
@@ -204,7 +204,7 @@ export const useTestStore = defineStore('test', () => {
 
   async function selectCurrentTest(
     currentStudentId: number,
-    nextTestCurriculumId: number,
+    nextTestCurriculumId: string,
   ): Promise<boolean> {
     if (
       studentId.value !== currentStudentId ||
@@ -222,7 +222,7 @@ export const useTestStore = defineStore('test', () => {
 
   async function addComparisonTest(
     currentStudentId: number,
-    testCurriculumId: number,
+    testCurriculumId: string,
   ): Promise<boolean> {
     if (
       !canAddComparison.value ||
@@ -242,7 +242,7 @@ export const useTestStore = defineStore('test', () => {
 
   async function removeComparisonTest(
     currentStudentId: number,
-    testCurriculumId: number,
+    testCurriculumId: string,
   ): Promise<boolean> {
     const next = comparisonTestCurriculumIds.value.filter((id) => id !== testCurriculumId)
     if (sameIds(next, comparisonTestCurriculumIds.value)) return false

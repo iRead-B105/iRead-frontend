@@ -15,7 +15,7 @@ export class ApiTestRepository implements TestRepository {
 
   getTest(
     studentId: number,
-    testCurriculumId: number,
+    testCurriculumId: string,
     options: Parameters<TestRepository['getTest']>[2] = {},
   ) {
     assertPositiveId(studentId, 'studentId')
@@ -25,8 +25,8 @@ export class ApiTestRepository implements TestRepository {
 
   async compareTests(
     studentId: number,
-    currentTestCurriculumId: number,
-    comparisonTestCurriculumIds: readonly number[],
+    currentTestCurriculumId: string,
+    comparisonTestCurriculumIds: readonly string[],
     options: Parameters<TestRepository['compareTests']>[3] = {},
   ) {
     assertTestComparisonSelection(

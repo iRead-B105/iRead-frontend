@@ -10,7 +10,7 @@ function questions(scores: readonly number[]): readonly TestQuestionResult[] {
     const track = tracks[Math.floor(index / 3)]!
     const voice = index >= 6
     return {
-      testId: 11_001 + index,
+      testId: String(11_001 + index),
       sequenceNo: index + 1,
       trackCode: track[0],
       questionType: voice ? 'VOICE' : index % 2 === 0 ? 'SINGLE_CHOICE' : 'DIRECT_INPUT',
@@ -28,7 +28,7 @@ function questions(scores: readonly number[]): readonly TestQuestionResult[] {
 }
 
 function detail(
-  id: number,
+  id: string,
   completedAt: string,
   overallScore: number | null,
   scores: readonly number[],
@@ -36,7 +36,7 @@ function detail(
 ): TestDetail {
   const questionResults = questions(scores).map((question) => ({
     ...question,
-    testId: id * 10 + question.sequenceNo,
+    testId: `${id}${question.sequenceNo}`,
   }))
   const areaScores = ['음운 인식', '짧은 글', '유창성'].map((title, index) => {
     const area = scores.slice(index * 3, index * 3 + 3)
@@ -85,17 +85,17 @@ function detail(
     recommendationLastAttemptAt: completedAt,
     recommendationRetryCount: 0,
     dailyCurriculumId,
-    contentGenerationStatus: null,
-    teacherReviewStatus: null,
+    contentGenerationStatus: dailyCurriculumId === null ? null : 'NOT_STARTED',
+    teacherReviewStatus: dailyCurriculumId === null ? null : 'REVIEW_REQUIRED',
   }
 }
 
 export const testDetailFixtures: readonly TestDetail[] = [
-  detail(1_011, '2026-07-24T10:30:00', 86, [100, 80, 80, 100, 60, 80, 90, 80, 84], 201),
-  detail(1_008, '2026-06-28T11:20:00', 78, [80, 80, 70, 80, 70, 80, 90, 70, 82], 189),
-  detail(1_005, '2026-05-30T09:10:00', 70, [60, 70, 80, 70, 60, 80, 70, 70, 70]),
-  detail(1_004, '2026-04-30T09:00:00', 0, [0, 0, 0, 0, 0, 0, 0, 0, 0]),
-  detail(2_001, '2026-07-18T13:00:00', 82, [80, 80, 90, 80, 80, 80, 90, 80, 78]),
+  detail('1011', '2026-07-24T10:30:00', 86, [100, 80, 80, 100, 60, 80, 90, 80, 84], 201),
+  detail('1008', '2026-06-28T11:20:00', 78, [80, 80, 70, 80, 70, 80, 90, 70, 82], 189),
+  detail('1005', '2026-05-30T09:10:00', 70, [60, 70, 80, 70, 60, 80, 70, 70, 70]),
+  detail('1004', '2026-04-30T09:00:00', 0, [0, 0, 0, 0, 0, 0, 0, 0, 0]),
+  detail('2001', '2026-07-18T13:00:00', 82, [80, 80, 90, 80, 80, 80, 90, 80, 78]),
 ]
 
 function listItem(item: TestDetail): TestListItem {

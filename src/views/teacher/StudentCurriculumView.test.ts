@@ -397,7 +397,7 @@ describe('StudentCurriculumView', () => {
   it('검사 결과에서 지정한 추천 커리큘럼의 상태를 표시하고 최종 검수를 완료한다', async () => {
     const recommended: DailyCurriculum = {
       ...currentCurriculumFixture,
-      sourceTestCurriculumId: 1_011,
+      sourceTestCurriculumId: '1011',
       reviewStatus: 'REVIEW_REQUIRED',
       trainings: currentCurriculumFixture.trainings.map((training) => ({
         ...training,
@@ -449,7 +449,7 @@ describe('StudentCurriculumView', () => {
   it('저장하지 않은 변경 사항이 있으면 최종 검수 버튼을 비활성화한다', async () => {
     const recommended: DailyCurriculum = {
       ...currentCurriculumFixture,
-      sourceTestCurriculumId: 1_011,
+      sourceTestCurriculumId: '1011',
       reviewStatus: 'REVIEW_REQUIRED',
       trainings: currentCurriculumFixture.trainings.map((training) => ({
         ...training,
@@ -476,7 +476,7 @@ describe('StudentCurriculumView', () => {
   ] as const)('추천 커리큘럼 %s 상태를 %s로 표시한다', async (reviewStatus, label) => {
     const recommended: DailyCurriculum = {
       ...currentCurriculumFixture,
-      sourceTestCurriculumId: 1_011,
+      sourceTestCurriculumId: '1011',
       reviewStatus,
     }
     const { wrapper } = await mountCurriculum(

@@ -12,19 +12,23 @@ export interface TestRepository {
   ) => Promise<readonly TestListItem[]>
   readonly getTest: (
     studentId: number,
-    testCurriculumId: number,
+    testCurriculumId: string,
     options?: TestRequestOptions,
   ) => Promise<TestDetail>
   readonly compareTests: (
     studentId: number,
-    currentTestCurriculumId: number,
-    comparisonTestCurriculumIds: readonly number[],
+    currentTestCurriculumId: string,
+    comparisonTestCurriculumIds: readonly string[],
     options?: TestRequestOptions,
   ) => Promise<TestComparison>
 }
 
-export function assertPositiveId(value: number, name: string): void {
-  if (!Number.isInteger(value) || value <= 0) {
+export function assertPositiveId(value: number | string, name: string): void {
+  const valid =
+    typeof value === 'number'
+      ? Number.isInteger(value) && value > 0
+      : /^[1-9]\d*$/.test(value)
+  if (!valid) {
     throw new ApiError({
       status: 400,
       code: 'INVALID_ID',
@@ -35,8 +39,8 @@ export function assertPositiveId(value: number, name: string): void {
 
 export function assertTestComparisonSelection(
   studentId: number,
-  currentTestCurriculumId: number,
-  comparisonTestCurriculumIds: readonly number[],
+  currentTestCurriculumId: string,
+  comparisonTestCurriculumIds: readonly string[],
 ): void {
   assertPositiveId(studentId, 'studentId')
   assertPositiveId(currentTestCurriculumId, 'currentTestCurriculumId')

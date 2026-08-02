@@ -14,7 +14,9 @@ import { chartColors } from '@/features/teacher/chartTheme'
 import { asyncStateKind } from '@/features/teacher/error'
 import {
   averageTestMetric,
+  formatContentGenerationStatus,
   formatRecommendationStatus,
+  formatTeacherReviewStatus,
   formatTestAnswer,
   formatTestDate,
   formatTestSeconds,
@@ -163,19 +165,19 @@ watch(
 
 async function changeCurrentTest(event: Event): Promise<void> {
   if (studentId.value === null) return
-  const id = Number((event.target as HTMLSelectElement).value)
-  if (Number.isInteger(id)) await testStore.selectCurrentTest(studentId.value, id)
+  const id = (event.target as HTMLSelectElement).value
+  if (id) await testStore.selectCurrentTest(studentId.value, id)
 }
 
 async function addComparison(event: Event): Promise<void> {
   const select = event.target as HTMLSelectElement
   if (studentId.value === null) return
-  const id = Number(select.value)
+  const id = select.value
   select.value = ''
-  if (Number.isInteger(id)) await testStore.addComparisonTest(studentId.value, id)
+  if (id) await testStore.addComparisonTest(studentId.value, id)
 }
 
-async function removeComparison(id: number): Promise<void> {
+async function removeComparison(id: string): Promise<void> {
   if (studentId.value !== null) await testStore.removeComparisonTest(studentId.value, id)
 }
 
@@ -432,6 +434,16 @@ function openRecommendedCurriculum(): void {
             <p v-if="currentDetail?.recommendationError" class="error-copy" role="alert">
               추천 생성 오류: {{ currentDetail.recommendationError }}
             </p>
+            <dl class="recommendation-statuses">
+              <div>
+                <dt>AI 콘텐츠</dt>
+                <dd>{{ formatContentGenerationStatus(currentDetail?.contentGenerationStatus ?? null) }}</dd>
+              </div>
+              <div>
+                <dt>교수자 검수</dt>
+                <dd>{{ formatTeacherReviewStatus(currentDetail?.teacherReviewStatus ?? null) }}</dd>
+              </div>
+            </dl>
             <div class="recommendation-actions">
               <span v-if="currentDetail?.dailyCurriculumId !== null">
                 추천 커리큘럼 #{{ currentDetail?.dailyCurriculumId }}
@@ -519,6 +531,8 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
 .area-grid article strong { font-size: 22px; }
 .area-grid article small { color: var(--slate-500); }
 .recommendation-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border-radius: var(--radius-sm); background: var(--primary-50); color: var(--primary-800); font-size: 13px; font-weight: 700; }
+.recommendation-statuses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.recommendation-statuses div { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: color-mix(in oklch, var(--muted) 28%, transparent); }
 .error-copy { margin: 0; color: var(--danger-600); font-size: 13px; }
 .question-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .question-list li { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); }
@@ -535,6 +549,7 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
 @media (max-width: 760px) {
   .selection-field { min-width: 100%; }
   .recommendation-actions, .section-heading { align-items: flex-start; flex-direction: column; }
+  .recommendation-statuses { grid-template-columns: 1fr; }
   .question-list dl { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 480px) {

@@ -65,7 +65,7 @@ export const trainingCatalogFixture: readonly TrainingCatalogItem[] = trainingCa
 export const currentCurriculumFixture: DailyCurriculum = {
   curriculumId: 201,
   status: 'NOT_STARTED',
-  sourceTestCurriculumId: 1_011,
+  sourceTestCurriculumId: '1011',
   reviewStatus: 'REGENERATION_REQUIRED',
   reviewedByTeacherId: null,
   reviewedAt: null,

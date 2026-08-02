@@ -39,7 +39,7 @@ export interface CurriculumTraining {
 export interface DailyCurriculum {
   readonly curriculumId: CurriculumId
   readonly status: CurriculumStatus
-  readonly sourceTestCurriculumId?: number | null
+  readonly sourceTestCurriculumId?: string | null
   readonly reviewStatus?: CurriculumReviewStatus
   readonly reviewedByTeacherId?: number | null
   readonly reviewedAt?: string | null
