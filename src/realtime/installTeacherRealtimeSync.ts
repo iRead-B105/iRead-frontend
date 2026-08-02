@@ -96,7 +96,7 @@ export function installTeacherRealtimeSync(pinia: Pinia, router: Router): () => 
     let succeeded: () => boolean
     switch (routeName) {
       case 'student-curriculum':
-        request = training.loadForStudent(studentId)
+        request = training.refreshForStudent(studentId)
         succeeded = () =>
           training.catalogStatus === 'success' && training.curriculumStatus === 'success'
         break

@@ -171,6 +171,35 @@ describe('installTeacherRealtimeSync', () => {
     stop()
   })
 
+  it('커리큘럼 화면의 일반 학습 이벤트는 기존 행을 유지하는 갱신 경로를 사용한다', async () => {
+    const { pinia, router, students } = await setup()
+    await router.push('/teacher/students/2001/curriculum')
+    const training = useTrainingStore(pinia)
+    const loadForStudent = vi.spyOn(training, 'loadForStudent').mockResolvedValue()
+    const refreshForStudent = vi.spyOn(training, 'refreshForStudent').mockResolvedValue(true)
+    vi.spyOn(students, 'loadList').mockImplementation(async () => {
+      students.listStatus = 'success'
+    })
+    vi.spyOn(students, 'loadSummary').mockImplementation(async () => {
+      students.summaryStatus = 'success'
+    })
+    const stop = installTeacherRealtimeSync(pinia, router)
+    const options = realtimeHarness.options as CapturedRealtimeOptions
+
+    await options.onEvent({
+      eventId: 'event-training-reset',
+      studentId: 2001,
+      resource: 'TRAINING',
+      resourceId: 101,
+      changeType: 'RESET',
+      occurredAt: '2026-07-31T10:00:00+09:00',
+      version: 1,
+    })
+
+    expect(refreshForStudent).toHaveBeenCalledWith(2001)
+    expect(loadForStudent).not.toHaveBeenCalled()
+    stop()
+  })
   it('교안 CONTENT_UPDATED는 커리큘럼 전체 재조회 대신 편집 충돌 보호 경로로 처리한다', async () => {
     const { pinia, router, students } = await setup()
     await router.push('/teacher/students/2001/curriculum')

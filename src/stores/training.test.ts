@@ -67,7 +67,8 @@ describe('Training store', () => {
     const previousTrainingLog = store.trainingLog
     const previousTrainingId = store.selectedHistoryTrainingId
     const previousDetail = store.historyTrainingDetail
-    const pendingLogs = deferred<Array<(typeof previousLogs)[number]>>()    vi.spyOn(mock, 'getCurriculumLogs').mockReturnValueOnce(pendingLogs.promise)
+    const pendingLogs = deferred<Array<(typeof previousLogs)[number]>>()
+    vi.spyOn(mock, 'getCurriculumLogs').mockReturnValueOnce(pendingLogs.promise)
     const refresh = store.loadHistoryForStudent(1)
 
     expect(store.curriculumLogsStatus).toBe('success')
@@ -83,6 +84,39 @@ describe('Training store', () => {
     expect(store.selectedHistoryTrainingId).toBe(previousTrainingId)
   })
 
+  it('keeps curriculum rows rendered during a same-student realtime refresh', async () => {
+    const mock = new MockTrainingRepository()
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadForStudent(1)
+
+    const previousCatalog = store.catalog
+    const previousCurriculum = store.savedCurriculum
+    const previousDraft = store.draftItems
+    const pendingCatalog = deferred<typeof previousCatalog>()
+    const pendingCurriculum = deferred<DailyCurriculum | null>()
+    vi.spyOn(mock, 'getCatalog').mockReturnValueOnce(pendingCatalog.promise)
+    vi.spyOn(mock, 'getCurrentCurriculum').mockReturnValueOnce(pendingCurriculum.promise)
+
+    const refresh = store.refreshForStudent(1)
+
+    expect(store.catalogStatus).toBe('success')
+    expect(store.curriculumStatus).toBe('success')
+    expect(store.catalog).toBe(previousCatalog)
+    expect(store.savedCurriculum).toBe(previousCurriculum)
+    expect(store.draftItems).toBe(previousDraft)
+
+    store.selectTemplate(14)
+    store.addSelectedTemplate()
+    const editedDraftLength = store.draftItems.length
+
+    pendingCatalog.resolve([...previousCatalog])
+    pendingCurriculum.resolve(previousCurriculum)
+    await expect(refresh).resolves.toBe(true)
+    expect(store.catalog).toHaveLength(previousCatalog.length)
+    expect(store.draftItems).toHaveLength(editedDraftLength)
+    expect(store.hasChanges).toBe(true)
+  })
   it('훈련 목록을 sequence로 재정렬하지 않고 백엔드 배열 순서를 유지한다', async () => {
     const store = useTrainingStore()
     store.setRepository(
@@ -868,10 +902,7 @@ describe('Training store', () => {
       reviewedByTeacherId: 7,
       reviewedAt: '2026-08-01T19:00:00',
     }
-    const getCurriculum = vi
-      .fn()
-      .mockResolvedValueOnce(recommended)
-      .mockResolvedValueOnce(reviewed)
+    const getCurriculum = vi.fn().mockResolvedValueOnce(recommended).mockResolvedValueOnce(reviewed)
     const store = useTrainingStore()
     store.setRepository(
       repository({
@@ -901,9 +932,11 @@ describe('Training store', () => {
         status: 'NOT_STARTED' as const,
       })),
     }
-    const completeCurriculumReview = vi.fn().mockRejectedValue(
-      new ApiError({ status: 409, code: 'CURRICULUM_NOT_REVIEWABLE', message: 'conflict' }),
-    )
+    const completeCurriculumReview = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError({ status: 409, code: 'CURRICULUM_NOT_REVIEWABLE', message: 'conflict' }),
+      )
     const store = useTrainingStore()
     store.setRepository(
       repository({
@@ -926,31 +959,34 @@ describe('Training store', () => {
   it.each([
     [403, 'FORBIDDEN', '검수할 권한이 없습니다.'],
     [404, 'CURRICULUM_NOT_FOUND', '추천 커리큘럼을 찾을 수 없습니다.'],
-  ])('최종 검수 %i 오류를 교수자가 이해할 수 있는 안내로 변환한다', async (status, code, message) => {
-    const recommended: DailyCurriculum = {
-      ...currentCurriculumFixture,
-      sourceTestCurriculumId: 1_011,
-      reviewStatus: 'REVIEW_REQUIRED',
-      trainings: currentCurriculumFixture.trainings.map((training) => ({
-        ...training,
-        status: 'NOT_STARTED' as const,
-      })),
-    }
-    const store = useTrainingStore()
-    store.setRepository(
-      repository({
-        getCurriculum: vi.fn().mockResolvedValue(recommended),
-        completeCurriculumReview: vi.fn().mockRejectedValue(
-          new ApiError({ status, code, message: 'internal details' }),
-        ),
-      }),
-    )
-    await store.loadForStudent(1, 201)
+  ])(
+    '최종 검수 %i 오류를 교수자가 이해할 수 있는 안내로 변환한다',
+    async (status, code, message) => {
+      const recommended: DailyCurriculum = {
+        ...currentCurriculumFixture,
+        sourceTestCurriculumId: 1_011,
+        reviewStatus: 'REVIEW_REQUIRED',
+        trainings: currentCurriculumFixture.trainings.map((training) => ({
+          ...training,
+          status: 'NOT_STARTED' as const,
+        })),
+      }
+      const store = useTrainingStore()
+      store.setRepository(
+        repository({
+          getCurriculum: vi.fn().mockResolvedValue(recommended),
+          completeCurriculumReview: vi
+            .fn()
+            .mockRejectedValue(new ApiError({ status, code, message: 'internal details' })),
+        }),
+      )
+      await store.loadForStudent(1, 201)
 
-    await expect(store.completeCurriculumReview()).resolves.toBe(false)
+      await expect(store.completeCurriculumReview()).resolves.toBe(false)
 
-    expect(store.reviewCompletionStatus).toBe('error')
-    expect(store.reviewCompletionError).toContain(message)
-    expect(store.reviewCompletionError).not.toContain('internal')
-  })
+      expect(store.reviewCompletionStatus).toBe('error')
+      expect(store.reviewCompletionError).toContain(message)
+      expect(store.reviewCompletionError).not.toContain('internal')
+    },
+  )
 })
