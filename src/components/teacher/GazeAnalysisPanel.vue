@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type CSSProperties } from 'vue'
 import { Button } from '@/components/ui/button'
 import {
   formatGazeAverage,
@@ -108,6 +108,99 @@ const aggregateGroups = computed(() => {
     },
   ]
 })
+
+const replay = computed(() =>
+  props.state?.status === 'AVAILABLE' ? props.state.analysis.replay ?? null : null,
+)
+
+const replayWords = computed(() => replay.value?.words ?? [])
+const replaySamples = computed(() => replay.value?.samples ?? [])
+const maxWordDwellMs = computed(() =>
+  Math.max(0, ...replayWords.value.map((word) => word.dwellMs)),
+)
+
+function replayWordKey(
+  item: {
+    questionNo?: number | null
+    questionNumber?: number | null
+    targetIndex?: number | null
+    tokenIndex?: number | null
+    text?: string
+  },
+) {
+  return [
+    item.questionNo ?? item.questionNumber ?? '-',
+    item.targetIndex ?? '-',
+    item.tokenIndex ?? '-',
+    item.text ?? '',
+  ].join(':')
+}
+
+function wordTitle(word: {
+  questionNo?: number | null
+  questionNumber?: number | null
+  tokenIndex?: number | null
+  text?: string
+}) {
+  const questionNo = word.questionNo ?? word.questionNumber
+  const prefix = questionNo ? `${questionNo}번 ` : ''
+  const order = word.tokenIndex !== null && word.tokenIndex !== undefined ? `${word.tokenIndex + 1}. ` : ''
+  return `${prefix}${order}${word.text || '-'}`
+}
+
+const heatmapWords = computed(() =>
+  replayWords.value
+    .slice()
+    .sort((a, b) =>
+      (a.questionNo ?? 0) - (b.questionNo ?? 0)
+      || (a.targetIndex ?? 0) - (b.targetIndex ?? 0)
+      || (a.tokenIndex ?? 0) - (b.tokenIndex ?? 0),
+    )
+    .map((word) => {
+      const intensity = maxWordDwellMs.value > 0 ? word.dwellMs / maxWordDwellMs.value : 0
+      return {
+        key: replayWordKey(word),
+        title: wordTitle(word),
+        dwell: formatGazeDuration(word.dwellMs),
+        visits: formatGazeCount(word.visitCount),
+        regressions: word.regressionCount,
+        skipped: word.skipped,
+        style: {
+          '--gaze-heat': String(Math.min(1, Math.max(0.08, intensity))),
+        } as CSSProperties,
+      }
+    }),
+)
+
+const movementSteps = computed(() => {
+  const wordsByKey = new Map(replayWords.value.map((word) => [replayWordKey(word), word]))
+  const steps: Array<{
+    key: string
+    order: number
+    title: string
+    detail: string
+  }> = []
+  let previousKey = ''
+  replaySamples.value
+    .filter((sample) => sample.text.trim() !== '')
+    .slice()
+    .sort((a, b) => (a.capturedAtMs ?? 0) - (b.capturedAtMs ?? 0))
+    .forEach((sample) => {
+      const key = replayWordKey(sample)
+      if (key === previousKey || steps.length >= 24) return
+      previousKey = key
+      const word = wordsByKey.get(key)
+      steps.push({
+        key: `${key}:${sample.capturedAtMs ?? steps.length}`,
+        order: steps.length + 1,
+        title: wordTitle(sample),
+        detail: word
+          ? `${formatGazeDuration(word.dwellMs)} · ${formatGazeCount(word.visitCount)}`
+          : '샘플 기준 이동',
+      })
+    })
+  return steps
+})
 </script>
 
 <template>
@@ -128,7 +221,7 @@ const aggregateGroups = computed(() => {
 
     <div v-else-if="status === 'error'" class="analysis-state analysis-state--error" role="alert">
       <p>{{ error ?? '시선 분석 결과를 불러오지 못했습니다.' }}</p>
-      <Button variant="outline" type="button" @click="$emit('retry')"> 다시 불러오기 </Button>
+      <Button variant="outline" type="button" @click="$emit('retry')">다시 불러오기</Button>
     </div>
 
     <p v-else-if="state?.status === 'NO_DATA'" class="analysis-state">
@@ -164,12 +257,45 @@ const aggregateGroups = computed(() => {
           </article>
         </div>
       </section>
+
+      <section v-if="heatmapWords.length > 0" class="gaze-replay" aria-label="단어별 시선 히트맵">
+        <header>
+          <h3>단어별 시선 머무름</h3>
+          <p>진하게 표시된 단어일수록 오래 머문 단어입니다.</p>
+        </header>
+        <ol class="gaze-word-heatmap">
+          <li
+            v-for="word in heatmapWords"
+            :key="word.key"
+            :class="{ 'is-skipped': word.skipped }"
+            :style="word.style"
+          >
+            <strong>{{ word.title }}</strong>
+            <span>{{ word.dwell }} · {{ word.visits }}</span>
+            <em v-if="word.regressions > 0">되돌아보기 {{ word.regressions }}회</em>
+          </li>
+        </ol>
+      </section>
+
+      <section v-if="movementSteps.length > 0" class="gaze-movement" aria-label="시선 이동 순서">
+        <header>
+          <h3>이동 순서</h3>
+          <p>실제 샘플 순서에서 같은 단어 연속 구간을 한 번으로 줄였습니다.</p>
+        </header>
+        <ol>
+          <li v-for="step in movementSteps" :key="step.key">
+            <b>{{ step.order }}</b>
+            <span>{{ step.title }}</span>
+            <small>{{ step.detail }}</small>
+          </li>
+        </ol>
+      </section>
     </div>
 
     <p v-else class="analysis-state">표시할 시선 분석 결과가 없습니다.</p>
 
     <p class="gaze-disclaimer">
-      시선 지표는 학습 과정 참고용이며 의학적·임상적 진단 결과가 아닙니다.
+      시선 지표는 학습 과정 참고용이며 의학적 진단 결과가 아닙니다.
     </p>
   </section>
 </template>
@@ -180,6 +306,7 @@ const aggregateGroups = computed(() => {
   gap: 18px;
   padding: 22px 0 4px;
   border-top: 1px solid var(--slate-200);
+  container-type: inline-size;
 }
 
 .gaze-analysis__heading {
@@ -346,6 +473,126 @@ const aggregateGroups = computed(() => {
 .analysis-state--warning {
   border-style: solid;
   border-color: color-mix(in oklch, var(--warning-500) 32%, var(--border));
+}
+
+.gaze-replay,
+.gaze-movement {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  background: var(--white);
+}
+
+.gaze-replay header,
+.gaze-movement header {
+  display: grid;
+  gap: 3px;
+}
+
+.gaze-replay h3,
+.gaze-movement h3 {
+  margin: 0;
+  color: var(--slate-800);
+  font-size: 13px;
+}
+
+.gaze-replay p,
+.gaze-movement p {
+  margin: 0;
+  color: var(--slate-500);
+  font-size: 11px;
+}
+
+.gaze-word-heatmap {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
+.gaze-word-heatmap li {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid color-mix(in oklch, var(--primary-500) 26%, var(--slate-200));
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  box-shadow: inset 0 0 0 999px rgb(37 99 235 / calc(var(--gaze-heat) * 0.2));
+}
+
+.gaze-word-heatmap li.is-skipped {
+  border-style: dashed;
+  background: var(--slate-50);
+  box-shadow: none;
+  opacity: 0.68;
+}
+
+.gaze-word-heatmap strong {
+  overflow: hidden;
+  color: var(--slate-900);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gaze-word-heatmap span,
+.gaze-word-heatmap em {
+  color: var(--slate-600);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.gaze-movement ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gaze-movement li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 8px;
+  min-width: 150px;
+  max-width: 220px;
+  padding: 9px 10px;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-sm);
+  background: var(--slate-50);
+}
+
+.gaze-movement b {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--primary-600);
+  color: var(--white);
+  font-size: 11px;
+  place-items: center;
+  grid-row: span 2;
+}
+
+.gaze-movement span {
+  overflow: hidden;
+  color: var(--slate-800);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gaze-movement small {
+  color: var(--slate-500);
+  font-size: 10px;
 }
 
 .gaze-disclaimer {

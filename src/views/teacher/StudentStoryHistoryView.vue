@@ -21,6 +21,11 @@ import {
 } from '@/features/teacher/story'
 import { useStoryHistoryStore } from '@/stores/storyHistory'
 
+type StoryReplayPreviewState = {
+  readonly kind: 'read' | 'regression' | 'skip'
+  readonly tokenIndexes: readonly number[]
+} | null
+
 function parseStudentId(value: unknown): number | null {
   const normalized = Array.isArray(value) ? value[0] : value
   const parsed = typeof normalized === 'string' ? Number(normalized) : Number.NaN
@@ -60,6 +65,7 @@ const filterFrom = ref('')
 const filterTo = ref('')
 const filterTemplateId = ref('')
 const filterError = ref('')
+const activeStoryReplayStep = ref<StoryReplayPreviewState>(null)
 
 watch(
   studentId,
@@ -71,6 +77,13 @@ watch(
     await storyStore.loadList(id)
   },
   { immediate: true },
+)
+
+watch(
+  () => selectedPage.value?.storyLineId ?? null,
+  () => {
+    activeStoryReplayStep.value = null
+  },
 )
 
 async function applyFilters(): Promise<void> {
@@ -325,14 +338,20 @@ function retryGaze(): void {
                 />
                 <template v-else>
                   <div class="story-page-layout">
-                    <StoryPagePreview :page="selectedPage" />
+                    <StoryPagePreview
+                      :page="selectedPage"
+                      :active-replay-kind="activeStoryReplayStep?.kind ?? null"
+                      :active-replay-token-indexes="activeStoryReplayStep?.tokenIndexes ?? []"
+                    />
                     <StoryPageAnalysisPanel
                       :story-status="selectedStory.gazeAnalysisStatus"
+                      :page="selectedPage"
                       :analysis="currentGazeAnalysis"
                       :metric="selectedPageMetric"
                       :request-status="gazeStatus"
                       :error="gazeError"
                       :contract-error="pageMetricContractError"
+                      @replay-step-change="activeStoryReplayStep = $event"
                       @retry="retryGaze"
                     />
                   </div>

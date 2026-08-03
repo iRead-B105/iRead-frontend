@@ -1,4 +1,8 @@
 import type {
+  GazeReplaySample,
+  GazeReplayWord,
+} from '@/features/teacher/gaze'
+import type {
   StoryBranchRecord,
   StoryDetail,
   StoryGazeAnalysisStatus,
@@ -114,6 +118,10 @@ export interface StoryGazeAnalysisDto {
   readonly regressionCount: number
   readonly averageFixationTime: number | null
   readonly pageMetrics: readonly StoryPageGazeMetricDto[] | null
+  readonly replay?: {
+    readonly words?: readonly Partial<GazeReplayWord>[]
+    readonly samples?: readonly Partial<GazeReplaySample>[]
+  } | null
   readonly analysisMeta: StoryGazeAnalysisMetaDto | null
 }
 
@@ -289,6 +297,7 @@ export function mapStoryGazeAnalysis(dto: StoryGazeAnalysisDto): StoryGazeAnalys
     pageMetrics: [...(dto.pageMetrics ?? [])]
       .sort((left, right) => left.pageNo - right.pageNo)
       .map(mapPageMetric),
+    replay: aggregate.analysis.replay ?? null,
     analysisMeta: dto.analysisMeta === null ? null : mapAnalysisMeta(dto.analysisMeta),
   }
 }

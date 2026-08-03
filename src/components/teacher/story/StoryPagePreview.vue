@@ -8,7 +8,15 @@ import {
 
 const props = defineProps<{
   page: StoryPage
+  activeReplayKind?: 'read' | 'regression' | 'skip' | null
+  activeReplayTokenIndexes?: readonly number[]
 }>()
+
+interface StoryPreviewWord {
+  readonly key: string
+  readonly text: string
+  readonly tokenIndex: number
+}
 
 const imageStateLabel = computed(() => {
   const labels: Record<Exclude<StoryImageGenerationStatus, 'AVAILABLE'>, string> = {
@@ -20,6 +28,36 @@ const imageStateLabel = computed(() => {
     ? null
     : labels[props.page.imageGenerationStatus]
 })
+
+const activeReplayTokenIndexSet = computed(() => new Set(props.activeReplayTokenIndexes ?? []))
+
+const previewTextLines = computed(() => {
+  let tokenIndex = 0
+  return props.page.textLines.map((line, lineIndex) =>
+    line
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((text): StoryPreviewWord => {
+        const word = {
+          key: `${props.page.storyLineId}-${lineIndex}-${tokenIndex}-${text}`,
+          text,
+          tokenIndex,
+        }
+        tokenIndex += 1
+        return word
+      }),
+  )
+})
+
+function wordReplayClass(word: StoryPreviewWord) {
+  const isActive = activeReplayTokenIndexSet.value.has(word.tokenIndex)
+  return {
+    'is-replay-active': isActive,
+    'is-replay-regression': isActive && props.activeReplayKind === 'regression',
+    'is-replay-skip': isActive && props.activeReplayKind === 'skip',
+  }
+}
 </script>
 
 <template>
@@ -44,8 +82,15 @@ const imageStateLabel = computed(() => {
         </div>
         <div class="story-reader-shade" aria-hidden="true" />
         <div class="story-reader-copy">
-          <p v-for="(line, index) in page.textLines" :key="`${page.storyLineId}-${index}`">
-            {{ line }}
+          <p v-for="(line, index) in previewTextLines" :key="`${page.storyLineId}-${index}`">
+            <span
+              v-for="word in line"
+              :key="word.key"
+              class="story-reader-word"
+              :class="wordReplayClass(word)"
+            >
+              {{ word.text }}
+            </span>
           </p>
           <p v-if="page.textLines.length === 0" class="story-reader-copy__empty">
             표시할 이야기 본문이 없습니다.
@@ -177,13 +222,37 @@ const imageStateLabel = computed(() => {
   font-size: clamp(18px, 3.1vw, 40px);
   font-weight: 800;
   line-height: 1.35;
-  letter-spacing: -0.025em;
+  letter-spacing: 0;
   overflow-wrap: normal;
   text-align: left;
   text-shadow:
     0 2px 0 rgb(255 255 255 / 80%),
     0 0 12px rgb(255 252 225 / 92%);
   word-break: keep-all;
+}
+
+.story-reader-word {
+  position: relative;
+  display: inline-block;
+  margin-right: 0.22em;
+  border-radius: 0.12em;
+}
+
+.story-reader-word.is-replay-active {
+  background: linear-gradient(transparent 58%, rgb(96 165 250 / 34%) 58%);
+  box-shadow: 0 0 0 0.06em rgb(37 99 235 / 42%);
+}
+
+.story-reader-word.is-replay-regression {
+  background: linear-gradient(transparent 58%, rgb(245 158 11 / 38%) 58%);
+  box-shadow: 0 0 0 0.06em rgb(217 119 6 / 46%);
+}
+
+.story-reader-word.is-replay-skip {
+  background: linear-gradient(transparent 58%, rgb(220 38 38 / 24%) 58%);
+  box-shadow: 0 0 0 0.06em rgb(220 38 38 / 40%);
+  text-decoration: underline dashed rgb(220 38 38 / 72%);
+  text-underline-offset: 0.18em;
 }
 
 .story-reader-copy .story-reader-copy__empty {

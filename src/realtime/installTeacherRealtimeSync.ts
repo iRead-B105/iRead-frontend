@@ -283,7 +283,7 @@ export function installTeacherRealtimeSync(pinia: Pinia, router: Router): () => 
   const safetyInterval = window.setInterval(() => {
     const routeName = String(router.currentRoute.value.name)
     void refreshCurrentContext({
-      includeVisible: !['student-curriculum', 'student-report'].includes(routeName),
+      includeVisible: !['student-curriculum', 'student-report', 'student-story-history'].includes(routeName),
     })
   }, SAFETY_REFRESH_MILLIS)
 

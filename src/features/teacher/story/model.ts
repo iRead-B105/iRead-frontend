@@ -1,3 +1,5 @@
+import type { GazeAnalysisReplay } from '@/features/teacher/gaze'
+
 export type StoryStatus = 'IN_PROGRESS' | 'COMPLETED' | 'DELETED'
 export type StoryReadingStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'
 export type StoryGazeAnalysisStatus = 'NOT_COLLECTED' | 'RUNNING' | 'AVAILABLE' | 'FAILED'
@@ -109,6 +111,7 @@ export interface StoryGazeAnalysis {
   readonly reverseReadCount: number
   readonly avgVisitedDurationMs: number | null
   readonly pageMetrics: readonly StoryPageGazeMetric[]
+  readonly replay?: GazeAnalysisReplay | null
   readonly analysisMeta: StoryGazeAnalysisMeta | null
 }
 
