@@ -390,7 +390,7 @@ describe('StudentOverviewView', () => {
     expect(learningEventButton.attributes('aria-expanded')).toBe('true')
     const expandedEvent = wrapper.get('.learning-event-item.is-expanded')
     expect(expandedEvent.find('.event-detail-shell').exists()).toBe(true)
-    expect(expandedEvent.text()).toContain('최근 학습 한눈에 보기')
+    expect(expandedEvent.find('.event-detail__heading').exists()).toBe(false)
     expect(expandedEvent.text()).toContain('학습 결과')
     expect(expandedEvent.text()).toContain('교수자 확인')
     expect(expandedEvent.text()).toContain('다음 학습 제안')
@@ -406,7 +406,7 @@ describe('StudentOverviewView', () => {
 
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === '내부 메모에 추가')!
+      .find((button) => button.text() === '학습 기록에 추가')!
       .trigger('click')
 
     expect(wrapper.get<HTMLTextAreaElement>('#internal-note').element.value).toContain(

@@ -64,7 +64,7 @@ describe('StudentLearningEvents', () => {
     const expandedItem = wrapper.get('.learning-event-item.is-expanded')
     expect(expandedItem.get('.learning-event').attributes('aria-expanded')).toBe('true')
     expect(expandedItem.get('.event-detail-shell').element.parentElement).toBe(expandedItem.element)
-    expect(expandedItem.text()).toContain('최근 학습 한눈에 보기')
+    expect(expandedItem.find('.event-detail__heading').exists()).toBe(false)
     expect(expandedItem.text()).toContain('학습 결과')
     expect(expandedItem.text()).toContain('교수자 확인')
     expect(expandedItem.text()).toContain('다음 학습 제안')
@@ -77,7 +77,7 @@ describe('StudentLearningEvents', () => {
 
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === '내부 메모에 추가')!
+      .find((button) => button.text() === '학습 기록에 추가')!
       .trigger('click')
     expect(wrapper.emitted('addToMemo')).toEqual([[detail]])
   })

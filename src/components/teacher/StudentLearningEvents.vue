@@ -156,15 +156,6 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
             class="event-detail"
             aria-live="polite"
           >
-            <header class="event-detail__heading">
-              <div>
-                <span>최근 학습 한눈에 보기</span>
-                <h3>{{ studentLearningEventTypeLabels[detail.eventType] }} 결과</h3>
-                <p>학습 결과부터 교수자가 확인할 내용과 다음 학습 제안까지 모았습니다.</p>
-              </div>
-              <Badge v-if="detail.attentionRequired" variant="secondary">확인 필요</Badge>
-            </header>
-
             <dl class="event-summary-grid">
               <div>
                 <dt>학습 종류</dt>
@@ -232,7 +223,7 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
 
             <div class="event-detail__actions">
               <Button variant="outline" size="sm" type="button" @click="emit('addToMemo', detail)">
-                내부 메모에 추가
+                학습 기록에 추가
               </Button>
             </div>
           </article>
@@ -413,29 +404,9 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
   background: var(--slate-50);
 }
 
-.event-detail__heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.event-detail__heading span,
 .recommendation > span {
   color: var(--slate-500);
   font-size: 11px;
-}
-
-.event-detail h3 {
-  margin: 3px 0 0;
-  font-size: 15px;
-}
-
-.event-detail__heading p {
-  margin: 5px 0 0;
-  color: var(--slate-500);
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 .event-summary-grid,
@@ -471,7 +442,7 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
 .event-insight-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .event-insight {
@@ -566,11 +537,6 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
     grid-template-columns: 1fr;
   }
 
-  .event-detail__heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .learning-event__result {
     justify-content: space-between;
   }
@@ -580,7 +546,6 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
   }
 
   .event-summary-grid,
-  .event-insight-grid,
   .recommendation dl {
     grid-template-columns: 1fr;
   }
