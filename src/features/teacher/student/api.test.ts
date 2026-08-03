@@ -343,4 +343,20 @@ describe('Student API', () => {
       { signal: undefined },
     )
   })
+
+  it('uses the backend demo date for date-sensitive teacher queries', async () => {
+    const request = vi.fn().mockResolvedValue({ points: [], voiceChangeRate: null })
+    const api = createStudentApi(
+      request,
+      () => new Date('2026-08-03T12:00:00+09:00'),
+      async () => new Date('2026-08-04T12:00:00+09:00'),
+    )
+
+    await api.getReadingSpeedTrend(7)
+
+    expect(request).toHaveBeenCalledWith(
+      '/api/admin/student/7/reading-speed-trend?from=2026-07-06&to=2026-08-04',
+      { signal: undefined },
+    )
+  })
 })

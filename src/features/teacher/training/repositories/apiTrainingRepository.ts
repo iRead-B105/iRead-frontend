@@ -1,4 +1,5 @@
-import { isApiError } from '@/lib/api'
+import { apiRequest, downloadFile, isApiError } from '@/lib/api'
+import { resolveDemoReferenceDate } from '@/features/teacher/devReferenceDate'
 import { isGazeAnalysisNotFoundError } from '@/features/teacher/gaze'
 import { createTrainingApi, type TrainingApi } from '../api'
 import {
@@ -13,7 +14,14 @@ import {
 } from './trainingRepository'
 
 export class ApiTrainingRepository implements TrainingRepository {
-  constructor(private readonly api: TrainingApi = createTrainingApi()) {}
+  constructor(
+    private readonly api: TrainingApi = createTrainingApi(
+      apiRequest,
+      downloadFile,
+      () => new Date(),
+      resolveDemoReferenceDate,
+    ),
+  ) {}
 
   getCatalog(studentId: number, options: Parameters<TrainingRepository['getCatalog']>[1] = {}) {
     return this.api.getCatalog(studentId, options)
