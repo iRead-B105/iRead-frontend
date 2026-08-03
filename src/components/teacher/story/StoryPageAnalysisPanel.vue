@@ -68,6 +68,7 @@ interface DisplayRegressionView {
   readonly fromTokenIndex: number
   readonly toTokenIndex: number
   readonly offsetMs: number
+  readonly isSkipReturn: boolean
 }
 
 function pageMatches(value: number | null | undefined, pageNo: number): boolean {
@@ -80,6 +81,10 @@ function tokenLabel(tokenIndex: number | null | undefined, text: string): string
 
 function tokenPositionLabel(tokenIndex: number | null | undefined): string {
   return tokenIndex === null || tokenIndex === undefined ? '-' : `${tokenIndex + 1}번 위치`
+}
+
+function isSkipReturnMovement(fromTokenIndex: number, toTokenIndex: number): boolean {
+  return fromTokenIndex > toTokenIndex + 1
 }
 
 function compressedOffset(
@@ -132,6 +137,7 @@ const metricReplayWords = computed((): readonly Omit<ReplayWordView, 'style'>[] 
   if (tokens.length === 0) return []
   const regressionCounts = new Map<number, number>()
   metric.regressions.forEach((regression) => {
+    if (isSkipReturnMovement(regression.fromTokenIndex, regression.toTokenIndex)) return
     regressionCounts.set(regression.toTokenIndex, (regressionCounts.get(regression.toTokenIndex) ?? 0) + 1)
   })
   const baseDwell = Math.max(1, Math.round(metric.dwellDurationMs / tokens.length))
@@ -171,7 +177,7 @@ const pageHeatmapWords = computed(() =>
         dwellMs: word.dwellMs,
         visitCount: word.visitCount,
         skipped: word.skipped,
-        regressions: word.regressionCount,
+        regressions: visibleRegressionCountsByTokenIndex.value.get(word.tokenIndex ?? -1) ?? word.regressionCount,
         firstSeenMs: word.firstSeenMs,
         source: 'sample' as const,
       }))
@@ -203,6 +209,7 @@ const pageMovementSteps = computed(() => {
   let previousDisplayOffsetMs: number | null = null
   let currentMovementKind: 'read' | 'regression' | 'skip' = 'read'
   let currentMovementDetail = ''
+  const skippedReturnTokenIndexes = new Set<number>()
 
   rawPageReplaySamples.value.forEach((sample) => {
     if (!sample.text.trim()) return
@@ -218,11 +225,18 @@ const pageMovementSteps = computed(() => {
 
     if (previousTokenIndex !== null && sample.tokenIndex !== null) {
       if (sample.tokenIndex < previousTokenIndex) {
-        currentMovementKind = 'regression'
-        currentMovementDetail = `되돌아보기 · ${formatOffset(displayOffsetMs)}`
+        if (skippedReturnTokenIndexes.has(sample.tokenIndex)) {
+          skippedReturnTokenIndexes.delete(sample.tokenIndex)
+        } else {
+          currentMovementKind = 'regression'
+          currentMovementDetail = `되돌아보기 · ${formatOffset(displayOffsetMs)}`
+        }
       } else if (sample.tokenIndex > previousTokenIndex + 1) {
         currentMovementKind = 'skip'
         currentMovementDetail = `건너뜀 · ${formatOffset(displayOffsetMs)}`
+        for (let skippedIndex = previousTokenIndex + 1; skippedIndex < sample.tokenIndex; skippedIndex += 1) {
+          skippedReturnTokenIndexes.add(skippedIndex)
+        }
       }
     }
 
@@ -236,6 +250,9 @@ const pageMovementSteps = computed(() => {
       isRegression: currentMovementKind === 'regression',
       isSkipped: currentMovementKind === 'skip',
     })
+    if (sample.tokenIndex !== null && currentMovementKind === 'read') {
+      skippedReturnTokenIndexes.delete(sample.tokenIndex)
+    }
     previousTokenIndex = sample.tokenIndex
   })
   if (steps.length > 0) return steps
@@ -265,6 +282,23 @@ const pageMovementSteps = computed(() => {
         || steps.length >= MAX_REPLAY_STEPS
       ) return
       usedRegressionIndexes.add(regressionIndex)
+      if (regression.isSkipReturn) {
+        const fromWord = wordByTokenIndex.get(regression.fromTokenIndex)
+        if (fromWord && steps.length < MAX_REPLAY_STEPS) {
+          addStep({
+            key: `${fromWord.key}:metric-skip-before-return:${regressionIndex}`,
+            label: fromWord.label,
+            detail: `건너뜀 · ${formatOffset(regression.offsetMs)}`,
+            tokenIndex: regression.fromTokenIndex,
+            targetTokenIndexes: [regression.fromTokenIndex],
+            kind: 'skip',
+            isRegression: false,
+            isSkipped: true,
+          })
+        }
+        return
+      }
+
       const fromWord = wordByTokenIndex.get(regression.fromTokenIndex)
       if (fromWord && steps.length < MAX_REPLAY_STEPS) {
         addStep({
@@ -311,6 +345,19 @@ const pageMovementSteps = computed(() => {
 
   displayRegressions.value.forEach((regression, regressionIndex) => {
     if (usedRegressionIndexes.has(regressionIndex) || steps.length >= MAX_REPLAY_STEPS) return
+    if (regression.isSkipReturn) {
+      addStep({
+        key: `metric-skip-return:${regression.fromTokenIndex}:${regression.toTokenIndex}:${regressionIndex}`,
+        label: tokenPositionLabel(regression.fromTokenIndex),
+        detail: `건너뜀 · ${formatOffset(regression.offsetMs)}`,
+        tokenIndex: regression.fromTokenIndex,
+        targetTokenIndexes: [regression.fromTokenIndex],
+        kind: 'skip',
+        isRegression: false,
+        isSkipped: true,
+      })
+      return
+    }
     addStep({
       key: `metric-regression:${regression.fromTokenIndex}:${regression.toTokenIndex}:${regressionIndex}`,
       label: tokenPositionLabel(regression.toTokenIndex),
@@ -349,8 +396,21 @@ const displayRegressions = computed<readonly DisplayRegressionView[]>(() => {
       fromTokenIndex: regression.fromTokenIndex,
       toTokenIndex: regression.toTokenIndex,
       offsetMs,
+      isSkipReturn: isSkipReturnMovement(regression.fromTokenIndex, regression.toTokenIndex),
     }
   })
+})
+
+const visibleRegressions = computed(() =>
+  displayRegressions.value.filter((regression) => !regression.isSkipReturn),
+)
+
+const visibleRegressionCountsByTokenIndex = computed(() => {
+  const counts = new Map<number, number>()
+  visibleRegressions.value.forEach((regression) => {
+    counts.set(regression.toTokenIndex, (counts.get(regression.toTokenIndex) ?? 0) + 1)
+  })
+  return counts
 })
 
 const replayDataLabel = computed(() =>
@@ -555,7 +615,7 @@ onBeforeUnmount(stopReplay)
       <section class="story-page-analysis-record" aria-label="시선 분석 기록">
         <div class="story-page-heatmap__heading">
           <h4>시선 분석 기록</h4>
-          <span>{{ metric.regressionCount }}회 되돌아보기</span>
+          <span>{{ visibleRegressions.length }}회 되돌아보기</span>
         </div>
 
       <dl class="story-page-analysis__metrics">
@@ -579,7 +639,7 @@ onBeforeUnmount(stopReplay)
         </div>
         <div>
           <dt>되돌아보기 횟수</dt>
-          <dd>{{ metric.regressionCount }}회</dd>
+          <dd>{{ visibleRegressions.length }}회</dd>
         </div>
       </dl>
 
@@ -643,14 +703,14 @@ onBeforeUnmount(stopReplay)
       <section class="story-page-regressions" aria-labelledby="story-page-regressions-title">
         <div class="story-page-regressions__heading">
           <h4 id="story-page-regressions-title">되돌아보기 상세</h4>
-          <span>{{ displayRegressions.length }}회</span>
+          <span>{{ visibleRegressions.length }}회</span>
         </div>
-        <p v-if="displayRegressions.length === 0" class="story-page-regressions__empty">
+        <p v-if="visibleRegressions.length === 0" class="story-page-regressions__empty">
           이 페이지에서 되돌아본 기록이 없습니다.
         </p>
         <ol v-else>
           <li
-            v-for="(regression, index) in displayRegressions"
+            v-for="(regression, index) in visibleRegressions"
             :key="`${regression.offsetMs}-${index}`"
           >
             <strong>{{ index + 1 }}번째</strong>
