@@ -672,4 +672,21 @@ describe('MockTrainingRepository', () => {
     expect(json.contentType).toContain('application/json')
     expect(await csv.blob.text()).toContain('trainingId')
   })
+
+  it('uses the backend demo date for curriculum history periods', async () => {
+    const request = vi.fn().mockResolvedValue([])
+    const trainingApi = createTrainingApi(
+      request,
+      undefined,
+      () => new Date('2026-08-03T12:00:00+09:00'),
+      async () => new Date('2026-08-04T12:00:00+09:00'),
+    )
+
+    await trainingApi.getCurriculumLogs(7, '30d')
+
+    expect(request).toHaveBeenCalledWith(
+      '/api/admin/training/7/curriculum-log?from=2026-07-06&to=2026-08-04',
+      {},
+    )
+  })
 })

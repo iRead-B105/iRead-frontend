@@ -1,8 +1,16 @@
+import { apiRequest } from '@/lib/api'
+import { resolveDemoReferenceDate } from '@/features/teacher/devReferenceDate'
 import { createStudentApi, type StudentApi } from '../api'
 import type { StudentRepository } from './studentRepository'
 
 export class ApiStudentRepository implements StudentRepository {
-  constructor(private readonly api: StudentApi = createStudentApi()) {}
+  constructor(
+    private readonly api: StudentApi = createStudentApi(
+      apiRequest,
+      () => new Date(),
+      resolveDemoReferenceDate,
+    ),
+  ) {}
 
   list(query = {}, options = {}) {
     return this.api.list(query, options)

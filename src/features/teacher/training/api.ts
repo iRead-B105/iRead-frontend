@@ -1,6 +1,10 @@
 import { apiRequest, downloadFile, jsonBody } from '@/lib/api'
 import { resolveHistoryDateRange } from '@/features/teacher/periodDateRange'
 import {
+  resolveReferenceDate,
+  type ReferenceDateResolver,
+} from '@/features/teacher/devReferenceDate'
+import {
   mapRawGazeAnalysis,
   type GazeAnalysisState,
   type RawGazeAnalysisDto,
@@ -342,6 +346,7 @@ export function createTrainingApi(
   request: TrainingApiRequest = apiRequest,
   download: TrainingApiDownloadRequest = downloadFile,
   now: () => Date = () => new Date(),
+  referenceDate: ReferenceDateResolver = async () => null,
 ): TrainingApi {
   return {
     async getCatalog(studentId, options) {
@@ -419,7 +424,8 @@ export function createTrainingApi(
       )
     },
     async getCurriculumLogs(studentId, period, options) {
-      const { from, to } = resolveHistoryDateRange(period, now())
+      const today = await resolveReferenceDate(studentId, now, referenceDate, options)
+      const { from, to } = resolveHistoryDateRange(period, today)
       const search = new URLSearchParams({ from, to })
       const dto = await request<readonly CurriculumLogDto[]>(
         `/api/admin/training/${studentId}/curriculum-log?${search}`,
@@ -440,7 +446,8 @@ export function createTrainingApi(
       return mapTrainingLog(curriculumId, dto)
     },
     async getStatistics(studentId, curriculumId, period, options) {
-      const { from, to } = resolveHistoryDateRange(period, now())
+      const today = await resolveReferenceDate(studentId, now, referenceDate, options)
+      const { from, to } = resolveHistoryDateRange(period, today)
       const search = new URLSearchParams({ from, to })
       const [statistics, readingSpeed] = await Promise.all([
         request<TrainingStatisticsDto>(

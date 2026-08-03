@@ -12,7 +12,7 @@ interface CapturedRealtimeOptions {
   readonly onEvent: (event: {
     eventId: string
     studentId: number
-    resource: 'STUDENT' | 'TRAINING'
+    resource: 'STUDENT' | 'CURRICULUM' | 'TRAINING'
     resourceId: number | null
     changeType: string
     occurredAt: string
@@ -237,6 +237,51 @@ describe('installTeacherRealtimeSync', () => {
 
     expect(handleLessonMaterialContentUpdated).toHaveBeenCalledWith(2001, 101)
     expect(loadForStudent).not.toHaveBeenCalled()
+    stop()
+  })
+
+  it('refreshes overview trends when the learner advances a demo day', async () => {
+    const { pinia, router, students } = await setup()
+    await router.push('/teacher/students/2001')
+    vi.spyOn(students, 'refreshList').mockResolvedValue(true)
+    vi.spyOn(students, 'refreshSummary').mockResolvedValue(true)
+    vi.spyOn(students, 'loadDetail').mockImplementation(async () => {
+      students.detailStatusById[2001] = 'success'
+      return null
+    })
+    vi.spyOn(students, 'loadLearningSummary').mockImplementation(async () => {
+      students.learningSummaryStatusById[2001] = 'success'
+      return null
+    })
+    vi.spyOn(students, 'loadLearningEvents').mockImplementation(async () => {
+      students.learningEventsStatusById[2001] = 'success'
+      return []
+    })
+    const loadAccuracyTrend = vi.spyOn(students, 'loadAccuracyTrend').mockImplementation(async () => {
+      students.accuracyTrendStatusById[2001] = 'success'
+      return null
+    })
+    const loadReadingSpeedTrend = vi
+      .spyOn(students, 'loadReadingSpeedTrend')
+      .mockImplementation(async () => {
+        students.readingSpeedTrendStatusById[2001] = 'success'
+        return null
+      })
+    const stop = installTeacherRealtimeSync(pinia, router)
+    const options = realtimeHarness.options as CapturedRealtimeOptions
+
+    await options.onEvent({
+      eventId: 'event-next-day',
+      studentId: 2001,
+      resource: 'CURRICULUM',
+      resourceId: 180004,
+      changeType: 'ADVANCED_TO_NEXT_DAY',
+      occurredAt: '2026-08-04T10:30:00+09:00',
+      version: 1,
+    })
+
+    expect(loadAccuracyTrend).toHaveBeenCalledWith(2001)
+    expect(loadReadingSpeedTrend).toHaveBeenCalledWith(2001)
     stop()
   })
 })

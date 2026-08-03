@@ -1,4 +1,8 @@
 import { apiRequest, jsonBody } from '@/lib/api'
+import {
+  resolveReferenceDate,
+  type ReferenceDateResolver,
+} from '@/features/teacher/devReferenceDate'
 import { serializeStudentListQuery } from './query'
 import { resolveTrainingHistoryDateRange } from './trainingHistoryPeriod'
 import type {
@@ -204,6 +208,7 @@ function mapStudentDetail(dto: StudentDetailDto): StudentDetail {
 export function createStudentApi(
   request: StudentApiRequest = apiRequest,
   now: () => Date = () => new Date(),
+  referenceDate: ReferenceDateResolver = async () => null,
 ): StudentApi {
   return {
     list(query, options) {
@@ -280,7 +285,8 @@ export function createStudentApi(
       }
     },
     async getReadingSpeedTrend(studentId, options) {
-      const { from, to } = resolveTrainingHistoryDateRange('30d', now())
+      const today = await resolveReferenceDate(studentId, now, referenceDate, options)
+      const { from, to } = resolveTrainingHistoryDateRange('30d', today)
       const search = new URLSearchParams({ from, to })
       const result = await request<StudentReadingSpeedTrendDto>(
         `/api/admin/student/${studentId}/reading-speed-trend?${search}`,
@@ -299,7 +305,8 @@ export function createStudentApi(
       }
     },
     async getTrainingHistory(studentId, query, options) {
-      const { from, to } = resolveTrainingHistoryDateRange(query, now())
+      const today = await resolveReferenceDate(studentId, now, referenceDate, options)
+      const { from, to } = resolveTrainingHistoryDateRange(query, today)
       const search = new URLSearchParams({ from, to })
       const result = await request<StudentTrainingHistoryDto>(
         `/api/admin/student/${studentId}/training-history?${search}`,
