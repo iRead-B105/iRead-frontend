@@ -7,6 +7,7 @@ import PageHeader from '@/components/teacher/PageHeader.vue'
 import StoryPageAnalysisPanel from '@/components/teacher/story/StoryPageAnalysisPanel.vue'
 import StoryPageNavigator from '@/components/teacher/story/StoryPageNavigator.vue'
 import StoryPagePreview from '@/components/teacher/story/StoryPagePreview.vue'
+import StoryPageEditor from '@/components/teacher/story/StoryPageEditor.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -142,6 +143,10 @@ function retryGaze(): void {
   const storyId = selectedStoryId.value
   if (id === null || storyId === null) return
   void storyStore.loadGazeAnalysis(id, storyId)
+}
+
+function refreshEditedPage(): void {
+  retryDetail()
 }
 </script>
 
@@ -338,11 +343,20 @@ function retryGaze(): void {
                 />
                 <template v-else>
                   <div class="story-page-layout">
-                    <StoryPagePreview
-                      :page="selectedPage"
-                      :active-replay-kind="activeStoryReplayStep?.kind ?? null"
-                      :active-replay-token-indexes="activeStoryReplayStep?.tokenIndexes ?? []"
-                    />
+                    <div class="story-page-main">
+                      <StoryPagePreview
+                        :page="selectedPage"
+                        :active-replay-kind="activeStoryReplayStep?.kind ?? null"
+                        :active-replay-token-indexes="activeStoryReplayStep?.tokenIndexes ?? []"
+                      />
+                      <StoryPageEditor
+                        v-if="selectedPage.editable"
+                        :student-id="studentId!"
+                        :story-id="selectedStory.storyId"
+                        :page="selectedPage"
+                        @updated="refreshEditedPage"
+                      />
+                    </div>
                     <StoryPageAnalysisPanel
                       :story-status="selectedStory.gazeAnalysisStatus"
                       :page="selectedPage"
@@ -615,6 +629,12 @@ function retryGaze(): void {
   gap: 18px;
   grid-template-columns: minmax(0, 1.65fr) minmax(280px, 0.85fr);
   animation: story-page-fade 140ms ease-out;
+}
+
+.story-page-main {
+  display: grid;
+  min-width: 0;
+  gap: 18px;
 }
 
 .story-detail-updating {
