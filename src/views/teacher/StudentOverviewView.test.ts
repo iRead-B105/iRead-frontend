@@ -380,16 +380,29 @@ describe('StudentOverviewView', () => {
     expect(wrapper.text()).toContain('84 → 96 단어/분')
     expect(wrapper.text()).toContain('전체 훈련 이력 보기')
 
-    await wrapper
+    const learningEventButton = wrapper
       .findAll('button')
       .find((button) => button.text().includes('읽기 훈련'))!
-      .trigger('click')
+    await learningEventButton.trigger('click')
     await flushPromises()
 
     expect(getLearningEvent).toHaveBeenCalledWith(1, 'TRAINING', 701)
+    expect(learningEventButton.attributes('aria-expanded')).toBe('true')
+    const expandedEvent = wrapper.get('.learning-event-item.is-expanded')
+    expect(expandedEvent.find('.event-detail-shell').exists()).toBe(true)
+    expect(expandedEvent.text()).toContain('최근 학습 한눈에 보기')
+    expect(expandedEvent.text()).toContain('학습 결과')
+    expect(expandedEvent.text()).toContain('교수자 확인')
+    expect(expandedEvent.text()).toContain('다음 학습 제안')
+    expect(expandedEvent.text()).toContain('정확도')
+    expect(expandedEvent.text()).toContain('68%')
+    expect(expandedEvent.text()).toContain('재시도')
+    expect(expandedEvent.text()).toContain('2회')
     expect(wrapper.text()).toContain('받침이 있는 문장 읽기')
     expect(wrapper.text()).toContain('최근 6주 정확도가 가장 낮은 영역입니다.')
-    expect(wrapper.get('.event-detail').element.closest('li')).not.toBeNull()
+    expect(wrapper.get('.event-detail').element.closest('.learning-event-item')).toBe(
+      expandedEvent.element,
+    )
 
     await wrapper
       .findAll('button')
@@ -401,11 +414,9 @@ describe('StudentOverviewView', () => {
     )
     expect(updateTeacherMemo).not.toHaveBeenCalled()
 
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('읽기 훈련'))!
-      .trigger('click')
+    await learningEventButton.trigger('click')
 
+    expect(learningEventButton.attributes('aria-expanded')).toBe('false')
     expect(wrapper.find('.event-detail').exists()).toBe(false)
   })
 
