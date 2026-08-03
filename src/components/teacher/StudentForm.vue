@@ -374,6 +374,16 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
           </div>
         </div>
       </section>
+
+      <section v-if="mode === 'edit'" class="danger-zone" aria-label="아동 삭제">
+        <div>
+          <h3>데이터 관리</h3>
+          <p>아동과 연결된 모든 학습 기록을 영구 삭제합니다.</p>
+        </div>
+        <Button variant="outline" size="sm" type="button" @click="openDeleteDialog">
+          아동 영구 삭제
+        </Button>
+      </section>
     </SettingsSection>
 
     <div class="student-form__footer">
@@ -388,15 +398,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
         @cancel="router.push({ name: 'teacher-students' })"
       />
 
-      <section v-if="mode === 'edit'" class="danger-zone" aria-label="아동 삭제">
-        <div>
-          <h2>데이터 관리</h2>
-          <p>아동과 연결된 모든 학습 기록을 영구 삭제합니다.</p>
-        </div>
-        <Button variant="outline" size="sm" type="button" @click="openDeleteDialog">
-          아동 영구 삭제
-        </Button>
-      </section>
     </div>
 
     <AlertDialog :open="deleteDialogOpen" @update:open="handleDeleteDialogOpen">
@@ -511,12 +512,12 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  margin-top: 2px;
-  padding: 18px 2px 0;
+  margin-top: 24px;
+  padding: 22px 0 0;
   border-top: 1px solid var(--border);
 }
 
-.danger-zone h2 {
+.danger-zone h3 {
   margin: 0;
   color: var(--slate-700);
   font-size: 13px;

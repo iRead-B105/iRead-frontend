@@ -14,7 +14,6 @@ const trainingCatalogMetadata = [
   [3, '글자 따라 보기', 3, '음절 따라 보기'],
   [4, '소리 듣고 고르기', 1, '자음 소리 고르기'],
   [5, '소리 듣고 고르기', 2, '모음 소리 고르기'],
-  [6, '소리 듣고 고르기', 3, '자음·모음 구별하기'],
   [7, '소리 듣고 고르기', 4, '음절의 첫소리 찾기'],
   [8, '소리 듣고 고르기', 5, '낱말의 첫소리 찾기'],
   [9, '소리 듣고 고르기', 6, '같은 첫소리 낱말 찾기'],
@@ -22,7 +21,6 @@ const trainingCatalogMetadata = [
   [11, '소리 듣고 고르기', 8, '낱말의 끝소리 고르기'],
   [12, '소리 듣고 고르기', 9, '서로 다른 받침 음절 비교하기'],
   [13, '소리 듣고 고르기', 10, '비슷한 소리 고르기'],
-  [14, '글자 만들기', 1, '음소 합쳐 음절 만들기'],
   [15, '글자 만들기', 2, '음절 합쳐 낱말 만들기'],
   [16, '글자 만들기', 3, '기본 글자 만들기'],
   [17, '글자 만들기', 4, '받침 글자 만들기'],
@@ -47,7 +45,7 @@ const trainingCatalogMetadata = [
 const mockAchievementByTemplateId: Readonly<Record<number, number>> = {
   12: 72,
   13: 61,
-  14: 48,
+  15: 48,
 }
 
 export const trainingCatalogFixture: readonly TrainingCatalogItem[] = trainingCatalogMetadata.map(
@@ -60,6 +58,13 @@ export const trainingCatalogFixture: readonly TrainingCatalogItem[] = trainingCa
     form: null,
   }),
 )
+
+function catalogForm(trainingTemplateId: number): TrainingCatalogItem['form'] {
+  return (
+    trainingCatalogFixture.find((item) => item.trainingTemplateId === trainingTemplateId)?.form ??
+    null
+  )
+}
 
 export const currentCurriculumFixture: DailyCurriculum = {
   curriculumId: 201,
@@ -101,7 +106,7 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
     trainingId: 101,
     trainingTemplateId: 12,
     name: '서로 다른 받침 음절 비교하기',
-    form: trainingCatalogFixture[11]?.form ?? null,
+    form: catalogForm(12),
     generatedData: {
       questions: [
         {
@@ -126,7 +131,7 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
     trainingId: 102,
     trainingTemplateId: 12,
     name: '서로 다른 받침 음절 비교하기',
-    form: trainingCatalogFixture[11]?.form ?? null,
+    form: catalogForm(12),
     generatedData: null,
     status: 'NOT_READY',
     startedAt: null,
@@ -138,7 +143,7 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
     trainingId: 103,
     trainingTemplateId: 13,
     name: '비슷한 소리 고르기',
-    form: trainingCatalogFixture[12]?.form ?? null,
+    form: catalogForm(13),
     generatedData: {
       questions: [
         {
@@ -158,7 +163,7 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
     trainingId: 901,
     trainingTemplateId: 12,
     name: '서로 다른 받침 음절 비교하기',
-    form: trainingCatalogFixture[11]?.form ?? null,
+    form: catalogForm(12),
     generatedData: null,
     status: 'COMPLETED',
     startedAt: '2026-07-20T09:00:00+09:00',
@@ -188,7 +193,7 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
     trainingId: 902,
     trainingTemplateId: 13,
     name: '비슷한 소리 고르기',
-    form: trainingCatalogFixture[12]?.form ?? null,
+    form: catalogForm(13),
     generatedData: null,
     status: 'COMPLETED',
     startedAt: '2026-07-20T09:10:00+09:00',
@@ -208,9 +213,9 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
   },
   {
     trainingId: 903,
-    trainingTemplateId: 14,
-    name: '음소 합쳐 음절 만들기',
-    form: trainingCatalogFixture[13]?.form ?? null,
+    trainingTemplateId: 15,
+    name: '음절 합쳐 낱말 만들기',
+    form: catalogForm(15),
     generatedData: null,
     status: 'COMPLETED',
     startedAt: '2026-07-20T09:16:00+09:00',
@@ -222,7 +227,7 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
     trainingId: 891,
     trainingTemplateId: 11,
     name: '낱말의 끝소리 고르기',
-    form: trainingCatalogFixture[10]?.form ?? null,
+    form: catalogForm(11),
     generatedData: null,
     status: 'COMPLETED',
     startedAt: '2026-07-05T10:00:00+09:00',
@@ -244,7 +249,7 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
     trainingId: 801,
     trainingTemplateId: 11,
     name: '낱말의 끝소리 고르기',
-    form: trainingCatalogFixture[10]?.form ?? null,
+    form: catalogForm(11),
     generatedData: null,
     status: 'COMPLETED',
     startedAt: '2026-05-18T14:00:00+09:00',
@@ -266,7 +271,7 @@ const thirtyDayCurriculumLogs: readonly CurriculumLog[] = [
         trainingName: '서로 다른 받침 음절 비교하기',
       },
       { trainingId: 902, unitName: '소리 듣고 고르기', trainingName: '비슷한 소리 고르기' },
-      { trainingId: 903, unitName: '글자 만들기', trainingName: '음소 합쳐 음절 만들기' },
+      { trainingId: 903, unitName: '글자 만들기', trainingName: '음절 합쳐 낱말 만들기' },
     ],
   },
   {
@@ -332,7 +337,7 @@ export const trainingLogFixtures: Readonly<Record<number, CurriculumTrainingLog>
       },
       {
         trainingId: 903,
-        trainingName: '음소 합쳐 음절 만들기',
+        trainingName: '음절 합쳐 낱말 만들기',
         startedAt: '2026-07-20T09:16:00+09:00',
         finishedAt: '2026-07-20T09:20:00+09:00',
         accuracy: null,
@@ -389,7 +394,7 @@ export const trainingStatisticsFixtures: Readonly<Record<string, TrainingStatist
       },
       {
         trainingId: 903,
-        trainingName: '음소 합쳐 음절 만들기',
+        trainingName: '음절 합쳐 낱말 만들기',
         date: '2026-07-20',
         accuracy: null,
         previousTrainingDate: null,

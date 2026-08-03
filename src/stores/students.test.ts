@@ -89,6 +89,26 @@ beforeEach(() => {
 })
 
 describe('Student store', () => {
+  it('keeps a resolved empty list visible during a background refresh', async () => {
+    const pending = deferred<StudentListResult>()
+    const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
+      list: vi.fn().mockResolvedValueOnce(result([])).mockReturnValueOnce(pending.promise),
+      getSummary: vi.fn().mockResolvedValue({ totalStudents: 0, scheduledTodayCount: 0 }),
+    }
+    const store = useStudentStore()
+    store.setRepository(repository)
+    await store.loadList()
+
+    const refresh = store.refreshList()
+
+    expect(store.listStatus).toBe('success')
+    expect(store.students).toEqual([])
+    pending.resolve(result([]))
+    await expect(refresh).resolves.toBe(true)
+    expect(store.listStatus).toBe('success')
+  })
+
   it('목록 재조회 실패 시 기존 목록을 유지하고 서버 원문을 노출하지 않는다', async () => {
     const list = vi
       .fn()

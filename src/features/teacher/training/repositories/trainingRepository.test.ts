@@ -99,7 +99,7 @@ describe('ApiTrainingRepository', () => {
     const updateCurriculum = vi.fn().mockResolvedValue(undefined)
     const getCurriculum = vi.fn().mockResolvedValue(updated)
     const repository = new ApiTrainingRepository(api({ updateCurriculum, getCurriculum }))
-    const request = { trainingTemplateIds: [11, 12, 13, 14, 11] }
+    const request = { trainingTemplateIds: [11, 12, 13, 15, 11] }
 
     await expect(repository.updateCurriculum(1, 10, request)).resolves.toBe(updated)
     expect(updateCurriculum).toHaveBeenCalledWith(1, 10, request)
@@ -178,7 +178,7 @@ describe('Training API target contract', () => {
     const request = vi.fn().mockResolvedValue({
       trainingTypes: [
         {
-          trainingId: 14,
+          trainingId: 15,
           category: '글자 만들기',
           sequence: 1,
           trainingName: '음소 합쳐 음절 만들기',
@@ -197,7 +197,7 @@ describe('Training API target contract', () => {
 
     await expect(trainingApi.getCatalog(7)).resolves.toEqual([
       expect.objectContaining({
-        trainingTemplateId: 14,
+        trainingTemplateId: 15,
         unitName: '글자 만들기',
         sequence: 1,
       }),
@@ -237,19 +237,19 @@ describe('Training API target contract', () => {
     const trainingApi = createTrainingApi(request)
 
     await trainingApi.createCurriculum(1, {
-      trainingTemplateIds: [12, 12, 13, 14, 11],
+      trainingTemplateIds: [12, 12, 13, 15, 11],
     })
     await trainingApi.updateCurriculum(1, 10, {
-      trainingTemplateIds: [14, 13, 12, 11, 11],
+      trainingTemplateIds: [15, 13, 12, 11, 11],
     })
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/admin/training/1/curriculum', {
       method: 'POST',
-      body: JSON.stringify({ trainingTemplateIds: [12, 12, 13, 14, 11] }),
+      body: JSON.stringify({ trainingTemplateIds: [12, 12, 13, 15, 11] }),
     })
     expect(request).toHaveBeenNthCalledWith(2, '/api/admin/training/1/10', {
       method: 'PATCH',
-      body: JSON.stringify({ trainingTemplateIds: [14, 13, 12, 11, 11] }),
+      body: JSON.stringify({ trainingTemplateIds: [15, 13, 12, 11, 11] }),
     })
   })
 
@@ -524,16 +524,16 @@ describe('Training API target contract', () => {
 })
 
 describe('MockTrainingRepository', () => {
-  it('삭제된 24번을 제외한 33개 template ID와 배열 순서를 공통으로 사용한다', async () => {
+  it('비활성 6·14·24번을 제외한 31개 template ID와 배열 순서를 공통으로 사용한다', async () => {
     const repository = new MockTrainingRepository()
 
     await expect(repository.getCatalog(1)).resolves.toEqual(trainingCatalogFixture)
-    expect(trainingCatalogFixture).toHaveLength(33)
+    expect(trainingCatalogFixture).toHaveLength(31)
     expect(trainingCatalogFixture.map((item) => item.trainingTemplateId)).toEqual(
       Array.from({ length: 34 }, (_, index) => index + 1)
-        .filter((id) => id !== 24),
+        .filter((id) => ![6, 14, 24].includes(id)),
     )
-    expect(trainingCatalogFixture[32]).toMatchObject({
+    expect(trainingCatalogFixture[30]).toMatchObject({
       trainingTemplateId: 34,
       unitName: '유창하게 읽기',
       sequence: 5,
@@ -545,7 +545,7 @@ describe('MockTrainingRepository', () => {
     const repository = new MockTrainingRepository()
 
     const updated = await repository.updateCurriculum(1, 201, {
-      trainingTemplateIds: [13, 12, 12, 14, 11],
+      trainingTemplateIds: [13, 12, 12, 15, 11],
     })
 
     expect(updated.trainings.map((training) => training.trainingId)).toEqual([
@@ -615,7 +615,7 @@ describe('MockTrainingRepository', () => {
     )
     await expect(
       repository.createCurriculum(1, {
-        trainingTemplateIds: [11, 12, 13, 14, 11],
+        trainingTemplateIds: [11, 12, 13, 15, 11],
       }),
     ).rejects.toMatchObject({
       status: 409,

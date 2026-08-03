@@ -49,7 +49,7 @@ describe('StudentLearningEvents', () => {
     expect(wrapper.text()).not.toContain('확인 완료')
   })
 
-  it('Backend 추천 근거·시간·횟수를 표시하고 상세을 메모 추가 이벤트로 전달한다', async () => {
+  it('선택한 카드 안에서 학습 결과·교수자 확인·다음 제안을 함께 표시한다', async () => {
     const wrapper = mount(StudentLearningEvents, {
       props: {
         events,
@@ -61,17 +61,23 @@ describe('StudentLearningEvents', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('받침이 있는 문장 읽기')
-    expect(wrapper.text()).toContain('최근 6주 정확도가 가장 낮은 영역입니다.')
-    expect(wrapper.text()).toContain('10분')
-    expect(wrapper.text()).toContain('2회')
-    expect(wrapper.text()).toContain('받침 ㄹ 발음')
-    expect(wrapper.get('.event-detail').element.closest('li')).not.toBeNull()
+    const expandedItem = wrapper.get('.learning-event-item.is-expanded')
+    expect(expandedItem.get('.learning-event').attributes('aria-expanded')).toBe('true')
+    expect(expandedItem.get('.event-detail-shell').element.parentElement).toBe(expandedItem.element)
+    expect(expandedItem.find('.event-detail__heading').exists()).toBe(false)
+    expect(expandedItem.text()).toContain('학습 결과')
+    expect(expandedItem.text()).toContain('교수자 확인')
+    expect(expandedItem.text()).toContain('다음 학습 제안')
+    expect(expandedItem.text()).toContain('받침이 있는 문장 읽기')
+    expect(expandedItem.text()).toContain('최근 6주 정확도가 가장 낮은 영역입니다.')
+    expect(expandedItem.text()).toContain('10분')
+    expect(expandedItem.text()).toContain('2회')
+    expect(expandedItem.text()).toContain('받침 ㄹ 발음')
     expect(wrapper.findAll('.event-detail')).toHaveLength(1)
 
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === '내부 메모에 추가')!
+      .find((button) => button.text() === '학습 기록에 추가')!
       .trigger('click')
     expect(wrapper.emitted('addToMemo')).toEqual([[detail]])
   })
@@ -101,7 +107,8 @@ describe('StudentLearningEvents', () => {
 
     expect(wrapper.text()).toContain('산정할 수 없음')
     expect(wrapper.text()).toContain('확인된 문제 구간 없음')
-    expect(wrapper.text()).toContain('Backend에서 제공한 권장 훈련이 없습니다.')
+    expect(wrapper.text()).toContain('추가로 확인할 신호 없음')
+    expect(wrapper.text()).toContain('다음 학습으로 제안된 훈련이 없습니다.')
   })
 
   it('상세 요청 상태가 바뀌어도 선택 카드 내부의 상세 셸을 유지한다', async () => {

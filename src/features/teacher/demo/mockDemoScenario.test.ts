@@ -127,7 +127,7 @@ describe('교수자 mock 데모 시나리오', () => {
     })
     await mutableStudentRepository.updateTeacherMemo(student.primaryId, '새로고침 전 임시 메모')
     await mutableTrainingRepository.updateCurriculum(student.primaryId, curriculum.currentId, {
-      trainingTemplateIds: [14, 13, 12, 11, 14],
+      trainingTemplateIds: [15, 13, 12, 11, 15],
     })
     const createdReport = await mutableReportRepository.create({
       studentId: student.primaryId,

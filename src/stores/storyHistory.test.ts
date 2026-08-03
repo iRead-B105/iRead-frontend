@@ -136,6 +136,29 @@ describe('story history store', () => {
     setActivePinia(createPinia())
   })
 
+  it('keeps a resolved empty story list visible during a background refresh', async () => {
+    const emptyResult: StoryHistoryList = {
+      ...result(6801),
+      stories: [],
+      totalElements: 0,
+      totalPages: 0,
+    }
+    const pending = deferred<StoryHistoryList>()
+    const store = useStoryHistoryStore()
+    store.setRepository(
+      repository(vi.fn().mockResolvedValueOnce(emptyResult).mockReturnValueOnce(pending.promise)),
+    )
+    await store.loadList(1)
+
+    const refresh = store.refreshList(1)
+
+    expect(store.listStatus).toBe('success')
+    expect(store.stories).toEqual([])
+    pending.resolve(emptyResult)
+    await expect(refresh).resolves.toBe(true)
+    expect(store.listStatus).toBe('success')
+  })
+
   it('필터 변경 시 첫 목록 페이지와 이야기·이야기 페이지 선택을 초기화한다', async () => {
     const store = useStoryHistoryStore()
     store.setRepository(repository())

@@ -12,6 +12,10 @@ describe('StudentCommunicationPanel', () => {
       },
     })
 
+    expect(wrapper.get('h2').text()).toBe('학습 기록')
+    expect(wrapper.find('label').exists()).toBe(false)
+    expect(wrapper.get('textarea').attributes('aria-label')).toBe('학습 기록')
+
     await wrapper.get('textarea').setValue('가'.repeat(1001))
 
     expect(wrapper.text()).toContain('1,000자 이내')

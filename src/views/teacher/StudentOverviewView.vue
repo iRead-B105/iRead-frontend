@@ -57,6 +57,9 @@ const learningEventsError = computed(
 )
 const selectedEventId = ref<number | null>(null)
 const selectedEventType = ref<StudentLearningEventType | null>(null)
+const pendingEventId = ref<number | null>(null)
+const pendingEventType = ref<StudentLearningEventType | null>(null)
+let learningEventSelectionSequence = 0
 const selectedEventKey = computed(() =>
   selectedEventId.value === null || selectedEventType.value === null
     ? null
@@ -267,10 +270,13 @@ function memoErrorMessage(error: unknown): string {
 }
 
 async function loadOverview(nextStudentId: number): Promise<void> {
+  learningEventSelectionSequence += 1
   noteDraft.value = ''
   memoError.value = ''
   selectedEventId.value = null
   selectedEventType.value = null
+  pendingEventId.value = null
+  pendingEventType.value = null
   selectedTrend.value = 'accuracy'
   if (!Number.isInteger(nextStudentId) || nextStudentId <= 0) return
 
@@ -289,13 +295,42 @@ async function loadOverview(nextStudentId: number): Promise<void> {
 
 async function selectLearningEvent(event: StudentLearningEvent): Promise<void> {
   if (selectedEventId.value === event.eventId && selectedEventType.value === event.eventType) {
+    learningEventSelectionSequence += 1
     selectedEventId.value = null
     selectedEventType.value = null
+    pendingEventId.value = null
+    pendingEventType.value = null
     return
   }
-  selectedEventId.value = event.eventId
-  selectedEventType.value = event.eventType
-  await studentStore.loadLearningEvent(studentId.value, event.eventType, event.eventId)
+
+  if (pendingEventId.value === event.eventId && pendingEventType.value === event.eventType) return
+
+  const requestSequence = ++learningEventSelectionSequence
+  const eventKey = studentStore.insightKey(studentId.value, `${event.eventType}:${event.eventId}`)
+  const cachedDetail = studentStore.learningEventDetailsByKey[eventKey]
+  const keepCurrentDetailVisible = selectedEventDetail.value !== null && cachedDetail === undefined
+
+  pendingEventId.value = event.eventId
+  pendingEventType.value = event.eventType
+
+  if (!keepCurrentDetailVisible) {
+    selectedEventId.value = event.eventId
+    selectedEventType.value = event.eventType
+  }
+
+  const loadedDetail = await studentStore.loadLearningEvent(
+    studentId.value,
+    event.eventType,
+    event.eventId,
+  )
+  if (learningEventSelectionSequence !== requestSequence) return
+
+  pendingEventId.value = null
+  pendingEventType.value = null
+  if (loadedDetail !== null || studentStore.learningEventDetailStatusByKey[eventKey] === 'error') {
+    selectedEventId.value = event.eventId
+    selectedEventType.value = event.eventType
+  }
 }
 
 async function retryLearningEvent(event: StudentLearningEvent): Promise<void> {
@@ -557,6 +592,8 @@ watch(studentId, loadOverview, { immediate: true })
             :events="learningEvents"
             :selected-event-id="selectedEventId"
             :selected-event-type="selectedEventType"
+            :pending-event-id="pendingEventId"
+            :pending-event-type="pendingEventType"
             :detail="selectedEventDetail"
             :list-status="learningEventsStatus"
             :list-error="learningEventsError"

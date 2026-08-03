@@ -108,11 +108,13 @@ describe('installTeacherRealtimeSync', () => {
   it('Store 오류가 3초 지속될 때 경고하고 현재 화면 재조회 성공 후 제거한다', async () => {
     const { pinia, router, students, freshness } = await setup()
     let shouldSucceed = false
-    const loadList = vi.spyOn(students, 'loadList').mockImplementation(async () => {
+    const refreshList = vi.spyOn(students, 'refreshList').mockImplementation(async () => {
       students.listStatus = shouldSucceed ? 'success' : 'error'
+      return shouldSucceed
     })
-    const loadSummary = vi.spyOn(students, 'loadSummary').mockImplementation(async () => {
+    const refreshSummary = vi.spyOn(students, 'refreshSummary').mockImplementation(async () => {
       students.summaryStatus = shouldSucceed ? 'success' : 'error'
+      return shouldSucceed
     })
     const stop = installTeacherRealtimeSync(pinia, router)
     const options = realtimeHarness.options as CapturedRealtimeOptions
@@ -129,8 +131,8 @@ describe('installTeacherRealtimeSync', () => {
     freshness.requestRetry()
     await flushPromises()
 
-    expect(loadList).toHaveBeenCalled()
-    expect(loadSummary).toHaveBeenCalled()
+    expect(refreshList).toHaveBeenCalled()
+    expect(refreshSummary).toHaveBeenCalled()
     expect(freshness.warningVisible).toBe(false)
     expect(freshness.retrying).toBe(false)
     stop()
@@ -138,11 +140,13 @@ describe('installTeacherRealtimeSync', () => {
 
   it('보고서 라우트로 이동하면 이전 최신성 상태를 제거하고 이벤트로 다시 만들지 않는다', async () => {
     const { pinia, router, students, freshness } = await setup()
-    vi.spyOn(students, 'loadList').mockImplementation(async () => {
+    vi.spyOn(students, 'refreshList').mockImplementation(async () => {
       students.listStatus = 'error'
+      return false
     })
-    vi.spyOn(students, 'loadSummary').mockImplementation(async () => {
+    vi.spyOn(students, 'refreshSummary').mockImplementation(async () => {
       students.summaryStatus = 'error'
+      return false
     })
     const stop = installTeacherRealtimeSync(pinia, router)
     const options = realtimeHarness.options as CapturedRealtimeOptions
@@ -177,11 +181,13 @@ describe('installTeacherRealtimeSync', () => {
     const training = useTrainingStore(pinia)
     const loadForStudent = vi.spyOn(training, 'loadForStudent').mockResolvedValue()
     const refreshForStudent = vi.spyOn(training, 'refreshForStudent').mockResolvedValue(true)
-    vi.spyOn(students, 'loadList').mockImplementation(async () => {
+    vi.spyOn(students, 'refreshList').mockImplementation(async () => {
       students.listStatus = 'success'
+      return true
     })
-    vi.spyOn(students, 'loadSummary').mockImplementation(async () => {
+    vi.spyOn(students, 'refreshSummary').mockImplementation(async () => {
       students.summaryStatus = 'success'
+      return true
     })
     const stop = installTeacherRealtimeSync(pinia, router)
     const options = realtimeHarness.options as CapturedRealtimeOptions
@@ -208,11 +214,13 @@ describe('installTeacherRealtimeSync', () => {
     const handleLessonMaterialContentUpdated = vi
       .spyOn(training, 'handleLessonMaterialContentUpdated')
       .mockResolvedValue(true)
-    vi.spyOn(students, 'loadList').mockImplementation(async () => {
+    vi.spyOn(students, 'refreshList').mockImplementation(async () => {
       students.listStatus = 'success'
+      return true
     })
-    vi.spyOn(students, 'loadSummary').mockImplementation(async () => {
+    vi.spyOn(students, 'refreshSummary').mockImplementation(async () => {
       students.summaryStatus = 'success'
+      return true
     })
     const stop = installTeacherRealtimeSync(pinia, router)
     const options = realtimeHarness.options as CapturedRealtimeOptions

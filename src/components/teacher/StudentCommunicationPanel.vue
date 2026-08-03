@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import SaveToast from '@/components/common/SaveToast.vue'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   normalizeTeacherMemo,
@@ -47,14 +46,13 @@ const saveLabel = computed(() =>
   <section class="communication-panel" aria-labelledby="communication-title">
     <header class="communication-panel__heading">
       <div>
-        <h2 id="communication-title">기록과 소통</h2>
+        <h2 id="communication-title">학습 기록</h2>
       </div>
       <SaveToast :visible="saved" message="교수자 내부 메모가 저장되었습니다." inline />
     </header>
 
     <div class="note-editor">
       <div class="note-editor__label">
-        <Label for="internal-note">내부 메모</Label>
         <span :class="{ 'is-invalid': Boolean(validationError) }">
           {{ noteDraft.trim().length.toLocaleString('ko-KR') }} /
           {{ STUDENT_MEMO_MAX_LENGTH.toLocaleString('ko-KR') }}
@@ -64,6 +62,7 @@ const saveLabel = computed(() =>
         id="internal-note"
         class="textarea"
         :model-value="noteDraft"
+        aria-label="학습 기록"
         :aria-invalid="Boolean(validationError)"
         :aria-describedby="validationError || error ? 'internal-note-error' : undefined"
         placeholder="학습 지도와 상담에 필요한 내부 메모를 작성합니다."
@@ -120,13 +119,8 @@ const saveLabel = computed(() =>
 .note-editor__label {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-}
-
-.note-editor__label label {
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .note-editor__label span {

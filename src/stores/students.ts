@@ -165,23 +165,22 @@ export const useStudentStore = defineStore('students', () => {
     query.page = 0
   }
 
-  async function loadList(): Promise<void> {
+  async function requestList(background: boolean): Promise<boolean> {
     const requestSequence = ++listSequence
     listController?.abort()
     const controller = new AbortController()
     listController = controller
-    if (students.value.length === 0) listStatus.value = 'loading'
+    if (!background && students.value.length === 0) listStatus.value = 'loading'
     listError.value = null
     listUiError.value = null
 
     try {
       const result = await repository.value.list({ ...query }, { signal: controller.signal })
-      if (requestSequence !== listSequence) return
+      if (requestSequence !== listSequence) return false
 
       if (result.totalPages > 0 && query.page >= result.totalPages) {
         query.page = result.totalPages - 1
-        await loadList()
-        return
+        return requestList(background)
       }
 
       students.value = result.students
@@ -191,34 +190,56 @@ export const useStudentStore = defineStore('students', () => {
       totalPages.value = result.totalPages
       listStatus.value = 'success'
       listStale.value = false
+      return true
     } catch (error) {
-      if (isAbortError(error) || requestSequence !== listSequence) return
-      listStatus.value = 'error'
+      if (isAbortError(error) || requestSequence !== listSequence) return false
+      if (!background) listStatus.value = 'error'
+      listStale.value = true
       listUiError.value = mapCommonError(error)
       listError.value = listUiError.value?.message ?? errorMessage(error)
+      return false
     } finally {
       if (requestSequence === listSequence) listController = null
     }
   }
 
-  async function loadSummary(): Promise<void> {
+  async function loadList(): Promise<void> {
+    await requestList(false)
+  }
+
+  function refreshList(): Promise<boolean> {
+    return requestList(listStatus.value === 'success')
+  }
+
+  async function requestSummary(background: boolean): Promise<boolean> {
     summaryController?.abort()
     const controller = new AbortController()
     summaryController = controller
-    if (summary.value === null) summaryStatus.value = 'loading'
+    if (!background && summary.value === null) summaryStatus.value = 'loading'
     summaryError.value = null
 
     try {
       summary.value = await repository.value.getSummary({ signal: controller.signal })
       summaryStatus.value = 'success'
       summaryStale.value = false
+      return true
     } catch (error) {
-      if (isAbortError(error)) return
-      summaryStatus.value = 'error'
+      if (isAbortError(error)) return false
+      if (!background) summaryStatus.value = 'error'
+      summaryStale.value = true
       summaryError.value = errorMessage(error)
+      return false
     } finally {
       if (summaryController === controller) summaryController = null
     }
+  }
+
+  async function loadSummary(): Promise<void> {
+    await requestSummary(false)
+  }
+
+  function refreshSummary(): Promise<boolean> {
+    return requestSummary(summaryStatus.value === 'success')
   }
 
   function mergeNavigationItems(items: readonly StudentListItem[], resetItems: boolean): void {
@@ -900,7 +921,9 @@ export const useStudentStore = defineStore('students', () => {
     setListPage,
     clearListFilters,
     loadList,
+    refreshList,
     loadSummary,
+    refreshSummary,
     loadNavigation,
     searchNavigation,
     loadMoreNavigation,
