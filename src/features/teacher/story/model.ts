@@ -66,6 +66,27 @@ export interface StoryPage {
   readonly requiresBranchInput: boolean
   readonly readAt: string | null
   readonly branchRecord: StoryBranchRecord | null
+  readonly revision?: number
+  readonly editable?: boolean
+  readonly subtitle?: string | null
+  readonly choices?: readonly string[]
+}
+
+export interface StoryPageEditInput {
+  readonly revision: number
+  readonly subtitle?: string
+  readonly body?: string
+  readonly choices?: readonly string[]
+}
+
+export interface StoryPageEditResult {
+  readonly storyLineId: number
+  readonly revision: number
+  readonly subtitle: string | null
+  readonly body: string
+  readonly choices: readonly string[]
+  readonly imageUrl: string | null
+  readonly editable: boolean
 }
 
 export interface StoryDetail {

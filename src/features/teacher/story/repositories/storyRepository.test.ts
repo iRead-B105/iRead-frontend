@@ -22,6 +22,9 @@ function api(overrides: Partial<StoryApi> = {}): StoryApi {
     }),
     getDetail: vi.fn().mockRejectedValue(new Error('not configured')),
     getGazeAnalysis: vi.fn().mockRejectedValue(new Error('not configured')),
+    updatePage: vi.fn().mockRejectedValue(new Error('not configured')),
+    uploadPageImage: vi.fn().mockRejectedValue(new Error('not configured')),
+    regeneratePageImage: vi.fn().mockRejectedValue(new Error('not configured')),
     ...overrides,
   }
 }

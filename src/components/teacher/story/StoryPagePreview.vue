@@ -89,7 +89,7 @@ function wordReplayClass(word: StoryPreviewWord) {
               class="story-reader-word"
               :class="wordReplayClass(word)"
             >
-              {{ word.text }}
+              {{ word.text }}{{ ' ' }}
             </span>
           </p>
           <p v-if="page.textLines.length === 0" class="story-reader-copy__empty">

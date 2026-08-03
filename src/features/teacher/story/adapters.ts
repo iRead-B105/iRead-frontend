@@ -73,6 +73,10 @@ export interface StoryPageDto {
   readonly requiresBranchInput: boolean
   readonly readAt: string | null
   readonly branchRecord: StoryBranchRecordDto | null
+  readonly revision?: number
+  readonly editable?: boolean
+  readonly subtitle?: string | null
+  readonly choices?: readonly string[] | null
 }
 
 export interface StoryDetailDto {
@@ -225,6 +229,10 @@ function mapStoryPage(dto: StoryPageDto): StoryPage {
     requiresBranchInput: dto.requiresBranchInput,
     readAt: dto.readAt,
     branchRecord: dto.branchRecord === null ? null : mapStoryBranchRecord(dto.branchRecord),
+    revision: dto.revision ?? 0,
+    editable: dto.editable ?? dto.readAt === null,
+    subtitle: dto.subtitle?.trim() || null,
+    choices: (dto.choices ?? []).map((choice) => choice.trim()).filter(Boolean),
   }
 }
 

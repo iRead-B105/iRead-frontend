@@ -13,6 +13,8 @@ import type {
   StoryGazeAnalysis,
   StoryHistoryList,
   StoryHistoryQuery,
+  StoryPageEditInput,
+  StoryPageEditResult,
 } from './model'
 import type { StoryRequestOptions } from './repositories/storyRepository'
 
@@ -34,6 +36,15 @@ export interface StoryApi {
     storyId: number,
     options?: StoryRequestOptions,
   ) => Promise<StoryGazeAnalysis>
+  readonly updatePage: (
+    studentId: number, storyId: number, storyLineId: number, input: StoryPageEditInput,
+  ) => Promise<StoryPageEditResult>
+  readonly uploadPageImage: (
+    studentId: number, storyId: number, storyLineId: number, revision: number, image: File,
+  ) => Promise<StoryPageEditResult>
+  readonly regeneratePageImage: (
+    studentId: number, storyId: number, storyLineId: number, revision: number,
+  ) => Promise<StoryPageEditResult>
 }
 
 export function createStoryApi(request: StoryApiRequest = apiRequest): StoryApi {
@@ -59,6 +70,31 @@ export function createStoryApi(request: StoryApiRequest = apiRequest): StoryApi 
         { signal: options.signal },
       )
       return mapStoryGazeAnalysis(result)
+    },
+    async updatePage(studentId, storyId, storyLineId, input) {
+      return request<StoryPageEditResult>(
+        `/api/admin/student/${studentId}/story-history/${storyId}/pages/${storyLineId}`,
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) },
+      )
+    },
+    async uploadPageImage(studentId, storyId, storyLineId, revision, image) {
+      const body = new FormData()
+      body.append('revision', String(revision))
+      body.append('image', image)
+      return request<StoryPageEditResult>(
+        `/api/admin/student/${studentId}/story-history/${storyId}/pages/${storyLineId}/image`,
+        { method: 'POST', body },
+      )
+    },
+    async regeneratePageImage(studentId, storyId, storyLineId, revision) {
+      return request<StoryPageEditResult>(
+        `/api/admin/student/${studentId}/story-history/${storyId}/pages/${storyLineId}/image/regenerate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ revision }),
+        },
+      )
     },
   }
 }
