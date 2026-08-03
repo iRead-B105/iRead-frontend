@@ -3,6 +3,12 @@ export type TrainingInstanceId = number
 export type CurriculumId = number
 
 export type CurriculumStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'
+export type CurriculumReviewStatus =
+  | 'NOT_REQUIRED'
+  | 'GENERATION_PENDING'
+  | 'REVIEW_REQUIRED'
+  | 'REGENERATION_REQUIRED'
+  | 'REVIEW_COMPLETED'
 export type TrainingStatus = 'NOT_READY' | 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'
 export type TrainingRequestStatus = 'idle' | 'loading' | 'success' | 'error'
 export type TrainingPeriod = '30d' | '3m'
@@ -33,7 +39,18 @@ export interface CurriculumTraining {
 export interface DailyCurriculum {
   readonly curriculumId: CurriculumId
   readonly status: CurriculumStatus
+  readonly sourceTestCurriculumId?: string | null
+  readonly reviewStatus?: CurriculumReviewStatus
+  readonly reviewedByTeacherId?: number | null
+  readonly reviewedAt?: string | null
   readonly trainings: readonly CurriculumTraining[]
+}
+
+export interface CurriculumReviewResult {
+  readonly curriculumId: CurriculumId
+  readonly reviewStatus: CurriculumReviewStatus
+  readonly reviewedByTeacherId: number | null
+  readonly reviewedAt: string | null
 }
 
 export interface SaveCurriculumRequest {
@@ -41,11 +58,6 @@ export interface SaveCurriculumRequest {
    * Array order is execution order and duplicate values represent repeated attempts.
    */
   readonly trainingTemplateIds: readonly TrainingTemplateId[]
-}
-
-export interface ExpectedWord {
-  readonly wordId: number
-  readonly wordName: string
 }
 
 export interface TrainingDetail {
@@ -111,6 +123,18 @@ export interface SavedLessonMaterial {
   readonly source: 'MANUAL'
   readonly materials: readonly LessonMaterialItem[]
 }
+
+export interface LessonMaterialFieldError {
+  readonly path: string
+  readonly reason: string
+  readonly message: string
+}
+
+export type LessonMaterialSaveIssue =
+  | 'revision-conflict'
+  | 'not-editable'
+  | 'validation'
+  | 'network'
 
 export interface TrainingQuestionResult {
   readonly questionNumber: number

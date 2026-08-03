@@ -16,15 +16,16 @@ async function mountHistory(
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      {
-        path: '/teacher/students',
-        name: 'teacher-students',
-        component: { template: '<div>학습자 목록</div>' },
-      },
+      { path: '/teacher/students', name: 'teacher-students', component: { template: '<div />' } },
       {
         path: '/teacher/students/:id/test-history',
         name: 'student-test-history',
         component: StudentTestHistoryView,
+      },
+      {
+        path: '/teacher/students/:id/curriculum',
+        name: 'student-curriculum',
+        component: { template: '<div>커리큘럼 화면</div>' },
       },
     ],
   })
@@ -37,13 +38,21 @@ async function mountHistory(
         plugins: [pinia, router],
         stubs: {
           ChartPanel: {
-            props: ['ariaLabel', 'option'],
+            props: {
+              ariaLabel: String,
+              option: Object,
+              animated: Boolean,
+            },
             computed: {
               seriesNames() {
                 return this.option.series.map((series: { name: string }) => series.name).join(', ')
               },
+              seriesTypes() {
+                return this.option.series.map((series: { type: string }) => series.type).join(', ')
+              },
             },
-            template: '<div data-test="metric-chart">{{ ariaLabel }} {{ seriesNames }}</div>',
+            template:
+              '<div data-test="metric-chart">{{ ariaLabel }} {{ seriesNames }} {{ seriesTypes }} {{ animated }}</div>',
           },
         },
       },
@@ -54,7 +63,7 @@ async function mountHistory(
 }
 
 describe('StudentTestHistoryView', () => {
-  it('잘못된 studentId에서는 Repository를 호출하지 않고 목록 이동 action을 표시한다', async () => {
+  it('잘못된 studentId에서는 Repository를 호출하지 않는다', async () => {
     const repository = new MockTestRepository()
     const getTests = vi.spyOn(repository, 'getTests')
     const { wrapper } = await mountHistory(
@@ -64,171 +73,84 @@ describe('StudentTestHistoryView', () => {
 
     expect(getTests).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('올바른 학습자를 선택해 주세요.')
-    expect(wrapper.text()).toContain('학습자 목록으로 이동')
   })
 
-  it('최신 검사의 정확도를 기본 탭과 단일 그래프로 표시하고 주요 기록을 강조한다', async () => {
+  it('검사 커리큘럼 한 건에 3개 영역과 실제 9문항 제출 결과를 표시한다', async () => {
     const { wrapper, store } = await mountHistory(new MockTestRepository())
 
-    expect(store.currentTestId).toBe(1_011)
-    expect(store.comparisonTestIds).toEqual([])
-    expect(wrapper.text()).toContain('정확도')
+    expect(store.currentTestCurriculumId).toBe('1011')
+    expect(wrapper.text()).toContain('실력 도전 #1011')
+    expect(wrapper.text()).toContain('영역별 점수')
+    expect(wrapper.text()).toContain('음운 인식')
+    expect(wrapper.text()).toContain('짧은 글')
+    expect(wrapper.text()).toContain('유창성')
+    expect(wrapper.findAll('.question-list > li')).toHaveLength(9)
+    expect(wrapper.text()).toContain('제출 답안')
+    expect(wrapper.text()).toContain('발음 점수')
+    expect(wrapper.text()).toContain('9/9')
+    expect(wrapper.text()).toContain('AI 콘텐츠 생성 완료')
+    expect(wrapper.text()).toContain('최종 검수 필요')
+  })
+
+  it('전체 점수·풀이 시간·시선 이탈·발음 점수를 검사 단위로 비교한다', async () => {
+    const { wrapper } = await mountHistory(new MockTestRepository())
+
+    expect(wrapper.findAll('[role="tab"]')).toHaveLength(4)
+    expect(wrapper.text()).toContain('전체 점수')
     expect(wrapper.text()).toContain('문제 풀이 시간')
     expect(wrapper.text()).toContain('시선 이탈 횟수')
-    expect(wrapper.text()).toContain('시선 역행 횟수')
-    expect(wrapper.text()).toContain('전체 평균 · 4건 기준')
-    expect(wrapper.text()).toContain('1분 32초')
-    expect(wrapper.text()).toContain('친구를 배려하는 마음')
-    expect(wrapper.findAll('[role="tab"]')).toHaveLength(4)
-    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('정확도')
+    expect(wrapper.text()).toContain('발음 점수')
     expect(wrapper.findAll('[data-test="metric-chart"]')).toHaveLength(1)
-    expect(wrapper.get('[data-test="metric-chart"]').text()).toContain(
-      '정확도 기준·비교 검사와 전체 평균 차트',
-    )
-    expect(wrapper.findAll('[data-metric-key="accuracy"].highlighted')).toHaveLength(
+    expect(wrapper.get('[data-test="metric-chart"]').text()).toContain('bar, line')
+    expect(wrapper.get('[data-test="metric-chart"]').text()).toContain('true')
+    expect(wrapper.findAll('[data-metric-key="overallScore"].highlighted')).toHaveLength(
       wrapper.findAll('.detail-card').length,
     )
-    expect(wrapper.text()).not.toContain('전체 검사 추이')
-    expect(wrapper.text()).not.toContain('영역별 검사 점수')
-    expect(wrapper.text()).not.toContain('강점 영역')
-    expect(wrapper.text()).not.toContain('권장 과정')
-    expect(wrapper.find('input[type="date"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('검사 시선 분석')
-    expect(wrapper.text().indexOf('검사별 주요 기록')).toBeLessThan(
-      wrapper.text().indexOf('검사 시선 분석'),
-    )
-    expect(wrapper.text()).toContain('51.2초')
-    expect(wrapper.text()).toContain('82회')
-    expect(wrapper.text()).toContain('9회')
-    expect(wrapper.text()).not.toContain('시선 고정')
-    expect(wrapper.text()).toContain('시선 이탈 횟수')
-  })
 
-  it('지표 탭을 바꾸면 그래프 하나와 모든 주요 기록 카드의 강조가 함께 변경된다', async () => {
-    const { wrapper } = await mountHistory(new MockTestRepository())
-    const reverseReadTab = wrapper
-      .findAll('[role="tab"]')
-      .find((tab) => tab.text() === '시선 역행 횟수')
-
-    await reverseReadTab?.trigger('click')
-    await flushPromises()
-
-    expect(reverseReadTab?.attributes('aria-selected')).toBe('true')
-    expect(wrapper.findAll('[data-test="metric-chart"]')).toHaveLength(1)
-    expect(wrapper.get('[data-test="metric-chart"]').text()).toContain(
-      '시선 역행 횟수 기준·비교 검사와 전체 평균 차트',
-    )
-    expect(wrapper.text()).toContain('전체 평균 · 2건 기준')
-    expect(wrapper.findAll('[data-metric-key="reverseReadCount"].highlighted')).toHaveLength(
-      wrapper.findAll('.detail-card').length,
-    )
-    expect(wrapper.findAll('[data-metric-key="accuracy"].highlighted')).toHaveLength(0)
-  })
-
-  it('전체 검사 상세 일부가 실패하면 성공한 평균을 유지하고 재시도를 제공한다', async () => {
-    const mock = new MockTestRepository()
-    const compareTests = vi
-      .spyOn(mock, 'compareTests')
-      .mockImplementation(async (studentId, currentTestId, comparisonTestIds, options) => {
-        if (currentTestId === 1_005) throw new Error('temporary failure')
-        return new MockTestRepository().compareTests(
-          studentId,
-          currentTestId,
-          comparisonTestIds,
-          options,
-        )
-      })
-    const { wrapper, store } = await mountHistory(mock)
-
-    expect(compareTests).toHaveBeenCalled()
-    expect(store.trendStatus).toBe('success')
-    expect(store.trendDetails.map((detail) => detail.testId)).toEqual([1_004, 1_008, 1_011])
-    expect(wrapper.text()).toContain('일부 검사 상세 1건을 불러오지 못해')
-    expect(wrapper.text()).toContain('다시 확인')
-  })
-
-  it('검사 선택에 따라 NO_DATA와 FAILED를 요청 오류 없이 구분한다', async () => {
-    const { wrapper, store } = await mountHistory(new MockTestRepository())
-
-    await wrapper.get<HTMLSelectElement>('#current-test').setValue('1008')
-    await flushPromises()
-    expect(store.gazeStatus).toBe('success')
-    expect(wrapper.text()).toContain('시선 분석 데이터가 없습니다.')
-
-    await wrapper.get<HTMLSelectElement>('#current-test').setValue('1005')
-    await flushPromises()
-    expect(store.gazeStatus).toBe('success')
-    expect(wrapper.text()).toContain('시선 분석을 완료하지 못했습니다.')
-  })
-
-  it('실제 완료 검사에서 비교 두 건만 추가하고 세 번째 선택을 차단한다', async () => {
-    const { wrapper, store } = await mountHistory(new MockTestRepository())
-    const comparisonSelect = wrapper.get<HTMLSelectElement>('#comparison-test')
-
-    await comparisonSelect.setValue('1008')
-    await flushPromises()
-    await wrapper.get<HTMLSelectElement>('#comparison-test').setValue('1005')
-    await flushPromises()
-
-    expect(store.comparisonTestIds).toEqual([1_008, 1_005])
-    expect(store.comparisonResult?.comparisonTests.map((test) => test.testId)).toEqual([
-      1_008, 1_005,
-    ])
-    expect(wrapper.get('#comparison-test').attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain('비교 2/2건')
-    expect(wrapper.findAll('.detail-card')).toHaveLength(3)
-  })
-
-  it('선택한 비교 검사를 개별 해제한다', async () => {
-    const { wrapper, store } = await mountHistory(new MockTestRepository())
     await wrapper.get<HTMLSelectElement>('#comparison-test').setValue('1008')
     await flushPromises()
-
-    const removeButton = wrapper
-      .findAll('button')
-      .find((button) => button.attributes('aria-label')?.includes('비교 해제'))
-    await removeButton?.trigger('click')
-    await flushPromises()
-
-    expect(store.comparisonTestIds).toEqual([])
-    expect(wrapper.findAll('.comparison-chip')).toHaveLength(0)
-    expect(wrapper.text()).toContain('비교 0/2건')
+    expect(wrapper.findAll('.detail-card')).toHaveLength(2)
+    expect(wrapper.text()).toContain('비교 1/2건')
   })
 
-  it('서버의 0초·0%·0회를 결측값과 구분한다', async () => {
+  it('추천 커리큘럼 ID를 보존해 해당 검수 화면으로 이동한다', async () => {
+    const { wrapper, router } = await mountHistory(new MockTestRepository())
+
+    expect(wrapper.text()).toContain('추천 커리큘럼 #201')
+    const button = wrapper.findAll('button').find((item) => item.text().includes('추천 교안 검수하기'))
+    await button?.trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('student-curriculum')
+    expect(router.currentRoute.value.params.id).toBe('1')
+    expect(router.currentRoute.value.query.curriculumId).toBe('201')
+  })
+
+  it('실제 0점·0초·0회를 측정값 없음과 구분한다', async () => {
     const { wrapper } = await mountHistory(new MockTestRepository())
 
     await wrapper.get<HTMLSelectElement>('#current-test').setValue('1004')
     await flushPromises()
 
+    expect(wrapper.text()).toContain('0점')
     expect(wrapper.text()).toContain('0초')
-    expect(wrapper.text()).toContain('0%')
     expect(wrapper.text()).toContain('0회')
   })
 
-  it('학습자 route 변경 시 목록과 선택을 초기화하고 검사 없음 상태를 표시한다', async () => {
-    const repository = new MockTestRepository()
-    const getTests = vi.spyOn(repository, 'getTests')
-    const { wrapper, router, store } = await mountHistory(repository)
+  it('학습자 변경 시 검사 없음 상태를 표시한다', async () => {
+    const { wrapper, router, store } = await mountHistory(new MockTestRepository())
 
     await router.push('/teacher/students/3/test-history')
     await flushPromises()
 
-    expect(getTests).toHaveBeenLastCalledWith(
-      3,
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
-    )
-    expect(store.studentId).toBe(3)
-    expect(store.currentTestId).toBeNull()
-    expect(store.comparisonTestIds).toEqual([])
-    expect(wrapper.text()).toContain('완료된 검사가 없습니다.')
+    expect(store.currentTestCurriculumId).toBeNull()
+    expect(wrapper.text()).toContain('완료된 실력 도전 검사가 없습니다.')
   })
 
-  it('403 오류에서 고정 검사 결과 대신 권한 안내를 표시한다', async () => {
+  it('403 오류에서 고정 결과 대신 권한 안내를 표시한다', async () => {
     const { wrapper } = await mountHistory(new MockTestRepository({ forbiddenStudentIds: [1] }))
 
     expect(wrapper.text()).toContain('이 학습자의 검사 기록을 볼 권한이 없습니다.')
-    expect(wrapper.text()).toContain('학습자 목록으로 이동')
-    expect(wrapper.text()).not.toContain('84점')
+    expect(wrapper.find('.question-list').exists()).toBe(false)
   })
 })

@@ -2,7 +2,7 @@ import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
-import { MockReportRepository } from '@/features/teacher/report'
+import { MockReportRepository, reportFixtures } from '@/features/teacher/report'
 import { MockStudentRepository } from '@/features/teacher/student'
 import { useReportStore } from '@/stores/report'
 import { useSessionStore } from '@/stores/session'
@@ -90,6 +90,28 @@ describe('StudentReportView', () => {
     expect(wrapper.find('[aria-label="교수자 의견"]').exists()).toBe(false)
   })
 
+  it('저장된 보고서를 6개씩 나누고 페이지를 이동한다', async () => {
+    const baseReport = reportFixtures[0]!
+    const reports = Array.from({ length: 7 }, (_, index) => ({
+      ...baseReport,
+      reportId: 9_000 + index,
+      createdAt: `2026-07-${String(20 - index).padStart(2, '0')}T09:00:00+09:00`,
+    }))
+    const { wrapper } = await mountReport(
+      '/teacher/students/1/report',
+      new MockReportRepository({ reports, delayMs: 0 }),
+    )
+
+    expect(wrapper.findAll('.saved-report-row')).toHaveLength(6)
+    expect(wrapper.get('.saved-reports__pagination').text()).toContain('1 / 2')
+
+    await wrapper.get('[aria-label="다음 보고서 페이지"]').trigger('click')
+
+    expect(wrapper.findAll('.saved-report-row')).toHaveLength(1)
+    expect(wrapper.get('.saved-reports__pagination').text()).toContain('2 / 2')
+    expect(wrapper.get('[aria-label="다음 보고서 페이지"]').attributes('disabled')).toBeDefined()
+  })
+
   it('선택한 상세가 snapshot과 현재 교수자 정보만 표시한다', async () => {
     const { wrapper, pinia } = await mountReport()
 
@@ -106,10 +128,11 @@ describe('StudentReportView', () => {
     expect(wrapper.text()).toContain('훈련 시선 추이')
     expect(wrapper.text()).toContain('검사 시선 추이')
     expect(wrapper.text()).toContain('교수자 의견')
+    expect(wrapper.text()).toContain('완료된 학습 데이터를 기준으로 생성된 보고서입니다.')
     expect(wrapper.find('[aria-label="교수자 의견"]').exists()).toBe(true)
-    expect(
-      (wrapper.get('[aria-label="교수자 의견"]').element as HTMLTextAreaElement).value,
-    ).toBe(useReportStore(pinia).teacherMemoDraft)
+    expect((wrapper.get('[aria-label="교수자 의견"]').element as HTMLTextAreaElement).value).toBe(
+      useReportStore(pinia).teacherMemoDraft,
+    )
     expect(wrapper.text()).toContain('변화를 비교하려면 두 건 이상의 결과가 필요합니다.')
     expect(wrapper.text()).not.toContain('내부 메모에서 불러오기')
     expect(wrapper.text()).not.toContain('학습 판단')

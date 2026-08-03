@@ -8,12 +8,11 @@ import type {
   SaveLessonMaterialRequest,
   TrainingDetail,
 } from './model'
-import {
-  defaultLessonMaterialData,
-  validateLessonMaterialItem,
-} from './lessonMaterialEditor'
+import { defaultLessonMaterialData, validateLessonMaterialItem } from './lessonMaterialEditor'
 
-export const LESSON_MATERIAL_COUNT = 5
+export const LESSON_MATERIAL_MIN_COUNT = 1
+export const LESSON_MATERIAL_MAX_COUNT = 5
+export const LESSON_MATERIAL_COUNT = LESSON_MATERIAL_MAX_COUNT
 
 export const LESSON_QUESTION_TYPES = [
   'VOWEL_TRACE',
@@ -201,10 +200,28 @@ export function editableItem(item: LessonMaterialItem): EditableLessonMaterialIt
   }
 }
 
-export function saveRequestFromDocument(document: LessonMaterialDocument): SaveLessonMaterialRequest {
+export function saveRequestFromDocument(
+  document: LessonMaterialDocument,
+): SaveLessonMaterialRequest {
   return {
     revision: document.revision,
     materials: document.materials.map(editableItem),
+  }
+}
+
+export function normalizeLessonMaterialDocument(
+  document: LessonMaterialDocument,
+): LessonMaterialDocument {
+  return {
+    ...document,
+    materials: document.materials.map((material) => ({
+      ...material,
+      presentation: presentationFrom(
+        material.presentation,
+        document.trainingName,
+        material.questionNo,
+      ),
+    })),
   }
 }
 
@@ -217,22 +234,28 @@ export function cloneLessonMaterialDocument(
 export function assertLessonMaterialResponseCount<
   T extends { readonly materials: readonly unknown[] },
 >(response: T): T {
-  if (response.materials.length !== LESSON_MATERIAL_COUNT) {
+  if (
+    response.materials.length < LESSON_MATERIAL_MIN_COUNT ||
+    response.materials.length > LESSON_MATERIAL_MAX_COUNT
+  ) {
     throw new ApiError({
       status: 502,
       code: 'LESSON_MATERIAL_CONTRACT_MISMATCH',
-      message: `교안 조회 결과는 정확히 ${LESSON_MATERIAL_COUNT}개 자료여야 합니다.`,
+      message: `교안 조회 결과는 ${LESSON_MATERIAL_MIN_COUNT}~${LESSON_MATERIAL_MAX_COUNT}개 자료여야 합니다.`,
     })
   }
   return response
 }
 
 export function assertLessonMaterialRequestCount(request: SaveLessonMaterialRequest): void {
-  if (request.materials.length !== LESSON_MATERIAL_COUNT) {
+  if (
+    request.materials.length < LESSON_MATERIAL_MIN_COUNT ||
+    request.materials.length > LESSON_MATERIAL_MAX_COUNT
+  ) {
     throw new ApiError({
       status: 422,
       code: 'LESSON_MATERIAL_VALIDATION_FAILED',
-      message: `교안 자료는 정확히 ${LESSON_MATERIAL_COUNT}개여야 합니다.`,
+      message: `교안 자료는 ${LESSON_MATERIAL_MIN_COUNT}~${LESSON_MATERIAL_MAX_COUNT}개여야 합니다.`,
     })
   }
 }

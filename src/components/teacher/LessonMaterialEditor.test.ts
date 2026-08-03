@@ -1,9 +1,10 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import type {
   CurriculumTraining,
   LessonMaterialDocument,
+  LessonMaterialFieldError,
   SaveLessonMaterialRequest,
   TrainingDetail,
 } from '@/features/teacher/training'
@@ -14,6 +15,14 @@ function mountEditor(
   options: {
     readonly materialGenerationStatus?: 'idle' | 'loading' | 'success' | 'error'
     readonly requiresRegeneration?: boolean
+    readonly lessonMaterialSaveIssue?:
+      | 'revision-conflict'
+      | 'not-editable'
+      | 'validation'
+      | 'network'
+      | null
+    readonly lessonMaterialFieldErrors?: readonly LessonMaterialFieldError[]
+    readonly lessonMaterialRemoteChange?: boolean
   } = {},
 ) {
   const training: CurriculumTraining = {
@@ -66,18 +75,17 @@ function mountEditor(
     props: {
       training,
       attemptLabel: '서로 다른 받침 음절 비교하기 1/1회차',
-      expectedWords: [{ wordId: 1, wordName: '꽃' }],
       detail,
       lessonMaterial,
-      expectedWordsStatus: 'success',
       detailStatus: 'success',
       lessonMaterialStatus: 'success',
       lessonMaterialSaveStatus: 'idle',
+      lessonMaterialSaveIssue: options.lessonMaterialSaveIssue ?? null,
+      lessonMaterialFieldErrors: options.lessonMaterialFieldErrors ?? [],
+      lessonMaterialRemoteChange: options.lessonMaterialRemoteChange ?? false,
       materialGenerationStatus: options.materialGenerationStatus ?? 'idle',
       requiresRegeneration: options.requiresRegeneration ?? status === 'NOT_READY',
-      isMutating: false,
       isSavingLessonMaterial: false,
-      expectedWordError: null,
       detailError: null,
       lessonMaterialError: null,
       lessonMaterialSaveError: null,
@@ -126,11 +134,34 @@ describe('LessonMaterialEditor', () => {
     expect(wrapper.text()).toContain('읽기 전용')
     expect(wrapper.find('fieldset').attributes('disabled')).toBeDefined()
     expect(
-      wrapper.findAll('button').find((button) => button.text() === '교안 저장')?.attributes('disabled'),
+      wrapper
+        .findAll('button')
+        .find((button) => button.text() === '교안 저장')
+        ?.attributes('disabled'),
     ).toBeDefined()
   })
 
-  it('자료 5개를 모두 표시하고 추가·삭제·순서 변경을 제공하지 않는다', async () => {
+  it('저장 중 편집 불가로 전환되어도 작성 중인 초안은 화면에 유지한다', async () => {
+    const wrapper = mountEditor('NOT_STARTED')
+    const activityName = wrapper.get('fieldset input')
+    await activityName.setValue('저장 전 작성 내용')
+    const document = wrapper.props('lessonMaterial')
+    expect(document).not.toBeNull()
+    if (!document) return
+
+    await wrapper.setProps({
+      lessonMaterial: {
+        ...document,
+        editable: false,
+      },
+      lessonMaterialSaveIssue: 'not-editable',
+    })
+
+    expect(wrapper.get('fieldset input').element).toHaveProperty('value', '저장 전 작성 내용')
+    expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined()
+  })
+
+  it('자료 5개를 모두 표시하고 드래그 앤 드롭으로 배열 순서를 변경한다', async () => {
     const wrapper = mountEditor('NOT_STARTED')
     const materialTabs = wrapper.findAll('[role="tab"]')
 
@@ -144,9 +175,29 @@ describe('LessonMaterialEditor', () => {
     ])
     expect(wrapper.text()).not.toContain('자료 추가')
     expect(wrapper.text()).not.toContain('자료 삭제')
+    expect(wrapper.find('[aria-label="자료 1 뒤로 이동"]').exists()).toBe(false)
 
-    await materialTabs[4]?.trigger('click')
-    expect(wrapper.text()).toContain('자료 5 / 5')
+    const dataTransfer = {
+      effectAllowed: '',
+      dropEffect: '',
+      setData: vi.fn(),
+    }
+    const materialItems = wrapper.findAll('.material-tab-item')
+    await materialItems[2]?.trigger('dragstart', { dataTransfer })
+    await materialItems[1]?.trigger('dragover', { dataTransfer })
+    await materialItems[1]?.trigger('drop', { dataTransfer })
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '교안 저장')
+      ?.trigger('click')
+
+    const request = wrapper.emitted('save')?.[0]?.[0] as SaveLessonMaterialRequest | undefined
+    expect(request?.materials).toHaveLength(5)
+    expect(request?.materials[0]?.questionNo).toBe(1)
+    expect(request?.materials[0]?.presentation.activityName).toBe('받침 소리 비교 1')
+    expect(request?.materials[1]?.questionNo).toBe(2)
+    expect(request?.materials[1]?.presentation.activityName).toBe('받침 소리 비교 3')
+    expect(request?.materials[2]?.presentation.activityName).toBe('받침 소리 비교 2')
   })
 
   it('재생성 필요 상태에서 기존 AI 재생성 동작을 유지한다', async () => {
@@ -159,19 +210,49 @@ describe('LessonMaterialEditor', () => {
     expect(wrapper.emitted('regenerate')).toHaveLength(1)
   })
 
-  it('삭제 확인 후 선택한 예상 단어 ID를 전달한다', async () => {
-    const wrapper = mountEditor('NOT_STARTED')
-    await wrapper.get('summary').trigger('click')
-    await wrapper.get('button[aria-label="꽃 예상 단어 삭제"]').trigger('click')
-    await flushPromises()
+  it('원격 변경이 있으면 저장을 막고 확인 후 최신 교안을 요청한다', async () => {
+    const wrapper = mountEditor('NOT_STARTED', {
+      lessonMaterialSaveIssue: 'revision-conflict',
+      lessonMaterialRemoteChange: true,
+    })
+    await wrapper.find('fieldset input').setValue('수정한 활동')
+
+    expect(wrapper.text()).toContain('서버의 교안이 변경되었습니다.')
+    expect(
+      wrapper
+        .findAll('button')
+        .find((button) => button.text() === '교안 저장')
+        ?.attributes('disabled'),
+    ).toBeDefined()
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '최신 교안 불러오기')
+      ?.trigger('click')
     const confirmDialog = wrapper
       .findAllComponents(ConfirmDialog)
-      .find((dialog) => dialog.props('title') === '예상 단어를 삭제할까요?')
+      .find((dialog) => dialog.props('title') === '최신 교안을 불러올까요?')
     expect(confirmDialog?.props('open')).toBe(true)
     confirmDialog?.vm.$emit('confirm')
     await flushPromises()
 
-    expect(wrapper.emitted('deleteWord')).toEqual([[1]])
+    expect(wrapper.emitted('reloadLatest')).toHaveLength(1)
+  })
+
+  it('422 검증 오류를 해당 편집 필드에 표시한다', () => {
+    const wrapper = mountEditor('NOT_STARTED', {
+      lessonMaterialSaveIssue: 'validation',
+      lessonMaterialFieldErrors: [
+        {
+          path: 'materials[0].presentation.activityName',
+          reason: 'NOT_BLANK',
+          message: '활동 이름을 입력해 주세요.',
+        },
+      ],
+    })
+
+    expect(wrapper.text()).toContain('활동 이름을 입력해 주세요.')
+    expect(wrapper.get('fieldset input').attributes('aria-invalid')).toBe('true')
   })
 
   it('하단 돌아가기 버튼으로 커리큘럼 화면 복귀 이벤트를 전달한다', async () => {

@@ -1,11 +1,9 @@
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
-import type { GazeAnalysisRequestStatus, GazeAnalysisState } from '@/features/teacher/gaze'
 import {
   testRepository,
   type TestComparison,
   type TestDetail,
-  type TestGazeResult,
   type TestListItem,
   type TestRepository,
   type TestRequestStatus,
@@ -17,11 +15,12 @@ function testErrorMessage(error: unknown, fallback: string): string {
   if (!isApiError(error)) return fallback
   if (error.status === 400) return '검사 선택 조건이 올바르지 않습니다.'
   if (error.status === 403) return '이 학습자의 검사 기록을 볼 권한이 없습니다.'
-  if (error.status === 404) return '요청한 완료 검사 기록을 찾을 수 없습니다.'
+  if (error.status === 404) return '요청한 실력 도전 검사 기록을 찾을 수 없습니다.'
+  if (error.status === 409) return '검사 결과가 변경되었습니다. 최신 내용을 다시 불러와 주세요.'
   return mapCommonError(error)?.message ?? fallback
 }
 
-function sameIds(left: readonly number[], right: readonly number[]): boolean {
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index])
 }
 
@@ -29,97 +28,88 @@ export const useTestStore = defineStore('test', () => {
   const repository = shallowRef<TestRepository>(testRepository)
   const studentId = ref<number | null>(null)
   const tests = ref<readonly TestListItem[]>([])
-  const currentTestId = ref<number | null>(null)
-  const comparisonTestIds = ref<readonly number[]>([])
+  const currentTestCurriculumId = ref<string | null>(null)
+  const comparisonTestCurriculumIds = ref<readonly string[]>([])
   const comparisonResult = ref<TestComparison | null>(null)
   const trendDetails = ref<readonly TestDetail[]>([])
-  const trendGazeResults = ref<readonly TestGazeResult[]>([])
-  const gazeAnalysis = ref<GazeAnalysisState | null>(null)
   const listStatus = ref<TestRequestStatus>('idle')
   const comparisonStatus = ref<TestRequestStatus>('idle')
   const trendStatus = ref<TestRequestStatus>('idle')
-  const gazeStatus = ref<GazeAnalysisRequestStatus>('idle')
   const listError = ref<string | null>(null)
   const listUiError = ref<UiError | null>(null)
   const comparisonError = ref<string | null>(null)
   const trendError = ref<string | null>(null)
   const trendFailedCount = ref(0)
-  const trendGazeFailedCount = ref(0)
-  const gazeError = ref<string | null>(null)
 
   let listGeneration = 0
   let comparisonGeneration = 0
   let trendGeneration = 0
-  let gazeGeneration = 0
   let listController: AbortController | null = null
   let comparisonController: AbortController | null = null
   let trendController: AbortController | null = null
-  let gazeController: AbortController | null = null
   const detailCache = new Map<string, TestDetail>()
-  const gazeCache = new Map<string, GazeAnalysisState>()
-
-  function detailCacheKey(currentStudentId: number, testId: number): string {
-    return `${currentStudentId}:${testId}`
-  }
-
-  function cacheComparison(currentStudentId: number, result: TestComparison): void {
-    for (const detail of [result.currentTest, ...result.comparisonTests]) {
-      detailCache.set(detailCacheKey(currentStudentId, detail.testId), detail)
-    }
-  }
 
   const currentTest = computed(
-    () => tests.value.find((test) => test.testId === currentTestId.value) ?? null,
+    () =>
+      tests.value.find(
+        (test) => test.testCurriculumId === currentTestCurriculumId.value,
+      ) ?? null,
   )
   const comparisonTests = computed(() =>
-    comparisonTestIds.value
-      .map((testId) => tests.value.find((test) => test.testId === testId))
-      .filter((test): test is TestListItem => test !== undefined),
+    comparisonTestCurriculumIds.value.flatMap((id) => {
+      const test = tests.value.find((item) => item.testCurriculumId === id)
+      return test ? [test] : []
+    }),
   )
   const availableComparisonTests = computed(() =>
     tests.value.filter(
       (test) =>
-        test.testId !== currentTestId.value && !comparisonTestIds.value.includes(test.testId),
+        test.testCurriculumId !== currentTestCurriculumId.value &&
+        !comparisonTestCurriculumIds.value.includes(test.testCurriculumId),
     ),
   )
   const canAddComparison = computed(
     () =>
-      comparisonTestIds.value.length < 2 &&
+      comparisonTestCurriculumIds.value.length < 2 &&
       availableComparisonTests.value.length > 0 &&
       comparisonStatus.value !== 'loading',
   )
+
+  function cacheKey(currentStudentId: number, testCurriculumId: string): string {
+    return `${currentStudentId}:${testCurriculumId}`
+  }
+
+  function cacheDetails(currentStudentId: number, details: readonly TestDetail[]): void {
+    for (const detail of details) {
+      detailCache.set(cacheKey(currentStudentId, detail.testCurriculumId), detail)
+    }
+  }
 
   function abortRequests(): void {
     listController?.abort()
     comparisonController?.abort()
     trendController?.abort()
-    gazeController?.abort()
     listController = null
     comparisonController = null
     trendController = null
-    gazeController = null
   }
 
   function clearState(nextStudentId: number | null): void {
     studentId.value = nextStudentId
     tests.value = []
-    currentTestId.value = null
-    comparisonTestIds.value = []
+    currentTestCurriculumId.value = null
+    comparisonTestCurriculumIds.value = []
     comparisonResult.value = null
     trendDetails.value = []
-    trendGazeResults.value = []
-    gazeAnalysis.value = null
     listStatus.value = nextStudentId === null ? 'idle' : 'loading'
     comparisonStatus.value = 'idle'
     trendStatus.value = 'idle'
-    gazeStatus.value = 'idle'
     listError.value = null
     listUiError.value = null
     comparisonError.value = null
     trendError.value = null
     trendFailedCount.value = 0
-    trendGazeFailedCount.value = 0
-    gazeError.value = null
+    detailCache.clear()
   }
 
   function setRepository(nextRepository: TestRepository): void {
@@ -129,348 +119,220 @@ export const useTestStore = defineStore('test', () => {
 
   async function loadForStudent(nextStudentId: number): Promise<void> {
     abortRequests()
-    const controller = new AbortController()
-    listController = controller
     const generation = ++listGeneration
     comparisonGeneration += 1
     trendGeneration += 1
-    gazeGeneration += 1
     const isRefresh = studentId.value === nextStudentId
     if (isRefresh) {
-      listStatus.value = 'loading'
+      if (tests.value.length === 0) listStatus.value = 'loading'
       listError.value = null
       listUiError.value = null
     } else {
       clearState(nextStudentId)
     }
-
+    const controller = new AbortController()
+    listController = controller
     try {
       const items = await repository.value.getTests(nextStudentId, {
         signal: controller.signal,
       })
       if (generation !== listGeneration || studentId.value !== nextStudentId) return
-      tests.value = [...items].sort(
-        (left, right) => right.date.localeCompare(left.date) || right.testId - left.testId,
-      )
-      const retainedCurrentTestId = tests.value.some((test) => test.testId === currentTestId.value)
-        ? currentTestId.value
-        : null
-      currentTestId.value = retainedCurrentTestId ?? tests.value[0]?.testId ?? null
-      comparisonTestIds.value = comparisonTestIds.value
-        .filter(
-          (testId) =>
-            testId !== currentTestId.value && tests.value.some((test) => test.testId === testId),
-        )
-        .slice(0, 2)
+      tests.value = [...items]
       listStatus.value = 'success'
-      if (currentTestId.value !== null) {
-        await loadComparison(nextStudentId)
-        if (generation !== listGeneration || studentId.value !== nextStudentId) return
-        await loadGazeAnalysis(nextStudentId, currentTestId.value)
-        if (generation !== listGeneration || studentId.value !== nextStudentId) return
-        await loadTrend(nextStudentId)
-      } else {
-        comparisonResult.value = null
-        trendDetails.value = []
-        trendGazeResults.value = []
-        gazeAnalysis.value = null
-        comparisonStatus.value = 'idle'
-        trendStatus.value = 'idle'
-        gazeStatus.value = 'idle'
+      currentTestCurriculumId.value = items[0]?.testCurriculumId ?? null
+      if (currentTestCurriculumId.value !== null) {
+        await Promise.all([loadComparison(nextStudentId), loadTrend(nextStudentId)])
       }
     } catch (error) {
       if (isAbortError(error) || generation !== listGeneration) return
       listStatus.value = 'error'
       listUiError.value = mapCommonError(error)
-      listError.value = testErrorMessage(error, '완료된 검사 목록을 불러오지 못했습니다.')
+      listError.value = testErrorMessage(error, '완료된 실력 도전 검사 목록을 불러오지 못했습니다.')
     } finally {
-      if (generation === listGeneration) listController = null
+      if (listController === controller) listController = null
     }
   }
 
   async function retryList(): Promise<void> {
+    if (studentId.value === null || listStatus.value === 'loading') return
     const currentStudentId = studentId.value
-    if (currentStudentId === null) return
-    await loadForStudent(currentStudentId)
+    const previousTests = tests.value
+    const previousCurrentId = currentTestCurriculumId.value
+    listStatus.value = 'loading'
+    listError.value = null
+    listUiError.value = null
+    const controller = new AbortController()
+    listController?.abort()
+    listController = controller
+    const generation = ++listGeneration
+    try {
+      const items = await repository.value.getTests(currentStudentId, {
+        signal: controller.signal,
+      })
+      if (generation !== listGeneration || studentId.value !== currentStudentId) return
+      tests.value = [...items]
+      listStatus.value = 'success'
+      if (items.length === 0) {
+        currentTestCurriculumId.value = null
+        comparisonTestCurriculumIds.value = []
+        comparisonResult.value = null
+        trendDetails.value = []
+        comparisonStatus.value = 'idle'
+        trendStatus.value = 'idle'
+        return
+      }
+      const nextCurrentId = items.some(
+        (item) => item.testCurriculumId === previousCurrentId,
+      )
+        ? previousCurrentId!
+        : items[0]!.testCurriculumId
+      currentTestCurriculumId.value = nextCurrentId
+      comparisonTestCurriculumIds.value = comparisonTestCurriculumIds.value.filter((id) =>
+        items.some((item) => item.testCurriculumId === id && id !== nextCurrentId),
+      )
+      await Promise.all([loadComparison(currentStudentId), loadTrend(currentStudentId)])
+    } catch (error) {
+      if (isAbortError(error) || generation !== listGeneration) return
+      tests.value = previousTests
+      listStatus.value = 'error'
+      listUiError.value = mapCommonError(error)
+      listError.value = testErrorMessage(error, '최신 검사 목록을 불러오지 못했습니다.')
+    } finally {
+      if (listController === controller) listController = null
+    }
   }
 
-  async function selectCurrentTest(currentStudentId: number, nextTestId: number): Promise<boolean> {
+  async function selectCurrentTest(
+    currentStudentId: number,
+    nextTestCurriculumId: string,
+  ): Promise<boolean> {
     if (
-      currentStudentId !== studentId.value ||
-      !tests.value.some((test) => test.testId === nextTestId)
+      studentId.value !== currentStudentId ||
+      !tests.value.some((test) => test.testCurriculumId === nextTestCurriculumId)
     ) {
       return false
     }
-    if (currentTestId.value === nextTestId && comparisonStatus.value === 'success') {
-      return true
-    }
-    currentTestId.value = nextTestId
-    comparisonTestIds.value = comparisonTestIds.value.filter((testId) => testId !== nextTestId)
-    trendController?.abort()
-    trendController = null
-    trendGeneration += 1
-    await Promise.all([
-      loadComparison(currentStudentId),
-      loadGazeAnalysis(currentStudentId, nextTestId),
-      loadTrend(currentStudentId),
-    ])
-    return comparisonStatus.value === 'success'
-  }
-
-  async function addComparisonTest(currentStudentId: number, testId: number): Promise<boolean> {
-    if (
-      currentStudentId !== studentId.value ||
-      currentTestId.value === testId ||
-      comparisonTestIds.value.includes(testId) ||
-      comparisonTestIds.value.length >= 2 ||
-      !tests.value.some((test) => test.testId === testId)
-    ) {
-      return false
-    }
-    comparisonTestIds.value = [...comparisonTestIds.value, testId]
+    currentTestCurriculumId.value = nextTestCurriculumId
+    comparisonTestCurriculumIds.value = comparisonTestCurriculumIds.value.filter(
+      (id) => id !== nextTestCurriculumId,
+    )
     await loadComparison(currentStudentId)
     return comparisonStatus.value === 'success'
   }
 
-  async function removeComparisonTest(currentStudentId: number, testId: number): Promise<boolean> {
-    if (currentStudentId !== studentId.value || !comparisonTestIds.value.includes(testId)) {
+  async function addComparisonTest(
+    currentStudentId: number,
+    testCurriculumId: string,
+  ): Promise<boolean> {
+    if (
+      !canAddComparison.value ||
+      !availableComparisonTests.value.some(
+        (test) => test.testCurriculumId === testCurriculumId,
+      )
+    ) {
       return false
     }
-    comparisonTestIds.value = comparisonTestIds.value.filter((candidate) => candidate !== testId)
+    comparisonTestCurriculumIds.value = [
+      ...comparisonTestCurriculumIds.value,
+      testCurriculumId,
+    ]
+    await loadComparison(currentStudentId)
+    return comparisonStatus.value === 'success'
+  }
+
+  async function removeComparisonTest(
+    currentStudentId: number,
+    testCurriculumId: string,
+  ): Promise<boolean> {
+    const next = comparisonTestCurriculumIds.value.filter((id) => id !== testCurriculumId)
+    if (sameIds(next, comparisonTestCurriculumIds.value)) return false
+    comparisonTestCurriculumIds.value = next
     await loadComparison(currentStudentId)
     return comparisonStatus.value === 'success'
   }
 
   async function retryComparison(): Promise<void> {
-    const currentStudentId = studentId.value
-    if (currentStudentId === null || currentTestId.value === null) return
-    await loadComparison(currentStudentId)
+    if (studentId.value !== null) await loadComparison(studentId.value)
   }
 
   async function loadComparison(currentStudentId: number): Promise<void> {
-    const requestedCurrentTestId = currentTestId.value
-    const requestedComparisonTestIds = [...comparisonTestIds.value]
-    if (
-      currentStudentId !== studentId.value ||
-      requestedCurrentTestId === null ||
-      !tests.value.some((test) => test.testId === requestedCurrentTestId) ||
-      requestedComparisonTestIds.some(
-        (testId) => !tests.value.some((test) => test.testId === testId),
-      )
-    ) {
-      return
-    }
-
+    const currentId = currentTestCurriculumId.value
+    if (studentId.value !== currentStudentId || currentId === null) return
     comparisonController?.abort()
     const controller = new AbortController()
     comparisonController = controller
     const generation = ++comparisonGeneration
-    comparisonResult.value = null
-    comparisonStatus.value = 'loading'
+    if (comparisonResult.value === null) comparisonStatus.value = 'loading'
     comparisonError.value = null
-
     try {
       const result = await repository.value.compareTests(
         currentStudentId,
-        requestedCurrentTestId,
-        requestedComparisonTestIds,
+        currentId,
+        comparisonTestCurriculumIds.value,
         { signal: controller.signal },
       )
       if (
         generation !== comparisonGeneration ||
         studentId.value !== currentStudentId ||
-        currentTestId.value !== requestedCurrentTestId ||
-        !sameIds(comparisonTestIds.value, requestedComparisonTestIds)
+        currentTestCurriculumId.value !== currentId
       ) {
         return
       }
       comparisonResult.value = result
-      cacheComparison(currentStudentId, result)
+      cacheDetails(currentStudentId, [result.currentTest, ...result.comparisonTests])
       comparisonStatus.value = 'success'
     } catch (error) {
       if (isAbortError(error) || generation !== comparisonGeneration) return
+      comparisonResult.value = null
       comparisonStatus.value = 'error'
       comparisonError.value = testErrorMessage(error, '검사 상세 결과를 불러오지 못했습니다.')
     } finally {
-      if (generation === comparisonGeneration) comparisonController = null
+      if (comparisonController === controller) comparisonController = null
     }
   }
 
   async function loadTrend(currentStudentId: number): Promise<void> {
-    if (currentStudentId !== studentId.value || tests.value.length === 0) return
-
+    if (studentId.value !== currentStudentId) return
     trendController?.abort()
     const controller = new AbortController()
     trendController = controller
     const generation = ++trendGeneration
     const requestedTests = [...tests.value]
-    trendStatus.value = 'loading'
+    if (trendDetails.value.length === 0) trendStatus.value = 'loading'
     trendError.value = null
     trendFailedCount.value = 0
-    trendGazeFailedCount.value = 0
-
-    const missingTests = requestedTests.filter(
-      (test) => !detailCache.has(detailCacheKey(currentStudentId, test.testId)),
-    )
-    const missingGazeTests = requestedTests.filter(
-      (test) => !gazeCache.has(detailCacheKey(currentStudentId, test.testId)),
-    )
-    let failedDetailCount = 0
-    let failedGazeCount = 0
-    const tasks: Array<() => Promise<void>> = [
-      ...missingTests.map(
-        (test) => async () => {
-          controller.signal.throwIfAborted()
-          try {
-            const result = await repository.value.compareTests(currentStudentId, test.testId, [], {
+    const results = await Promise.allSettled(
+      requestedTests.map((test) => {
+        const cached = detailCache.get(cacheKey(currentStudentId, test.testCurriculumId))
+        return cached
+          ? Promise.resolve(cached)
+          : repository.value.getTest(currentStudentId, test.testCurriculumId, {
               signal: controller.signal,
             })
-            detailCache.set(
-              detailCacheKey(currentStudentId, result.currentTest.testId),
-              result.currentTest,
-            )
-          } catch (error) {
-            if (isAbortError(error)) throw error
-            failedDetailCount += 1
-          }
-        },
-      ),
-      ...missingGazeTests.map(
-        (test) => async () => {
-          controller.signal.throwIfAborted()
-          try {
-            const state = await repository.value.getGazeAnalysis(
-              currentStudentId,
-              test.testId,
-              { signal: controller.signal },
-            )
-            gazeCache.set(detailCacheKey(currentStudentId, test.testId), state)
-          } catch (error) {
-            if (isAbortError(error)) throw error
-            failedGazeCount += 1
-          }
-        },
-      ),
-    ]
-    let taskCursor = 0
-
-    async function worker(): Promise<void> {
-      while (taskCursor < tasks.length) {
-        const task = tasks[taskCursor]
-        taskCursor += 1
-        if (!task) return
-        controller.signal.throwIfAborted()
-        try {
-          await task()
-        } catch (error) {
-          if (isAbortError(error)) throw error
-          throw error
-        }
-      }
-    }
-
-    try {
-      const workerCount = Math.min(3, tasks.length)
-      await Promise.all(Array.from({ length: workerCount }, () => worker()))
-      if (generation !== trendGeneration || studentId.value !== currentStudentId) return
-
-      trendDetails.value = requestedTests
-        .map((test) => detailCache.get(detailCacheKey(currentStudentId, test.testId)))
-        .filter((detail): detail is TestDetail => detail !== undefined)
-        .sort((left, right) => left.date.localeCompare(right.date) || left.testId - right.testId)
-      trendGazeResults.value = requestedTests
-        .map((test) => {
-          const state = gazeCache.get(detailCacheKey(currentStudentId, test.testId))
-          return state ? { testId: test.testId, state } : null
-        })
-        .filter((result): result is TestGazeResult => result !== null)
-      trendFailedCount.value = failedDetailCount
-      trendGazeFailedCount.value = failedGazeCount
-
-      if (trendDetails.value.length === 0) {
-        trendStatus.value = 'error'
-        trendError.value = '검사 평균을 계산할 결과를 불러오지 못했습니다.'
-      } else {
-        trendStatus.value = 'success'
-        const failures = [
-          failedDetailCount > 0 ? `검사 상세 ${failedDetailCount}건` : null,
-          failedGazeCount > 0 ? `시선 분석 ${failedGazeCount}건` : null,
-        ].filter((message): message is string => message !== null)
-        trendError.value =
-          failures.length > 0
-            ? `일부 ${failures.join(', ')}을 불러오지 못해 확인 가능한 결과만 표시합니다.`
-            : null
-      }
-    } catch (error) {
-      if (isAbortError(error) || generation !== trendGeneration) return
-      trendStatus.value = 'error'
-      trendError.value = testErrorMessage(error, '검사 평균을 계산할 결과를 불러오지 못했습니다.')
-    } finally {
-      if (generation === trendGeneration) trendController = null
-    }
+      }),
+    )
+    if (generation !== trendGeneration || studentId.value !== currentStudentId) return
+    const details = results.flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    )
+    const failures = results.length - details.length
+    cacheDetails(currentStudentId, details)
+    trendDetails.value = details.sort(
+      (left, right) => left.createdAt.localeCompare(right.createdAt),
+    )
+    trendFailedCount.value = failures
+    trendStatus.value = details.length > 0 ? 'success' : failures > 0 ? 'error' : 'success'
+    trendError.value =
+      failures > 0
+        ? details.length > 0
+          ? `일부 검사 상세 ${failures}건을 불러오지 못해 성공한 결과만 평균에 반영했습니다.`
+          : '검사 지표 평균을 계산할 상세 결과를 불러오지 못했습니다.'
+        : null
+    if (trendController === controller) trendController = null
   }
 
   async function retryTrend(): Promise<void> {
-    const currentStudentId = studentId.value
-    if (currentStudentId === null) return
-    await loadTrend(currentStudentId)
-  }
-
-  async function loadGazeAnalysis(
-    currentStudentId: number,
-    testId: number,
-    force = false,
-  ): Promise<void> {
-    if (
-      currentStudentId !== studentId.value ||
-      currentTestId.value !== testId ||
-      !tests.value.some((test) => test.testId === testId)
-    ) {
-      return
-    }
-    const cached = gazeCache.get(detailCacheKey(currentStudentId, testId))
-    if (cached && !force) {
-      gazeAnalysis.value = cached
-      gazeStatus.value = 'success'
-      gazeError.value = null
-      return
-    }
-    gazeController?.abort()
-    const controller = new AbortController()
-    gazeController = controller
-    const generation = ++gazeGeneration
-    gazeAnalysis.value = null
-    gazeStatus.value = 'loading'
-    gazeError.value = null
-
-    try {
-      const state = await repository.value.getGazeAnalysis(currentStudentId, testId, {
-        signal: controller.signal,
-      })
-      if (
-        generation !== gazeGeneration ||
-        studentId.value !== currentStudentId ||
-        currentTestId.value !== testId
-      ) {
-        return
-      }
-      gazeCache.set(detailCacheKey(currentStudentId, testId), state)
-      gazeAnalysis.value = state
-      gazeStatus.value = 'success'
-    } catch (error) {
-      if (isAbortError(error) || generation !== gazeGeneration) return
-      gazeStatus.value = 'error'
-      gazeError.value = testErrorMessage(error, '시선 분석 결과를 불러오지 못했습니다.')
-    } finally {
-      if (generation === gazeGeneration) gazeController = null
-    }
-  }
-
-  async function retryGazeAnalysis(): Promise<void> {
-    const currentStudentId = studentId.value
-    const testId = currentTestId.value
-    if (currentStudentId === null || testId === null) return
-    await loadGazeAnalysis(currentStudentId, testId, true)
+    if (studentId.value !== null) await loadTrend(studentId.value)
   }
 
   function reset(): void {
@@ -478,21 +340,16 @@ export const useTestStore = defineStore('test', () => {
     listGeneration += 1
     comparisonGeneration += 1
     trendGeneration += 1
-    gazeGeneration += 1
-    detailCache.clear()
-    gazeCache.clear()
     clearState(null)
   }
 
   return {
     studentId,
     tests,
-    currentTestId,
-    comparisonTestIds,
+    currentTestCurriculumId,
+    comparisonTestCurriculumIds,
     comparisonResult,
     trendDetails,
-    trendGazeResults,
-    gazeAnalysis,
     currentTest,
     comparisonTests,
     availableComparisonTests,
@@ -500,14 +357,11 @@ export const useTestStore = defineStore('test', () => {
     listStatus,
     comparisonStatus,
     trendStatus,
-    gazeStatus,
     listError,
     listUiError,
     comparisonError,
     trendError,
     trendFailedCount,
-    trendGazeFailedCount,
-    gazeError,
     setRepository,
     loadForStudent,
     retryList,
@@ -515,11 +369,7 @@ export const useTestStore = defineStore('test', () => {
     addComparisonTest,
     removeComparisonTest,
     retryComparison,
-    loadComparison,
-    loadTrend,
     retryTrend,
-    loadGazeAnalysis,
-    retryGazeAnalysis,
     reset,
   }
 })

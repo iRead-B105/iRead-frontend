@@ -1,11 +1,6 @@
 import { apiRequest } from '@/lib/api'
-import {
-  mapRawGazeAnalysis,
-  type GazeAnalysisState,
-  type RawGazeAnalysisDto,
-} from '@/features/teacher/gaze'
 import type {
-  TestComparison,
+  TestAreaScore,
   TestDetail,
   TestListItem,
   TestQuestionResult,
@@ -15,60 +10,136 @@ import type { TestRequestOptions } from './repositories/testRepository'
 export type TestApiRequest = <T>(endpoint: string, init?: RequestInit) => Promise<T>
 
 interface TestListItemDto {
-  readonly testId: number
-  readonly date: string
+  readonly testCurriculumId: string
+  readonly status: string
+  readonly createdAt: string
+  readonly completedAt?: string | null
+  readonly completedQuestions: number
+  readonly totalQuestions: number
+  readonly overallScore?: number | null
 }
 
 interface TestListDataDto {
-  readonly testHistory: readonly TestListItemDto[]
+  readonly curriculums?: readonly TestListItemDto[] | null
+}
+
+interface TestAreaScoreDto {
+  readonly trackCode: string
+  readonly title: string
+  readonly score?: number | null
+  readonly completedQuestions: number
+  readonly totalQuestions: number
 }
 
 interface TestQuestionResultDto {
-  readonly questionNumber: number
+  readonly testId: string
+  readonly sequenceNo: number
+  readonly trackCode: string
+  readonly questionType: string
   readonly question?: string | null
-  readonly isCorrect?: boolean | null
-  readonly correctAnswer?: string | null
-  readonly selectedAnswer?: string | null
-}
-
-interface TestDetailDto {
-  readonly testId: number
-  readonly date: string
-  readonly readingTimeSeconds?: number | null
+  readonly responseType: string
+  readonly selectedAnswer?: unknown
+  readonly correctAnswer?: unknown
+  readonly correct?: boolean | null
+  readonly score?: number | null
+  readonly pronunciationScore?: number | null
   readonly solvingTimeSeconds?: number | null
-  readonly accuracy?: number | null
   readonly gazeDepartureCount?: number | null
-  readonly questions?: readonly TestQuestionResultDto[] | null
 }
 
-interface TestComparisonDto {
-  readonly currentTest: TestDetailDto
-  readonly comparisonTests?: readonly TestDetailDto[] | null
+interface TestDetailDto extends TestListItemDto {
+  readonly areaScores?: readonly TestAreaScoreDto[] | null
+  readonly solvingTimeSeconds?: number | null
+  readonly questions?: readonly TestQuestionResultDto[] | null
+  readonly recommendationStatus?: string | null
+  readonly recommendationError?: string | null
+  readonly recommendationLastAttemptAt?: string | null
+  readonly recommendationRetryCount?: number | null
+  readonly dailyCurriculumId?: number | null
+  readonly contentGenerationStatus?: string | null
+  readonly teacherReviewStatus?: string | null
 }
 
 function requestInit(options?: TestRequestOptions): RequestInit {
   return options?.signal ? { signal: options.signal } : {}
 }
 
-function mapQuestion(dto: TestQuestionResultDto): TestQuestionResult {
+function compareDecimalIdsDescending(left: string, right: string): number {
+  return right.length - left.length || right.localeCompare(left)
+}
+
+function mapListItem(dto: TestListItemDto): TestListItem {
   return {
-    questionNumber: dto.questionNumber,
-    question: dto.question ?? null,
-    isCorrect: dto.isCorrect ?? null,
-    correctAnswer: dto.correctAnswer ?? null,
-    selectedAnswer: dto.selectedAnswer ?? null,
+    testCurriculumId: dto.testCurriculumId,
+    status: dto.status,
+    createdAt: dto.createdAt,
+    completedAt: dto.completedAt ?? null,
+    completedQuestions: dto.completedQuestions,
+    totalQuestions: dto.totalQuestions,
+    overallScore: dto.overallScore ?? null,
   }
 }
 
-function mapDetail(dto: TestDetailDto): TestDetail {
+function mapAreaScore(dto: TestAreaScoreDto): TestAreaScore {
+  return {
+    trackCode: dto.trackCode,
+    title: dto.title,
+    score: dto.score ?? null,
+    completedQuestions: dto.completedQuestions,
+    totalQuestions: dto.totalQuestions,
+  }
+}
+
+function mapQuestion(dto: TestQuestionResultDto): TestQuestionResult {
   return {
     testId: dto.testId,
-    date: dto.date,
-    readingTimeSeconds: dto.readingTimeSeconds ?? null,
+    sequenceNo: dto.sequenceNo,
+    trackCode: dto.trackCode,
+    questionType: dto.questionType,
+    question: dto.question ?? null,
+    responseType: dto.responseType,
+    selectedAnswer: dto.selectedAnswer ?? null,
+    correctAnswer: dto.correctAnswer ?? null,
+    correct: dto.correct ?? null,
+    score: dto.score ?? null,
+    pronunciationScore: dto.pronunciationScore ?? null,
     solvingTimeSeconds: dto.solvingTimeSeconds ?? null,
-    accuracy: dto.accuracy ?? null,
     gazeDepartureCount: dto.gazeDepartureCount ?? null,
-    questions: (dto.questions ?? []).map(mapQuestion),
+  }
+}
+
+function sumMeasured(values: readonly (number | null)[]): number | null {
+  const measured = values.filter((value): value is number => value !== null)
+  return measured.length === 0 ? null : measured.reduce((sum, value) => sum + value, 0)
+}
+
+function averageMeasured(values: readonly (number | null)[]): number | null {
+  const measured = values.filter((value): value is number => value !== null)
+  if (measured.length === 0) return null
+  return Math.round((measured.reduce((sum, value) => sum + value, 0) / measured.length) * 10) / 10
+}
+
+function mapDetail(dto: TestDetailDto): TestDetail {
+  const questions = [...(dto.questions ?? [])]
+    .sort(
+      (left, right) =>
+        left.sequenceNo - right.sequenceNo || left.testId.localeCompare(right.testId),
+    )
+    .map(mapQuestion)
+  return {
+    ...mapListItem(dto),
+    areaScores: (dto.areaScores ?? []).map(mapAreaScore),
+    solvingTimeSeconds: dto.solvingTimeSeconds ?? null,
+    gazeDepartureCount: sumMeasured(questions.map((question) => question.gazeDepartureCount)),
+    pronunciationScore: averageMeasured(questions.map((question) => question.pronunciationScore)),
+    questions,
+    recommendationStatus: dto.recommendationStatus ?? null,
+    recommendationError: dto.recommendationError ?? null,
+    recommendationLastAttemptAt: dto.recommendationLastAttemptAt ?? null,
+    recommendationRetryCount: dto.recommendationRetryCount ?? 0,
+    dailyCurriculumId: dto.dailyCurriculumId ?? null,
+    contentGenerationStatus: dto.contentGenerationStatus ?? null,
+    teacherReviewStatus: dto.teacherReviewStatus ?? null,
   }
 }
 
@@ -77,50 +148,36 @@ export interface TestApi {
     studentId: number,
     options?: TestRequestOptions,
   ) => Promise<readonly TestListItem[]>
-  readonly compareTests: (
+  readonly getTest: (
     studentId: number,
-    currentTestId: number,
-    comparisonTestIds: readonly number[],
+    testCurriculumId: string,
     options?: TestRequestOptions,
-  ) => Promise<TestComparison>
-  readonly getGazeAnalysis: (
-    studentId: number,
-    testId: number,
-    options?: TestRequestOptions,
-  ) => Promise<GazeAnalysisState>
+  ) => Promise<TestDetail>
 }
 
 export function createTestApi(request: TestApiRequest = apiRequest): TestApi {
   return {
     async getTests(studentId, options) {
       const dto = await request<TestListDataDto>(
-        `/api/admin/test/${studentId}/list`,
+        `/api/admin/test/${studentId}/curriculums`,
         requestInit(options),
       )
-      return [...dto.testHistory]
-        .sort((left, right) => right.date.localeCompare(left.date) || right.testId - left.testId)
-        .map((item) => ({ ...item }))
+      return [...(dto.curriculums ?? [])]
+        .sort(
+          (left, right) =>
+            (right.completedAt ?? right.createdAt).localeCompare(
+              left.completedAt ?? left.createdAt,
+            ) ||
+            compareDecimalIdsDescending(left.testCurriculumId, right.testCurriculumId),
+        )
+        .map(mapListItem)
     },
-    async compareTests(studentId, currentTestId, comparisonTestIds, options) {
-      const query = new URLSearchParams({ currentTestId: String(currentTestId) })
-      comparisonTestIds.forEach((testId) => {
-        query.append('comparisonTestIds', String(testId))
-      })
-      const dto = await request<TestComparisonDto>(
-        `/api/admin/test/${studentId}/compare?${query.toString()}`,
+    async getTest(studentId, testCurriculumId, options) {
+      const dto = await request<TestDetailDto>(
+        `/api/admin/test/${studentId}/curriculums/${testCurriculumId}`,
         requestInit(options),
       )
-      return {
-        currentTest: mapDetail(dto.currentTest),
-        comparisonTests: (dto.comparisonTests ?? []).map(mapDetail),
-      }
-    },
-    async getGazeAnalysis(studentId, testId, options) {
-      const dto = await request<RawGazeAnalysisDto>(
-        `/api/admin/test/${studentId}/${testId}/gaze-analysis`,
-        requestInit(options),
-      )
-      return mapRawGazeAnalysis(dto)
+      return mapDetail(dto)
     },
   }
 }

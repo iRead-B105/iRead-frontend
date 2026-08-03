@@ -76,6 +76,8 @@ const emit = defineEmits<{
       </div>
     </dl>
 
+    <p class="report-snapshot-notice">완료된 학습 데이터를 기준으로 생성된 보고서입니다.</p>
+
     <ReportLearningSnapshot :snapshot="report.snapshot" />
     <ReportGazeTrend :trend="report.snapshot.gazeTrend" />
 
@@ -132,6 +134,17 @@ const emit = defineEmits<{
   border-radius: var(--radius-sm);
   background: var(--card);
   color: var(--foreground);
+}
+
+.report-snapshot-notice {
+  margin: 0 0 24px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
 }
 .learning-report__header {
   display: flex;

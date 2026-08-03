@@ -3,6 +3,7 @@ import { computed, type Component } from 'vue'
 import {
   getLessonMaterialEditorDefinition,
   type EditableLessonMaterialItem,
+  type LessonMaterialFieldError,
   type LessonMaterialEditorCode,
 } from '@/features/teacher/training'
 import {
@@ -24,6 +25,7 @@ import {
 const props = defineProps<{
   material: EditableLessonMaterialItem
   disabled: boolean
+  fieldErrors?: readonly LessonMaterialFieldError[]
 }>()
 
 const emit = defineEmits<{
@@ -50,11 +52,7 @@ const editors: Readonly<Record<LessonMaterialEditorCode, Component>> = {
 const definition = computed(() => getLessonMaterialEditorDefinition(props.material.questionType))
 const editor = computed(() => (definition.value ? editors[definition.value.editorCode] : null))
 
-function handleUpdateField(
-  section: 'content' | 'answer',
-  key: string,
-  value: unknown,
-): void {
+function handleUpdateField(section: 'content' | 'answer', key: string, value: unknown): void {
   emit('updateField', section, key, value)
 }
 
@@ -69,6 +67,7 @@ function handleEditorError(message: string | null): void {
     v-if="editor"
     :material="material"
     :disabled="disabled"
+    :field-errors="fieldErrors ?? []"
     @update-field="handleUpdateField"
     @editor-error="handleEditorError"
   />

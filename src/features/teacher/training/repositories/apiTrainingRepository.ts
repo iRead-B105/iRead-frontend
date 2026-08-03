@@ -4,6 +4,7 @@ import { createTrainingApi, type TrainingApi } from '../api'
 import {
   assertLessonMaterialRequestCount,
   assertLessonMaterialResponseCount,
+  normalizeLessonMaterialDocument,
 } from '../lessonMaterial'
 import {
   assertSaveCurriculumRequest,
@@ -56,30 +57,14 @@ export class ApiTrainingRepository implements TrainingRepository {
     assertSaveCurriculumRequest(request)
     await this.api.updateCurriculum(studentId, curriculumId, request)
     try {
-      const curriculum = await this.getCurrentCurriculum(studentId)
-      if (curriculum === null) {
-        throw new Error('저장된 현재 커리큘럼을 찾을 수 없습니다.')
-      }
-      return curriculum
+      return await this.getCurriculum(studentId, curriculumId)
     } catch (error) {
       throw new CurriculumSynchronizationError(error)
     }
   }
 
-  getExpectedWords(
-    studentId: number,
-    trainingId: number,
-    options: Parameters<TrainingRepository['getExpectedWords']>[2] = {},
-  ) {
-    return this.api.getExpectedWords(studentId, trainingId, options)
-  }
-
-  addExpectedWord(studentId: number, trainingId: number, wordName: string) {
-    return this.api.addExpectedWord(studentId, trainingId, wordName)
-  }
-
-  deleteExpectedWord(studentId: number, trainingId: number, wordId: number) {
-    return this.api.deleteExpectedWord(studentId, trainingId, wordId)
+  completeCurriculumReview(studentId: number, curriculumId: number) {
+    return this.api.completeCurriculumReview(studentId, curriculumId)
   }
 
   generateTraining(studentId: number, trainingId: number) {
@@ -100,7 +85,7 @@ export class ApiTrainingRepository implements TrainingRepository {
     options: Parameters<TrainingRepository['getLessonMaterial']>[2] = {},
   ) {
     const document = await this.api.getLessonMaterial(studentId, trainingId, options)
-    return assertLessonMaterialResponseCount(document)
+    return normalizeLessonMaterialDocument(assertLessonMaterialResponseCount(document))
   }
 
   async saveLessonMaterial(

@@ -1,15 +1,12 @@
 import { defineComponent, h, type PropType } from 'vue'
 import type {
   EditableLessonMaterialItem,
+  LessonMaterialFieldError,
   LessonMaterialEditorCode,
 } from '@/features/teacher/training'
 import BehaviorMaterialEditor from './BehaviorMaterialEditor.vue'
 
-type UpdateField = (
-  section: 'content' | 'answer',
-  key: string,
-  value: unknown,
-) => void
+type UpdateField = (section: 'content' | 'answer', key: string, value: unknown) => void
 
 function createMaterialEditor(name: string, editorCode: LessonMaterialEditorCode) {
   return defineComponent({
@@ -23,13 +20,14 @@ function createMaterialEditor(name: string, editorCode: LessonMaterialEditorCode
         type: Boolean,
         default: false,
       },
+      fieldErrors: {
+        type: Array as PropType<readonly LessonMaterialFieldError[]>,
+        default: () => [],
+      },
     },
     emits: {
-      updateField: (
-        section: 'content' | 'answer',
-        key: string,
-        _value: unknown,
-      ) => (section === 'content' || section === 'answer') && Boolean(key),
+      updateField: (section: 'content' | 'answer', key: string, _value: unknown) =>
+        (section === 'content' || section === 'answer') && Boolean(key),
       editorError: (_message: string | null) => true,
     },
     setup(props, { emit }) {
@@ -44,6 +42,7 @@ function createMaterialEditor(name: string, editorCode: LessonMaterialEditorCode
           material: props.material,
           editorCode,
           disabled: props.disabled,
+          fieldErrors: props.fieldErrors,
           onUpdateField,
           onEditorError,
         })

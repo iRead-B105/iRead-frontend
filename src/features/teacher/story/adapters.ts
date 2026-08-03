@@ -65,7 +65,7 @@ export interface StoryPageDto {
   readonly backgroundImageUrl: string | null
   readonly backgroundImagePosition: string | null
   readonly imageGenerationStatus: StoryImageGenerationStatus
-  readonly textLines: readonly string[] | null
+  readonly textLines: readonly unknown[] | null
   readonly requiresBranchInput: boolean
   readonly readAt: string | null
   readonly branchRecord: StoryBranchRecordDto | null
@@ -119,6 +119,29 @@ export interface StoryGazeAnalysisDto {
 
 function nullableUrl(value: string | null): string | null {
   return value?.trim() || null
+}
+
+function textFromRecord(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const text = (value as Record<string, unknown>).text
+  return typeof text === 'string' ? text.trim() || null : null
+}
+
+function normalizeStoryTextLine(value: unknown): string | null {
+  const recordText = textFromRecord(value)
+  if (recordText) return recordText
+  if (typeof value !== 'string') return null
+
+  const text = value.trim()
+  if (!text) return null
+  if (text.startsWith('{') && text.endsWith('}')) {
+    try {
+      return textFromRecord(JSON.parse(text)) ?? text
+    } catch {
+      return text
+    }
+  }
+  return text
 }
 
 export function mapStoryTemplate(dto: StoryTemplateDto): StoryTemplateOption {
@@ -188,7 +211,9 @@ function mapStoryPage(dto: StoryPageDto): StoryPage {
     backgroundImageUrl,
     backgroundImagePosition: dto.backgroundImagePosition?.trim() || 'center',
     imageGenerationStatus: dto.imageGenerationStatus,
-    textLines: [...(dto.textLines ?? [])],
+    textLines: (dto.textLines ?? [])
+      .map(normalizeStoryTextLine)
+      .filter((line): line is string => line !== null),
     requiresBranchInput: dto.requiresBranchInput,
     readAt: dto.readAt,
     branchRecord: dto.branchRecord === null ? null : mapStoryBranchRecord(dto.branchRecord),

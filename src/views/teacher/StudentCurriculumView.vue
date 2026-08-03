@@ -29,34 +29,36 @@ const {
   selectedTrainingId,
   selectedTemplate,
   selectedTraining,
-  selectedExpectedWords,
   selectedTrainingDetail,
   selectedLessonMaterial,
-  expectedWordsByTrainingId,
   catalogStatus,
   curriculumStatus,
   curriculumSynchronizationStatus,
-  expectedWordsStatus,
   detailStatus,
   lessonMaterialStatus,
   lessonMaterialSaveStatus,
+  lessonMaterialSaveIssue,
+  lessonMaterialFieldErrors,
+  lessonMaterialRemoteChange,
+  lessonMaterialHasLocalChanges,
   materialGenerationStatus,
+  reviewCompletionStatus,
   requiresMaterialRegeneration,
   isSavingCurriculum,
   curriculumSaveConflict,
   isRefreshingCurriculumConflict,
-  isMutatingExpectedWord,
   isSavingLessonMaterial,
   catalogError,
   curriculumError,
-  expectedWordError,
   detailError,
   lessonMaterialError,
   lessonMaterialSaveError,
   materialGenerationError,
+  reviewCompletionError,
   hasChanges,
   draftTrainingIds,
   canEditCurriculum: canEditCurriculumFromStore,
+  canCompleteReview,
 } = storeToRefs(trainingStore)
 
 const draggedDraftKey = ref<string | null>(null)
@@ -66,6 +68,7 @@ const recommendationList = ref<HTMLElement | null>(null)
 const selectedCatalogUnit = ref('all')
 const materialEditorOpen = ref(false)
 const draftPendingDeletion = ref<CurriculumDraftItem | null>(null)
+const reviewConfirmOpen = ref(false)
 const reorderAnnouncement = ref('')
 const { visible: saved, show: showSaved } = useTemporaryNotice()
 
@@ -94,6 +97,7 @@ function parseStudentId(value: unknown): number | null {
 }
 
 const studentId = computed(() => parseStudentId(route.params.id))
+const requestedCurriculumId = computed(() => parseStudentId(route.query.curriculumId))
 const invalidStudentId = computed(() => studentId.value === null)
 const canEditCurriculum = computed(() => canEditCurriculumFromStore.value)
 const canSave = computed(
@@ -156,8 +160,8 @@ const visibleCatalogRows = computed(() =>
 )
 
 watch(
-  studentId,
-  async (id) => {
+  [studentId, requestedCurriculumId],
+  async ([id, curriculumId]) => {
     materialEditorOpen.value = false
     draftPendingDeletion.value = null
     selectedCatalogUnit.value = 'all'
@@ -166,7 +170,7 @@ watch(
       trainingStore.reset()
       return
     }
-    await trainingStore.loadForStudent(id)
+    await trainingStore.loadForStudent(id, curriculumId)
   },
   { immediate: true },
 )
@@ -186,7 +190,8 @@ watch(catalogUnitTabs, (tabs) => {
 
 function confirmDiscard(): boolean {
   return (
-    !hasChanges.value || window.confirm('저장하지 않은 커리큘럼 변경 사항을 버리고 이동할까요?')
+    (!hasChanges.value && !lessonMaterialHasLocalChanges.value) ||
+    window.confirm('저장하지 않은 커리큘럼 또는 교안 변경 사항을 버리고 이동할까요?')
   )
 }
 
@@ -369,6 +374,7 @@ function confirmDraftDeletion(): void {
   if (!draftPendingDeletion.value) return
   trainingStore.removeDraftItem(draftPendingDeletion.value.key)
   draftPendingDeletion.value = null
+  trainingStore.setLessonMaterialEditingState(null)
   materialEditorOpen.value = false
 }
 
@@ -394,19 +400,12 @@ async function retryCurriculumSynchronization(): Promise<void> {
 }
 
 function closeMaterialEditor(): void {
+  trainingStore.setLessonMaterialEditingState(null)
   materialEditorOpen.value = false
 }
 
 async function refreshCurriculumAfterConflict(): Promise<void> {
   await trainingStore.refreshCurriculumAfterConflict()
-}
-
-async function addExpectedWord(wordName: string): Promise<void> {
-  await trainingStore.addExpectedWord(wordName)
-}
-
-async function deleteExpectedWord(wordId: number): Promise<void> {
-  await trainingStore.deleteExpectedWord(wordId)
 }
 
 async function regenerateMaterial(): Promise<void> {
@@ -421,16 +420,61 @@ async function saveLessonMaterial(
   }
 }
 
+function reviewStatusLabel(): string {
+  const labels: Readonly<Record<string, string>> = {
+    GENERATION_PENDING: 'AI 콘텐츠 생성 대기',
+    REVIEW_REQUIRED: '최종 검수 필요',
+    REGENERATION_REQUIRED: 'AI 콘텐츠 재생성 필요',
+    REVIEW_COMPLETED: '최종 검수 완료',
+    NOT_REQUIRED: '최종 검수 대상 아님',
+  }
+  const status = savedCurriculum.value?.reviewStatus ?? 'NOT_REQUIRED'
+  return labels[status] ?? status
+}
+
+function reviewStatusDescription(): string {
+  const status = savedCurriculum.value?.reviewStatus
+  if (status === 'GENERATION_PENDING') {
+    return '오전 3시 AI 생성이 끝난 뒤 교안을 확인할 수 있습니다.'
+  }
+  if (status === 'REGENERATION_REQUIRED') {
+    return '구성 또는 생성 조건이 변경되었습니다. 필요한 교안을 다시 생성해 주세요.'
+  }
+  if (status === 'REVIEW_REQUIRED') {
+    return '5개 교안의 최신 내용을 확인하고 최종 검수를 완료해 주세요.'
+  }
+  if (status === 'REVIEW_COMPLETED') {
+    return '최신 검수 내용이 아동용 앱에 제공될 수 있습니다.'
+  }
+  return '일반 커리큘럼은 실력 도전 최종 검수 대상이 아닙니다.'
+}
+
+async function confirmCurriculumReview(): Promise<void> {
+  reviewConfirmOpen.value = false
+  await trainingStore.completeCurriculumReview()
+}
+
+function handleLessonMaterialEditingState(hasLocalChanges: boolean): void {
+  trainingStore.setLessonMaterialEditingState(
+    materialEditorOpen.value ? selectedTrainingId.value : null,
+    hasLocalChanges,
+  )
+}
+
+function clearLessonMaterialFieldError(path: string): void {
+  trainingStore.clearLessonMaterialFieldError(path)
+}
+
+async function reloadLatestLessonMaterial(): Promise<void> {
+  if (await trainingStore.reloadSelectedLessonMaterial()) {
+    trainingStore.setLessonMaterialEditingState(selectedTrainingId.value, false)
+  }
+}
+
 function deletionMessage(): string {
   const item = draftPendingDeletion.value
   if (!item) return ''
-  const wordCount =
-    item.trainingId === null ? 0 : (expectedWordsByTrainingId.value[item.trainingId]?.length ?? 0)
-  const warning =
-    wordCount > 0
-      ? ` 이 시행에 저장된 예상 단어 ${wordCount}개도 커리큘럼 저장 시 함께 제거됩니다.`
-      : ''
-  return `${attemptLabel(item)}을(를) 다음 회차에서 제거합니다.${warning}`
+  return `${attemptLabel(item)}을(를) 다음 회차에서 제거합니다.`
 }
 </script>
 
@@ -451,6 +495,33 @@ function deletionMessage(): string {
     </Card>
 
     <template v-else>
+      <Card
+        v-if="savedCurriculum?.sourceTestCurriculumId != null"
+        class="review-panel"
+        :class="`review-panel--${(savedCurriculum.reviewStatus ?? 'GENERATION_PENDING').toLowerCase()}`"
+      >
+        <div>
+          <span class="review-source">
+            실력 도전 #{{ savedCurriculum.sourceTestCurriculumId }} 추천
+          </span>
+          <h2>{{ reviewStatusLabel() }}</h2>
+          <p>{{ reviewStatusDescription() }}</p>
+          <p v-if="hasChanges || lessonMaterialHasLocalChanges" class="review-warning">
+            저장하지 않은 변경 사항이 있어 최종 검수를 완료할 수 없습니다.
+          </p>
+          <p v-if="reviewCompletionError" class="review-error" role="alert">
+            {{ reviewCompletionError }}
+          </p>
+        </div>
+        <Button
+          type="button"
+          :disabled="!canCompleteReview"
+          @click="reviewConfirmOpen = true"
+        >
+          {{ reviewCompletionStatus === 'loading' ? '최종 검수 처리 중...' : '최종 검수 완료' }}
+        </Button>
+      </Card>
+
       <div v-if="catalogStatus === 'error'" class="load-errors" role="alert">
         <div>
           <strong>전체 훈련 목록을 불러오지 못했습니다.</strong>
@@ -459,7 +530,7 @@ function deletionMessage(): string {
         <Button
           variant="outline"
           type="button"
-          @click="studentId && trainingStore.loadForStudent(studentId)"
+          @click="studentId && trainingStore.loadForStudent(studentId, requestedCurriculumId)"
         >
           다시 시도
         </Button>
@@ -628,7 +699,7 @@ function deletionMessage(): string {
                   variant="outline"
                   size="sm"
                   type="button"
-                  @click="studentId && trainingStore.loadForStudent(studentId)"
+                  @click="studentId && trainingStore.loadForStudent(studentId, requestedCurriculumId)"
                 >
                   다시 시도
                 </Button>
@@ -809,32 +880,41 @@ function deletionMessage(): string {
       @confirm="confirmDraftDeletion"
     />
 
+    <ConfirmDialog
+      :open="reviewConfirmOpen"
+      title="추천 커리큘럼의 최종 검수를 완료할까요?"
+      message="현재 저장된 5개 교안이 아동용 앱에 제공될 수 있습니다. 이후 내용을 변경하면 다시 검수해야 합니다."
+      confirm-label="최종 검수 완료"
+      @cancel="reviewConfirmOpen = false"
+      @confirm="confirmCurriculumReview"
+    />
+
     <LessonMaterialEditor
       v-if="materialEditorOpen && selectedTraining"
       v-model:open="materialEditorOpen"
       :training="selectedTraining"
       :attempt-label="selectedAttemptLabel"
-      :expected-words="selectedExpectedWords"
       :detail="selectedTrainingDetail"
       :lesson-material="selectedLessonMaterial"
-      :expected-words-status="expectedWordsStatus"
       :detail-status="detailStatus"
       :lesson-material-status="lessonMaterialStatus"
       :lesson-material-save-status="lessonMaterialSaveStatus"
+      :lesson-material-save-issue="lessonMaterialSaveIssue"
+      :lesson-material-field-errors="lessonMaterialFieldErrors"
+      :lesson-material-remote-change="lessonMaterialRemoteChange"
       :material-generation-status="materialGenerationStatus"
       :requires-regeneration="requiresMaterialRegeneration"
-      :is-mutating="isMutatingExpectedWord"
       :is-saving-lesson-material="isSavingLessonMaterial"
-      :expected-word-error="expectedWordError"
       :detail-error="detailError"
       :lesson-material-error="lessonMaterialError"
       :lesson-material-save-error="lessonMaterialSaveError"
       :material-generation-error="materialGenerationError"
       @close="closeMaterialEditor"
-      @add-word="addExpectedWord"
-      @delete-word="deleteExpectedWord"
       @regenerate="regenerateMaterial"
       @retry="retryResources"
+      @reload-latest="reloadLatestLessonMaterial"
+      @editing-state-change="handleLessonMaterialEditingState"
+      @field-edited="clearLessonMaterialFieldError"
       @save="saveLessonMaterial"
     />
   </div>
@@ -857,6 +937,41 @@ function deletionMessage(): string {
 .route-error p {
   margin: 8px 0 18px;
   color: var(--slate-500);
+}
+.review-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+  border-color: var(--primary-200);
+  background: color-mix(in oklch, var(--primary-50) 70%, var(--white));
+}
+.review-panel h2 {
+  margin: 5px 0 0;
+  font-size: 18px;
+}
+.review-panel p {
+  margin: 5px 0 0;
+  color: var(--slate-600);
+  font-size: 13px;
+}
+.review-source {
+  color: var(--primary-700);
+  font-size: 12px;
+  font-weight: 800;
+}
+.review-warning {
+  color: var(--warning-700) !important;
+  font-weight: 700;
+}
+.review-error {
+  color: var(--danger-600) !important;
+  font-weight: 700;
+}
+.review-panel--review_completed {
+  border-color: var(--success-200);
+  background: color-mix(in oklch, var(--success-50) 70%, var(--white));
 }
 .load-errors {
   display: flex;
@@ -926,10 +1041,10 @@ function deletionMessage(): string {
 }
 .catalog-tabs {
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 8px 6px;
   margin-top: 14px;
-  padding-bottom: 4px;
-  overflow-x: auto;
+  padding-bottom: 0;
 }
 .catalog-tab {
   display: inline-flex;
@@ -1234,6 +1349,10 @@ function deletionMessage(): string {
   }
 }
 @media (max-width: 640px) {
+  .review-panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
   .curriculum-library,
   .curriculum-panel {
     padding: 16px;

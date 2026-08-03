@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  CurriculumTraining,
-  SaveLessonMaterialRequest,
-  TrainingDetail,
-} from './model'
+import type { CurriculumTraining, SaveLessonMaterialRequest, TrainingDetail } from './model'
 import {
   LESSON_MATERIAL_COUNT,
+  LESSON_MATERIAL_MAX_COUNT,
+  LESSON_MATERIAL_MIN_COUNT,
   assertLessonMaterialRequestCount,
   assertLessonMaterialResponseCount,
   createMockLessonMaterialDocument,
+  normalizeLessonMaterialDocument,
   saveRequestFromDocument,
 } from './lessonMaterial'
 
@@ -36,7 +35,7 @@ const detail: TrainingDetail = {
   accuracy: null,
 }
 
-describe('lesson material fixed count policy', () => {
+describe('lesson material count contract', () => {
   it('Mock 교안을 항상 자료 5개와 연속된 문항 번호로 구성한다', () => {
     const document = createMockLessonMaterialDocument(training, detail)
 
@@ -44,35 +43,71 @@ describe('lesson material fixed count policy', () => {
     expect(document.materials.map((material) => material.questionNo)).toEqual([1, 2, 3, 4, 5])
   })
 
-  it('5개가 아닌 API 응답을 계약 불일치로 거부한다', () => {
+  it('API 응답은 자료 1~5개를 허용한다', () => {
     const document = createMockLessonMaterialDocument(training, detail)
 
-    expect(() =>
+    expect(
       assertLessonMaterialResponseCount({
         ...document,
-        materials: document.materials.slice(0, LESSON_MATERIAL_COUNT - 1),
-      }),
-    ).toThrowError(
-      expect.objectContaining({
-        status: 502,
-        code: 'LESSON_MATERIAL_CONTRACT_MISMATCH',
-      }),
+        materials: document.materials.slice(0, LESSON_MATERIAL_MIN_COUNT),
+      }).materials,
+    ).toHaveLength(LESSON_MATERIAL_MIN_COUNT)
+    expect(assertLessonMaterialResponseCount(document).materials).toHaveLength(
+      LESSON_MATERIAL_MAX_COUNT,
     )
   })
 
-  it('5개가 아닌 저장 요청을 전송 전에 거부한다', () => {
-    const document = createMockLessonMaterialDocument(training, detail)
-    const validRequest = saveRequestFromDocument(document)
-    const invalidRequest: SaveLessonMaterialRequest = {
-      ...validRequest,
-      materials: validRequest.materials.slice(0, LESSON_MATERIAL_COUNT - 1),
-    }
+  it.each([0, LESSON_MATERIAL_MAX_COUNT + 1])(
+    'API 응답 자료가 %i개면 계약 불일치로 거부한다',
+    (count) => {
+      const document = createMockLessonMaterialDocument(training, detail)
 
-    expect(() => assertLessonMaterialRequestCount(invalidRequest)).toThrowError(
-      expect.objectContaining({
-        status: 422,
-        code: 'LESSON_MATERIAL_VALIDATION_FAILED',
-      }),
-    )
+      expect(() =>
+        assertLessonMaterialResponseCount({
+          ...document,
+          materials: Array.from({ length: count }, () => document.materials[0]),
+        }),
+      ).toThrowError(
+        expect.objectContaining({
+          status: 502,
+          code: 'LESSON_MATERIAL_CONTRACT_MISMATCH',
+        }),
+      )
+    },
+  )
+
+  it.each([0, LESSON_MATERIAL_MAX_COUNT + 1])(
+    '저장 요청 자료가 %i개면 전송 전에 거부한다',
+    (count) => {
+      const document = createMockLessonMaterialDocument(training, detail)
+      const validRequest = saveRequestFromDocument(document)
+      const invalidRequest: SaveLessonMaterialRequest = {
+        ...validRequest,
+        materials: Array.from({ length: count }, () => validRequest.materials[0]!),
+      }
+
+      expect(() => assertLessonMaterialRequestCount(invalidRequest)).toThrowError(
+        expect.objectContaining({
+          status: 422,
+          code: 'LESSON_MATERIAL_VALIDATION_FAILED',
+        }),
+      )
+    },
+  )
+
+  it('presentation이 null인 API 자료를 편집 가능한 기본 문구로 정규화한다', () => {
+    const document = createMockLessonMaterialDocument(training, detail)
+    const normalized = normalizeLessonMaterialDocument({
+      ...document,
+      materials: [{ ...document.materials[0]!, presentation: null as never }],
+    })
+
+    expect(normalized.materials[0]?.presentation).toEqual({
+      activityName: `${training.trainingName} 1`,
+      instruction: '화면의 안내에 따라 활동해 보세요.',
+      hint: '',
+      correctFeedback: '잘했어요.',
+      retryFeedback: '한 번 더 생각해 보세요.',
+    })
   })
 })

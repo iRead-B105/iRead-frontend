@@ -29,6 +29,30 @@ describe('story detail adapters', () => {
     })
   })
 
+  it('객체 또는 JSON 문자열 형태의 본문을 표시 가능한 텍스트로 정규화한다', () => {
+    const fixture = storyDetailFixturesById[6801]!
+    const page = fixture.pages![0]!
+
+    const detail = mapStoryDetail({
+      ...fixture,
+      pages: [
+        {
+          ...page,
+          textLines: [
+            '{"text":"글자 탐색을 시작한 초기 학습자입니다."}',
+            { text: '빛나는 지도를 발견했습니다.' },
+          ],
+        },
+      ],
+      totalPages: 1,
+    })
+
+    expect(detail.pages[0]?.textLines).toEqual([
+      '글자 탐색을 시작한 초기 학습자입니다.',
+      '빛나는 지도를 발견했습니다.',
+    ])
+  })
+
   it('nullable 페이지 시선 배열과 내부 역행 배열은 빈 배열로 정규화한다', () => {
     const gaze = mapStoryGazeAnalysis({
       ...storyGazeFixturesByStoryId[6801]!,

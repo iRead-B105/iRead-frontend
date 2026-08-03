@@ -83,6 +83,12 @@ describe('StudentTrainingHistoryView', () => {
   it('최신 커리큘럼의 첫 실제 훈련 상세·정확도 비교·시선 집계를 표시한다', async () => {
     const { wrapper } = await mountHistory(new MockTrainingRepository())
 
+    const selectionCard = wrapper.get('[data-test="history-selection-card"]')
+    expect(selectionCard.findAll('.history-selection-section')).toHaveLength(2)
+    expect(selectionCard.get('.curriculum-section').text()).toContain('완료 커리큘럼')
+    expect(selectionCard.get('.training-section').text()).toContain('커리큘럼별 훈련')
+    expect(selectionCard.get('.training-section').classes()).toContain('history-selection-section')
+
     expect(wrapper.text()).toContain('2026.07.20')
     expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기')
     expect(wrapper.text()).toContain('8분 30초')

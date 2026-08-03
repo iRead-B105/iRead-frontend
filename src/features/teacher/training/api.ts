@@ -9,9 +9,10 @@ import type {
   CurriculumLog,
   CurriculumTrainingLog,
   CurriculumStatus,
+  CurriculumReviewResult,
+  CurriculumReviewStatus,
   DailyCurriculum,
   LessonMaterialDocument,
-  ExpectedWord,
   GeneratedTrainingData,
   SaveCurriculumRequest,
   SaveLessonMaterialRequest,
@@ -59,16 +60,18 @@ interface CurriculumTrainingDto {
 interface DailyCurriculumDto {
   readonly curriculumId: number
   readonly status: CurriculumStatus
+  readonly sourceTestCurriculumId?: string | null
+  readonly reviewStatus?: CurriculumReviewStatus | null
+  readonly reviewedByTeacherId?: number | null
+  readonly reviewedAt?: string | null
   readonly trainings: readonly CurriculumTrainingDto[]
 }
 
-interface ExpectedWordDto {
-  readonly wordId: number
-  readonly word: string
-}
-
-interface ExpectedWordsDto {
-  readonly words: readonly ExpectedWordDto[]
+interface CurriculumReviewResultDto {
+  readonly curriculumId: number
+  readonly reviewStatus: CurriculumReviewStatus
+  readonly reviewedByTeacherId?: number | null
+  readonly reviewedAt?: string | null
 }
 
 interface TrainingDetailDto {
@@ -154,16 +157,13 @@ function mapCurriculum(dto: DailyCurriculumDto): DailyCurriculum {
   return {
     curriculumId: dto.curriculumId,
     status: dto.status,
+    sourceTestCurriculumId: dto.sourceTestCurriculumId ?? null,
+    reviewStatus: dto.reviewStatus ?? 'NOT_REQUIRED',
+    reviewedByTeacherId: dto.reviewedByTeacherId ?? null,
+    reviewedAt: dto.reviewedAt ?? null,
     trainings: [...dto.trainings]
       .sort((left, right) => left.sequence - right.sequence)
       .map((training) => ({ ...training })),
-  }
-}
-
-function mapExpectedWord(dto: ExpectedWordDto): ExpectedWord {
-  return {
-    wordId: dto.wordId,
-    wordName: dto.word,
   }
 }
 
@@ -287,21 +287,10 @@ export interface TrainingApi {
     curriculumId: number,
     request: SaveCurriculumRequest,
   ) => Promise<void>
-  readonly getExpectedWords: (
+  readonly completeCurriculumReview: (
     studentId: number,
-    trainingId: number,
-    options?: TrainingRequestOptions,
-  ) => Promise<readonly ExpectedWord[]>
-  readonly addExpectedWord: (
-    studentId: number,
-    trainingId: number,
-    wordName: string,
-  ) => Promise<void>
-  readonly deleteExpectedWord: (
-    studentId: number,
-    trainingId: number,
-    wordId: number,
-  ) => Promise<void>
+    curriculumId: number,
+  ) => Promise<CurriculumReviewResult>
   readonly generateTraining: (
     studentId: number,
     trainingId: number,
@@ -389,24 +378,17 @@ export function createTrainingApi(
         body: jsonBody(command),
       })
     },
-    async getExpectedWords(studentId, trainingId, options) {
-      const dto = await request<ExpectedWordsDto>(
-        `/api/admin/training/${studentId}/${trainingId}/expected-word`,
-        requestInit(options),
+    async completeCurriculumReview(studentId, curriculumId) {
+      const dto = await request<CurriculumReviewResultDto>(
+        `/api/admin/training/${studentId}/${curriculumId}/review-complete`,
+        { method: 'POST' },
       )
-      return dto.words.map(mapExpectedWord)
-    },
-    async addExpectedWord(studentId, trainingId, wordName) {
-      await request<void>(`/api/admin/training/${studentId}/${trainingId}/expected-word`, {
-        method: 'POST',
-        body: jsonBody({ wordName }),
-      })
-    },
-    async deleteExpectedWord(studentId, trainingId, wordId) {
-      await request<void>(
-        `/api/admin/training/${studentId}/${trainingId}/expected-word/${wordId}`,
-        { method: 'DELETE' },
-      )
+      return {
+        curriculumId: dto.curriculumId,
+        reviewStatus: dto.reviewStatus,
+        reviewedByTeacherId: dto.reviewedByTeacherId ?? null,
+        reviewedAt: dto.reviewedAt ?? null,
+      }
     },
     async generateTraining(studentId, trainingId) {
       return request<GeneratedTrainingData>(

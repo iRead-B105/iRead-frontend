@@ -22,8 +22,8 @@ export const mockDemoScenario = {
     failedGazeId: 903,
   },
   test: {
-    currentId: 1_011,
-    comparisonId: 1_008,
+    currentId: '1011',
+    comparisonId: '1008',
     failedGazeId: 1_005,
   },
   report: {
