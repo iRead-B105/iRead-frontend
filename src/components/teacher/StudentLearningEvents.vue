@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChevronDownIcon } from '@lucide/vue'
+import { ChevronDownIcon, LoaderCircleIcon } from '@lucide/vue'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,8 @@ const props = withDefaults(
     events: readonly StudentLearningEvent[]
     selectedEventId?: number | null
     selectedEventType?: StudentLearningEventType | null
+    pendingEventId?: number | null
+    pendingEventType?: StudentLearningEventType | null
     detail?: StudentLearningEventDetail | null
     listStatus?: StudentRequestStatus
     listError?: string | null
@@ -33,6 +35,8 @@ const props = withDefaults(
   {
     selectedEventId: null,
     selectedEventType: null,
+    pendingEventId: null,
+    pendingEventType: null,
     detail: null,
     listStatus: 'idle',
     listError: null,
@@ -50,6 +54,10 @@ const emit = defineEmits<{
 
 function isSelectedEvent(event: StudentLearningEvent): boolean {
   return props.selectedEventId === event.eventId && props.selectedEventType === event.eventType
+}
+
+function isPendingEvent(event: StudentLearningEvent): boolean {
+  return props.pendingEventId === event.eventId && props.pendingEventType === event.eventType
 }
 </script>
 
@@ -85,13 +93,17 @@ function isSelectedEvent(event: StudentLearningEvent): boolean {
         v-for="event in events"
         :key="`${event.eventType}:${event.eventId}`"
         class="learning-event-item"
-        :class="{ 'is-expanded': isSelectedEvent(event) }"
+        :class="{
+          'is-expanded': isSelectedEvent(event),
+          'is-pending': isPendingEvent(event),
+        }"
       >
         <button
           class="learning-event"
           :class="{ 'is-selected': isSelectedEvent(event) }"
           type="button"
           :aria-expanded="isSelectedEvent(event)"
+          :aria-busy="isPendingEvent(event) ? 'true' : undefined"
           :aria-controls="`learning-event-detail-${event.eventType}-${event.eventId}`"
           @click="emit('select', event)"
         >
@@ -104,7 +116,12 @@ function isSelectedEvent(event: StudentLearningEvent): boolean {
               <Badge v-if="event.attentionRequired" variant="secondary">확인 필요</Badge>
               <b>{{ event.accuracy === null ? '정확도 없음' : `${event.accuracy}%` }}</b>
             </span>
-            <ChevronDownIcon class="learning-event__chevron" aria-hidden="true" />
+            <LoaderCircleIcon
+              v-if="isPendingEvent(event)"
+              class="learning-event__pending"
+              aria-hidden="true"
+            />
+            <ChevronDownIcon v-else class="learning-event__chevron" aria-hidden="true" />
           </span>
         </button>
         <div
@@ -113,12 +130,16 @@ function isSelectedEvent(event: StudentLearningEvent): boolean {
           class="event-detail-shell"
           :aria-busy="detailStatus === 'loading' ? 'true' : undefined"
         >
-          <div v-if="detailStatus === 'loading'" class="detail-placeholder" aria-live="polite">
+          <div
+            v-if="detailStatus === 'loading' && !detail"
+            class="detail-placeholder"
+            aria-live="polite"
+          >
             학습 이벤트 상세를 불러오는 중입니다.
           </div>
 
           <div
-            v-else-if="detailStatus === 'error'"
+            v-else-if="detailStatus === 'error' && !detail"
             class="detail-placeholder is-error"
             role="alert"
           >
@@ -129,99 +150,92 @@ function isSelectedEvent(event: StudentLearningEvent): boolean {
             </Button>
           </div>
 
-          <Transition v-else name="event-detail-fade" appear>
-            <article
-              v-if="detail"
-              :key="`${detail.eventType}:${detail.eventId}`"
-              class="event-detail"
-              aria-live="polite"
-            >
-              <header class="event-detail__heading">
-                <div>
-                  <span>최근 학습 한눈에 보기</span>
-                  <h3>{{ studentLearningEventTypeLabels[detail.eventType] }} 결과</h3>
-                  <p>학습 결과부터 교수자가 확인할 내용과 다음 학습 제안까지 모았습니다.</p>
-                </div>
-                <Badge v-if="detail.attentionRequired" variant="secondary">확인 필요</Badge>
-              </header>
+          <article
+            v-else-if="detail"
+            :key="`${detail.eventType}:${detail.eventId}`"
+            class="event-detail"
+            aria-live="polite"
+          >
+            <header class="event-detail__heading">
+              <div>
+                <span>최근 학습 한눈에 보기</span>
+                <h3>{{ studentLearningEventTypeLabels[detail.eventType] }} 결과</h3>
+                <p>학습 결과부터 교수자가 확인할 내용과 다음 학습 제안까지 모았습니다.</p>
+              </div>
+              <Badge v-if="detail.attentionRequired" variant="secondary">확인 필요</Badge>
+            </header>
 
-              <dl class="event-summary-grid">
+            <dl class="event-summary-grid">
+              <div>
+                <dt>학습 종류</dt>
+                <dd>{{ studentLearningEventTypeLabels[detail.eventType] }}</dd>
+              </div>
+              <div>
+                <dt>기록 시각</dt>
+                <dd>{{ formatStudentDateTime(detail.occurredAt) }}</dd>
+              </div>
+              <div>
+                <dt>정확도</dt>
+                <dd>
+                  {{ detail.accuracy === null ? '산정할 수 없음' : `${detail.accuracy}%` }}
+                </dd>
+              </div>
+              <div>
+                <dt>재시도</dt>
+                <dd>{{ detail.retryCount }}회</dd>
+              </div>
+            </dl>
+
+            <div class="event-insight-grid">
+              <section class="event-insight">
+                <span>학습 결과</span>
+                <h4>확인이 필요한 학습 구간</h4>
                 <div>
-                  <dt>학습 종류</dt>
-                  <dd>{{ studentLearningEventTypeLabels[detail.eventType] }}</dd>
+                  <ul v-if="detail.problemSegments.length" class="problem-segments">
+                    <li v-for="segment in detail.problemSegments" :key="segment">
+                      {{ segment }}
+                    </li>
+                  </ul>
+                  <span v-else>확인된 문제 구간 없음</span>
+                </div>
+              </section>
+              <section class="event-insight">
+                <span>교수자 확인</span>
+                <h4>추가로 살펴볼 신호</h4>
+                <div>
+                  <ul v-if="detail.attentionReasons.length" class="attention-reasons">
+                    <li v-for="reason in detail.attentionReasons" :key="reason">
+                      {{ attentionReasonLabels[reason] }}
+                    </li>
+                  </ul>
+                  <span v-else>추가로 확인할 신호 없음</span>
+                </div>
+              </section>
+            </div>
+
+            <section v-if="detail.recommendedTrainingTemplateId !== null" class="recommendation">
+              <span>다음 학습 제안</span>
+              <strong>{{ detail.recommendedCurriculumUnitName }}</strong>
+              <p>{{ detail.recommendationReason }}</p>
+              <dl>
+                <div>
+                  <dt>권장 시간</dt>
+                  <dd>{{ detail.recommendedMinutes }}분</dd>
                 </div>
                 <div>
-                  <dt>기록 시각</dt>
-                  <dd>{{ formatStudentDateTime(detail.occurredAt) }}</dd>
-                </div>
-                <div>
-                  <dt>정확도</dt>
-                  <dd>
-                    {{ detail.accuracy === null ? '산정할 수 없음' : `${detail.accuracy}%` }}
-                  </dd>
-                </div>
-                <div>
-                  <dt>재시도</dt>
-                  <dd>{{ detail.retryCount }}회</dd>
+                  <dt>권장 반복</dt>
+                  <dd>{{ detail.recommendedRepeatCount }}회</dd>
                 </div>
               </dl>
+            </section>
+            <p v-else class="recommendation-empty">다음 학습으로 제안된 훈련이 없습니다.</p>
 
-              <div class="event-insight-grid">
-                <section class="event-insight">
-                  <span>학습 결과</span>
-                  <h4>확인이 필요한 학습 구간</h4>
-                  <div>
-                    <ul v-if="detail.problemSegments.length" class="problem-segments">
-                      <li v-for="segment in detail.problemSegments" :key="segment">
-                        {{ segment }}
-                      </li>
-                    </ul>
-                    <span v-else>확인된 문제 구간 없음</span>
-                  </div>
-                </section>
-                <section class="event-insight">
-                  <span>교수자 확인</span>
-                  <h4>추가로 살펴볼 신호</h4>
-                  <div>
-                    <ul v-if="detail.attentionReasons.length" class="attention-reasons">
-                      <li v-for="reason in detail.attentionReasons" :key="reason">
-                        {{ attentionReasonLabels[reason] }}
-                      </li>
-                    </ul>
-                    <span v-else>추가로 확인할 신호 없음</span>
-                  </div>
-                </section>
-              </div>
-
-              <section v-if="detail.recommendedTrainingTemplateId !== null" class="recommendation">
-                <span>다음 학습 제안</span>
-                <strong>{{ detail.recommendedCurriculumUnitName }}</strong>
-                <p>{{ detail.recommendationReason }}</p>
-                <dl>
-                  <div>
-                    <dt>권장 시간</dt>
-                    <dd>{{ detail.recommendedMinutes }}분</dd>
-                  </div>
-                  <div>
-                    <dt>권장 반복</dt>
-                    <dd>{{ detail.recommendedRepeatCount }}회</dd>
-                  </div>
-                </dl>
-              </section>
-              <p v-else class="recommendation-empty">다음 학습으로 제안된 훈련이 없습니다.</p>
-
-              <div class="event-detail__actions">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  @click="emit('addToMemo', detail)"
-                >
-                  내부 메모에 추가
-                </Button>
-              </div>
-            </article>
-          </Transition>
+            <div class="event-detail__actions">
+              <Button variant="outline" size="sm" type="button" @click="emit('addToMemo', detail)">
+                내부 메모에 추가
+              </Button>
+            </div>
+          </article>
         </div>
       </li>
     </ol>
@@ -337,6 +351,13 @@ function isSelectedEvent(event: StudentLearningEvent): boolean {
   height: 16px;
   color: var(--slate-400);
   transition: transform 140ms ease;
+}
+
+.learning-event__pending {
+  width: 16px;
+  height: 16px;
+  color: var(--primary-600);
+  animation: learning-event-spin 700ms linear infinite;
 }
 
 .learning-event.is-selected .learning-event__chevron {
@@ -523,19 +544,20 @@ function isSelectedEvent(event: StudentLearningEvent): boolean {
   justify-content: flex-end;
 }
 
-.event-detail-fade-enter-active {
-  transition: opacity 140ms ease;
-}
-
-.event-detail-fade-enter-from {
-  opacity: 0;
+@keyframes learning-event-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .event-detail-fade-enter-active,
   .learning-event-item,
   .learning-event__chevron {
     transition: none;
+  }
+
+  .learning-event__pending {
+    animation: none;
   }
 }
 

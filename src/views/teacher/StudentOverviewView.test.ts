@@ -441,6 +441,82 @@ describe('StudentOverviewView', () => {
     expect(wrapper.text()).toContain('읽기 속도 추이를 불러오지 못했습니다.')
   })
 
+  it('열린 상세를 유지한 채 다른 기록을 조회하고 응답 후 한 번에 전환한다', async () => {
+    const firstEvent: StudentLearningEvent = {
+      eventId: 701,
+      eventType: 'TRAINING',
+      occurredAt: '2026-07-27T16:00:00+09:00',
+      sourceId: 91,
+      accuracy: 68,
+      attentionRequired: true,
+      attentionReasons: ['LOW_ACCURACY'],
+    }
+    const secondEvent: StudentLearningEvent = {
+      eventId: 702,
+      eventType: 'STORY',
+      occurredAt: '2026-07-28T16:00:00+09:00',
+      sourceId: 92,
+      accuracy: 82,
+      attentionRequired: false,
+      attentionReasons: [],
+    }
+    const firstDetail: StudentLearningEventDetail = {
+      ...firstEvent,
+      retryCount: 2,
+      problemSegments: ['기존 상세 문제'],
+      recommendedTrainingTemplateId: null,
+      recommendedCurriculumUnitId: null,
+      recommendedCurriculumUnitName: null,
+      recommendationReason: null,
+      recommendedMinutes: null,
+      recommendedRepeatCount: null,
+    }
+    const secondRequest = deferred<StudentLearningEventDetail>()
+    const getLearningEvent = vi
+      .fn()
+      .mockImplementation((_studentId: number, _eventType: string, eventId: number) =>
+        eventId === firstEvent.eventId ? Promise.resolve(firstDetail) : secondRequest.promise,
+      )
+    const { wrapper } = await mountOverview(
+      repository({
+        listLearningEvents: vi.fn().mockResolvedValue([firstEvent, secondEvent]),
+        getLearningEvent,
+      }),
+    )
+    const eventButtons = wrapper.findAll('.learning-event')
+
+    await eventButtons[0]!.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('기존 상세 문제')
+
+    await eventButtons[1]!.trigger('click')
+
+    expect(eventButtons[0]!.attributes('aria-expanded')).toBe('true')
+    expect(eventButtons[1]!.attributes('aria-busy')).toBe('true')
+    expect(wrapper.findAll('.event-detail-shell')).toHaveLength(1)
+    expect(wrapper.text()).toContain('기존 상세 문제')
+    expect(wrapper.text()).not.toContain('학습 이벤트 상세를 불러오는 중입니다.')
+
+    secondRequest.resolve({
+      ...secondEvent,
+      retryCount: 0,
+      problemSegments: ['새 상세 문제'],
+      recommendedTrainingTemplateId: null,
+      recommendedCurriculumUnitId: null,
+      recommendedCurriculumUnitName: null,
+      recommendationReason: null,
+      recommendedMinutes: null,
+      recommendedRepeatCount: null,
+    })
+    await flushPromises()
+
+    expect(eventButtons[0]!.attributes('aria-expanded')).toBe('false')
+    expect(eventButtons[1]!.attributes('aria-expanded')).toBe('true')
+    expect(eventButtons[1]!.attributes('aria-busy')).toBeUndefined()
+    expect(wrapper.text()).toContain('새 상세 문제')
+    expect(wrapper.text()).not.toContain('기존 상세 문제')
+  })
+
   it('기록을 빠르게 바꿔도 이전 상세 응답이 현재 선택을 덮어쓰지 않는다', async () => {
     const firstEvent: StudentLearningEvent = {
       eventId: 701,
