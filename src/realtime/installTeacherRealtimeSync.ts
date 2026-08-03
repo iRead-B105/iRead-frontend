@@ -28,6 +28,7 @@ export function installTeacherRealtimeSync(
   const tests = useTestStore(pinia)
   const stories = useStoryHistoryStore(pinia)
   let client: RealtimeClient | null = null
+  let sseConnected = false
   let refreshPromise: Promise<void> | null = null
   let globalRefreshPromise: Promise<void> | null = null
   const lastVersionByStudent = new Map<number, number>()
@@ -123,7 +124,8 @@ export function installTeacherRealtimeSync(
         endpoint: '/api/admin/realtime/events',
         onEvent: handleEvent,
         onStateChange: (state) => {
-          if (state === 'connected') {
+          sseConnected = state === 'connected'
+          if (sseConnected) {
             void refreshGlobalStudents()
             void refreshVisibleStudent()
           }
@@ -135,6 +137,8 @@ export function installTeacherRealtimeSync(
   )
 
   const safetyInterval = window.setInterval(() => {
+    // SSE가 정상이면 실시간 이벤트로 갱신되므로 폴백 폴링을 건너뛴다(3초마다 refetch해 화면이 깜빡거리는 현상 방지).
+    if (sseConnected) return
     void refreshGlobalStudents()
     const routeName = String(router.currentRoute.value.name)
     if (!['student-curriculum', 'student-report'].includes(routeName)) {

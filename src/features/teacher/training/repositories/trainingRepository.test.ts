@@ -485,15 +485,16 @@ describe('Training API target contract', () => {
 })
 
 describe('MockTrainingRepository', () => {
-  it('백엔드 기준 34개 template ID와 배열 순서를 공통으로 사용한다', async () => {
+  it('삭제된 24번을 제외한 33개 template ID와 배열 순서를 공통으로 사용한다', async () => {
     const repository = new MockTrainingRepository()
 
     await expect(repository.getCatalog(1)).resolves.toEqual(trainingCatalogFixture)
-    expect(trainingCatalogFixture).toHaveLength(34)
+    expect(trainingCatalogFixture).toHaveLength(33)
     expect(trainingCatalogFixture.map((item) => item.trainingTemplateId)).toEqual(
-      Array.from({ length: 34 }, (_, index) => index + 1),
+      Array.from({ length: 34 }, (_, index) => index + 1)
+        .filter((id) => id !== 24),
     )
-    expect(trainingCatalogFixture[33]).toMatchObject({
+    expect(trainingCatalogFixture[32]).toMatchObject({
       trainingTemplateId: 34,
       unitName: '유창하게 읽기',
       sequence: 5,
