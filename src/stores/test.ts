@@ -24,6 +24,10 @@ function sameIds(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index])
 }
 
+function sameValue<T>(left: T, right: T): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
 export const useTestStore = defineStore('test', () => {
   const repository = shallowRef<TestRepository>(testRepository)
   const studentId = ref<number | null>(null)
@@ -117,14 +121,17 @@ export const useTestStore = defineStore('test', () => {
     reset()
   }
 
-  async function loadForStudent(nextStudentId: number): Promise<void> {
+  async function requestForStudent(
+    nextStudentId: number,
+    background: boolean,
+  ): Promise<boolean> {
     abortRequests()
     const generation = ++listGeneration
     comparisonGeneration += 1
     trendGeneration += 1
     const isRefresh = studentId.value === nextStudentId
     if (isRefresh) {
-      if (tests.value.length === 0) listStatus.value = 'loading'
+      if (!background && tests.value.length === 0) listStatus.value = 'loading'
       listError.value = null
       listUiError.value = null
     } else {
@@ -136,21 +143,50 @@ export const useTestStore = defineStore('test', () => {
       const items = await repository.value.getTests(nextStudentId, {
         signal: controller.signal,
       })
-      if (generation !== listGeneration || studentId.value !== nextStudentId) return
-      tests.value = [...items]
+      if (generation !== listGeneration || studentId.value !== nextStudentId) return false
+      const nextTests = [...items]
+      if (!sameValue(tests.value, nextTests)) tests.value = nextTests
       listStatus.value = 'success'
-      currentTestCurriculumId.value = items[0]?.testCurriculumId ?? null
+      const retainedCurrentId = currentTestCurriculumId.value
+      currentTestCurriculumId.value = items.some(
+        (item) => item.testCurriculumId === retainedCurrentId,
+      )
+        ? retainedCurrentId
+        : (items[0]?.testCurriculumId ?? null)
+      comparisonTestCurriculumIds.value = comparisonTestCurriculumIds.value.filter((id) =>
+        items.some((item) => item.testCurriculumId === id && id !== currentTestCurriculumId.value),
+      )
       if (currentTestCurriculumId.value !== null) {
-        await Promise.all([loadComparison(nextStudentId), loadTrend(nextStudentId)])
+        const [comparisonSucceeded, trendSucceeded] = await Promise.all([
+          loadComparison(nextStudentId, background),
+          loadTrend(nextStudentId, background),
+        ])
+        return comparisonSucceeded && trendSucceeded
       }
+      comparisonTestCurriculumIds.value = []
+      comparisonResult.value = null
+      trendDetails.value = []
+      comparisonStatus.value = 'idle'
+      trendStatus.value = 'idle'
+      return true
     } catch (error) {
-      if (isAbortError(error) || generation !== listGeneration) return
-      listStatus.value = 'error'
+      if (isAbortError(error) || generation !== listGeneration) return false
+      if (!background) listStatus.value = 'error'
       listUiError.value = mapCommonError(error)
       listError.value = testErrorMessage(error, '완료된 실력 도전 검사 목록을 불러오지 못했습니다.')
+      return false
     } finally {
       if (listController === controller) listController = null
     }
+  }
+
+  async function loadForStudent(nextStudentId: number): Promise<void> {
+    await requestForStudent(nextStudentId, false)
+  }
+
+  function refreshForStudent(nextStudentId: number): Promise<boolean> {
+    const background = studentId.value === nextStudentId && listStatus.value === 'success'
+    return requestForStudent(nextStudentId, background)
   }
 
   async function retryList(): Promise<void> {
@@ -255,9 +291,12 @@ export const useTestStore = defineStore('test', () => {
     if (studentId.value !== null) await loadComparison(studentId.value)
   }
 
-  async function loadComparison(currentStudentId: number): Promise<void> {
+  async function loadComparison(
+    currentStudentId: number,
+    background = false,
+  ): Promise<boolean> {
     const currentId = currentTestCurriculumId.value
-    if (studentId.value !== currentStudentId || currentId === null) return
+    if (studentId.value !== currentStudentId || currentId === null) return false
     comparisonController?.abort()
     const controller = new AbortController()
     comparisonController = controller
@@ -276,23 +315,27 @@ export const useTestStore = defineStore('test', () => {
         studentId.value !== currentStudentId ||
         currentTestCurriculumId.value !== currentId
       ) {
-        return
+        return false
       }
-      comparisonResult.value = result
+      if (!sameValue(comparisonResult.value, result)) comparisonResult.value = result
       cacheDetails(currentStudentId, [result.currentTest, ...result.comparisonTests])
       comparisonStatus.value = 'success'
+      return true
     } catch (error) {
-      if (isAbortError(error) || generation !== comparisonGeneration) return
-      comparisonResult.value = null
-      comparisonStatus.value = 'error'
+      if (isAbortError(error) || generation !== comparisonGeneration) return false
+      if (!background) {
+        comparisonResult.value = null
+        comparisonStatus.value = 'error'
+      }
       comparisonError.value = testErrorMessage(error, '검사 상세 결과를 불러오지 못했습니다.')
+      return false
     } finally {
       if (comparisonController === controller) comparisonController = null
     }
   }
 
-  async function loadTrend(currentStudentId: number): Promise<void> {
-    if (studentId.value !== currentStudentId) return
+  async function loadTrend(currentStudentId: number, background = false): Promise<boolean> {
+    if (studentId.value !== currentStudentId) return false
     trendController?.abort()
     const controller = new AbortController()
     trendController = controller
@@ -311,15 +354,22 @@ export const useTestStore = defineStore('test', () => {
             })
       }),
     )
-    if (generation !== trendGeneration || studentId.value !== currentStudentId) return
+    if (generation !== trendGeneration || studentId.value !== currentStudentId) return false
     const details = results.flatMap((result) =>
       result.status === 'fulfilled' ? [result.value] : [],
     )
     const failures = results.length - details.length
     cacheDetails(currentStudentId, details)
-    trendDetails.value = details.sort(
+    const nextTrendDetails = details.sort(
       (left, right) => left.createdAt.localeCompare(right.createdAt),
     )
+    if (background && failures > 0) {
+      trendFailedCount.value = failures
+      trendError.value = '검사 지표 평균을 갱신할 상세 결과를 불러오지 못했습니다.'
+      if (trendController === controller) trendController = null
+      return false
+    }
+    if (!sameValue(trendDetails.value, nextTrendDetails)) trendDetails.value = nextTrendDetails
     trendFailedCount.value = failures
     trendStatus.value = details.length > 0 ? 'success' : failures > 0 ? 'error' : 'success'
     trendError.value =
@@ -329,6 +379,7 @@ export const useTestStore = defineStore('test', () => {
           : '검사 지표 평균을 계산할 상세 결과를 불러오지 못했습니다.'
         : null
     if (trendController === controller) trendController = null
+    return failures === 0
   }
 
   async function retryTrend(): Promise<void> {
@@ -364,6 +415,7 @@ export const useTestStore = defineStore('test', () => {
     trendFailedCount,
     setRepository,
     loadForStudent,
+    refreshForStudent,
     retryList,
     selectCurrentTest,
     addComparisonTest,

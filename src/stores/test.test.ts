@@ -29,6 +29,39 @@ function repository(overrides: Partial<TestRepository> = {}): TestRepository {
 beforeEach(() => setActivePinia(createPinia()))
 
 describe('Test store', () => {
+  it('keeps a resolved empty history visible during a background refresh', async () => {
+    const pending = deferred<readonly TestListItem[]>()
+    const store = useTestStore()
+    store.setRepository(
+      repository({
+        getTests: vi.fn().mockResolvedValueOnce([]).mockReturnValueOnce(pending.promise),
+      }),
+    )
+    await store.loadForStudent(1)
+
+    const refresh = store.refreshForStudent(1)
+
+    expect(store.listStatus).toBe('success')
+    expect(store.tests).toEqual([])
+    pending.resolve([])
+    await expect(refresh).resolves.toBe(true)
+    expect(store.listStatus).toBe('success')
+  })
+
+  it('preserves chart source references when a background refresh returns identical data', async () => {
+    const mock = new MockTestRepository()
+    const store = useTestStore()
+    store.setRepository(mock)
+    await store.loadForStudent(1)
+    const previousComparison = store.comparisonResult
+    const previousTrend = store.trendDetails
+
+    await expect(store.refreshForStudent(1)).resolves.toBe(true)
+
+    expect(store.comparisonResult).toBe(previousComparison)
+    expect(store.trendDetails).toBe(previousTrend)
+  })
+
   it('최신 완료 검사 커리큘럼을 기본 선택하고 단일 상세를 요청한다', async () => {
     const mock = new MockTestRepository()
     const compareTests = vi.spyOn(mock, 'compareTests')

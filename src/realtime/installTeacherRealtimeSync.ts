@@ -74,8 +74,8 @@ export function installTeacherRealtimeSync(pinia: Pinia, router: Router): () => 
       return Promise.resolve(true)
     }
     if (globalRefreshPromise) return globalRefreshPromise
-    const task = Promise.allSettled([students.loadList(), students.loadSummary()])
-      .then(() => students.listStatus === 'success' && students.summaryStatus === 'success')
+    const task = Promise.all([students.refreshList(), students.refreshSummary()])
+      .then(([listSucceeded, summarySucceeded]) => listSucceeded && summarySucceeded)
       .finally(() => {
         if (globalRefreshPromise === task) globalRefreshPromise = null
       })
@@ -92,41 +92,28 @@ export function installTeacherRealtimeSync(pinia: Pinia, router: Router): () => 
     const requestKey = `${routeName}:${studentId}`
     if (refreshPromise && refreshPromiseKey === requestKey) return refreshPromise
 
-    let request: Promise<unknown>
-    let succeeded: () => boolean
+    let request: Promise<boolean>
     switch (routeName) {
       case 'student-curriculum':
         request = training.refreshForStudent(studentId)
-        succeeded = () =>
-          training.catalogStatus === 'success' && training.curriculumStatus === 'success'
         break
       case 'student-training-history':
-        request = training.loadHistoryForStudent(studentId)
-        succeeded = () =>
-          training.curriculumLogsStatus === 'success' &&
-          hasResolvedWithoutError(
-            training.trainingLogStatus,
-            training.statisticsStatus,
-            training.historyDetailStatus,
-            training.historyGazeStatus,
-          )
+        request = training.refreshHistoryForStudent(studentId)
         break
       case 'student-test-history':
-        request = tests.loadForStudent(studentId)
-        succeeded = () =>
-          tests.listStatus === 'success' &&
-          hasResolvedWithoutError(tests.comparisonStatus, tests.trendStatus)
+        request = tests.refreshForStudent(studentId)
         break
       case 'student-story-history':
-        request = stories.loadList(studentId).then(() => {
+        request = stories.refreshList(studentId).then(async (listSucceeded) => {
+          if (!listSucceeded) return false
           const storyId = stories.selectedStoryId
-          return storyId === null
-            ? Promise.resolve()
-            : stories.loadSelectedStory(studentId, storyId)
+          if (storyId !== null) await stories.loadSelectedStory(studentId, storyId)
+          return hasResolvedWithoutError(
+            stories.listStatus,
+            stories.detailStatus,
+            stories.gazeStatus,
+          )
         })
-        succeeded = () =>
-          stories.listStatus === 'success' &&
-          hasResolvedWithoutError(stories.detailStatus, stories.gazeStatus)
         break
       case 'student-report':
         return Promise.resolve(true)
@@ -135,16 +122,17 @@ export function installTeacherRealtimeSync(pinia: Pinia, router: Router): () => 
           students.loadDetail(studentId),
           students.loadLearningSummary(studentId),
           students.loadLearningEvents(studentId),
-        ])
-        succeeded = () =>
-          students.detailStatusById[studentId] === 'success' &&
-          students.learningSummaryStatusById[studentId] === 'success' &&
-          students.learningEventsStatusById[studentId] === 'success'
+        ]).then(
+          () =>
+            students.detailStatusById[studentId] === 'success' &&
+            students.learningSummaryStatusById[studentId] === 'success' &&
+            students.learningEventsStatusById[studentId] === 'success',
+        )
         break
     }
 
-    const task = Promise.resolve(request)
-      .then(succeeded, () => false)
+    const task = request
+      .then((succeeded) => succeeded, () => false)
       .finally(() => {
         if (refreshPromise === task) {
           refreshPromise = null

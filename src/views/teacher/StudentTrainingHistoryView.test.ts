@@ -122,7 +122,7 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('시선 분석 데이터가 없습니다.')
     expect(wrapper.get('[data-test="chart"]').text()).toContain('이전 훈련 정확도 기록 없음')
 
-    await rows.find((row) => row.text().includes('음소 합쳐 음절 만들기'))?.trigger('click')
+    await rows.find((row) => row.text().includes('음절 합쳐 낱말 만들기'))?.trigger('click')
     await flushPromises()
     expect(store.historyGazeStatus).toBe('success')
     expect(wrapper.text()).toContain('시선 분석을 완료하지 못했습니다.')

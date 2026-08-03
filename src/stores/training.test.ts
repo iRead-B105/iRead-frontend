@@ -56,6 +56,25 @@ beforeEach(() => {
 })
 
 describe('Training store', () => {
+  it('keeps a resolved empty curriculum history visible during a background refresh', async () => {
+    const pending = deferred<Awaited<ReturnType<TrainingRepository['getCurriculumLogs']>>>()
+    const store = useTrainingStore()
+    store.setRepository(
+      repository({
+        getCurriculumLogs: vi.fn().mockResolvedValueOnce([]).mockReturnValueOnce(pending.promise),
+      }),
+    )
+    await store.loadHistoryForStudent(1)
+
+    const refresh = store.refreshHistoryForStudent(1)
+
+    expect(store.curriculumLogsStatus).toBe('success')
+    expect(store.curriculumLogs).toEqual([])
+    pending.resolve([])
+    await expect(refresh).resolves.toBe(true)
+    expect(store.curriculumLogsStatus).toBe('success')
+  })
+
   it('keeps rendered history data during a same-student background refresh', async () => {
     const mock = new MockTrainingRepository()
     const store = useTrainingStore()
@@ -106,7 +125,7 @@ describe('Training store', () => {
     expect(store.savedCurriculum).toBe(previousCurriculum)
     expect(store.draftItems).toBe(previousDraft)
 
-    store.selectTemplate(14)
+    store.selectTemplate(15)
     store.addSelectedTemplate()
     const editedDraftLength = store.draftItems.length
 
@@ -123,10 +142,10 @@ describe('Training store', () => {
       repository({
         getCatalog: vi.fn().mockResolvedValue([
           {
-            trainingTemplateId: 14,
+            trainingTemplateId: 15,
             unitName: '글자 만들기',
             sequence: 1,
-            trainingName: '음소 합쳐 음절 만들기',
+            trainingName: '음절 합쳐 낱말 만들기',
             studentAchievementRate: null,
             form: null,
           },
@@ -144,7 +163,7 @@ describe('Training store', () => {
 
     await store.loadForStudent(1)
 
-    expect(store.catalog.map((item) => item.trainingTemplateId)).toEqual([14, 4])
+    expect(store.catalog.map((item) => item.trainingTemplateId)).toEqual([15, 4])
   })
 
   it('훈련 이력 재조회 실패 시 이전 커리큘럼을 유지한다', async () => {
@@ -194,13 +213,13 @@ describe('Training store', () => {
     store.setRepository(new MockTrainingRepository())
 
     await store.loadForStudent(1)
-    store.selectTemplate(14)
+    store.selectTemplate(15)
     store.addSelectedTemplate()
     store.selectTemplate(11)
     store.addSelectedTemplate()
 
     expect(store.savedCurriculum?.trainings.map((item) => item.trainingId)).toEqual([101, 102, 103])
-    expect(store.draftTrainingIds).toEqual([12, 12, 13, 14, 11])
+    expect(store.draftTrainingIds).toEqual([12, 12, 13, 15, 11])
     expect(store.hasChanges).toBe(true)
 
     await expect(store.saveCurriculum()).resolves.toBe(true)
@@ -269,7 +288,7 @@ describe('Training store', () => {
         ...current.trainings,
         {
           trainingId: 204,
-          trainingTemplateId: 14,
+          trainingTemplateId: 15,
           sequence: 4,
           unitName: '이해력',
           trainingName: '핵심',
@@ -277,7 +296,7 @@ describe('Training store', () => {
         },
         {
           trainingId: 205,
-          trainingTemplateId: 15,
+          trainingTemplateId: 16,
           sequence: 5,
           unitName: '어휘',
           trainingName: '낱말',
@@ -299,8 +318,8 @@ describe('Training store', () => {
           { trainingTemplateId: 11, unitName: '음운', sequence: 1, trainingName: '첫소리' },
           { trainingTemplateId: 12, unitName: '파닉스', sequence: 2, trainingName: '받침' },
           { trainingTemplateId: 13, unitName: '유창성', sequence: 3, trainingName: '문장' },
-          { trainingTemplateId: 14, unitName: '이해력', sequence: 4, trainingName: '핵심' },
-          { trainingTemplateId: 15, unitName: '어휘', sequence: 5, trainingName: '낱말' },
+          { trainingTemplateId: 15, unitName: '이해력', sequence: 4, trainingName: '핵심' },
+          { trainingTemplateId: 16, unitName: '어휘', sequence: 5, trainingName: '낱말' },
         ]),
         getCurrentCurriculum,
         updateCurriculum,
@@ -320,9 +339,9 @@ describe('Training store', () => {
     )
 
     await store.loadForStudent(1)
-    store.selectTemplate(14)
-    store.addSelectedTemplate()
     store.selectTemplate(15)
+    store.addSelectedTemplate()
+    store.selectTemplate(16)
     store.addSelectedTemplate()
 
     await expect(store.saveCurriculum()).resolves.toBe(false)
@@ -355,7 +374,7 @@ describe('Training store', () => {
     const store = useTrainingStore()
     store.setRepository(mock)
     await store.loadForStudent(1)
-    store.selectTemplate(14)
+    store.selectTemplate(15)
     store.addSelectedTemplate()
     store.selectTemplate(11)
     store.addSelectedTemplate()

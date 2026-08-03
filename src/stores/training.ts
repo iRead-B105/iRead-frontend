@@ -1070,20 +1070,34 @@ export const useTrainingStore = defineStore('training', () => {
     exportError.value = null
   }
 
-  async function loadHistoryForStudent(studentId: number): Promise<void> {
-    const isBackgroundRefresh = historyStudentId.value === studentId
+  async function requestHistoryForStudent(
+    studentId: number,
+    background: boolean,
+  ): Promise<boolean> {
     abortHistoryRequests()
     historyGeneration += 1
     historyCurriculumGeneration += 1
     historyDetailGeneration += 1
     historyGazeGeneration += 1
-    if (isBackgroundRefresh) {
+    if (background) {
       curriculumLogsError.value = null
       curriculumLogsUiError.value = null
     } else {
       clearHistoryState(studentId, true)
     }
-    await loadCurriculumLogs(studentId)
+    return loadCurriculumLogs(studentId, background)
+  }
+
+  async function loadHistoryForStudent(studentId: number): Promise<void> {
+    const background =
+      historyStudentId.value === studentId && curriculumLogsStatus.value === 'success'
+    await requestHistoryForStudent(studentId, background)
+  }
+
+  function refreshHistoryForStudent(studentId: number): Promise<boolean> {
+    const background =
+      historyStudentId.value === studentId && curriculumLogsStatus.value === 'success'
+    return requestHistoryForStudent(studentId, background)
   }
 
   async function setHistoryPeriod(studentId: number, nextPeriod: TrainingPeriod): Promise<void> {
@@ -1097,7 +1111,7 @@ export const useTrainingStore = defineStore('training', () => {
     historyDetailGeneration += 1
     historyGazeGeneration += 1
     clearHistoryState(studentId, false)
-    await loadCurriculumLogs(studentId)
+    await loadCurriculumLogs(studentId, false)
   }
 
   async function retryHistory(): Promise<void> {
@@ -1111,15 +1125,15 @@ export const useTrainingStore = defineStore('training', () => {
     curriculumLogsStatus.value = 'loading'
     curriculumLogsError.value = null
     curriculumLogsUiError.value = null
-    await loadCurriculumLogs(studentId)
+    await loadCurriculumLogs(studentId, false)
   }
 
-  async function loadCurriculumLogs(studentId: number): Promise<void> {
+  async function loadCurriculumLogs(studentId: number, background = false): Promise<boolean> {
     const controller = new AbortController()
     historyController = controller
     const generation = historyGeneration
     const requestedPeriod = period.value
-    if (curriculumLogs.value.length === 0) curriculumLogsStatus.value = 'loading'
+    if (!background && curriculumLogs.value.length === 0) curriculumLogsStatus.value = 'loading'
     curriculumLogsError.value = null
     try {
       const logs = await repository.value.getCurriculumLogs(studentId, requestedPeriod, {
@@ -1130,7 +1144,7 @@ export const useTrainingStore = defineStore('training', () => {
         historyStudentId.value !== studentId ||
         period.value !== requestedPeriod
       ) {
-        return
+        return false
       }
       const retainedCurriculumId = selectedCurriculumId.value
       curriculumLogs.value = [...logs].sort(
@@ -1156,14 +1170,24 @@ export const useTrainingStore = defineStore('training', () => {
         historyDetailStatus.value = 'idle'
         historyGazeStatus.value = 'idle'
       }
+      return (
+        curriculumLogsStatus.value === 'success' &&
+        [
+          trainingLogStatus.value,
+          statisticsStatus.value,
+          historyDetailStatus.value,
+          historyGazeStatus.value,
+        ].every((status) => status === 'idle' || status === 'success')
+      )
     } catch (error) {
-      if (isAbortError(error) || generation !== historyGeneration) return
-      curriculumLogsStatus.value = 'error'
+      if (isAbortError(error) || generation !== historyGeneration) return false
+      if (!background) curriculumLogsStatus.value = 'error'
       curriculumLogsUiError.value = mapCommonError(error)
       curriculumLogsError.value = historyErrorMessage(
         error,
         '완료된 커리큘럼 기록을 불러오지 못했습니다.',
       )
+      return false
     } finally {
       if (generation === historyGeneration) historyController = null
     }
@@ -1517,6 +1541,7 @@ export const useTrainingStore = defineStore('training', () => {
     setRepository,
     loadForStudent,
     refreshForStudent,
+    refreshHistoryForStudent,
     selectTemplate,
     addSelectedTemplate,
     removeDraftItem,

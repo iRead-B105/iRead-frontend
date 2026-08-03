@@ -192,7 +192,7 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     gazeUiError.value = null
   }
 
-  async function loadList(nextStudentId: number): Promise<void> {
+  async function requestList(nextStudentId: number, background: boolean): Promise<boolean> {
     assertPositiveId(nextStudentId, 'studentId')
 
     const studentChanged = studentId.value !== nextStudentId
@@ -206,7 +206,7 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     listController?.abort()
     const controller = new AbortController()
     listController = controller
-    if (stories.value.length === 0) listStatus.value = 'loading'
+    if (!background && stories.value.length === 0) listStatus.value = 'loading'
     listError.value = null
     listUiError.value = null
 
@@ -216,7 +216,7 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
         { ...query },
         { signal: controller.signal },
       )
-      if (requestSequence !== listSequence || studentId.value !== nextStudentId) return
+      if (requestSequence !== listSequence || studentId.value !== nextStudentId) return false
 
       storyTemplates.value = result.storyTemplates
       stories.value = result.stories
@@ -228,14 +228,25 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
         clearSelection()
       }
       listStatus.value = 'success'
+      return true
     } catch (error) {
-      if (isAbortError(error) || requestSequence !== listSequence) return
-      listStatus.value = 'error'
+      if (isAbortError(error) || requestSequence !== listSequence) return false
+      if (!background) listStatus.value = 'error'
       listUiError.value = mapCommonError(error)
       listError.value = defaultErrorMessage(error, 'list')
+      return false
     } finally {
       if (requestSequence === listSequence) listController = null
     }
+  }
+
+  async function loadList(nextStudentId: number): Promise<void> {
+    await requestList(nextStudentId, false)
+  }
+
+  function refreshList(nextStudentId: number): Promise<boolean> {
+    const background = studentId.value === nextStudentId && listStatus.value === 'success'
+    return requestList(nextStudentId, background)
   }
 
   async function loadDetail(nextStudentId: number, nextStoryId: number): Promise<void> {
@@ -436,6 +447,7 @@ export const useStoryHistoryStore = defineStore('story-history', () => {
     selectStory,
     selectAndLoad,
     loadList,
+    refreshList,
     loadDetail,
     loadGazeAnalysis,
     loadSelectedStory,
