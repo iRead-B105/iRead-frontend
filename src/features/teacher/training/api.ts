@@ -133,15 +133,6 @@ interface TrainingStatisticsDto {
   }[]
 }
 
-interface ReadingSpeedTrendDto {
-  readonly unit: 'WORDS_PER_MINUTE'
-  readonly voiceChangeRate: number | null
-  readonly points: readonly {
-    readonly date: string
-    readonly voiceSpeed: number | null
-  }[]
-}
-
 function requestInit(options?: TrainingRequestOptions): RequestInit {
   return options?.signal ? { signal: options.signal } : {}
 }
@@ -241,10 +232,7 @@ function mapTrainingLog(
   }
 }
 
-function mapStatistics(
-  statistics: TrainingStatisticsDto,
-  readingSpeed: ReadingSpeedTrendDto,
-): TrainingStatistics {
+function mapStatistics(statistics: TrainingStatisticsDto): TrainingStatistics {
   return {
     accuracyComparisons: statistics.trainings.map((training) => ({
       trainingId: training.trainingId,
@@ -254,17 +242,6 @@ function mapStatistics(
       previousTrainingDate: training.previousTrainingDate,
       previousAccuracy: training.previousAccuracyRate,
     })),
-    readingSpeedTrend: {
-      unit: 'CORRECT_WORDS_PER_MINUTE',
-      changeRate: readingSpeed.voiceChangeRate,
-      points: readingSpeed.points
-        .filter(
-          (point): point is { readonly date: string; readonly voiceSpeed: number } =>
-            point.voiceSpeed !== null,
-        )
-        .sort((left, right) => left.date.localeCompare(right.date))
-        .map((point) => ({ date: point.date, speed: point.voiceSpeed })),
-    },
   }
 }
 
@@ -327,7 +304,6 @@ export interface TrainingApi {
   readonly getStatistics: (
     studentId: number,
     curriculumId: number,
-    period: TrainingPeriod,
     options?: TrainingRequestOptions,
   ) => Promise<TrainingStatistics>
   readonly getGazeAnalysis: (
@@ -445,21 +421,12 @@ export function createTrainingApi(
       )
       return mapTrainingLog(curriculumId, dto)
     },
-    async getStatistics(studentId, curriculumId, period, options) {
-      const today = await resolveReferenceDate(studentId, now, referenceDate, options)
-      const { from, to } = resolveHistoryDateRange(period, today)
-      const search = new URLSearchParams({ from, to })
-      const [statistics, readingSpeed] = await Promise.all([
-        request<TrainingStatisticsDto>(
-          `/api/admin/training/${studentId}/${curriculumId}/statistics`,
-          requestInit(options),
-        ),
-        request<ReadingSpeedTrendDto>(
-          `/api/admin/student/${studentId}/reading-speed-trend?${search}`,
-          requestInit(options),
-        ),
-      ])
-      return mapStatistics(statistics, readingSpeed)
+    async getStatistics(studentId, curriculumId, options) {
+      const statistics = await request<TrainingStatisticsDto>(
+        `/api/admin/training/${studentId}/${curriculumId}/statistics`,
+        requestInit(options),
+      )
+      return mapStatistics(statistics)
     },
     async getGazeAnalysis(studentId, trainingId, options) {
       const dto = await request<RawGazeAnalysisDto>(

@@ -146,7 +146,6 @@ export interface TrainingQuestionResult {
 
 export interface TrainingResult {
   readonly questions?: readonly TrainingQuestionResult[]
-  readonly learningAssessment?: string | null
   readonly [key: string]: unknown
 }
 
@@ -186,19 +185,8 @@ export interface AccuracyComparison {
   readonly previousAccuracy: number | null
 }
 
-export interface ReadingSpeedPoint {
-  readonly trainingId?: TrainingInstanceId
-  readonly date: string
-  readonly speed: number
-}
-
 export interface TrainingStatistics {
   readonly accuracyComparisons: readonly AccuracyComparison[]
-  readonly readingSpeedTrend: {
-    readonly unit: 'CORRECT_WORDS_PER_MINUTE'
-    readonly changeRate: number | null
-    readonly points: readonly ReadingSpeedPoint[]
-  }
 }
 
 export interface TrainingDownload {

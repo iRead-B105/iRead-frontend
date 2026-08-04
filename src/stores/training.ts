@@ -1263,7 +1263,7 @@ export const useTrainingStore = defineStore('training', () => {
       })
 
     const statisticsRequest = repository.value
-      .getStatistics(studentId, curriculumId, period.value, {
+      .getStatistics(studentId, curriculumId, {
         signal: controller.signal,
       })
       .then((nextStatistics) => {

@@ -3,7 +3,6 @@ import {
   formatTrainingDuration,
   toTrainingPreview,
   trainingDetailQuestions,
-  trainingLearningAssessment,
   trainingStatusLabel,
   type TrainingDetail,
 } from '.'
@@ -125,10 +124,9 @@ describe('training history presenters', () => {
     expect(formatTrainingDuration('2026-07-20T09:00:00+09:00', null)).toBe('-')
   })
 
-  it('서버가 제공한 문항과 학습 판단만 표시한다', () => {
+  it('서버가 제공한 문항만 표시한다', () => {
     const completed = detail({
       result: {
-        learningAssessment: ' 안정적으로 읽었습니다. ',
         questions: [
           {
             questionNumber: 1,
@@ -142,7 +140,6 @@ describe('training history presenters', () => {
     })
 
     expect(trainingDetailQuestions(completed)).toHaveLength(1)
-    expect(trainingLearningAssessment(completed)).toBe('안정적으로 읽었습니다.')
-    expect(trainingLearningAssessment(detail({ accuracy: 100 }))).toBe('-')
+    expect(trainingDetailQuestions(detail({ accuracy: 100 }))).toEqual([])
   })
 })

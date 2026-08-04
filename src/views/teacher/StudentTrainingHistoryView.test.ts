@@ -92,7 +92,12 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('2026.07.20')
     expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기')
     expect(wrapper.text()).toContain('8분 30초')
-    expect(wrapper.text()).toContain('받침 소리를 안정적으로 구분했습니다.')
+    expect(wrapper.text()).not.toContain('학습 판단')
+    expect(wrapper.text()).toContain('채점 문항2건')
+    expect(wrapper.text()).toContain('정답1건')
+    expect(wrapper.text()).toContain('오답1건')
+    expect(wrapper.text()).toContain('문항 내용과 답안은 오답 문항에 한해 제공됩니다.')
+    expect(wrapper.text()).toContain('제공되지 않음')
     expect(wrapper.text()).toContain('선택 훈련 정확도 비교')
     expect(wrapper.findAll('[data-test="chart"]')).toHaveLength(1)
     expect(wrapper.get('[data-test="chart"]').text()).toContain(
@@ -106,10 +111,51 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('42.4초')
     expect(wrapper.text()).toContain('68회')
     expect(wrapper.text()).toContain('7회')
-    expect(wrapper.text()).toContain('의학적·임상적 진단 결과가 아닙니다.')
+    expect(wrapper.text()).toContain('의학적 진단 결과가 아닙니다.')
     expect(wrapper.text()).not.toContain('읽기 이탈')
     expect(wrapper.text()).not.toContain('권장합니다')
     expect(wrapper.text()).not.toContain('generatedData')
+  })
+
+  it('훈련 gaze에서는 공식 네 집계만 표시하고 replay 상세는 표시하지 않는다', async () => {
+    const repository = new MockTrainingRepository({
+      gazeByTrainingId: {
+        901: {
+          status: 'AVAILABLE',
+          analysis: {
+            gazeSessionId: 6_101,
+            gazeAnalysisResultId: 7_101,
+            totalVisitedDurationMs: 42_400,
+            totalVisitedCount: 68,
+            reverseReadCount: 7,
+            avgVisitedDurationMs: 624,
+            replay: {
+              words: [
+                {
+                  questionNo: 1,
+                  targetIndex: 0,
+                  tokenIndex: 0,
+                  text: '꽃',
+                  dwellMs: 1_000,
+                  visitCount: 2,
+                  skipped: false,
+                  regressionCount: 0,
+                  firstSeenMs: 0,
+                  lastSeenMs: 1_000,
+                },
+              ],
+              samples: [],
+            },
+          },
+        },
+      },
+    })
+    const { wrapper } = await mountHistory(repository)
+
+    expect(wrapper.text()).toContain('42.4초')
+    expect(wrapper.text()).toContain('68회')
+    expect(wrapper.text()).not.toContain('단어별 시선 머무름')
+    expect(wrapper.text()).not.toContain('이동 순서')
   })
 
   it('훈련 선택에 따라 NO_DATA와 FAILED를 요청 오류 없이 구분한다', async () => {
@@ -209,6 +255,11 @@ describe('StudentTrainingHistoryView', () => {
     expect(store.historyStudentId).toBe(2)
     expect(store.selectedCurriculumId).toBeNull()
     expect(store.selectedHistoryTrainingId).toBeNull()
-    expect(wrapper.text()).toContain('선택한 기간에 완료된 커리큘럼이 없습니다.')
+    expect(wrapper.get('[data-test="history-empty-card"]').text()).toContain(
+      '선택한 기간에 완료된 커리큘럼과 훈련이 없습니다.',
+    )
+    expect(wrapper.find('[data-test="history-selection-card"]').exists()).toBe(false)
+    expect(wrapper.find('.statistics-card').exists()).toBe(false)
+    expect(wrapper.find('.detail-card').exists()).toBe(false)
   })
 })

@@ -224,8 +224,3 @@ export function trainingDetailQuestions(
 ): readonly TrainingQuestionResult[] {
   return Array.isArray(detail?.result?.questions) ? detail.result.questions : []
 }
-
-export function trainingLearningAssessment(detail: TrainingDetail | null): string {
-  const value = detail?.result?.learningAssessment
-  return typeof value === 'string' && value.trim() ? value.trim() : '-'
-}

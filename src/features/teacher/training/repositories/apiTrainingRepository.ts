@@ -125,10 +125,9 @@ export class ApiTrainingRepository implements TrainingRepository {
   getStatistics(
     studentId: number,
     curriculumId: number,
-    period: Parameters<TrainingRepository['getStatistics']>[2],
-    options: Parameters<TrainingRepository['getStatistics']>[3] = {},
+    options: Parameters<TrainingRepository['getStatistics']>[2] = {},
   ) {
-    return this.api.getStatistics(studentId, curriculumId, period, options)
+    return this.api.getStatistics(studentId, curriculumId, options)
   }
 
   async getGazeAnalysis(

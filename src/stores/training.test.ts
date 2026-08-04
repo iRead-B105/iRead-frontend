@@ -714,7 +714,7 @@ describe('Training store', () => {
       trainingId: 901,
       status: 'COMPLETED',
     })
-    expect(store.statistics?.readingSpeedTrend.unit).toBe('CORRECT_WORDS_PER_MINUTE')
+    expect(store.statistics?.accuracyComparisons).toHaveLength(3)
     expect(store.historyGazeStatus).toBe('success')
     expect(store.historyGazeAnalysis).toMatchObject({ status: 'AVAILABLE' })
   })

@@ -391,7 +391,7 @@ describe('Training API target contract', () => {
     )
   })
 
-  it('training log와 statistics를 목표 endpoint에서 조회한다', async () => {
+  it('training log와 정확도 statistics를 목표 endpoint에서 조회한다', async () => {
     const request = vi
       .fn()
       .mockResolvedValueOnce({
@@ -426,15 +426,6 @@ describe('Training API target contract', () => {
           },
         ],
       })
-      .mockResolvedValueOnce({
-        unit: 'WORDS_PER_MINUTE',
-        voiceChangeRate: 20,
-        points: [
-          { date: '2026-07-20', voiceSpeed: 60 },
-          { date: '2026-07-01', voiceSpeed: 50 },
-          { date: '2026-07-15', voiceSpeed: null },
-        ],
-      })
     const trainingApi = createTrainingApi(
       request,
       undefined,
@@ -442,15 +433,11 @@ describe('Training API target contract', () => {
     )
 
     const log = await trainingApi.getTrainingLog(7, 10)
-    const statistics = await trainingApi.getStatistics(7, 10, '30d')
+    const statistics = await trainingApi.getStatistics(7, 10)
 
     expect(request).toHaveBeenNthCalledWith(1, '/api/admin/training/7/10/training-log', {})
     expect(request).toHaveBeenNthCalledWith(2, '/api/admin/training/7/10/statistics', {})
-    expect(request).toHaveBeenNthCalledWith(
-      3,
-      '/api/admin/student/7/reading-speed-trend?from=2026-06-30&to=2026-07-29',
-      {},
-    )
+    expect(request).toHaveBeenCalledTimes(2)
     expect(log).toEqual({
       curriculumId: 10,
       trainings: [
@@ -474,13 +461,6 @@ describe('Training API target contract', () => {
       trainingId: 901,
       accuracy: 80,
       previousAccuracy: 70,
-    })
-    expect(statistics.readingSpeedTrend).toMatchObject({
-      changeRate: 20,
-      points: [
-        { date: '2026-07-01', speed: 50 },
-        { date: '2026-07-20', speed: 60 },
-      ],
     })
   })
 

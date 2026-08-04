@@ -124,7 +124,6 @@ export interface TrainingRepository {
   readonly getStatistics: (
     studentId: number,
     curriculumId: number,
-    period: TrainingPeriod,
     options?: TrainingRequestOptions,
   ) => Promise<TrainingStatistics>
   readonly getGazeAnalysis: (
