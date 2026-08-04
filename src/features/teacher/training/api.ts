@@ -30,6 +30,7 @@ import type {
   TrainingResult,
   TrainingStatus,
   TrainingStatistics,
+  TrainingQuestionValue,
 } from './model'
 import type { TrainingRequestOptions } from './repositories/trainingRepository'
 
@@ -109,15 +110,15 @@ interface CurriculumTrainingLogDto {
     readonly startedAt: string | null
     readonly endedAt: string | null
     readonly accuracyRate: number | null
-    readonly questionResults: readonly {
-      readonly questionNumber: number
-      readonly isCorrect: boolean | null
-    }[]
-    readonly incorrectItems: readonly {
-      readonly questionNumber: number
-      readonly question: string
-      readonly correctAnswer: string
-      readonly selectedAnswer: string
+    readonly questions: readonly {
+      readonly questionNo: number
+      readonly questionType: string | null
+      readonly question: TrainingQuestionValue
+      readonly responseType: string | null
+      readonly selectedAnswer: TrainingQuestionValue
+      readonly correctAnswer: TrainingQuestionValue
+      readonly correct: boolean | null
+      readonly score: number | null
     }[]
   }[]
 }
@@ -207,28 +208,14 @@ function mapTrainingLog(
 ): CurriculumTrainingLog {
   return {
     curriculumId,
-    trainings: dto.trainings.map((training) => {
-      const incorrectByQuestion = new Map(
-        training.incorrectItems.map((item) => [item.questionNumber, item]),
-      )
-      return {
-        trainingId: training.trainingId,
-        trainingName: training.trainingName,
-        startedAt: training.startedAt,
-        finishedAt: training.endedAt,
-        accuracy: training.accuracyRate,
-        questions: training.questionResults.map((result) => {
-          const incorrect = incorrectByQuestion.get(result.questionNumber)
-          return {
-            questionNumber: result.questionNumber,
-            question: incorrect?.question ?? null,
-            isCorrect: result.isCorrect,
-            selectedAnswer: incorrect?.selectedAnswer ?? null,
-            correctAnswer: incorrect?.correctAnswer ?? null,
-          }
-        }),
-      }
-    }),
+    trainings: dto.trainings.map((training) => ({
+      trainingId: training.trainingId,
+      trainingName: training.trainingName,
+      startedAt: training.startedAt,
+      finishedAt: training.endedAt,
+      accuracy: training.accuracyRate,
+      questions: training.questions.map((question) => ({ ...question })),
+    })),
   }
 }
 

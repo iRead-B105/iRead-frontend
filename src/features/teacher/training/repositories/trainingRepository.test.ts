@@ -399,13 +399,16 @@ describe('Training API target contract', () => {
             startedAt: '2026-07-20T10:00:00',
             endedAt: '2026-07-20T10:08:00',
             accuracyRate: 80,
-            questionResults: [{ questionNumber: 1, isCorrect: false }],
-            incorrectItems: [
+            questions: [
               {
-                questionNumber: 1,
-                question: 'ㄱ + ㅏ',
-                selectedAnswer: '거',
-                correctAnswer: '가',
+                questionNo: 1,
+                questionType: 'SENTENCE_ASSEMBLY',
+                question: { prompt: '순서를 맞추세요.', cards: ['가', '나'] },
+                responseType: 'ORDERING',
+                selectedAnswer: [1, 0],
+                correctAnswer: [0, 1],
+                correct: false,
+                score: 0,
               },
             ],
           },
@@ -444,11 +447,14 @@ describe('Training API target contract', () => {
           accuracy: 80,
           questions: [
             {
-              questionNumber: 1,
-              question: 'ㄱ + ㅏ',
-              isCorrect: false,
-              selectedAnswer: '거',
-              correctAnswer: '가',
+              questionNo: 1,
+              questionType: 'SENTENCE_ASSEMBLY',
+              question: { prompt: '순서를 맞추세요.', cards: ['가', '나'] },
+              responseType: 'ORDERING',
+              selectedAnswer: [1, 0],
+              correctAnswer: [0, 1],
+              correct: false,
+              score: 0,
             },
           ],
         }),
@@ -507,8 +513,7 @@ describe('TestTrainingRepository', () => {
     await expect(repository.getCatalog(1)).resolves.toEqual(trainingCatalogFixture)
     expect(trainingCatalogFixture).toHaveLength(31)
     expect(trainingCatalogFixture.map((item) => item.trainingTemplateId)).toEqual(
-      Array.from({ length: 34 }, (_, index) => index + 1)
-        .filter((id) => ![6, 14, 24].includes(id)),
+      Array.from({ length: 34 }, (_, index) => index + 1).filter((id) => ![6, 14, 24].includes(id)),
     )
     expect(trainingCatalogFixture[30]).toMatchObject({
       trainingTemplateId: 34,
