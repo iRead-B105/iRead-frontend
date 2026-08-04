@@ -7,7 +7,9 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite'
 
-const LOCAL_BACKEND_TARGET = 'http://localhost:8080'
+// Docker compose는 VITE_BACKEND_URL=http://iread-backend:8080을 주입한다.
+// 컨테이너 안 localhost는 자기 자신이므로 env가 있으면 반드시 그것을 써야 한다.
+const LOCAL_BACKEND_TARGET = process.env.VITE_BACKEND_URL || 'http://localhost:8080'
 
 // defineConfig로 감싸면 설정 항목의 자동 완성과 자료형 검사를 받을 수 있습니다.
 export default defineConfig(() => {
