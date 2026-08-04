@@ -525,9 +525,12 @@ export const useStudentStore = defineStore('students', () => {
   async function loadAccuracyTrend(studentId: number): Promise<StudentAccuracyTrend | null> {
     const requestSequence = (accuracyTrendSequences.get(studentId) ?? 0) + 1
     accuracyTrendSequences.set(studentId, requestSequence)
-    accuracyTrendStatusById.value = {
-      ...accuracyTrendStatusById.value,
-      [studentId]: 'loading',
+    const hasExistingTrend = accuracyTrendById.value[studentId] !== undefined
+    if (!hasExistingTrend) {
+      accuracyTrendStatusById.value = {
+        ...accuracyTrendStatusById.value,
+        [studentId]: 'loading',
+      }
     }
     accuracyTrendErrorById.value = {
       ...accuracyTrendErrorById.value,
@@ -552,7 +555,7 @@ export const useStudentStore = defineStore('students', () => {
       }
       accuracyTrendStatusById.value = {
         ...accuracyTrendStatusById.value,
-        [studentId]: 'error',
+        [studentId]: hasExistingTrend ? 'success' : 'error',
       }
       accuracyTrendErrorById.value = {
         ...accuracyTrendErrorById.value,
@@ -567,9 +570,12 @@ export const useStudentStore = defineStore('students', () => {
   ): Promise<StudentReadingSpeedTrend | null> {
     const requestSequence = (readingSpeedTrendSequences.get(studentId) ?? 0) + 1
     readingSpeedTrendSequences.set(studentId, requestSequence)
-    readingSpeedTrendStatusById.value = {
-      ...readingSpeedTrendStatusById.value,
-      [studentId]: 'loading',
+    const hasExistingTrend = readingSpeedTrendById.value[studentId] !== undefined
+    if (!hasExistingTrend) {
+      readingSpeedTrendStatusById.value = {
+        ...readingSpeedTrendStatusById.value,
+        [studentId]: 'loading',
+      }
     }
     readingSpeedTrendErrorById.value = {
       ...readingSpeedTrendErrorById.value,
@@ -594,7 +600,7 @@ export const useStudentStore = defineStore('students', () => {
       }
       readingSpeedTrendStatusById.value = {
         ...readingSpeedTrendStatusById.value,
-        [studentId]: 'error',
+        [studentId]: hasExistingTrend ? 'success' : 'error',
       }
       readingSpeedTrendErrorById.value = {
         ...readingSpeedTrendErrorById.value,

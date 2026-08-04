@@ -431,4 +431,57 @@ describe('Student store', () => {
       points: [{ date: '2026-07-27', speed: 96 }],
     })
   })
+
+  it('주기 재조회 중에는 기존 정확도와 읽기 속도를 loading 상태로 바꾸지 않는다', async () => {
+    const nextAccuracy = deferred<{
+      dailyAccuracy: readonly { date: string; accuracy: number }[]
+    }>()
+    const nextSpeed = deferred<{
+      unit: 'CORRECT_WORDS_PER_MINUTE'
+      changeRate: number | null
+      points: readonly { date: string; speed: number }[]
+    }>()
+    const repository: StudentRepository = {
+      ...mutationRepositoryMethods,
+      list: vi.fn().mockResolvedValue(result([])),
+      getSummary: vi.fn().mockResolvedValue({
+        totalStudents: 0,
+        scheduledTodayCount: 0,
+      }),
+      getAccuracyTrend: vi
+        .fn()
+        .mockResolvedValueOnce({ dailyAccuracy: [{ date: '2026-07-20', accuracy: 70 }] })
+        .mockReturnValueOnce(nextAccuracy.promise),
+      getReadingSpeedTrend: vi
+        .fn()
+        .mockResolvedValueOnce({
+          unit: 'CORRECT_WORDS_PER_MINUTE',
+          changeRate: null,
+          points: [{ date: '2026-07-20', speed: 80 }],
+        })
+        .mockReturnValueOnce(nextSpeed.promise),
+    }
+    const store = useStudentStore()
+    store.setRepository(repository)
+
+    await Promise.all([store.loadAccuracyTrend(1), store.loadReadingSpeedTrend(1)])
+    const accuracyRefresh = store.loadAccuracyTrend(1)
+    const speedRefresh = store.loadReadingSpeedTrend(1)
+
+    expect(store.accuracyTrendStatusById[1]).toBe('success')
+    expect(store.readingSpeedTrendStatusById[1]).toBe('success')
+    expect(store.accuracyTrendById[1]?.dailyAccuracy[0]?.accuracy).toBe(70)
+    expect(store.readingSpeedTrendById[1]?.points[0]?.speed).toBe(80)
+
+    nextAccuracy.resolve({ dailyAccuracy: [{ date: '2026-07-27', accuracy: 78 }] })
+    nextSpeed.resolve({
+      unit: 'CORRECT_WORDS_PER_MINUTE',
+      changeRate: 10,
+      points: [{ date: '2026-07-27', speed: 88 }],
+    })
+    await Promise.all([accuracyRefresh, speedRefresh])
+
+    expect(store.accuracyTrendById[1]?.dailyAccuracy[0]?.accuracy).toBe(78)
+    expect(store.readingSpeedTrendById[1]?.points[0]?.speed).toBe(88)
+  })
 })

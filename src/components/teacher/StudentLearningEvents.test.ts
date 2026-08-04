@@ -45,7 +45,8 @@ describe('StudentLearningEvents', () => {
     await wrapper.findAll('button')[1]!.trigger('click')
 
     expect(wrapper.emitted('select')).toEqual([[events[1]]])
-    expect(wrapper.text()).toContain('정확도 없음')
+    expect(wrapper.text()).toContain('시선 분석')
+    expect(wrapper.text()).not.toContain('정확도 없음')
     expect(wrapper.text()).not.toContain('확인 완료')
   })
 
@@ -64,14 +65,16 @@ describe('StudentLearningEvents', () => {
     const expandedItem = wrapper.get('.learning-event-item.is-expanded')
     expect(expandedItem.get('.learning-event').attributes('aria-expanded')).toBe('true')
     expect(expandedItem.get('.event-detail-shell').element.parentElement).toBe(expandedItem.element)
-    expect(expandedItem.find('.event-detail__heading').exists()).toBe(false)
+    expect(expandedItem.get('.event-detail__heading').text()).toContain('선택 기록 상세')
+    expect(expandedItem.get('.event-detail__heading').text()).toContain('읽기 훈련')
     expect(expandedItem.text()).toContain('학습 결과')
     expect(expandedItem.text()).toContain('교수자 확인')
     expect(expandedItem.text()).toContain('다음 학습 제안')
     expect(expandedItem.text()).toContain('받침이 있는 문장 읽기')
     expect(expandedItem.text()).toContain('최근 6주 정확도가 가장 낮은 영역입니다.')
-    expect(expandedItem.text()).toContain('10분')
-    expect(expandedItem.text()).toContain('2회')
+    expect(expandedItem.text()).not.toContain('권장 시간')
+    expect(expandedItem.text()).not.toContain('권장 반복')
+    expect(expandedItem.text()).not.toContain('10분')
     expect(expandedItem.text()).toContain('받침 ㄹ 발음')
     expect(wrapper.findAll('.event-detail')).toHaveLength(1)
 
@@ -80,6 +83,12 @@ describe('StudentLearningEvents', () => {
       .find((button) => button.text() === '학습 기록에 추가')!
       .trigger('click')
     expect(wrapper.emitted('addToMemo')).toEqual([[detail]])
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('상세 이력 보기'))!
+      .trigger('click')
+    expect(wrapper.emitted('openHistory')).toEqual([['TRAINING']])
   })
 
   it('문제 구간과 추천이 없으면 별도 빈 상태를 표시한다', () => {
@@ -105,7 +114,8 @@ describe('StudentLearningEvents', () => {
       },
     })
 
-    expect(wrapper.text()).toContain('산정할 수 없음')
+    expect(wrapper.text()).toContain('시선 분석')
+    expect(wrapper.text()).not.toContain('산정할 수 없음')
     expect(wrapper.text()).toContain('확인된 문제 구간 없음')
     expect(wrapper.text()).toContain('추가로 확인할 신호 없음')
     expect(wrapper.text()).toContain('다음 학습으로 제안된 훈련이 없습니다.')

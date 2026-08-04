@@ -152,6 +152,9 @@ interface StudentReadingSpeedTrendDto {
   readonly points: readonly {
     readonly date: string
     readonly voiceSpeed: number | null
+    readonly voiceWordCount?: number | null
+    readonly voiceDurationMs?: number | null
+    readonly trainingCount?: number | null
   }[]
 }
 
@@ -300,7 +303,15 @@ export function createStudentApi(
             (point): point is typeof point & { readonly voiceSpeed: number } =>
               point.voiceSpeed !== null,
           )
-          .map(({ date, voiceSpeed }) => ({ date, speed: voiceSpeed }))
+          .map(
+            ({ date, voiceSpeed, voiceWordCount, voiceDurationMs, trainingCount }) => ({
+              date,
+              speed: voiceSpeed,
+              correctWordCount: voiceWordCount ?? null,
+              measuredDurationMs: voiceDurationMs ?? null,
+              trainingCount: trainingCount ?? null,
+            }),
+          )
           .sort((left, right) => left.date.localeCompare(right.date)),
       }
     },

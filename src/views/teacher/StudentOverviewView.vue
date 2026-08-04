@@ -156,11 +156,41 @@ const readingSpeedChartSummary = computed(
       .map((point) => `${point.date} 분당 ${point.speed}개 정답 단어`)
       .join(', ')}`,
 )
+
+function formatReadingDuration(milliseconds: number | null | undefined): string {
+  if (milliseconds === null || milliseconds === undefined) return '미측정'
+  return `${Number((milliseconds / 1_000).toFixed(1))}초`
+}
+
+function readingSpeedTooltip(params: unknown): string {
+  const first = Array.isArray(params) ? params[0] : params
+  if (typeof first !== 'object' || first === null) return ''
+  const dataIndex = (first as { readonly dataIndex?: unknown }).dataIndex
+  if (typeof dataIndex !== 'number') return ''
+  const point = readingSpeedTrend.value[dataIndex]
+  if (!point) return ''
+  const correctWords =
+    point.correctWordCount === null || point.correctWordCount === undefined
+      ? '미측정'
+      : `${point.correctWordCount}개`
+  const trainings =
+    point.trainingCount === null || point.trainingCount === undefined
+      ? '미측정'
+      : `${point.trainingCount}회`
+  return [
+    point.date,
+    `읽기 속도: ${point.speed} 단어/분`,
+    `정답 단어: ${correctWords}`,
+    `음성 측정 시간: ${formatReadingDuration(point.measuredDurationMs)}`,
+    `포함 훈련: ${trainings}`,
+  ].join('<br>')
+}
+
 const readingSpeedChartOption = computed<EChartsOption>(() => ({
   grid: { left: 52, right: 18, top: 24, bottom: 34 },
   tooltip: {
     trigger: 'axis',
-    valueFormatter: (value) => `${value} 단어/분`,
+    formatter: readingSpeedTooltip,
   },
   xAxis: {
     type: 'category',
@@ -218,7 +248,7 @@ const selectedTrendSummary = computed(() =>
 )
 const selectedTrendAriaLabel = computed(() =>
   selectedTrend.value === 'accuracy'
-    ? '최근 6주 날짜별 읽기 정확도 추이 차트'
+    ? 'Backend 응답 날짜별 읽기 정확도 추이 차트'
     : '최근 30일 날짜별 읽기 속도 추이 차트',
 )
 const visibleAttentionReasons = computed(
@@ -347,6 +377,17 @@ function addLearningEventToMemo(event: StudentLearningEventDetail): void {
   }
   noteDraft.value = nextDraft
   memoError.value = ''
+}
+
+function openLearningEventHistory(
+  eventType: Exclude<StudentLearningEventType, 'GAZE'>,
+): void {
+  const routeName = {
+    TRAINING: 'student-training-history',
+    TEST: 'student-test-history',
+    STORY: 'student-story-history',
+  }[eventType]
+  void router.push({ name: routeName, params: { id: studentId.value } })
 }
 
 async function retryDetail(): Promise<void> {
@@ -563,7 +604,7 @@ watch(studentId, loadOverview, { immediate: true })
                 {{
                   accuracyDelta === null
                     ? `${accuracyTrend.length}개 날짜 기록`
-                    : `첫 기록 대비 ${accuracyDelta >= 0 ? '+' : ''}${accuracyDelta}%p`
+                    : `첫 기록 대비 ${accuracyDelta >= 0 ? '+' : ''}${accuracyDelta}%p · ${accuracyTrend.length}개 날짜 기록`
                 }}
               </p>
             </div>
@@ -580,7 +621,7 @@ watch(studentId, loadOverview, { immediate: true })
                 {{
                   readingSpeedChangeRate === null
                     ? `${readingSpeedTrend.length}개 날짜 기록`
-                    : `기간 변화 ${readingSpeedChangeRate >= 0 ? '+' : ''}${readingSpeedChangeRate}%`
+                    : `기간 변화 ${readingSpeedChangeRate >= 0 ? '+' : ''}${readingSpeedChangeRate}% · ${readingSpeedTrend.length}개 날짜 기록`
                 }}
               </p>
             </div>
@@ -603,6 +644,7 @@ watch(studentId, loadOverview, { immediate: true })
             @retry-list="studentStore.loadLearningEvents(detail.studentId, 3)"
             @retry-detail="retryLearningEvent"
             @add-to-memo="addLearningEventToMemo"
+            @open-history="openLearningEventHistory"
           />
           <RouterLink
             class="history-link"

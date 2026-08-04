@@ -258,9 +258,23 @@ describe('Student API', () => {
       voiceChangeRate: 12.5,
       gazeChangeRate: 4.2,
       points: [
-        { date: '2026-07-28', voiceSpeed: 96, gazeSpeed: 88 },
+        {
+          date: '2026-07-28',
+          voiceSpeed: 96,
+          voiceWordCount: 48,
+          voiceDurationMs: 30_000,
+          trainingCount: 3,
+          gazeSpeed: 88,
+        },
         { date: '2026-07-27', voiceSpeed: null, gazeSpeed: 82 },
-        { date: '2026-07-20', voiceSpeed: 84, gazeSpeed: null },
+        {
+          date: '2026-07-20',
+          voiceSpeed: 84,
+          voiceWordCount: 42,
+          voiceDurationMs: 30_000,
+          trainingCount: 2,
+          gazeSpeed: null,
+        },
       ],
     })
     const api = createStudentApi(request, () => new Date('2026-07-29T12:00:00+09:00'))
@@ -269,8 +283,20 @@ describe('Student API', () => {
       unit: 'CORRECT_WORDS_PER_MINUTE',
       changeRate: 12.5,
       points: [
-        { date: '2026-07-20', speed: 84 },
-        { date: '2026-07-28', speed: 96 },
+        {
+          date: '2026-07-20',
+          speed: 84,
+          correctWordCount: 42,
+          measuredDurationMs: 30_000,
+          trainingCount: 2,
+        },
+        {
+          date: '2026-07-28',
+          speed: 96,
+          correctWordCount: 48,
+          measuredDurationMs: 30_000,
+          trainingCount: 3,
+        },
       ],
     })
   })
