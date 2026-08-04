@@ -284,4 +284,50 @@ describe('installTeacherRealtimeSync', () => {
     expect(loadReadingSpeedTrend).toHaveBeenCalledWith(2001)
     stop()
   })
+
+  it('기존 그래프를 유지한 재조회 실패도 최신성 실패로 표시한다', async () => {
+    const { pinia, router, students, freshness } = await setup()
+    await router.push('/teacher/students/2001')
+    vi.spyOn(students, 'refreshList').mockResolvedValue(true)
+    vi.spyOn(students, 'refreshSummary').mockResolvedValue(true)
+    vi.spyOn(students, 'loadDetail').mockImplementation(async () => {
+      students.detailStatusById[2001] = 'success'
+      return null
+    })
+    vi.spyOn(students, 'loadLearningSummary').mockImplementation(async () => {
+      students.learningSummaryStatusById[2001] = 'success'
+      return null
+    })
+    vi.spyOn(students, 'loadLearningEvents').mockImplementation(async () => {
+      students.learningEventsStatusById[2001] = 'success'
+      return []
+    })
+    vi.spyOn(students, 'loadAccuracyTrend').mockImplementation(async () => {
+      students.accuracyTrendStatusById[2001] = 'success'
+      students.accuracyTrendErrorById[2001] = '정확도 재조회 실패'
+      return null
+    })
+    vi.spyOn(students, 'loadReadingSpeedTrend').mockImplementation(async () => {
+      students.readingSpeedTrendStatusById[2001] = 'success'
+      students.readingSpeedTrendErrorById[2001] = null
+      return null
+    })
+    const stop = installTeacherRealtimeSync(pinia, router)
+    const options = realtimeHarness.options as CapturedRealtimeOptions
+
+    await options.onEvent({
+      eventId: 'event-refresh-failed',
+      studentId: 2001,
+      resource: 'TRAINING',
+      resourceId: 101,
+      changeType: 'UPDATED',
+      occurredAt: '2026-08-04T10:30:00+09:00',
+      version: 1,
+    })
+    expect(freshness.warningVisible).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(freshness.warningVisible).toBe(true)
+    stop()
+  })
 })

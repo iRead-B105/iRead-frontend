@@ -248,7 +248,7 @@ const selectedTrendSummary = computed(() =>
 )
 const selectedTrendAriaLabel = computed(() =>
   selectedTrend.value === 'accuracy'
-    ? 'Backend 응답 날짜별 읽기 정확도 추이 차트'
+    ? '제공된 날짜별 읽기 정확도 추이 차트'
     : '최근 30일 날짜별 읽기 속도 추이 차트',
 )
 const visibleAttentionReasons = computed(
