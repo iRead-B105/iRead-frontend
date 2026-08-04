@@ -1,10 +1,10 @@
 import { apiRequest } from '@/lib/api'
-import type {
-  TestAreaScore,
-  TestDetail,
-  TestListItem,
-  TestQuestionResult,
-} from './model'
+import {
+  mapRawGazeAnalysis,
+  type GazeAnalysisState,
+  type RawGazeAnalysisDto,
+} from '@/features/teacher/gaze'
+import type { TestAreaScore, TestDetail, TestListItem, TestQuestionResult } from './model'
 import type { TestRequestOptions } from './repositories/testRepository'
 
 export type TestApiRequest = <T>(endpoint: string, init?: RequestInit) => Promise<T>
@@ -153,6 +153,11 @@ export interface TestApi {
     testCurriculumId: string,
     options?: TestRequestOptions,
   ) => Promise<TestDetail>
+  readonly getGazeAnalysis: (
+    studentId: number,
+    testId: string,
+    options?: TestRequestOptions,
+  ) => Promise<GazeAnalysisState>
 }
 
 export function createTestApi(request: TestApiRequest = apiRequest): TestApi {
@@ -167,8 +172,7 @@ export function createTestApi(request: TestApiRequest = apiRequest): TestApi {
           (left, right) =>
             (right.completedAt ?? right.createdAt).localeCompare(
               left.completedAt ?? left.createdAt,
-            ) ||
-            compareDecimalIdsDescending(left.testCurriculumId, right.testCurriculumId),
+            ) || compareDecimalIdsDescending(left.testCurriculumId, right.testCurriculumId),
         )
         .map(mapListItem)
     },
@@ -178,6 +182,13 @@ export function createTestApi(request: TestApiRequest = apiRequest): TestApi {
         requestInit(options),
       )
       return mapDetail(dto)
+    },
+    async getGazeAnalysis(studentId, testId, options) {
+      const dto = await request<RawGazeAnalysisDto>(
+        `/api/admin/test/${studentId}/${testId}/gaze-analysis`,
+        requestInit(options),
+      )
+      return mapRawGazeAnalysis(dto)
     },
   }
 }

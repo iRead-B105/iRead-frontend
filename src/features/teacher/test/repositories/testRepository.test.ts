@@ -111,6 +111,29 @@ describe('Test API', () => {
     expect(result.gazeDepartureCount).toBe(0)
     expect(result.pronunciationScore).toBe(0)
   })
+
+  it('개별 검사 문항 ID로 기존 시선 집계 API를 조회한다', async () => {
+    const request = vi.fn().mockResolvedValue({
+      gazeSessionId: 91,
+      gazeAnalysisId: 92,
+      totalDwellTime: 1_200,
+      dwellCount: 4,
+      regressionCount: 1,
+      averageFixationTime: 300,
+    })
+
+    const result = await createTestApi(request).getGazeAnalysis(7, '101')
+
+    expect(request).toHaveBeenCalledWith('/api/admin/test/7/101/gaze-analysis', {})
+    expect(result).toMatchObject({
+      status: 'AVAILABLE',
+      analysis: {
+        totalVisitedDurationMs: 1_200,
+        totalVisitedCount: 4,
+        reverseReadCount: 1,
+      },
+    })
+  })
 })
 
 describe('Test Repository', () => {
@@ -131,7 +154,11 @@ describe('Test Repository', () => {
         pronunciationScore: 0,
       }),
     )
-    const repository = new ApiTestRepository({ getTests: vi.fn(), getTest })
+    const repository = new ApiTestRepository({
+      getTests: vi.fn(),
+      getTest,
+      getGazeAnalysis: vi.fn(),
+    })
 
     const result = await repository.compareTests(1, '11', ['9', '7'])
 
@@ -156,6 +183,24 @@ describe('Test Repository', () => {
     await expect(new MockTestRepository().getTest(2, '1011')).rejects.toMatchObject({
       status: 404,
       code: 'TEST_CURRICULUM_NOT_FOUND',
+    })
+  })
+
+  it('시선 분석 결과만 없는 404는 NO_DATA로 변환한다', async () => {
+    const notFound = new ApiError({
+      status: 404,
+      code: 'GAZE_ANALYSIS_NOT_FOUND',
+      message: '시선 분석 결과를 찾을 수 없습니다.',
+    })
+    const repository = new ApiTestRepository({
+      getTests: vi.fn(),
+      getTest: vi.fn(),
+      getGazeAnalysis: vi.fn().mockRejectedValue(notFound),
+    })
+
+    await expect(repository.getGazeAnalysis(1, '101')).resolves.toEqual({
+      status: 'NO_DATA',
+      analysis: null,
     })
   })
 })

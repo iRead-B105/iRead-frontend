@@ -1,4 +1,5 @@
 import { ApiError } from '@/lib/api'
+import { testGazeFixtures, type GazeAnalysisState } from '@/features/teacher/gaze'
 import { testDetailFixtures, testListFixtures } from '../fixtures'
 import type { TestDetail, TestListItem } from '../model'
 import {
@@ -13,6 +14,7 @@ export interface MockTestRepositoryFixtures {
   readonly details?: readonly TestDetail[]
   readonly forbiddenStudentIds?: readonly number[]
   readonly failedDetailTestCurriculumIds?: readonly string[]
+  readonly gazeByTestId?: Readonly<Record<string, GazeAnalysisState>>
 }
 
 function clone<T>(value: T): T {
@@ -32,6 +34,7 @@ export class MockTestRepository implements TestRepository {
   private readonly details = new Map<string, TestDetail>()
   private readonly forbiddenStudentIds: ReadonlySet<number>
   private readonly failedDetailIds: ReadonlySet<string>
+  private readonly gazeByTestId: ReadonlyMap<string, GazeAnalysisState>
 
   constructor(fixtures: MockTestRepositoryFixtures = {}) {
     this.testsByStudent = clone(fixtures.testsByStudent ?? testListFixtures)
@@ -40,6 +43,17 @@ export class MockTestRepository implements TestRepository {
     }
     this.forbiddenStudentIds = new Set(fixtures.forbiddenStudentIds ?? [])
     this.failedDetailIds = new Set(fixtures.failedDetailTestCurriculumIds ?? [])
+    this.gazeByTestId = new Map(
+      Object.entries(
+        fixtures.gazeByTestId ?? {
+          '10111': testGazeFixtures[1_011]!,
+          '10081': testGazeFixtures[1_008]!,
+          '10051': testGazeFixtures[1_005]!,
+          '10041': testGazeFixtures[1_004]!,
+          '20011': testGazeFixtures[2_001]!,
+        },
+      ),
+    )
   }
 
   async getTests(studentId: number, options?: TestRequestOptions) {
@@ -50,17 +64,12 @@ export class MockTestRepository implements TestRepository {
         (left, right) =>
           (right.completedAt ?? right.createdAt).localeCompare(
             left.completedAt ?? left.createdAt,
-          ) ||
-          compareDecimalIdsDescending(left.testCurriculumId, right.testCurriculumId),
+          ) || compareDecimalIdsDescending(left.testCurriculumId, right.testCurriculumId),
       ),
     )
   }
 
-  async getTest(
-    studentId: number,
-    testCurriculumId: string,
-    options?: TestRequestOptions,
-  ) {
+  async getTest(studentId: number, testCurriculumId: string, options?: TestRequestOptions) {
     this.assertStudentAccess(studentId)
     assertPositiveId(testCurriculumId, 'testCurriculumId')
     assertNotAborted(options)
@@ -91,16 +100,31 @@ export class MockTestRepository implements TestRepository {
     comparisonTestCurriculumIds: readonly string[],
     options?: TestRequestOptions,
   ) {
-    assertTestComparisonSelection(
-      studentId,
-      currentTestCurriculumId,
-      comparisonTestCurriculumIds,
-    )
+    assertTestComparisonSelection(studentId, currentTestCurriculumId, comparisonTestCurriculumIds)
     const [currentTest, ...comparisonTests] = await Promise.all([
       this.getTest(studentId, currentTestCurriculumId, options),
       ...comparisonTestCurriculumIds.map((id) => this.getTest(studentId, id, options)),
     ])
     return { currentTest, comparisonTests }
+  }
+
+  async getGazeAnalysis(studentId: number, testId: string, options?: TestRequestOptions) {
+    this.assertStudentAccess(studentId)
+    assertPositiveId(testId, 'testId')
+    assertNotAborted(options)
+    const belongsToStudent = (this.testsByStudent[studentId] ?? []).some((item) =>
+      this.details
+        .get(item.testCurriculumId)
+        ?.questions.some((question) => question.testId === testId),
+    )
+    if (!belongsToStudent) {
+      throw new ApiError({
+        status: 404,
+        code: 'TEST_NOT_FOUND',
+        message: '검사 문항을 찾을 수 없습니다.',
+      })
+    }
+    return clone(this.gazeByTestId.get(testId) ?? { status: 'NO_DATA' as const, analysis: null })
   }
 
   private assertStudentAccess(studentId: number): void {

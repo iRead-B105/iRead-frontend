@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import ChartPanel from '@/components/common/ChartPanel.vue'
+import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
 import HistoryToolbar from '@/components/teacher/HistoryToolbar.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,7 @@ import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { chartColors } from '@/features/teacher/chartTheme'
 import { asyncStateKind } from '@/features/teacher/error'
+import type { GazeAnalysisState } from '@/features/teacher/gaze'
 import {
   averageTestMetric,
   formatContentGenerationStatus,
@@ -46,6 +48,14 @@ const {
   listUiError,
   comparisonError,
   trendError,
+  selectedQuestionTestId,
+  selectedQuestionSequenceNo,
+  questionGazeAnalysis,
+  questionGazeStatus,
+  questionGazeError,
+  questionGazeAvailability,
+  questionGazeAvailabilityStatus,
+  questionGazeAvailabilityFailedCount,
 } = storeToRefs(testStore)
 const listErrorKind = computed(() => asyncStateKind(listUiError.value))
 
@@ -63,6 +73,48 @@ const displayedDetails = computed<TestDetail[]>(() => {
   return [comparisonResult.value.currentTest, ...comparisonResult.value.comparisonTests]
 })
 const currentDetail = computed(() => comparisonResult.value?.currentTest ?? null)
+const selectedQuestion = computed(
+  () =>
+    currentDetail.value?.questions.find(
+      (question) =>
+        question.testId === selectedQuestionTestId.value &&
+        question.sequenceNo === selectedQuestionSequenceNo.value,
+    ) ?? null,
+)
+const gazeButtonQuestionKeys = computed(() => {
+  const keys = new Set<string>()
+  const seenTestIds = new Set<string>()
+  for (const question of currentDetail.value?.questions ?? []) {
+    if (seenTestIds.has(question.testId)) continue
+    seenTestIds.add(question.testId)
+    if (questionGazeAvailability.value[question.testId] === 'AVAILABLE') {
+      keys.add(questionKey(question))
+    }
+  }
+  return keys
+})
+const questionGazeAggregate = computed<GazeAnalysisState | null>(() => {
+  const state = questionGazeAnalysis.value
+  if (state?.status !== 'AVAILABLE') return state
+  return {
+    ...state,
+    analysis: {
+      ...state.analysis,
+      replay: null,
+    },
+  }
+})
+const questionContractWarning = computed(() => {
+  const detail = currentDetail.value
+  if (!detail) return null
+  const sequences = detail.questions.map((question) => question.sequenceNo)
+  const hasExpectedSequences =
+    sequences.length === 9 && sequences.every((sequence, index) => sequence === index + 1)
+  if (detail.totalQuestions === 9 && detail.completedQuestions === 9 && hasExpectedSequences) {
+    return null
+  }
+  return `9문항 완료 결과가 필요하지만 현재 ${detail.completedQuestions}/${detail.totalQuestions}문항, 상세 ${detail.questions.length}건이 제공되었습니다.`
+})
 
 interface MetricDefinition {
   readonly key: TestMetricKey
@@ -125,7 +177,7 @@ const metricCharts = computed(() =>
                 },
         },
         {
-          name: `${metric.label} ??`,
+          name: `${metric.label} 연결선`,
           type: 'line',
           data: values,
           smooth: 0.2,
@@ -159,6 +211,18 @@ watch(
       return
     }
     await testStore.loadForStudent(id)
+  },
+  { immediate: true },
+)
+
+watch(
+  currentDetail,
+  (detail) => {
+    if (studentId.value === null || !detail || detail.questions.length === 0) return
+    void testStore.loadQuestionGazeAvailability(
+      studentId.value,
+      detail.questions.map((question) => question.testId),
+    )
   },
   { immediate: true },
 )
@@ -205,6 +269,41 @@ function questionStatusClass(question: TestQuestionResult): string {
 
 function formatMetric(value: number | null, unit: string): string {
   return value === null ? '측정값 없음' : `${value}${unit}`
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return '-'
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+}
+
+function selectQuestion(question: TestQuestionResult): void {
+  if (studentId.value !== null) {
+    void testStore.selectQuestionGaze(studentId.value, question.testId, question.sequenceNo)
+  }
+}
+
+function questionKey(question: TestQuestionResult): string {
+  return `${question.testId}:${question.sequenceNo}`
+}
+
+function hasGazeButton(question: TestQuestionResult): boolean {
+  return gazeButtonQuestionKeys.value.has(questionKey(question))
+}
+
+function isSelectedQuestion(question: TestQuestionResult): boolean {
+  return (
+    selectedQuestionTestId.value === question.testId &&
+    selectedQuestionSequenceNo.value === question.sequenceNo
+  )
 }
 
 function openRecommendedCurriculum(): void {
@@ -392,17 +491,33 @@ function openRecommendedCurriculum(): void {
                   <strong>{{ testDate(detail) }}</strong>
                 </header>
                 <dl>
-                  <div data-metric-key="overallScore" :class="{ highlighted: selectedMetricKey === 'overallScore' }">
-                    <dt>전체 점수</dt><dd>{{ formatMetric(detail.overallScore, '점') }}</dd>
+                  <div
+                    data-metric-key="overallScore"
+                    :class="{ highlighted: selectedMetricKey === 'overallScore' }"
+                  >
+                    <dt>전체 점수</dt>
+                    <dd>{{ formatMetric(detail.overallScore, '점') }}</dd>
                   </div>
-                  <div data-metric-key="solvingTimeSeconds" :class="{ highlighted: selectedMetricKey === 'solvingTimeSeconds' }">
-                    <dt>문제 풀이 시간</dt><dd>{{ formatTestSeconds(detail.solvingTimeSeconds) }}</dd>
+                  <div
+                    data-metric-key="solvingTimeSeconds"
+                    :class="{ highlighted: selectedMetricKey === 'solvingTimeSeconds' }"
+                  >
+                    <dt>문제 풀이 시간</dt>
+                    <dd>{{ formatTestSeconds(detail.solvingTimeSeconds) }}</dd>
                   </div>
-                  <div data-metric-key="gazeDepartureCount" :class="{ highlighted: selectedMetricKey === 'gazeDepartureCount' }">
-                    <dt>시선 이탈 횟수</dt><dd>{{ formatMetric(detail.gazeDepartureCount, '회') }}</dd>
+                  <div
+                    data-metric-key="gazeDepartureCount"
+                    :class="{ highlighted: selectedMetricKey === 'gazeDepartureCount' }"
+                  >
+                    <dt>시선 이탈 횟수</dt>
+                    <dd>{{ formatMetric(detail.gazeDepartureCount, '회') }}</dd>
                   </div>
-                  <div data-metric-key="pronunciationScore" :class="{ highlighted: selectedMetricKey === 'pronunciationScore' }">
-                    <dt>발음 점수</dt><dd>{{ formatMetric(detail.pronunciationScore, '점') }}</dd>
+                  <div
+                    data-metric-key="pronunciationScore"
+                    :class="{ highlighted: selectedMetricKey === 'pronunciationScore' }"
+                  >
+                    <dt>발음 점수</dt>
+                    <dd>{{ formatMetric(detail.pronunciationScore, '점') }}</dd>
                   </div>
                 </dl>
               </article>
@@ -411,7 +526,10 @@ function openRecommendedCurriculum(): void {
 
           <Card class="area-section">
             <header class="section-heading">
-              <div><h2>영역별 점수</h2><p>각 영역 3문항의 결과입니다.</p></div>
+              <div>
+                <h2>영역별 점수</h2>
+                <p>각 영역 3문항의 결과입니다.</p>
+              </div>
               <strong>{{ formatMetric(currentDetail?.overallScore ?? null, '점') }}</strong>
             </header>
             <div class="area-grid">
@@ -429,7 +547,9 @@ function openRecommendedCurriculum(): void {
                 <h2>추천 훈련 커리큘럼</h2>
                 <p>이 검사를 근거로 생성된 추천 훈련과 검수 화면으로 이동합니다.</p>
               </div>
-              <span class="status-pill">{{ formatRecommendationStatus(currentDetail?.recommendationStatus ?? null) }}</span>
+              <span class="status-pill">{{
+                formatRecommendationStatus(currentDetail?.recommendationStatus ?? null)
+              }}</span>
             </header>
             <p v-if="currentDetail?.recommendationError" class="error-copy" role="alert">
               추천 생성 오류: {{ currentDetail.recommendationError }}
@@ -437,11 +557,23 @@ function openRecommendedCurriculum(): void {
             <dl class="recommendation-statuses">
               <div>
                 <dt>AI 콘텐츠</dt>
-                <dd>{{ formatContentGenerationStatus(currentDetail?.contentGenerationStatus ?? null) }}</dd>
+                <dd>
+                  {{
+                    formatContentGenerationStatus(currentDetail?.contentGenerationStatus ?? null)
+                  }}
+                </dd>
               </div>
               <div>
                 <dt>교수자 검수</dt>
                 <dd>{{ formatTeacherReviewStatus(currentDetail?.teacherReviewStatus ?? null) }}</dd>
+              </div>
+              <div>
+                <dt>최근 추천 시도</dt>
+                <dd>{{ formatDateTime(currentDetail?.recommendationLastAttemptAt ?? null) }}</dd>
+              </div>
+              <div>
+                <dt>재시도 횟수</dt>
+                <dd>{{ currentDetail?.recommendationRetryCount ?? 0 }}회</dd>
               </div>
             </dl>
             <div class="recommendation-actions">
@@ -462,16 +594,51 @@ function openRecommendedCurriculum(): void {
           <Card class="question-section">
             <header class="section-heading">
               <div>
-                <h2>9개 문항 결과</h2>
+                <h2>문항별 검사 결과</h2>
                 <p>아동 앱이 저장한 실제 제출 결과와 생성 문항을 결합한 결과입니다.</p>
               </div>
-              <span>{{ currentDetail?.completedQuestions }}/{{ currentDetail?.totalQuestions }}</span>
+              <span v-if="questionContractWarning === null" class="question-contract-ok">
+                9문항 확인
+              </span>
+              <span v-else
+                >{{ currentDetail?.completedQuestions }}/{{ currentDetail?.totalQuestions }}</span
+              >
             </header>
+            <p v-if="questionContractWarning" class="warning-copy" role="alert">
+              {{ questionContractWarning }}
+            </p>
+            <p
+              v-if="questionGazeAvailabilityStatus === 'loading'"
+              class="gaze-availability-copy"
+              aria-live="polite"
+            >
+              시선 분석 기록이 있는 검사 구간을 확인하는 중입니다.
+            </p>
+            <p
+              v-else-if="questionGazeAvailabilityFailedCount > 0"
+              class="warning-copy"
+              role="status"
+            >
+              일부 검사 구간의 시선 분석 존재 여부를 확인하지 못했습니다.
+            </p>
+            <p
+              v-else-if="
+                questionGazeAvailabilityStatus === 'success' &&
+                gazeButtonQuestionKeys.size === 0
+              "
+              class="gaze-availability-copy"
+            >
+              시선 분석이 기록된 검사 구간이 없습니다.
+            </p>
             <div v-if="currentDetail?.questions.length === 0" class="inline-empty">
               제공된 문항 결과가 없습니다.
             </div>
             <ol v-else class="question-list">
-              <li v-for="question in currentDetail?.questions" :key="question.testId">
+              <li
+                v-for="question in currentDetail?.questions"
+                :key="`${question.testId}:${question.sequenceNo}`"
+                :class="{ 'is-gaze-selected': isSelectedQuestion(question) }"
+              >
                 <header>
                   <div>
                     <strong>문항 {{ question.sequenceNo }}</strong>
@@ -481,15 +648,54 @@ function openRecommendedCurriculum(): void {
                 </header>
                 <p>{{ question.question ?? '문항 내용 없음' }}</p>
                 <dl>
-                  <div><dt>제출 답안</dt><dd>{{ formatTestAnswer(question.selectedAnswer) }}</dd></div>
-                  <div><dt>정답</dt><dd>{{ formatTestAnswer(question.correctAnswer) }}</dd></div>
-                  <div><dt>점수</dt><dd>{{ formatMetric(question.score, '점') }}</dd></div>
-                  <div><dt>발음 점수</dt><dd>{{ formatMetric(question.pronunciationScore, '점') }}</dd></div>
-                  <div><dt>풀이 시간</dt><dd>{{ formatTestSeconds(question.solvingTimeSeconds) }}</dd></div>
-                  <div><dt>시선 이탈</dt><dd>{{ formatMetric(question.gazeDepartureCount, '회') }}</dd></div>
+                  <div>
+                    <dt>제출 답안</dt>
+                    <dd>{{ formatTestAnswer(question.selectedAnswer) }}</dd>
+                  </div>
+                  <div>
+                    <dt>정답</dt>
+                    <dd>{{ formatTestAnswer(question.correctAnswer) }}</dd>
+                  </div>
+                  <div>
+                    <dt>점수</dt>
+                    <dd>{{ formatMetric(question.score, '점') }}</dd>
+                  </div>
+                  <div>
+                    <dt>발음 점수</dt>
+                    <dd>{{ formatMetric(question.pronunciationScore, '점') }}</dd>
+                  </div>
+                  <div>
+                    <dt>풀이 시간</dt>
+                    <dd>{{ formatTestSeconds(question.solvingTimeSeconds) }}</dd>
+                  </div>
+                  <div>
+                    <dt>시선 이탈</dt>
+                    <dd>{{ formatMetric(question.gazeDepartureCount, '회') }}</dd>
+                  </div>
                 </dl>
+                <Button
+                  v-if="hasGazeButton(question)"
+                  variant="outline"
+                  type="button"
+                  :aria-pressed="isSelectedQuestion(question)"
+                  @click="selectQuestion(question)"
+                >
+                  {{
+                    isSelectedQuestion(question)
+                      ? '시선 분석 선택됨'
+                      : '이 검사 구간의 시선 분석 보기'
+                  }}
+                </Button>
               </li>
             </ol>
+            <GazeAnalysisPanel
+              v-if="selectedQuestion"
+              :title="`문항 ${selectedQuestion.sequenceNo} 시선 분석`"
+              :state="questionGazeAggregate"
+              :status="questionGazeStatus"
+              :error="questionGazeError"
+              @retry="testStore.retryQuestionGaze()"
+            />
           </Card>
         </template>
       </template>
@@ -531,17 +737,22 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
 .area-grid article strong { font-size: 22px; }
 .area-grid article small { color: var(--slate-500); }
 .recommendation-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border-radius: var(--radius-sm); background: var(--primary-50); color: var(--primary-800); font-size: 13px; font-weight: 700; }
-.recommendation-statuses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.recommendation-statuses { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; }
 .recommendation-statuses div { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: color-mix(in oklch, var(--muted) 28%, transparent); }
 .error-copy { margin: 0; color: var(--danger-600); font-size: 13px; }
 .question-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .question-list li { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.question-list li.is-gaze-selected { border-color: var(--primary-300); background: var(--primary-50); }
 .question-list li > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .question-list header div { display: grid; gap: 3px; }
 .question-list header small { color: var(--slate-500); font-size: 11px; }
 .question-list li > p { margin: 12px 0; color: var(--slate-800); }
 .question-list dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .question-list dl div { background: var(--slate-50); }
+.question-list li > button { margin-top: 12px; }
+.question-contract-ok { color: var(--success-600); font-size: 12px; font-weight: 800; }
+.warning-copy { margin: 0; padding: 10px 12px; border: 1px solid var(--warning-500); border-radius: var(--radius-sm); color: var(--slate-700); font-size: 12px; }
+.gaze-availability-copy { margin: 0; color: var(--slate-500); font-size: 12px; }
 .is-correct { color: var(--success-600); font-weight: 800; }
 .is-incorrect { color: var(--danger-600); font-weight: 800; }
 .is-ungraded { color: var(--slate-500); font-weight: 800; }
@@ -549,10 +760,11 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
 @media (max-width: 760px) {
   .selection-field { min-width: 100%; }
   .recommendation-actions, .section-heading { align-items: flex-start; flex-direction: column; }
-  .recommendation-statuses { grid-template-columns: 1fr; }
+  .recommendation-statuses { grid-template-columns: 1fr 1fr; }
   .question-list dl { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 480px) {
   .detail-card dl, .question-list dl { grid-template-columns: 1fr; }
+  .recommendation-statuses { grid-template-columns: 1fr; }
 }
 </style>

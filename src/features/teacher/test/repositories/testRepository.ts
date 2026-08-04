@@ -1,4 +1,5 @@
 import { ApiError } from '@/lib/api'
+import type { GazeAnalysisState } from '@/features/teacher/gaze'
 import type { TestComparison, TestDetail, TestListItem } from '../model'
 
 export interface TestRequestOptions {
@@ -21,13 +22,16 @@ export interface TestRepository {
     comparisonTestCurriculumIds: readonly string[],
     options?: TestRequestOptions,
   ) => Promise<TestComparison>
+  readonly getGazeAnalysis: (
+    studentId: number,
+    testId: string,
+    options?: TestRequestOptions,
+  ) => Promise<GazeAnalysisState>
 }
 
 export function assertPositiveId(value: number | string, name: string): void {
   const valid =
-    typeof value === 'number'
-      ? Number.isInteger(value) && value > 0
-      : /^[1-9]\d*$/.test(value)
+    typeof value === 'number' ? Number.isInteger(value) && value > 0 : /^[1-9]\d*$/.test(value)
   if (!valid) {
     throw new ApiError({
       status: 400,

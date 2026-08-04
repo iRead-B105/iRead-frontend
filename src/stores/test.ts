@@ -9,6 +9,7 @@ import {
   type TestRequestStatus,
 } from '@/features/teacher/test'
 import { mapCommonError, type UiError } from '@/features/teacher/error'
+import type { GazeAnalysisRequestStatus, GazeAnalysisState } from '@/features/teacher/gaze'
 import { isAbortError, isApiError } from '@/lib/api'
 
 function testErrorMessage(error: unknown, fallback: string): string {
@@ -20,6 +21,12 @@ function testErrorMessage(error: unknown, fallback: string): string {
   return mapCommonError(error)?.message ?? fallback
 }
 
+function gazeErrorMessage(error: unknown): string {
+  if (!isApiError(error)) return '시선 분석 결과를 불러오지 못했습니다.'
+  if (error.status === 403) return '이 학습자의 시선 분석을 볼 권한이 없습니다.'
+  return mapCommonError(error)?.message ?? '시선 분석 결과를 불러오지 못했습니다.'
+}
+
 function sameIds(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((id, index) => id === right[index])
 }
@@ -27,6 +34,8 @@ function sameIds(left: readonly string[], right: readonly string[]): boolean {
 function sameValue<T>(left: T, right: T): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
 }
+
+type QuestionGazeAvailability = GazeAnalysisState['status'] | 'ERROR'
 
 export const useTestStore = defineStore('test', () => {
   const repository = shallowRef<TestRepository>(testRepository)
@@ -44,20 +53,31 @@ export const useTestStore = defineStore('test', () => {
   const comparisonError = ref<string | null>(null)
   const trendError = ref<string | null>(null)
   const trendFailedCount = ref(0)
+  const selectedQuestionTestId = ref<string | null>(null)
+  const selectedQuestionSequenceNo = ref<number | null>(null)
+  const questionGazeAnalysis = ref<GazeAnalysisState | null>(null)
+  const questionGazeStatus = ref<GazeAnalysisRequestStatus>('idle')
+  const questionGazeError = ref<string | null>(null)
+  const questionGazeAvailability = ref<Readonly<Record<string, QuestionGazeAvailability>>>({})
+  const questionGazeByTestId = ref<Readonly<Record<string, GazeAnalysisState>>>({})
+  const questionGazeAvailabilityStatus = ref<GazeAnalysisRequestStatus>('idle')
+  const questionGazeAvailabilityFailedCount = ref(0)
 
   let listGeneration = 0
   let comparisonGeneration = 0
   let trendGeneration = 0
+  let questionGazeGeneration = 0
+  let questionGazeAvailabilityGeneration = 0
   let listController: AbortController | null = null
   let comparisonController: AbortController | null = null
   let trendController: AbortController | null = null
+  let questionGazeController: AbortController | null = null
+  let questionGazeAvailabilityController: AbortController | null = null
   const detailCache = new Map<string, TestDetail>()
 
   const currentTest = computed(
     () =>
-      tests.value.find(
-        (test) => test.testCurriculumId === currentTestCurriculumId.value,
-      ) ?? null,
+      tests.value.find((test) => test.testCurriculumId === currentTestCurriculumId.value) ?? null,
   )
   const comparisonTests = computed(() =>
     comparisonTestCurriculumIds.value.flatMap((id) => {
@@ -89,13 +109,17 @@ export const useTestStore = defineStore('test', () => {
     }
   }
 
-  function abortRequests(): void {
+  function abortRequests(includeQuestionGaze = true): void {
     listController?.abort()
     comparisonController?.abort()
     trendController?.abort()
+    if (includeQuestionGaze) questionGazeController?.abort()
+    if (includeQuestionGaze) questionGazeAvailabilityController?.abort()
     listController = null
     comparisonController = null
     trendController = null
+    if (includeQuestionGaze) questionGazeController = null
+    if (includeQuestionGaze) questionGazeAvailabilityController = null
   }
 
   function clearState(nextStudentId: number | null): void {
@@ -113,6 +137,15 @@ export const useTestStore = defineStore('test', () => {
     comparisonError.value = null
     trendError.value = null
     trendFailedCount.value = 0
+    selectedQuestionTestId.value = null
+    selectedQuestionSequenceNo.value = null
+    questionGazeAnalysis.value = null
+    questionGazeStatus.value = 'idle'
+    questionGazeError.value = null
+    questionGazeAvailability.value = {}
+    questionGazeByTestId.value = {}
+    questionGazeAvailabilityStatus.value = 'idle'
+    questionGazeAvailabilityFailedCount.value = 0
     detailCache.clear()
   }
 
@@ -121,15 +154,12 @@ export const useTestStore = defineStore('test', () => {
     reset()
   }
 
-  async function requestForStudent(
-    nextStudentId: number,
-    background: boolean,
-  ): Promise<boolean> {
-    abortRequests()
+  async function requestForStudent(nextStudentId: number, background: boolean): Promise<boolean> {
+    const isRefresh = studentId.value === nextStudentId
+    abortRequests(!isRefresh)
     const generation = ++listGeneration
     comparisonGeneration += 1
     trendGeneration += 1
-    const isRefresh = studentId.value === nextStudentId
     if (isRefresh) {
       if (!background && tests.value.length === 0) listStatus.value = 'loading'
       listError.value = null
@@ -217,9 +247,7 @@ export const useTestStore = defineStore('test', () => {
         trendStatus.value = 'idle'
         return
       }
-      const nextCurrentId = items.some(
-        (item) => item.testCurriculumId === previousCurrentId,
-      )
+      const nextCurrentId = items.some((item) => item.testCurriculumId === previousCurrentId)
         ? previousCurrentId!
         : items[0]!.testCurriculumId
       currentTestCurriculumId.value = nextCurrentId
@@ -248,12 +276,15 @@ export const useTestStore = defineStore('test', () => {
     ) {
       return false
     }
+    comparisonResult.value = null
+    comparisonStatus.value = 'loading'
+    comparisonError.value = null
+    clearQuestionGaze()
     currentTestCurriculumId.value = nextTestCurriculumId
     comparisonTestCurriculumIds.value = comparisonTestCurriculumIds.value.filter(
       (id) => id !== nextTestCurriculumId,
     )
-    await loadComparison(currentStudentId)
-    return comparisonStatus.value === 'success'
+    return loadComparison(currentStudentId)
   }
 
   async function addComparisonTest(
@@ -262,18 +293,15 @@ export const useTestStore = defineStore('test', () => {
   ): Promise<boolean> {
     if (
       !canAddComparison.value ||
-      !availableComparisonTests.value.some(
-        (test) => test.testCurriculumId === testCurriculumId,
-      )
+      !availableComparisonTests.value.some((test) => test.testCurriculumId === testCurriculumId)
     ) {
       return false
     }
-    comparisonTestCurriculumIds.value = [
-      ...comparisonTestCurriculumIds.value,
-      testCurriculumId,
-    ]
-    await loadComparison(currentStudentId)
-    return comparisonStatus.value === 'success'
+    comparisonTestCurriculumIds.value = [...comparisonTestCurriculumIds.value, testCurriculumId]
+    comparisonResult.value = null
+    comparisonStatus.value = 'loading'
+    comparisonError.value = null
+    return loadComparison(currentStudentId)
   }
 
   async function removeComparisonTest(
@@ -283,18 +311,17 @@ export const useTestStore = defineStore('test', () => {
     const next = comparisonTestCurriculumIds.value.filter((id) => id !== testCurriculumId)
     if (sameIds(next, comparisonTestCurriculumIds.value)) return false
     comparisonTestCurriculumIds.value = next
-    await loadComparison(currentStudentId)
-    return comparisonStatus.value === 'success'
+    comparisonResult.value = null
+    comparisonStatus.value = 'loading'
+    comparisonError.value = null
+    return loadComparison(currentStudentId)
   }
 
   async function retryComparison(): Promise<void> {
     if (studentId.value !== null) await loadComparison(studentId.value)
   }
 
-  async function loadComparison(
-    currentStudentId: number,
-    background = false,
-  ): Promise<boolean> {
+  async function loadComparison(currentStudentId: number, background = false): Promise<boolean> {
     const currentId = currentTestCurriculumId.value
     if (studentId.value !== currentStudentId || currentId === null) return false
     comparisonController?.abort()
@@ -360,8 +387,8 @@ export const useTestStore = defineStore('test', () => {
     )
     const failures = results.length - details.length
     cacheDetails(currentStudentId, details)
-    const nextTrendDetails = details.sort(
-      (left, right) => left.createdAt.localeCompare(right.createdAt),
+    const nextTrendDetails = details.sort((left, right) =>
+      left.createdAt.localeCompare(right.createdAt),
     )
     if (background && failures > 0) {
       trendFailedCount.value = failures
@@ -386,11 +413,186 @@ export const useTestStore = defineStore('test', () => {
     if (studentId.value !== null) await loadTrend(studentId.value)
   }
 
+  function clearQuestionGaze(): void {
+    questionGazeController?.abort()
+    questionGazeAvailabilityController?.abort()
+    questionGazeController = null
+    questionGazeAvailabilityController = null
+    questionGazeGeneration += 1
+    questionGazeAvailabilityGeneration += 1
+    selectedQuestionTestId.value = null
+    selectedQuestionSequenceNo.value = null
+    questionGazeAnalysis.value = null
+    questionGazeStatus.value = 'idle'
+    questionGazeError.value = null
+    questionGazeAvailability.value = {}
+    questionGazeByTestId.value = {}
+    questionGazeAvailabilityStatus.value = 'idle'
+    questionGazeAvailabilityFailedCount.value = 0
+  }
+
+  async function loadQuestionGazeAvailability(
+    currentStudentId: number,
+    testIds: readonly string[],
+  ): Promise<boolean> {
+    const currentIds = new Set(
+      comparisonResult.value?.currentTest.questions.map((question) => question.testId) ?? [],
+    )
+    const uniqueTestIds = [...new Set(testIds)]
+    if (
+      studentId.value !== currentStudentId ||
+      uniqueTestIds.length === 0 ||
+      uniqueTestIds.some((testId) => !currentIds.has(testId))
+    ) {
+      return false
+    }
+    const previousIds = Object.keys(questionGazeAvailability.value)
+    if (
+      questionGazeAvailabilityStatus.value === 'success' &&
+      sameIds(previousIds, uniqueTestIds)
+    ) {
+      return questionGazeAvailabilityFailedCount.value === 0
+    }
+
+    questionGazeAvailabilityController?.abort()
+    const controller = new AbortController()
+    questionGazeAvailabilityController = controller
+    const generation = ++questionGazeAvailabilityGeneration
+    if (previousIds.length === 0) questionGazeAvailabilityStatus.value = 'loading'
+    questionGazeAvailabilityFailedCount.value = 0
+    const results = await Promise.allSettled(
+      uniqueTestIds.map((testId) =>
+        repository.value.getGazeAnalysis(currentStudentId, testId, {
+          signal: controller.signal,
+        }),
+      ),
+    )
+    if (
+      generation !== questionGazeAvailabilityGeneration ||
+      studentId.value !== currentStudentId
+    ) {
+      return false
+    }
+    const availability: Record<string, QuestionGazeAvailability> = {}
+    const analyses: Record<string, GazeAnalysisState> = {}
+    let failedCount = 0
+    results.forEach((result, index) => {
+      const testId = uniqueTestIds[index]!
+      if (result.status === 'fulfilled') {
+        availability[testId] = result.value.status
+        analyses[testId] = result.value
+      } else if (!isAbortError(result.reason)) {
+        availability[testId] = 'ERROR'
+        failedCount += 1
+      }
+    })
+    questionGazeAvailability.value = availability
+    questionGazeByTestId.value = analyses
+    questionGazeAvailabilityFailedCount.value = failedCount
+    questionGazeAvailabilityStatus.value = failedCount === results.length ? 'error' : 'success'
+    if (questionGazeAvailabilityController === controller) {
+      questionGazeAvailabilityController = null
+    }
+    return failedCount === 0
+  }
+
+  async function loadQuestionGaze(
+    currentStudentId: number,
+    testId: string,
+    sequenceNo: number,
+    force: boolean,
+  ): Promise<boolean> {
+    const questionExists = comparisonResult.value?.currentTest.questions.some(
+      (question) => question.testId === testId && question.sequenceNo === sequenceNo,
+    )
+    if (studentId.value !== currentStudentId || !questionExists) return false
+    if (
+      !force &&
+      selectedQuestionTestId.value === testId &&
+      selectedQuestionSequenceNo.value === sequenceNo &&
+      (questionGazeStatus.value === 'loading' || questionGazeStatus.value === 'success')
+    ) {
+      return questionGazeStatus.value === 'success'
+    }
+
+    questionGazeController?.abort()
+    const controller = new AbortController()
+    questionGazeController = controller
+    const generation = ++questionGazeGeneration
+    if (
+      selectedQuestionTestId.value !== testId ||
+      selectedQuestionSequenceNo.value !== sequenceNo
+    ) {
+      questionGazeAnalysis.value = null
+    }
+    selectedQuestionTestId.value = testId
+    selectedQuestionSequenceNo.value = sequenceNo
+    questionGazeStatus.value = 'loading'
+    questionGazeError.value = null
+    const cached = questionGazeByTestId.value[testId]
+    if (!force && cached?.status === 'AVAILABLE') {
+      questionGazeController = null
+      questionGazeAnalysis.value = cached
+      questionGazeStatus.value = 'success'
+      return true
+    }
+    try {
+      const state = await repository.value.getGazeAnalysis(currentStudentId, testId, {
+        signal: controller.signal,
+      })
+      if (
+        generation !== questionGazeGeneration ||
+        studentId.value !== currentStudentId ||
+        selectedQuestionTestId.value !== testId ||
+        selectedQuestionSequenceNo.value !== sequenceNo
+      ) {
+        return false
+      }
+      questionGazeAnalysis.value = state
+      questionGazeStatus.value = 'success'
+      return true
+    } catch (error) {
+      if (isAbortError(error) || generation !== questionGazeGeneration) return false
+      questionGazeAnalysis.value = null
+      questionGazeStatus.value = 'error'
+      questionGazeError.value = gazeErrorMessage(error)
+      return false
+    } finally {
+      if (questionGazeController === controller) questionGazeController = null
+    }
+  }
+
+  function selectQuestionGaze(
+    currentStudentId: number,
+    testId: string,
+    sequenceNo: number,
+  ): Promise<boolean> {
+    return loadQuestionGaze(currentStudentId, testId, sequenceNo, false)
+  }
+
+  async function retryQuestionGaze(): Promise<void> {
+    if (
+      studentId.value === null ||
+      selectedQuestionTestId.value === null ||
+      selectedQuestionSequenceNo.value === null
+    ) {
+      return
+    }
+    await loadQuestionGaze(
+      studentId.value,
+      selectedQuestionTestId.value,
+      selectedQuestionSequenceNo.value,
+      true,
+    )
+  }
+
   function reset(): void {
     abortRequests()
     listGeneration += 1
     comparisonGeneration += 1
     trendGeneration += 1
+    questionGazeGeneration += 1
+    questionGazeAvailabilityGeneration += 1
     clearState(null)
   }
 
@@ -413,6 +615,14 @@ export const useTestStore = defineStore('test', () => {
     comparisonError,
     trendError,
     trendFailedCount,
+    selectedQuestionTestId,
+    selectedQuestionSequenceNo,
+    questionGazeAnalysis,
+    questionGazeStatus,
+    questionGazeError,
+    questionGazeAvailability,
+    questionGazeAvailabilityStatus,
+    questionGazeAvailabilityFailedCount,
     setRepository,
     loadForStudent,
     refreshForStudent,
@@ -422,6 +632,10 @@ export const useTestStore = defineStore('test', () => {
     removeComparisonTest,
     retryComparison,
     retryTrend,
+    selectQuestionGaze,
+    loadQuestionGazeAvailability,
+    retryQuestionGaze,
+    clearQuestionGaze,
     reset,
   }
 })
