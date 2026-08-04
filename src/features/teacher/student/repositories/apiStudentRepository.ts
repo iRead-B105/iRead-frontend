@@ -61,8 +61,16 @@ export class ApiStudentRepository implements StudentRepository {
     return this.api.getAccuracyTrend(studentId, options)
   }
 
+  getAccuracyRecords(studentId: number, options = {}) {
+    return this.api.getAccuracyRecords(studentId, options)
+  }
+
   getReadingSpeedTrend(studentId: number, options = {}) {
     return this.api.getReadingSpeedTrend(studentId, options)
+  }
+
+  getReadingSpeedRecords(studentId: number, options = {}) {
+    return this.api.getReadingSpeedRecords(studentId, options)
   }
 
   getTrainingHistory(

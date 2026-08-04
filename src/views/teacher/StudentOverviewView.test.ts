@@ -78,10 +78,24 @@ function repository(overrides: Partial<StudentRepository> = {}): StudentReposito
     listLearningEvents: vi.fn().mockResolvedValue([]),
     getLearningEvent: vi.fn(),
     getAccuracyTrend: vi.fn().mockResolvedValue({ dailyAccuracy: [] }),
+    getAccuracyRecords: vi.fn().mockResolvedValue({
+      from: '2026-06-28',
+      to: '2026-07-27',
+      unit: 'PERCENT',
+      calculationVersion: 'reading-metrics-v1',
+      records: [],
+    }),
     getReadingSpeedTrend: vi.fn().mockResolvedValue({
       unit: 'CORRECT_WORDS_PER_MINUTE',
       changeRate: null,
       points: [],
+    }),
+    getReadingSpeedRecords: vi.fn().mockResolvedValue({
+      from: '2026-06-28',
+      to: '2026-07-27',
+      unit: 'CORRECT_WORDS_PER_MINUTE',
+      calculationVersion: 'reading-metrics-v1',
+      records: [],
     }),
     getTrainingHistory: vi.fn().mockResolvedValue({ learningHistory: [] }),
     updateTeacherMemo: vi.fn().mockResolvedValue(undefined),
@@ -210,18 +224,38 @@ describe('StudentOverviewView', () => {
     expect(wrapper.text()).toContain('표시할 읽기 속도 데이터가 없습니다.')
   })
 
-  it('정확도 데이터가 1건이면 변화폭을 계산하지 않는다', async () => {
+  it('정확도 탭에서는 정확도 계산에 포함된 원본 기록만 표시한다', async () => {
     const { wrapper } = await mountOverview(
       repository({
         getAccuracyTrend: vi.fn().mockResolvedValue({
           dailyAccuracy: [{ date: '2026-07-27', accuracy: 82 }],
         }),
+        getAccuracyRecords: vi.fn().mockResolvedValue({
+          from: '2026-06-28',
+          to: '2026-07-27',
+          unit: 'PERCENT',
+          calculationVersion: 'reading-metrics-v1',
+          records: [
+            {
+              sourceType: 'TRAINING',
+              sourceId: 91,
+              trainingName: '받침 소리 구분',
+              measuredAt: '2026-07-27T16:00:00+09:00',
+              correctAttemptCount: 82,
+              attemptCount: 100,
+              accuracy: 82,
+              unit: 'PERCENT',
+              calculationVersion: 'reading-metrics-v1',
+            },
+          ],
+        }),
       }),
     )
 
-    expect(wrapper.text()).toContain('82% → 82%')
-    expect(wrapper.text()).toContain('1개 날짜 기록')
-    expect(wrapper.text()).not.toContain('%p')
+    expect(wrapper.text()).toContain('읽기 정확도 기록')
+    expect(wrapper.text()).toContain('정답 82개 / 유효 시도 100개')
+    expect(wrapper.text()).toContain('PERCENT · reading-metrics-v1')
+    expect(wrapper.text()).not.toContain('읽기 속도 기록')
   })
 
   it('route의 studentId가 바뀌면 새 상세를 조회하고 이전 아동을 표시하지 않는다', async () => {
@@ -370,15 +404,62 @@ describe('StudentOverviewView', () => {
           { date: '2026-07-27', speed: 96 },
         ],
       }),
+      getAccuracyRecords: vi.fn().mockResolvedValue({
+        from: '2026-06-28',
+        to: '2026-07-27',
+        unit: 'PERCENT',
+        calculationVersion: 'reading-metrics-v1',
+        records: [
+          {
+            sourceType: 'TRAINING',
+            sourceId: 91,
+            trainingName: '받침 소리 구분',
+            measuredAt: '2026-07-27T16:00:00+09:00',
+            correctAttemptCount: 12,
+            attemptCount: 20,
+            accuracy: 60,
+            unit: 'PERCENT',
+            calculationVersion: 'reading-metrics-v1',
+          },
+        ],
+      }),
+      getReadingSpeedRecords: vi.fn().mockResolvedValue({
+        from: '2026-06-28',
+        to: '2026-07-27',
+        unit: 'CORRECT_WORDS_PER_MINUTE',
+        calculationVersion: 'reading-metrics-v1',
+        records: [
+          {
+            sourceType: 'TRAINING',
+            sourceId: 92,
+            trainingName: '짧은 이야기 읽기',
+            measuredAt: '2026-07-27T17:00:00+09:00',
+            correctWordCount: 48,
+            measuredDurationMs: 30_000,
+            speed: 96,
+            unit: 'CORRECT_WORDS_PER_MINUTE',
+            calculationVersion: 'reading-metrics-v1',
+          },
+        ],
+      }),
       updateTeacherMemo,
     })
     const { wrapper } = await mountOverview(studentRepository)
 
-    expect(wrapper.text()).toContain('첫 기록 대비 +12%p')
     expect(wrapper.find('[data-test="accuracy-chart"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('기간 변화 +12.5%')
-    expect(wrapper.text()).toContain('84 → 96 단어/분')
+    expect(wrapper.text()).toContain('읽기 정확도 기록')
+    expect(wrapper.text()).toContain('정답 12개 / 유효 시도 20개')
+    expect(wrapper.text()).not.toContain('읽기 속도 기록')
     expect(wrapper.text()).toContain('전체 훈련 이력 보기')
+
+    await wrapper
+      .findAll('[role="tab"]')
+      .find((tab) => tab.text().trim() === '읽기 속도')!
+      .trigger('click')
+
+    expect(wrapper.text()).toContain('읽기 속도 기록')
+    expect(wrapper.text()).toContain('정답 단어 48개 / 유효 음성 30초')
+    expect(wrapper.text()).not.toContain('읽기 정확도 기록')
 
     const learningEventButton = wrapper
       .findAll('button')

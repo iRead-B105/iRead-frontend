@@ -255,10 +255,22 @@ describe('installTeacherRealtimeSync', () => {
       students.accuracyTrendStatusById[2001] = 'success'
       return null
     })
+    const loadAccuracyRecords = vi
+      .spyOn(students, 'loadAccuracyRecords')
+      .mockImplementation(async () => {
+        students.accuracyRecordsStatusById[2001] = 'success'
+        return null
+      })
     const loadReadingSpeedTrend = vi
       .spyOn(students, 'loadReadingSpeedTrend')
       .mockImplementation(async () => {
         students.readingSpeedTrendStatusById[2001] = 'success'
+        return null
+      })
+    const loadReadingSpeedRecords = vi
+      .spyOn(students, 'loadReadingSpeedRecords')
+      .mockImplementation(async () => {
+        students.readingSpeedRecordsStatusById[2001] = 'success'
         return null
       })
     const stop = installTeacherRealtimeSync(pinia, router)
@@ -275,7 +287,9 @@ describe('installTeacherRealtimeSync', () => {
     })
 
     expect(loadAccuracyTrend).toHaveBeenCalledWith(2001)
+    expect(loadAccuracyRecords).toHaveBeenCalledWith(2001)
     expect(loadReadingSpeedTrend).toHaveBeenCalledWith(2001)
+    expect(loadReadingSpeedRecords).toHaveBeenCalledWith(2001)
     stop()
   })
 

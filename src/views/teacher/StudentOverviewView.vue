@@ -7,6 +7,7 @@ import ChartPanel from '@/components/common/ChartPanel.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import StudentCommunicationPanel from '@/components/teacher/StudentCommunicationPanel.vue'
 import StudentLearningEvents from '@/components/teacher/StudentLearningEvents.vue'
+import StudentMetricRecords from '@/components/teacher/StudentMetricRecords.vue'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -92,11 +93,17 @@ const accuracyTrendStatus = computed(
 const accuracyTrendError = computed(
   () => studentStore.accuracyTrendErrorById[studentId.value] ?? null,
 )
+const accuracyRecords = computed(
+  () => studentStore.accuracyRecordsById[studentId.value] ?? null,
+)
+const accuracyRecordsStatus = computed(
+  () => studentStore.accuracyRecordsStatusById[studentId.value] ?? 'idle',
+)
+const accuracyRecordsError = computed(
+  () => studentStore.accuracyRecordsErrorById[studentId.value] ?? null,
+)
 const readingSpeedTrend = computed(
   () => studentStore.readingSpeedTrendById[studentId.value]?.points ?? [],
-)
-const readingSpeedChangeRate = computed(
-  () => studentStore.readingSpeedTrendById[studentId.value]?.changeRate ?? null,
 )
 const readingSpeedTrendStatus = computed(
   () => studentStore.readingSpeedTrendStatusById[studentId.value] ?? 'idle',
@@ -104,17 +111,24 @@ const readingSpeedTrendStatus = computed(
 const readingSpeedTrendError = computed(
   () => studentStore.readingSpeedTrendErrorById[studentId.value] ?? null,
 )
+const readingSpeedRecords = computed(
+  () => studentStore.readingSpeedRecordsById[studentId.value] ?? null,
+)
+const readingSpeedRecordsStatus = computed(
+  () => studentStore.readingSpeedRecordsStatusById[studentId.value] ?? 'idle',
+)
+const readingSpeedRecordsError = computed(
+  () => studentStore.readingSpeedRecordsErrorById[studentId.value] ?? null,
+)
 const selectedTrend = ref<'accuracy' | 'reading-speed'>('accuracy')
-const accuracyDelta = computed(() => {
-  if (accuracyTrend.value.length < 2) return null
-  const delta =
-    accuracyTrend.value[accuracyTrend.value.length - 1]!.accuracy - accuracyTrend.value[0]!.accuracy
-  return Math.round(delta * 100) / 100
-})
-const firstAccuracy = computed(() => accuracyTrend.value[0]?.accuracy ?? null)
-const latestAccuracy = computed(() => accuracyTrend.value.at(-1)?.accuracy ?? null)
-const firstReadingSpeed = computed(() => readingSpeedTrend.value[0]?.speed ?? null)
-const latestReadingSpeed = computed(() => readingSpeedTrend.value.at(-1)?.speed ?? null)
+const selectedRecordsStatus = computed(() =>
+  selectedTrend.value === 'accuracy'
+    ? accuracyRecordsStatus.value
+    : readingSpeedRecordsStatus.value,
+)
+const selectedRecordsError = computed(() =>
+  selectedTrend.value === 'accuracy' ? accuracyRecordsError.value : readingSpeedRecordsError.value,
+)
 const accuracyChartSummary = computed(
   () =>
     `날짜별 읽기 정확도: ${accuracyTrend.value
@@ -317,7 +331,9 @@ async function loadOverview(nextStudentId: number): Promise<void> {
     studentStore.loadLearningSummary(nextStudentId),
     studentStore.loadLearningEvents(nextStudentId, 3),
     studentStore.loadAccuracyTrend(nextStudentId),
+    studentStore.loadAccuracyRecords(nextStudentId),
     studentStore.loadReadingSpeedTrend(nextStudentId),
+    studentStore.loadReadingSpeedRecords(nextStudentId),
   ])
   if (studentId.value !== nextStudentId) return
   noteDraft.value = studentStore.detailsById[nextStudentId]?.teacherMemo ?? ''
@@ -400,9 +416,11 @@ function retrySelectedTrend(): void {
   if (!detail.value) return
   if (selectedTrend.value === 'accuracy') {
     void studentStore.loadAccuracyTrend(detail.value.studentId)
+    void studentStore.loadAccuracyRecords(detail.value.studentId)
     return
   }
   void studentStore.loadReadingSpeedTrend(detail.value.studentId)
+  void studentStore.loadReadingSpeedRecords(detail.value.studentId)
 }
 
 async function saveMemo(value: string): Promise<void> {
@@ -592,40 +610,15 @@ watch(studentId, loadOverview, { immediate: true })
             />
           </div>
 
-          <div class="analysis-followup">
-            <div>
-              <span class="followup-label">읽기 정확도 기록</span>
-              <strong>
-                {{
-                  latestAccuracy === null ? '기록 없음' : `${firstAccuracy}% → ${latestAccuracy}%`
-                }}
-              </strong>
-              <p>
-                {{
-                  accuracyDelta === null
-                    ? `${accuracyTrend.length}개 날짜 기록`
-                    : `첫 기록 대비 ${accuracyDelta >= 0 ? '+' : ''}${accuracyDelta}%p · ${accuracyTrend.length}개 날짜 기록`
-                }}
-              </p>
-            </div>
-            <div>
-              <span class="followup-label">읽기 속도 기록</span>
-              <strong>
-                {{
-                  latestReadingSpeed === null
-                    ? '기록 없음'
-                    : `${firstReadingSpeed} → ${latestReadingSpeed} 단어/분`
-                }}
-              </strong>
-              <p>
-                {{
-                  readingSpeedChangeRate === null
-                    ? `${readingSpeedTrend.length}개 날짜 기록`
-                    : `기간 변화 ${readingSpeedChangeRate >= 0 ? '+' : ''}${readingSpeedChangeRate}% · ${readingSpeedTrend.length}개 날짜 기록`
-                }}
-              </p>
-            </div>
-          </div>
+          <StudentMetricRecords
+            :student-id="detail.studentId"
+            :selected-trend="selectedTrend"
+            :accuracy-records="accuracyRecords"
+            :reading-speed-records="readingSpeedRecords"
+            :status="selectedRecordsStatus"
+            :error="selectedRecordsError"
+            @retry="retrySelectedTrend"
+          />
         </Card>
 
         <aside class="recent-panel" aria-label="최근 학습 기록">
@@ -911,41 +904,6 @@ watch(studentId, loadOverview, { immediate: true })
   color: var(--danger-600);
 }
 
-.analysis-followup {
-  display: grid;
-  gap: 24px;
-  margin-top: 4px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.analysis-followup > div {
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: color-mix(in oklch, var(--muted) 28%, transparent);
-}
-
-.followup-label {
-  color: var(--slate-500);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.analysis-followup strong {
-  display: block;
-  margin-top: 5px;
-  color: var(--slate-900);
-  font-size: 14px;
-  line-height: 1.45;
-}
-
-.analysis-followup p {
-  margin: 4px 0 0;
-  color: var(--slate-600);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .history-link {
   display: inline-flex;
   width: 100%;
@@ -984,8 +942,7 @@ watch(studentId, loadOverview, { immediate: true })
 }
 
 @media (max-width: 560px) {
-  .learning-summary-section > header,
-  .analysis-followup {
+  .learning-summary-section > header {
     align-items: flex-start;
     grid-template-columns: 1fr;
   }

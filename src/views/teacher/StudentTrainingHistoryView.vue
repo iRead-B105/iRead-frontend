@@ -65,6 +65,7 @@ function parseStudentId(value: unknown): number | null {
 }
 
 const studentId = computed(() => parseStudentId(route.params.id))
+const requestedTrainingId = computed(() => parseStudentId(route.query.trainingId))
 const invalidStudentId = computed(() => studentId.value === null)
 const selectedHistoryTraining = computed(
   () =>
@@ -142,13 +143,21 @@ const accuracyComparisonChart = computed(() => {
   }
 })
 watch(
-  studentId,
-  async (id) => {
+  [studentId, requestedTrainingId],
+  async ([id, trainingId]) => {
     if (id === null) {
       trainingStore.reset()
       return
     }
     await trainingStore.loadHistoryForStudent(id)
+    if (trainingId === null) return
+    const curriculum = curriculumLogs.value.find((item) =>
+      item.trainings.some((training) => training.trainingId === trainingId),
+    )
+    if (!curriculum) return
+    await trainingStore.selectHistoryCurriculum(id, curriculum.curriculumId)
+    const training = trainingLog.value?.trainings.find((item) => item.trainingId === trainingId)
+    if (training) await trainingStore.selectHistoryTraining(id, training.trainingId)
   },
   { immediate: true },
 )

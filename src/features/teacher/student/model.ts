@@ -103,6 +103,26 @@ export interface StudentAccuracyTrend {
   readonly dailyAccuracy: readonly StudentAccuracyPoint[]
 }
 
+export interface StudentAccuracyRecord {
+  readonly sourceType: string
+  readonly sourceId: number
+  readonly trainingName: string
+  readonly measuredAt: string
+  readonly correctAttemptCount: number
+  readonly attemptCount: number
+  readonly accuracy: number
+  readonly unit: string
+  readonly calculationVersion: string
+}
+
+export interface StudentAccuracyRecords {
+  readonly from: string
+  readonly to: string
+  readonly unit: string
+  readonly calculationVersion: string
+  readonly records: readonly StudentAccuracyRecord[]
+}
+
 export interface StudentReadingSpeedPoint {
   readonly date: string
   readonly speed: number
@@ -115,6 +135,26 @@ export interface StudentReadingSpeedTrend {
   readonly unit: 'CORRECT_WORDS_PER_MINUTE'
   readonly changeRate: number | null
   readonly points: readonly StudentReadingSpeedPoint[]
+}
+
+export interface StudentReadingSpeedRecord {
+  readonly sourceType: string
+  readonly sourceId: number
+  readonly trainingName: string
+  readonly measuredAt: string
+  readonly correctWordCount: number
+  readonly measuredDurationMs: number
+  readonly speed: number
+  readonly unit: string
+  readonly calculationVersion: string
+}
+
+export interface StudentReadingSpeedRecords {
+  readonly from: string
+  readonly to: string
+  readonly unit: string
+  readonly calculationVersion: string
+  readonly records: readonly StudentReadingSpeedRecord[]
 }
 
 export type StudentTrainingHistoryPeriod = '30d' | '3m'

@@ -252,6 +252,79 @@ describe('Student API', () => {
     })
   })
 
+  it('정확도와 읽기 속도 원본 기록을 분리된 계약 경로와 화면 필드로 변환한다', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        from: '2026-06-30',
+        to: '2026-07-29',
+        unit: 'PERCENT',
+        calculationVersion: 'reading-metrics-v1',
+        records: [
+          {
+            sourceType: 'TRAINING',
+            sourceId: 91,
+            trainingName: '받침 소리 구분',
+            measuredAt: '2026-07-28T16:00:00',
+            correctAttemptCount: 8,
+            attemptCount: 10,
+            accuracyRate: 80,
+            unit: 'PERCENT',
+            calculationVersion: 'reading-metrics-v1',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        from: '2026-06-30',
+        to: '2026-07-29',
+        unit: 'CORRECT_WORDS_PER_MINUTE',
+        calculationVersion: 'reading-metrics-v1',
+        records: [
+          {
+            sourceType: 'TRAINING',
+            sourceId: 92,
+            trainingName: '짧은 이야기 읽기',
+            measuredAt: '2026-07-28T17:00:00',
+            correctWordCount: 48,
+            measuredDurationMs: 30_000,
+            readingSpeed: 96,
+            unit: 'CORRECT_WORDS_PER_MINUTE',
+            calculationVersion: 'reading-metrics-v1',
+          },
+        ],
+      })
+    const api = createStudentApi(request, () => new Date('2026-07-29T12:00:00+09:00'))
+
+    await expect(api.getAccuracyRecords(7)).resolves.toMatchObject({
+      records: [
+        expect.objectContaining({
+          sourceId: 91,
+          trainingName: '받침 소리 구분',
+          accuracy: 80,
+        }),
+      ],
+    })
+    await expect(api.getReadingSpeedRecords(7)).resolves.toMatchObject({
+      records: [
+        expect.objectContaining({
+          sourceId: 92,
+          trainingName: '짧은 이야기 읽기',
+          speed: 96,
+        }),
+      ],
+    })
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/admin/student/7/accuracy-records?from=2026-06-30&to=2026-07-29',
+      { signal: undefined },
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      '/api/admin/student/7/reading-speed-records?from=2026-06-30&to=2026-07-29',
+      { signal: undefined },
+    )
+  })
+
   it('읽기 속도 응답에서 음성 속도만 화면 모델로 정규화한다', async () => {
     const request = vi.fn().mockResolvedValue({
       unit: 'WORDS_PER_MINUTE',
@@ -261,7 +334,7 @@ describe('Student API', () => {
         {
           date: '2026-07-28',
           voiceSpeed: 96,
-          voiceWordCount: 48,
+          correctWordCount: 48,
           voiceDurationMs: 30_000,
           trainingCount: 3,
           gazeSpeed: 88,
@@ -270,7 +343,7 @@ describe('Student API', () => {
         {
           date: '2026-07-20',
           voiceSpeed: 84,
-          voiceWordCount: 42,
+          correctWordCount: 42,
           voiceDurationMs: 30_000,
           trainingCount: 2,
           gazeSpeed: null,
