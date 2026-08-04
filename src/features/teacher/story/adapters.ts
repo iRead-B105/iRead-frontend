@@ -14,6 +14,10 @@ import type {
   StoryPage,
   StoryPageGazeMetric,
   StoryPageGazeRegression,
+  StoryGazeMovementType,
+  StoryGazeReplay,
+  StoryGazeReplayEvent,
+  StoryGazeWordMetric,
   StoryReadingStatus,
   StoryStatus,
   StoryTemplateOption,
@@ -106,10 +110,39 @@ export interface StoryPageGazeMetricDto {
 }
 
 export interface StoryGazeAnalysisMetaDto {
-  readonly contentType: string
-  readonly storyId: number
+  readonly calculationVersion: string
   readonly calculationSource: string
-  readonly gazeSessionDurationMs: number
+  readonly heatmapScale: string
+  readonly dwellThresholdMethod: string
+  readonly sampleTailMs: number
+  readonly maxSampleGapMs: number
+  readonly firstSeenReference: string
+  readonly skipRequiresDwell: boolean
+  readonly regressionRequiresDwell: boolean
+}
+
+export interface StoryGazeWordMetricDto {
+  readonly storyLineId: number
+  readonly pageNo: number
+  readonly tokenIndex: number
+  readonly text: string
+  readonly dwellDurationMs: number
+  readonly visitCount: number
+  readonly skipped: boolean
+  readonly regressionCount: number
+  readonly firstSeenMs: number | null
+}
+
+export interface StoryGazeReplayEventDto {
+  readonly pageNo: number
+  readonly eventIndex: number
+  readonly eventAtMs: number
+  readonly fromTokenIndex: number | null
+  readonly toTokenIndex: number
+  readonly movementType: string
+  readonly dwellQualified: boolean
+  readonly dwellDurationMs: number
+  readonly skippedTokenIndexes: readonly number[] | null
 }
 
 export interface StoryGazeAnalysisDto {
@@ -123,11 +156,13 @@ export interface StoryGazeAnalysisDto {
   readonly regressionCount: number
   readonly averageFixationTime: number | null
   readonly pageMetrics: readonly StoryPageGazeMetricDto[] | null
+  readonly wordMetrics: readonly StoryGazeWordMetricDto[]
   readonly replay?: {
     readonly words?: readonly Partial<GazeReplayWord>[]
     readonly samples?: readonly Partial<GazeReplaySample>[]
+    readonly events?: readonly StoryGazeReplayEventDto[]
   } | null
-  readonly analysisMeta: StoryGazeAnalysisMetaDto | null
+  readonly analysisMeta: StoryGazeAnalysisMetaDto
 }
 
 function nullableUrl(value: string | null): string | null {
@@ -284,11 +319,97 @@ function mapPageMetric(dto: StoryPageGazeMetricDto): StoryPageGazeMetric {
   }
 }
 
-function mapAnalysisMeta(dto: StoryGazeAnalysisMetaDto): StoryGazeAnalysisMeta {
+function assertNonNegativeInteger(value: unknown, field: string): asserts value is number {
+  if (!Number.isInteger(value) || Number(value) < 0) {
+    throw new TypeError(`[이야기 시선 분석 API] ${field}은 0 이상의 정수여야 합니다.`)
+  }
+}
+
+function assertPositiveInteger(value: unknown, field: string): asserts value is number {
+  if (!Number.isInteger(value) || Number(value) <= 0) {
+    throw new TypeError(`[이야기 시선 분석 API] ${field}은 양의 정수여야 합니다.`)
+  }
+}
+
+function mapAnalysisMeta(dto: StoryGazeAnalysisMetaDto | null | undefined): StoryGazeAnalysisMeta {
+  const valid = dto?.calculationVersion === 'story-gaze-word-v1'
+    && dto.calculationSource === 'BACKEND'
+    && dto.heatmapScale === 'PAGE_RELATIVE_MAX'
+    && dto.dwellThresholdMethod === 'PAGE_CHARACTER_AVERAGE'
+    && dto.sampleTailMs === 80
+    && dto.maxSampleGapMs === 250
+    && dto.firstSeenReference === 'PAGE_FIRST_VALID_SAMPLE'
+    && dto.skipRequiresDwell === true
+    && dto.regressionRequiresDwell === true
+  if (!valid) {
+    throw new TypeError('[이야기 시선 분석 API] 지원하지 않는 단어 판정 계약입니다.')
+  }
+  return {
+    calculationVersion: 'story-gaze-word-v1',
+    calculationSource: dto.calculationSource,
+    heatmapScale: 'PAGE_RELATIVE_MAX',
+    dwellThresholdMethod: 'PAGE_CHARACTER_AVERAGE',
+    sampleTailMs: 80,
+    maxSampleGapMs: 250,
+    firstSeenReference: 'PAGE_FIRST_VALID_SAMPLE',
+    skipRequiresDwell: true,
+    regressionRequiresDwell: true,
+  }
+}
+
+function mapWordMetric(dto: StoryGazeWordMetricDto): StoryGazeWordMetric {
+  assertPositiveInteger(dto.storyLineId, 'wordMetrics.storyLineId')
+  assertPositiveInteger(dto.pageNo, 'wordMetrics.pageNo')
+  assertNonNegativeInteger(dto.tokenIndex, 'wordMetrics.tokenIndex')
+  assertNonNegativeInteger(dto.dwellDurationMs, 'wordMetrics.dwellDurationMs')
+  assertNonNegativeInteger(dto.visitCount, 'wordMetrics.visitCount')
+  assertNonNegativeInteger(dto.regressionCount, 'wordMetrics.regressionCount')
+  if (dto.firstSeenMs !== null) assertNonNegativeInteger(dto.firstSeenMs, 'wordMetrics.firstSeenMs')
   return { ...dto }
 }
 
+function mapReplayEvent(dto: StoryGazeReplayEventDto): StoryGazeReplayEvent {
+  assertPositiveInteger(dto.pageNo, 'replay.events.pageNo')
+  assertNonNegativeInteger(dto.eventIndex, 'replay.events.eventIndex')
+  assertNonNegativeInteger(dto.eventAtMs, 'replay.events.eventAtMs')
+  if (dto.fromTokenIndex !== null) {
+    assertNonNegativeInteger(dto.fromTokenIndex, 'replay.events.fromTokenIndex')
+  }
+  assertNonNegativeInteger(dto.toTokenIndex, 'replay.events.toTokenIndex')
+  assertNonNegativeInteger(dto.dwellDurationMs, 'replay.events.dwellDurationMs')
+  const movementTypes: readonly StoryGazeMovementType[] = ['READ', 'SKIP', 'REGRESSION']
+  if (!movementTypes.includes(dto.movementType as StoryGazeMovementType)) {
+    throw new TypeError('[이야기 시선 분석 API] 지원하지 않는 이동 판정입니다.')
+  }
+  const skippedTokenIndexes = dto.skippedTokenIndexes ?? []
+  skippedTokenIndexes.forEach((tokenIndex) => {
+    assertNonNegativeInteger(tokenIndex, 'replay.events.skippedTokenIndexes')
+  })
+  return {
+    ...dto,
+    movementType: dto.movementType as StoryGazeMovementType,
+    skippedTokenIndexes: [...skippedTokenIndexes],
+  }
+}
+
+function mapStoryReplay(
+  dto: StoryGazeAnalysisDto['replay'],
+  mappedLegacyReplay: ReturnType<typeof mapRawGazeAnalysis>['analysis'],
+): StoryGazeReplay | null {
+  if (dto === null || dto === undefined) return null
+  return {
+    words: mappedLegacyReplay?.replay?.words ?? [],
+    samples: mappedLegacyReplay?.replay?.samples ?? [],
+    events: (dto.events ?? [])
+      .map(mapReplayEvent)
+      .sort((left, right) => left.eventIndex - right.eventIndex),
+  }
+}
+
 export function mapStoryGazeAnalysis(dto: StoryGazeAnalysisDto): StoryGazeAnalysis {
+  if (!Array.isArray(dto.wordMetrics)) {
+    throw new TypeError('[이야기 시선 분석 API] wordMetrics 배열이 필요합니다.')
+  }
   const aggregate = mapRawGazeAnalysis(dto)
   if (aggregate.status !== 'AVAILABLE') {
     throw new TypeError('[이야기 시선 분석 API] 집계 결과를 변환하지 못했습니다.')
@@ -307,7 +428,10 @@ export function mapStoryGazeAnalysis(dto: StoryGazeAnalysisDto): StoryGazeAnalys
     pageMetrics: [...(dto.pageMetrics ?? [])]
       .sort((left, right) => left.pageNo - right.pageNo)
       .map(mapPageMetric),
-    replay: aggregate.analysis.replay ?? null,
-    analysisMeta: dto.analysisMeta === null ? null : mapAnalysisMeta(dto.analysisMeta),
+    wordMetrics: dto.wordMetrics
+      .map(mapWordMetric)
+      .sort((left, right) => left.pageNo - right.pageNo || left.tokenIndex - right.tokenIndex),
+    replay: mapStoryReplay(dto.replay, aggregate.analysis),
+    analysisMeta: mapAnalysisMeta(dto.analysisMeta),
   }
 }

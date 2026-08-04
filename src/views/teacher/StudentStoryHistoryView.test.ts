@@ -90,7 +90,19 @@ function repository(
           regressions: [],
         },
       ],
-      analysisMeta: null,
+      wordMetrics: [],
+      replay: { words: [], samples: [], events: [] },
+      analysisMeta: {
+        calculationVersion: 'story-gaze-word-v1',
+        calculationSource: 'BACKEND',
+        heatmapScale: 'PAGE_RELATIVE_MAX',
+        dwellThresholdMethod: 'PAGE_CHARACTER_AVERAGE',
+        sampleTailMs: 80,
+        maxSampleGapMs: 250,
+        firstSeenReference: 'PAGE_FIRST_VALID_SAMPLE',
+        skipRequiresDwell: true,
+        regressionRequiresDwell: true,
+      },
     }),
   }
 }
@@ -155,7 +167,7 @@ describe('StudentStoryHistoryView', () => {
     expect(wrapper.text()).toContain('읽기 리플레이')
     expect(wrapper.text()).toContain('전체 체류 시간')
     expect(wrapper.text()).toContain('되돌아본 횟수')
-    expect(wrapper.text()).toContain('단어 건너뛴 횟수')
+    expect(wrapper.text()).toContain('건너뛴 단어 수')
     expect(wrapper.text()).not.toContain('보정 상태')
     expect(wrapper.findAll('.story-reader-word').length).toBeGreaterThan(0)
     expect(wrapper.get('.story-page-navigator').text()).toContain('1')

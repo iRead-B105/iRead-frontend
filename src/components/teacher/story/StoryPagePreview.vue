@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import type { GazeReplayWord } from '@/features/teacher/gaze'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   formatStoryActivityAt,
+  type StoryGazeWordMetric,
   type StoryImageGenerationStatus,
   type StoryPage,
 } from '@/features/teacher/story'
@@ -14,8 +14,10 @@ const props = defineProps<{
   storyId: number
   activeReplayKind?: 'read' | 'regression' | 'skip' | null
   activeReplayTokenIndexes?: readonly number[]
+  activeReplayFromTokenIndex?: number | null
+  activeReplayToTokenIndex?: number | null
   activeReplayDwellMs?: number
-  heatmapWords?: readonly GazeReplayWord[]
+  heatmapWords?: readonly StoryGazeWordMetric[]
   heatmapVisible?: boolean
 }>()
 
@@ -55,7 +57,7 @@ const imageStateLabel = computed(() => {
 })
 
 const activeReplayTokenIndexSet = computed(() => new Set(props.activeReplayTokenIndexes ?? []))
-const maxHeatmapDwellMs = computed(() => Math.max(1, ...(props.heatmapWords ?? []).map((word) => word.dwellMs)))
+const maxHeatmapDwellMs = computed(() => Math.max(1, ...(props.heatmapWords ?? []).map((word) => word.dwellDurationMs)))
 const heatmapByTokenIndex = computed(() => new Map(
   (props.heatmapWords ?? [])
     .filter((word) => word.tokenIndex !== null)
@@ -112,34 +114,119 @@ const previewTextLines = computed(() => {
 })
 
 function wordReplayClass(word: StoryPreviewWord) {
-  const isActive = activeReplayTokenIndexSet.value.has(word.tokenIndex)
+  const isActive = !props.heatmapVisible && activeReplayTokenIndexSet.value.has(word.tokenIndex)
+  const metric = heatmapByTokenIndex.value.get(word.tokenIndex)
   return {
     'is-replay-active': isActive,
     'is-replay-regression': isActive && props.activeReplayKind === 'regression',
     'is-replay-skip': isActive && props.activeReplayKind === 'skip',
     'is-replay-dwell': isActive && (props.activeReplayDwellMs ?? 0) > 0,
+    'is-heatmap-skipped': props.heatmapVisible && metric?.skipped === true,
+    'is-heatmap-regression': props.heatmapVisible && (metric?.regressionCount ?? 0) > 0,
   }
 }
 
 function wordHeatmapStyle(word: StoryPreviewWord) {
   if (!props.heatmapVisible) return undefined
   const gaze = heatmapByTokenIndex.value.get(word.tokenIndex)
-  const intensity = !gaze || gaze.dwellMs <= 0
-    ? 0.08
-    : 0.16 + 0.56 * Math.min(1, gaze.dwellMs / maxHeatmapDwellMs.value)
+  if (!gaze || gaze.dwellDurationMs <= 0) return undefined
+  const intensity = 0.16 + 0.56 * Math.min(1, gaze.dwellDurationMs / maxHeatmapDwellMs.value)
   return { '--heatmap-intensity': intensity.toFixed(2) }
 }
+
+interface ReplayPath {
+  readonly x1: number
+  readonly y1: number
+  readonly x2: number
+  readonly y2: number
+  readonly width: number
+  readonly height: number
+}
+
+const copyElement = ref<HTMLElement | null>(null)
+const replayPath = ref<ReplayPath | null>(null)
+const replayArrowId = computed(() => `story-replay-arrow-${props.page.storyLineId}`)
+let copyResizeObserver: ResizeObserver | null = null
+
+function updateReplayPath(): void {
+  const copy = copyElement.value
+  const fromTokenIndex = props.activeReplayFromTokenIndex
+  const toTokenIndex = props.activeReplayToTokenIndex
+  if (props.heatmapVisible || !copy || fromTokenIndex === null || fromTokenIndex === undefined || toTokenIndex === null || toTokenIndex === undefined || fromTokenIndex === toTokenIndex) {
+    replayPath.value = null
+    return
+  }
+  const from = copy.querySelector<HTMLElement>(`[data-token-index="${fromTokenIndex}"]`)
+  const to = copy.querySelector<HTMLElement>(`[data-token-index="${toTokenIndex}"]`)
+  if (!from || !to) {
+    replayPath.value = null
+    return
+  }
+  const copyRect = copy.getBoundingClientRect()
+  const fromRect = from.getBoundingClientRect()
+  const toRect = to.getBoundingClientRect()
+  replayPath.value = {
+    x1: fromRect.left - copyRect.left + fromRect.width / 2,
+    y1: fromRect.top - copyRect.top + fromRect.height / 2,
+    x2: toRect.left - copyRect.left + toRect.width / 2,
+    y2: toRect.top - copyRect.top + toRect.height / 2,
+    width: copy.clientWidth,
+    height: copy.clientHeight,
+  }
+}
+
+watch(
+  () => [
+    props.page.storyLineId,
+    props.activeReplayFromTokenIndex,
+    props.activeReplayToTokenIndex,
+    props.heatmapVisible,
+  ] as const,
+  () => nextTick(updateReplayPath),
+  { immediate: true },
+)
+
+onMounted(() => {
+  if (typeof ResizeObserver !== 'undefined' && copyElement.value) {
+    copyResizeObserver = new ResizeObserver(updateReplayPath)
+    copyResizeObserver.observe(copyElement.value)
+  }
+  updateReplayPath()
+})
+
+onBeforeUnmount(() => copyResizeObserver?.disconnect())
 </script>
 
 <template>
   <div class="story-page-preview">
     <section class="story-reader-frame" :aria-label="`이야기 ${page.pageNo}페이지 미리보기`">
-      <div class="story-reader-copy">
+      <div ref="copyElement" class="story-reader-copy">
+        <svg
+          v-if="replayPath && !heatmapVisible"
+          class="story-reader-replay-path"
+          :class="`is-${activeReplayKind ?? 'read'}`"
+          :viewBox="`0 0 ${replayPath.width} ${replayPath.height}`"
+          aria-hidden="true"
+        >
+          <defs>
+            <marker :id="replayArrowId" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 z" />
+            </marker>
+          </defs>
+          <line
+            :x1="replayPath.x1"
+            :y1="replayPath.y1"
+            :x2="replayPath.x2"
+            :y2="replayPath.y2"
+            :marker-end="`url(#${replayArrowId})`"
+          />
+        </svg>
         <p v-for="(line, index) in previewTextLines" :key="`${page.storyLineId}-${index}`">
           <span
             v-for="word in line"
             :key="word.key"
             class="story-reader-word"
+            :data-token-index="word.tokenIndex"
             :class="wordReplayClass(word)"
             :style="wordHeatmapStyle(word)"
           >
@@ -280,10 +367,40 @@ function wordHeatmapStyle(word: StoryPreviewWord) {
 }
 
 .story-reader-copy {
+  position: relative;
   width: 100%;
   padding: clamp(18px, 3vw, 34px);
   border-radius: 13px;
   background: #fffdf7;
+}
+
+.story-reader-replay-path {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: #2563eb;
+  pointer-events: none;
+}
+
+.story-reader-replay-path line {
+  stroke: currentcolor;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.story-reader-replay-path path {
+  fill: currentcolor;
+}
+
+.story-reader-replay-path.is-skip {
+  color: #dc2626;
+}
+
+.story-reader-replay-path.is-regression {
+  color: #d97706;
 }
 
 .story-reader-copy p {
@@ -301,6 +418,7 @@ function wordHeatmapStyle(word: StoryPreviewWord) {
 
 .story-reader-word {
   position: relative;
+  z-index: 3;
   display: inline-block;
   margin-right: 0.22em;
   border-radius: 0.12em;
@@ -331,6 +449,16 @@ function wordHeatmapStyle(word: StoryPreviewWord) {
 .story-reader-word.is-replay-dwell {
   background: linear-gradient(transparent 58%, rgb(168 85 247 / 40%) 58%);
   box-shadow: 0 0 0 0.06em rgb(126 34 206 / 54%), 0 0 0.5em rgb(192 132 252 / 48%);
+}
+
+.story-reader-word.is-heatmap-skipped {
+  text-decoration: underline dashed #dc2626;
+  text-decoration-thickness: 2px;
+  text-underline-offset: .2em;
+}
+
+.story-reader-word.is-heatmap-regression {
+  box-shadow: 0 0 0 .08em #d97706;
 }
 
 .story-reader-copy .story-reader-copy__empty {

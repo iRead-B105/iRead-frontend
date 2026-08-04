@@ -40,16 +40,35 @@ describe('StoryPagePreview', () => {
         storyId: 180147,
         heatmapVisible: false,
         heatmapWords: [{
-          questionNo: 1,
-          targetIndex: 0,
+          storyLineId: 10,
+          pageNo: 1,
           tokenIndex: 0,
           text: '아기돼지',
-          dwellMs: 2500,
+          dwellDurationMs: 2500,
           visitCount: 1,
           skipped: false,
           regressionCount: 0,
           firstSeenMs: 0,
-          lastSeenMs: 2500,
+        }, {
+          storyLineId: 10,
+          pageNo: 1,
+          tokenIndex: 1,
+          text: '삼형제가',
+          dwellDurationMs: 0,
+          visitCount: 0,
+          skipped: true,
+          regressionCount: 0,
+          firstSeenMs: null,
+        }, {
+          storyLineId: 10,
+          pageNo: 1,
+          tokenIndex: 2,
+          text: '흙길에',
+          dwellDurationMs: 1200,
+          visitCount: 2,
+          skipped: false,
+          regressionCount: 1,
+          firstSeenMs: 700,
         }],
       },
     })
@@ -59,6 +78,35 @@ describe('StoryPagePreview', () => {
 
     await wrapper.setProps({ heatmapVisible: true })
     expect(firstWord.attributes('style')).toContain('--heatmap-intensity')
-    expect(wrapper.findAll('.story-reader-word').every((word) => word.attributes('style')?.includes('--heatmap-intensity'))).toBe(true)
+    expect(wrapper.findAll('.story-reader-word')[1]?.attributes('style')).toBeUndefined()
+    expect(wrapper.findAll('.story-reader-word')[1]?.classes()).toContain('is-heatmap-skipped')
+    expect(wrapper.findAll('.story-reader-word')[2]?.classes()).toContain('is-heatmap-regression')
+  })
+
+  it('현재 Backend 판정 event의 출발 단어와 도착 단어 사이만 표시한다', async () => {
+    const wrapper = mount(StoryPagePreview, {
+      props: {
+        page,
+        studentId: 2001,
+        storyId: 180147,
+        activeReplayKind: 'skip',
+        activeReplayTokenIndexes: [1, 2],
+        activeReplayFromTokenIndex: 0,
+        activeReplayToTokenIndex: 2,
+      },
+    })
+
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.story-reader-replay-path.is-skip').exists()).toBe(true)
+    expect(wrapper.find('.story-reader-replay-path line').attributes('marker-end')).toContain(
+      'story-replay-arrow-10',
+    )
+    expect(wrapper.findAll('.story-reader-word.is-replay-skip')).toHaveLength(2)
+
+    await wrapper.setProps({ heatmapVisible: true })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.story-reader-replay-path').exists()).toBe(false)
+    expect(wrapper.findAll('.story-reader-word.is-replay-skip')).toHaveLength(0)
   })
 })
