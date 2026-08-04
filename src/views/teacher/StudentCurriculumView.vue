@@ -9,6 +9,7 @@ import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
+import { apiRequest } from '@/lib/api'
 import {
   CURRICULUM_TRAINING_COUNT,
   trainingStatusLabel,
@@ -70,7 +71,30 @@ const materialEditorOpen = ref(false)
 const draftPendingDeletion = ref<CurriculumDraftItem | null>(null)
 const reviewConfirmOpen = ref(false)
 const reorderAnnouncement = ref('')
+const aiRecommendationStatus = ref<'idle' | 'loading' | 'success' | 'error'>('idle')
+const aiRecommendationError = ref<string | null>(null)
+const aiRecommendation = ref<AiCurriculumRecommendation | null>(null)
 const { visible: saved, show: showSaved } = useTemporaryNotice()
+
+interface AiCurriculumRecommendation {
+  readonly recommendationProvider: string
+  readonly dataSufficiency: string
+  readonly currentStage: number
+  readonly maximumAllowedStage: number
+  readonly stageRationale: string
+  readonly recommendations: readonly {
+    readonly sequenceNo: number
+    readonly trainingTemplateId: number
+    readonly trainingName: string
+    readonly role: string
+    readonly recommendedDifficulty: number
+    readonly score: number
+    readonly targetFeatureCodes: readonly string[]
+    readonly reasonCodes: readonly string[]
+    readonly rationale: string
+  }[]
+  readonly warnings: readonly string[]
+}
 
 interface PointerDragState {
   readonly pointerId: number
@@ -165,6 +189,9 @@ watch(
     materialEditorOpen.value = false
     draftPendingDeletion.value = null
     selectedCatalogUnit.value = 'all'
+    aiRecommendationStatus.value = 'idle'
+    aiRecommendationError.value = null
+    aiRecommendation.value = null
     cancelPointerDragging()
     if (id === null) {
       trainingStore.reset()
@@ -381,6 +408,38 @@ function confirmDraftDeletion(): void {
 async function saveChanges(): Promise<void> {
   if (await trainingStore.saveCurriculum()) {
     showSaved()
+  }
+}
+
+async function loadAiRecommendation(): Promise<void> {
+  if (studentId.value === null || !canEditCurriculum.value) return
+  if (
+    hasChanges.value &&
+    !window.confirm('현재 편집 중인 커리큘럼을 AI 추천 5개로 바꿀까요?')
+  ) {
+    return
+  }
+
+  aiRecommendationStatus.value = 'loading'
+  aiRecommendationError.value = null
+  try {
+    const result = await apiRequest<AiCurriculumRecommendation>(
+      `/api/admin/training/${studentId.value}/ai-recommendation`,
+      { method: 'POST' },
+    )
+    const applied = trainingStore.applyRecommendedTemplates(
+      result.recommendations.map((item) => item.trainingTemplateId),
+    )
+    if (!applied) {
+      throw new Error('AI 추천을 현재 커리큘럼 편집 목록에 적용할 수 없습니다.')
+    }
+    aiRecommendation.value = result
+    aiRecommendationStatus.value = 'success'
+  } catch (error) {
+    aiRecommendation.value = null
+    aiRecommendationStatus.value = 'error'
+    aiRecommendationError.value =
+      error instanceof Error ? error.message : 'AI 추천을 불러오지 못했습니다.'
   }
 }
 
@@ -668,22 +727,67 @@ function deletionMessage(): string {
                 </p>
                 <p v-else>저장된 다음 회차가 없습니다. 훈련을 추가해 새로 구성하세요.</p>
               </div>
-              <Button
-                class="save-curriculum-button"
-                size="sm"
-                type="button"
-                :disabled="!canSave"
-                @click="saveChanges"
-              >
-                {{
-                  isSavingCurriculum
-                    ? '저장 중...'
-                    : savedCurriculum
-                      ? '변경 사항 저장'
-                      : '커리큘럼 생성'
-                }}
-              </Button>
+              <div class="next-session__actions">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  :disabled="
+                    !canEditCurriculum ||
+                    aiRecommendationStatus === 'loading' ||
+                    isSavingCurriculum
+                  "
+                  @click="loadAiRecommendation"
+                >
+                  {{
+                    aiRecommendationStatus === 'loading'
+                      ? 'AI 추천 중...'
+                      : 'AI 추천 불러오기'
+                  }}
+                </Button>
+                <Button
+                  class="save-curriculum-button"
+                  size="sm"
+                  type="button"
+                  :disabled="!canSave"
+                  @click="saveChanges"
+                >
+                  {{
+                    isSavingCurriculum
+                      ? '저장 중...'
+                      : savedCurriculum
+                        ? '변경 사항 저장'
+                        : '커리큘럼 생성'
+                  }}
+                </Button>
+              </div>
             </header>
+
+            <div
+              v-if="aiRecommendationStatus === 'error'"
+              class="ai-recommendation-preview is-error"
+              role="alert"
+            >
+              {{ aiRecommendationError }}
+            </div>
+            <div
+              v-else-if="aiRecommendation"
+              class="ai-recommendation-preview"
+              aria-live="polite"
+            >
+              <strong>
+                AI 추천 적용 · {{ aiRecommendation.recommendationProvider }} · 현재 단계
+                {{ aiRecommendation.currentStage }} / 허용 {{ aiRecommendation.maximumAllowedStage }}
+              </strong>
+              <ol>
+                <li v-for="item in aiRecommendation.recommendations" :key="item.trainingTemplateId">
+                  <span>{{ item.role }}</span>
+                  {{ item.trainingName }}
+                  <small>{{ item.targetFeatureCodes.join(', ') }}</small>
+                </li>
+              </ol>
+              <p>{{ aiRecommendation.stageRationale }}</p>
+            </div>
 
             <div v-if="showCurriculumFeedback" class="curriculum-feedback" aria-live="polite">
               <div
@@ -1191,6 +1295,48 @@ function deletionMessage(): string {
   margin-top: 14px;
   padding-top: 20px;
   border-top: 1px solid var(--border);
+}
+.next-session__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ai-recommendation-preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in oklch, var(--primary-600) 35%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--primary-50) 55%, var(--white));
+  color: var(--slate-700);
+  font-size: 12px;
+}
+.ai-recommendation-preview.is-error {
+  border-color: color-mix(in oklch, var(--danger-600) 35%, var(--border));
+  color: var(--danger-600);
+}
+.ai-recommendation-preview ol {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+}
+.ai-recommendation-preview li span {
+  display: inline-block;
+  min-width: 104px;
+  color: var(--primary-700);
+  font-weight: 800;
+}
+.ai-recommendation-preview li small {
+  display: block;
+  margin-left: 108px;
+  color: var(--slate-500);
+}
+.ai-recommendation-preview p {
+  margin: 0;
+  color: var(--slate-500);
 }
 .curriculum-feedback {
   height: 92px;

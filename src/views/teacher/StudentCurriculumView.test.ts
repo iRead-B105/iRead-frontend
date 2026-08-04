@@ -10,6 +10,7 @@ import {
   type TrainingRepository,
 } from '@/features/teacher/training'
 import { ApiError } from '@/lib/api'
+import * as api from '@/lib/api'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import LessonMaterialEditor from '@/components/teacher/LessonMaterialEditor.vue'
 import { useTrainingStore } from '@/stores/training'
@@ -116,6 +117,39 @@ function dispatchPointerEvent(
 }
 
 describe('StudentCurriculumView', () => {
+  it('loads five AI recommendations into the editable draft without saving them', async () => {
+    const request = vi.spyOn(api, 'apiRequest').mockResolvedValueOnce({
+      recommendationProvider: 'openai',
+      dataSufficiency: 'SUFFICIENT',
+      currentStage: 3,
+      maximumAllowedStage: 4,
+      stageRationale: '현재 단계의 약점을 중심으로 추천했습니다.',
+      recommendations: [1, 2, 3, 4, 5].map((trainingTemplateId, index) => ({
+        sequenceNo: index + 1,
+        trainingTemplateId,
+        trainingName: `AI 추천 ${trainingTemplateId}`,
+        role: index < 3 ? 'CORE' : index === 3 ? 'REINFORCEMENT' : 'STRETCH',
+        recommendedDifficulty: 2,
+        score: 0.75,
+        targetFeatureCodes: ['GRAPHEME.CODA.COMPLEX.ㄺ'],
+        reasonCodes: ['HIGH_WEAKNESS'],
+        rationale: '겹받침을 보완합니다.',
+      })),
+      warnings: [],
+    })
+    const { wrapper, store } = await mountCurriculum(repository())
+
+    await buttonWithText(wrapper, 'AI 추천 불러오기')?.trigger('click')
+    await flushPromises()
+
+    expect(request).toHaveBeenCalledWith('/api/admin/training/1/ai-recommendation', {
+      method: 'POST',
+    })
+    expect(store.draftTrainingIds).toEqual([1, 2, 3, 4, 5])
+    expect(store.savedCurriculum).toEqual(currentCurriculumFixture)
+    expect(wrapper.text()).toContain('AI 추천 적용 · openai')
+  })
+
   it('잘못된 studentId에서는 API를 호출하지 않고 목록 이동 action을 표시한다', async () => {
     const trainingRepository = repository()
     const { wrapper } = await mountCurriculum(

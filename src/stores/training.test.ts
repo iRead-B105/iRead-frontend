@@ -56,6 +56,30 @@ beforeEach(() => {
 })
 
 describe('Training store', () => {
+  it('applies five AI recommendations as an unsaved editable draft', async () => {
+    const store = useTrainingStore()
+    store.setRepository(new MockTrainingRepository())
+    await store.loadForStudent(1)
+
+    expect(store.applyRecommendedTemplates([1, 2, 3, 4, 5])).toBe(true)
+
+    expect(store.draftTrainingIds).toEqual([1, 2, 3, 4, 5])
+    expect(store.savedCurriculum).toEqual(currentCurriculumFixture)
+    expect(store.hasChanges).toBe(true)
+  })
+
+  it('rejects incomplete or unknown AI recommendation template sets', async () => {
+    const store = useTrainingStore()
+    store.setRepository(new MockTrainingRepository())
+    await store.loadForStudent(1)
+    const previousDraft = [...store.draftTrainingIds]
+
+    expect(store.applyRecommendedTemplates([1, 2, 3, 4])).toBe(false)
+    expect(store.applyRecommendedTemplates([1, 2, 3, 4, 999])).toBe(false)
+    expect(store.applyRecommendedTemplates([1, 1, 2, 3, 4])).toBe(false)
+    expect(store.draftTrainingIds).toEqual(previousDraft)
+  })
+
   it('keeps a resolved empty curriculum history visible during a background refresh', async () => {
     const pending = deferred<Awaited<ReturnType<TrainingRepository['getCurriculumLogs']>>>()
     const store = useTrainingStore()
