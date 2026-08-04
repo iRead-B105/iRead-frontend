@@ -718,7 +718,11 @@ const visibleReplayStep = computed<ReplayStepView>(() =>
 )
 const replayProgressStyle = computed(() => {
   const total = pageMovementSteps.value.length
-  const progress = total <= 1 ? 100 : Math.round((replayStepIndex.value / (total - 1)) * 100)
+  const progress = total === 0
+    ? 0
+    : total === 1
+      ? 100
+      : Math.round((replayStepIndex.value / (total - 1)) * 100)
   return { width: `${progress}%` }
 })
 
@@ -842,15 +846,11 @@ onBeforeUnmount(stopReplay)
       message="최신 상태를 확인한 뒤 다시 시도해 주세요."
       compact
     />
-    <AsyncStatePanel
-      v-else-if="analysis && metric === null"
-      kind="empty"
-      title="이 페이지의 분석 기록이 없어요"
-      message="이야기 전체 분석은 완료됐지만 현재 페이지에 저장된 시선 지표가 없습니다."
-      compact
-    />
-
-    <template v-else-if="analysis && metric">
+    <template v-else-if="analysis">
+      <div v-if="metric === null" class="story-page-analysis__empty-notice" role="status">
+        <strong>이 페이지의 분석 기록이 없어요</strong>
+        <p>기존 분석 항목은 그대로 유지하며 저장된 시선 데이터가 없는 항목은 0건으로 표시합니다.</p>
+      </div>
       <p v-if="requestStatus === 'loading'" class="story-page-analysis__updating" role="status">
         최신 시선 분석을 다시 불러오고 있습니다.
       </p>
@@ -1111,6 +1111,26 @@ onBeforeUnmount(stopReplay)
   font-size: 11px;
 }
 
+.story-page-analysis__empty-notice {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--slate-50);
+  color: var(--slate-700);
+}
+
+.story-page-analysis__empty-notice strong {
+  color: var(--slate-900);
+  font-size: 13px;
+}
+
+.story-page-analysis__empty-notice p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .story-page-analysis__metrics,
 .story-page-analysis__timing,
 .story-overall-summary dl {
@@ -1162,6 +1182,11 @@ onBeforeUnmount(stopReplay)
   gap: 10px;
   padding-top: 14px;
   border-top: 1px solid var(--slate-200);
+}
+
+.story-page-replay {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .story-page-regressions__heading {

@@ -86,7 +86,6 @@ function uploadImage(event: Event) {
         <p>읽기 전 페이지</p>
         <h3 id="story-page-editor-title">생성 내용 수정</h3>
       </div>
-      <span>수정본은 다음 AI 생성의 문맥에 반영됩니다.</span>
     </header>
 
     <label v-if="page.requiresBranchInput">
@@ -121,12 +120,12 @@ function uploadImage(event: Event) {
 .story-page-editor { display: grid; gap: 14px; padding: 18px; border: 1px solid #dbe5dc; border-radius: 16px; background: #fbfdf9; }
 .story-page-editor header { display: flex; justify-content: space-between; gap: 16px; }
 .story-page-editor header p, .story-page-editor header h3 { margin: 0; }
-.story-page-editor header p, .story-page-editor header > span { color: var(--slate-500); font-size: 12px; }
+.story-page-editor header p { color: var(--slate-500); font-size: 12px; }
 .story-page-editor label { display: grid; gap: 6px; color: var(--slate-700); font-size: 12px; font-weight: 700; }
 .story-page-editor input, .story-page-editor textarea { width: 100%; border: 1px solid var(--slate-300); border-radius: 10px; padding: 10px 12px; background: white; color: var(--slate-900); font: inherit; line-height: 1.6; }
 .choice-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .editor-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
-.editor-actions > * { min-width: 120px; font-family: inherit; font-size: 14px; font-weight: 600; }
+.story-page-editor .editor-actions > * { display: inline-flex; align-items: center; justify-content: center; min-width: 132px; min-height: 40px; font-family: inherit; font-size: 14px; font-weight: 700; line-height: 1; }
 .upload-button { cursor: pointer; }
 .upload-button[aria-disabled='true'] { pointer-events: none; opacity: .5; }
 .upload-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }
