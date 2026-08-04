@@ -1296,6 +1296,12 @@ export const useTrainingStore = defineStore('training', () => {
   async function selectHistoryTraining(studentId: number, trainingId: number): Promise<void> {
     if (studentId !== historyStudentId.value) return
     if (!trainingLog.value?.trainings.some((item) => item.trainingId === trainingId)) return
+    if (selectedHistoryTrainingId.value !== trainingId) {
+      historyTrainingDetail.value = null
+      historyGazeAnalysis.value = null
+      historyDetailStatus.value = 'loading'
+      historyGazeStatus.value = 'loading'
+    }
     selectedHistoryTrainingId.value = trainingId
     await Promise.all([
       loadHistoryTrainingDetail(studentId, trainingId),
