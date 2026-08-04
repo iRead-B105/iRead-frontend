@@ -53,11 +53,10 @@ describe('story detail adapters', () => {
     ])
   })
 
-  it('nullable 페이지 시선 배열과 내부 역행 배열은 빈 배열로 정규화한다', () => {
+  it('단어 지표와 판정 이벤트의 0과 null을 구분해 매핑한다', () => {
     const gaze = mapStoryGazeAnalysis({
       ...storyGazeFixturesByStoryId[6801]!,
       pageMetrics: null,
-      analysisMeta: null,
     })
     const metric = mapStoryGazeAnalysis({
       ...storyGazeFixturesByStoryId[6801]!,
@@ -70,8 +69,29 @@ describe('story detail adapters', () => {
     })
 
     expect(gaze.pageMetrics).toEqual([])
-    expect(gaze.analysisMeta).toBeNull()
     expect(metric.pageMetrics[0]?.regressions).toEqual([])
+    expect(gaze.wordMetrics[0]).toMatchObject({ dwellDurationMs: 1200, firstSeenMs: 0 })
+    expect(gaze.wordMetrics[1]).toMatchObject({ dwellDurationMs: 0, firstSeenMs: null })
+    expect(gaze.replay?.events.map((event) => event.movementType)).toEqual([
+      'READ',
+      'SKIP',
+      'REGRESSION',
+    ])
+    expect(gaze.replay?.events[1]?.skippedTokenIndexes).toEqual([1])
+    expect(gaze.analysisMeta.calculationVersion).toBe('story-gaze-word-v1')
+  })
+
+  it('필수 단어 지표나 판정 버전이 없으면 계약 위반으로 처리한다', () => {
+    const fixture = storyGazeFixturesByStoryId[6801]!
+    expect(() => mapStoryGazeAnalysis({ ...fixture, wordMetrics: undefined as never }))
+      .toThrow('wordMetrics 배열이 필요합니다')
+    expect(() => mapStoryGazeAnalysis({
+      ...fixture,
+      analysisMeta: {
+        ...fixture.analysisMeta,
+        calculationVersion: 'frontend-gaze-v0',
+      },
+    })).toThrow('지원하지 않는 단어 판정 계약입니다')
   })
 
   it.each([

@@ -1,4 +1,4 @@
-import type { GazeAnalysisReplay } from '@/features/teacher/gaze'
+import type { GazeReplaySample, GazeReplayWord } from '@/features/teacher/gaze'
 
 export type StoryStatus = 'IN_PROGRESS' | 'COMPLETED' | 'DELETED'
 export type StoryReadingStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'
@@ -116,10 +116,47 @@ export interface StoryPageGazeMetric {
 }
 
 export interface StoryGazeAnalysisMeta {
-  readonly contentType: string
-  readonly storyId: number
+  readonly calculationVersion: 'story-gaze-word-v1'
   readonly calculationSource: string
-  readonly gazeSessionDurationMs: number
+  readonly heatmapScale: 'PAGE_RELATIVE_MAX'
+  readonly dwellThresholdMethod: 'PAGE_CHARACTER_AVERAGE'
+  readonly sampleTailMs: 80
+  readonly maxSampleGapMs: 250
+  readonly firstSeenReference: 'PAGE_FIRST_VALID_SAMPLE'
+  readonly skipRequiresDwell: true
+  readonly regressionRequiresDwell: true
+}
+
+export interface StoryGazeWordMetric {
+  readonly storyLineId: number
+  readonly pageNo: number
+  readonly tokenIndex: number
+  readonly text: string
+  readonly dwellDurationMs: number
+  readonly visitCount: number
+  readonly skipped: boolean
+  readonly regressionCount: number
+  readonly firstSeenMs: number | null
+}
+
+export type StoryGazeMovementType = 'READ' | 'SKIP' | 'REGRESSION'
+
+export interface StoryGazeReplayEvent {
+  readonly pageNo: number
+  readonly eventIndex: number
+  readonly eventAtMs: number
+  readonly fromTokenIndex: number | null
+  readonly toTokenIndex: number
+  readonly movementType: StoryGazeMovementType
+  readonly dwellQualified: boolean
+  readonly dwellDurationMs: number
+  readonly skippedTokenIndexes: readonly number[]
+}
+
+export interface StoryGazeReplay {
+  readonly words: readonly GazeReplayWord[]
+  readonly samples: readonly GazeReplaySample[]
+  readonly events: readonly StoryGazeReplayEvent[]
 }
 
 export interface StoryGazeAnalysis {
@@ -133,8 +170,9 @@ export interface StoryGazeAnalysis {
   readonly reverseReadCount: number
   readonly avgVisitedDurationMs: number | null
   readonly pageMetrics: readonly StoryPageGazeMetric[]
-  readonly replay?: GazeAnalysisReplay | null
-  readonly analysisMeta: StoryGazeAnalysisMeta | null
+  readonly wordMetrics: readonly StoryGazeWordMetric[]
+  readonly replay?: StoryGazeReplay | null
+  readonly analysisMeta: StoryGazeAnalysisMeta
 }
 
 export type StoryRequestStatus = 'idle' | 'loading' | 'success' | 'error'

@@ -107,7 +107,19 @@ function gazeAnalysis(story: StoryHistoryItem): StoryGazeAnalysis {
         regressions: [],
       },
     ],
-    analysisMeta: null,
+    wordMetrics: [],
+    replay: { words: [], samples: [], events: [] },
+    analysisMeta: {
+      calculationVersion: 'story-gaze-word-v1',
+      calculationSource: 'BACKEND',
+      heatmapScale: 'PAGE_RELATIVE_MAX',
+      dwellThresholdMethod: 'PAGE_CHARACTER_AVERAGE',
+      sampleTailMs: 80,
+      maxSampleGapMs: 250,
+      firstSeenReference: 'PAGE_FIRST_VALID_SAMPLE',
+      skipRequiresDwell: true,
+      regressionRequiresDwell: true,
+    },
   }
 }
 

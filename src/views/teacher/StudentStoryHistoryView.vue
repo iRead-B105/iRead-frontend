@@ -22,6 +22,8 @@ import { useStoryHistoryStore } from '@/stores/storyHistory'
 type StoryReplayPreviewState = {
   readonly kind: 'read' | 'regression' | 'skip'
   readonly tokenIndexes: readonly number[]
+  readonly fromTokenIndex: number | null
+  readonly toTokenIndex: number
   readonly dwellMs: number
 } | null
 
@@ -338,8 +340,10 @@ function refreshEditedPage(): void {
                           :page="selectedPage"
                           :active-replay-kind="activeStoryReplayStep?.kind ?? null"
                           :active-replay-token-indexes="activeStoryReplayStep?.tokenIndexes ?? []"
+                          :active-replay-from-token-index="activeStoryReplayStep?.fromTokenIndex ?? null"
+                          :active-replay-to-token-index="activeStoryReplayStep?.toTokenIndex ?? null"
                           :active-replay-dwell-ms="activeStoryReplayStep?.dwellMs ?? 0"
-                          :heatmap-words="currentGazeAnalysis?.replay?.words.filter((word) => word.questionNo === null || word.questionNo === (selectedPage?.pageNo ?? -1)) ?? []"
+                          :heatmap-words="currentGazeAnalysis?.wordMetrics.filter((word) => word.storyLineId === selectedPage?.storyLineId && word.pageNo === selectedPage?.pageNo) ?? []"
                           :heatmap-visible="storyHeatmapVisible"
                         />
                       <StoryPageEditor
