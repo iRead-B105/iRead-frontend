@@ -17,6 +17,13 @@ export type TrainingExportFormat = 'CSV' | 'JSON'
 export type TrainingForm = Readonly<Record<string, unknown>>
 export type GeneratedTrainingData = Readonly<Record<string, unknown>>
 export type LessonMaterialData = Readonly<Record<string, unknown>>
+export type TrainingQuestionValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly unknown[]
+  | Readonly<Record<string, unknown>>
 
 export interface TrainingCatalogItem {
   readonly trainingTemplateId: TrainingTemplateId
@@ -144,6 +151,17 @@ export interface TrainingQuestionResult {
   readonly correctAnswer: string | null
 }
 
+export interface TrainingHistoryQuestionResult {
+  readonly questionNo: number
+  readonly questionType: string | null
+  readonly question: TrainingQuestionValue
+  readonly responseType: string | null
+  readonly selectedAnswer: TrainingQuestionValue
+  readonly correctAnswer: TrainingQuestionValue
+  readonly correct: boolean | null
+  readonly score: number | null
+}
+
 export interface TrainingResult {
   readonly questions?: readonly TrainingQuestionResult[]
   readonly [key: string]: unknown
@@ -168,7 +186,7 @@ export interface CurriculumTrainingLogItem {
   readonly startedAt: string | null
   readonly finishedAt: string | null
   readonly accuracy: number | null
-  readonly questions: readonly TrainingQuestionResult[]
+  readonly questions: readonly TrainingHistoryQuestionResult[]
 }
 
 export interface CurriculumTrainingLog {

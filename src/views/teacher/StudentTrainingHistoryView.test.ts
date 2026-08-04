@@ -93,11 +93,14 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기')
     expect(wrapper.text()).toContain('8분 30초')
     expect(wrapper.text()).not.toContain('학습 판단')
-    expect(wrapper.text()).toContain('채점 문항2건')
+    expect(wrapper.text()).toContain('전체 문항2건')
     expect(wrapper.text()).toContain('정답1건')
     expect(wrapper.text()).toContain('오답1건')
-    expect(wrapper.text()).toContain('문항 내용과 답안은 오답 문항에 한해 제공됩니다.')
-    expect(wrapper.text()).toContain('제공되지 않음')
+    expect(wrapper.text()).not.toContain('오답 문항에 한해 제공됩니다.')
+    expect(wrapper.text()).toContain('다음 중 끝소리가 같은 낱말을 고르세요.')
+    expect(wrapper.text()).toContain('보기: 꽃, 옷 / 꽃, 낮')
+    expect(wrapper.text()).toContain('음성 응답 완료 · 전사 데이터 없음')
+    expect(wrapper.text()).toContain('100점')
     expect(wrapper.text()).toContain('선택 훈련 정확도 비교')
     expect(wrapper.findAll('[data-test="chart"]')).toHaveLength(1)
     expect(wrapper.get('[data-test="chart"]').text()).toContain(
@@ -167,6 +170,9 @@ describe('StudentTrainingHistoryView', () => {
     expect(store.historyGazeStatus).toBe('success')
     expect(wrapper.text()).toContain('시선 분석 데이터가 없습니다.')
     expect(wrapper.get('[data-test="chart"]').text()).toContain('이전 훈련 정확도 기록 없음')
+    expect(wrapper.text()).toContain('미제출')
+    expect(wrapper.text()).toContain('채점 대상 아님')
+    expect(wrapper.text()).toContain('정답 정보 없음')
 
     await rows.find((row) => row.text().includes('음절 합쳐 낱말 만들기'))?.trigger('click')
     await flushPromises()
@@ -203,6 +209,7 @@ describe('StudentTrainingHistoryView', () => {
     expect(store.selectedHistoryTrainingId).toBe(891)
     expect(zeroCurriculum?.text()).toContain('0%')
     expect(wrapper.text()).toContain('오답')
+    expect(wrapper.text()).toContain('문항 원본 없음')
   })
 
   it('공통 saveDownload으로 선택 훈련 CSV를 저장한다', async () => {

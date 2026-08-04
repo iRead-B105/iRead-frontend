@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatTrainingDuration,
+  formatTrainingQuestionAnswer,
+  formatTrainingQuestionContent,
   toTrainingPreview,
   trainingDetailQuestions,
   trainingStatusLabel,
@@ -51,23 +53,25 @@ describe('training preview presenter', () => {
   })
 
   it('백엔드 34개 템플릿의 다양한 문항 필드를 실제 값으로 표시한다', () => {
-    const preview = toTrainingPreview(detail({
-      generatedData: {
-        questions: [
-          { audioText: 'ㄱ', choices: ['ㄴ', 'ㄱ'], answerIndex: 1 },
-          { words: ['사과', '나무', '바다'] },
-          {
-            cards: ['먹는다.', '아기는', '사과를'],
-            answerOrder: [1, 2, 0],
-            completedSentence: '아기는 사과를 먹는다.',
-          },
-          {
-            difficultWords: [{ word: '국물', syllables: ['국', '물'] }],
-            sentence: '아기는 따뜻한 국물을 먹는다.',
-          },
-        ],
-      },
-    }))
+    const preview = toTrainingPreview(
+      detail({
+        generatedData: {
+          questions: [
+            { audioText: 'ㄱ', choices: ['ㄴ', 'ㄱ'], answerIndex: 1 },
+            { words: ['사과', '나무', '바다'] },
+            {
+              cards: ['먹는다.', '아기는', '사과를'],
+              answerOrder: [1, 2, 0],
+              completedSentence: '아기는 사과를 먹는다.',
+            },
+            {
+              difficultWords: [{ word: '국물', syllables: ['국', '물'] }],
+              sentence: '아기는 따뜻한 국물을 먹는다.',
+            },
+          ],
+        },
+      }),
+    )
 
     expect(preview.source).toBe('generated')
     expect(preview.items).toEqual([
@@ -92,9 +96,7 @@ describe('training preview presenter', () => {
     )
 
     expect(preview.source).toBe('template')
-    expect(preview.items.map((item) => item.content)).toEqual([
-      '받침을 정확히 읽습니다.',
-    ])
+    expect(preview.items.map((item) => item.content)).toEqual(['받침을 정확히 읽습니다.'])
     expect(JSON.stringify(preview)).not.toContain('노출하면 안 되는 내부 규칙')
   })
 
@@ -107,6 +109,43 @@ describe('training preview presenter', () => {
 })
 
 describe('training history presenters', () => {
+  it('문항 원본에서 지시문과 보기를 함께 표시한다', () => {
+    expect(
+      formatTrainingQuestionContent({
+        prompt: '순서를 맞추세요.',
+        cards: ['나는', '읽어요'],
+      }),
+    ).toBe('순서를 맞추세요. · 카드: 나는 / 읽어요')
+    expect(formatTrainingQuestionContent(null)).toBe('문항 원본 없음')
+  })
+
+  it('순서 배열과 글자 조합 답안을 실제 보기 값으로 변환한다', () => {
+    expect(
+      formatTrainingQuestionAnswer([1, 0], 'ORDERING', {
+        prompt: '순서를 맞추세요.',
+        cards: ['나는', '읽어요'],
+      }),
+    ).toBe('읽어요 → 나는')
+    expect(
+      formatTrainingQuestionAnswer(
+        [
+          { slot: 'INITIAL', selectedIndex: 1 },
+          { slot: 'MEDIAL', selectedIndex: 0 },
+        ],
+        'COMPONENT_BUILD',
+        { initialChoices: ['ㄱ', 'ㄴ'], medialChoices: ['ㅏ', 'ㅓ'] },
+      ),
+    ).toBe('초성: ㄴ · 중성: ㅏ')
+  })
+
+  it('따라 쓰기 좌표는 원시 JSON 대신 응답 완료로 표시한다', () => {
+    expect(
+      formatTrainingQuestionAnswer({ strokes: [{ points: [{ x: 1, y: 2 }] }] }, 'TRACE', {
+        instruction: '따라 쓰세요.',
+      }),
+    ).toBe('따라 쓰기 응답 완료')
+  })
+
   it('네 가지 상태를 확정된 대문자 enum에서 표시한다', () => {
     expect(trainingStatusLabel('NOT_READY')).toBe('준비 전')
     expect(trainingStatusLabel('NOT_STARTED')).toBe('시작 전')
@@ -115,12 +154,9 @@ describe('training history presenters', () => {
   })
 
   it('시작·완료 시각이 모두 있을 때만 학습 시간을 계산한다', () => {
-    expect(
-      formatTrainingDuration(
-        '2026-07-20T09:00:00+09:00',
-        '2026-07-20T09:08:30+09:00',
-      ),
-    ).toBe('8분 30초')
+    expect(formatTrainingDuration('2026-07-20T09:00:00+09:00', '2026-07-20T09:08:30+09:00')).toBe(
+      '8분 30초',
+    )
     expect(formatTrainingDuration('2026-07-20T09:00:00+09:00', null)).toBe('-')
   })
 

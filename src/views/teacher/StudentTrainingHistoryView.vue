@@ -15,12 +15,15 @@ import { chartColors } from '@/features/teacher/chartTheme'
 import { asyncStateKind } from '@/features/teacher/error'
 import {
   formatTrainingDuration,
+  formatTrainingQuestionAnswer,
+  formatTrainingQuestionContent,
+  trainingQuestionTypeLabel,
   trainingStatusLabel,
   type CurriculumLog,
   type CurriculumTrainingLogItem,
   type TrainingExportFormat,
   type TrainingPeriod,
-  type TrainingQuestionResult,
+  type TrainingHistoryQuestionResult,
 } from '@/features/teacher/training'
 import type { GazeAnalysisState } from '@/features/teacher/gaze'
 import { saveDownload } from '@/lib/api'
@@ -72,9 +75,9 @@ const selectedHistoryTraining = computed(
 const detailQuestions = computed(() => selectedHistoryTraining.value?.questions ?? [])
 const questionSummary = computed(() => ({
   total: detailQuestions.value.length,
-  correct: detailQuestions.value.filter((question) => question.isCorrect === true).length,
-  incorrect: detailQuestions.value.filter((question) => question.isCorrect === false).length,
-  ungraded: detailQuestions.value.filter((question) => question.isCorrect === null).length,
+  correct: detailQuestions.value.filter((question) => question.correct === true).length,
+  incorrect: detailQuestions.value.filter((question) => question.correct === false).length,
+  ungraded: detailQuestions.value.filter((question) => question.correct === null).length,
 }))
 const historyGazeAggregate = computed<GazeAnalysisState | null>(() => {
   const state = historyGazeAnalysis.value
@@ -210,18 +213,48 @@ function formatAccuracy(value: number | null): string {
   return value === null ? '기록 없음' : `${value}%`
 }
 
-function questionStatus(question: TrainingQuestionResult): string {
-  if (question.isCorrect === null) return '미채점'
-  return question.isCorrect ? '정답' : '오답'
+function hasSubmittedAnswer(question: TrainingHistoryQuestionResult): boolean {
+  return question.selectedAnswer !== null || question.correct !== null || question.score !== null
 }
 
-function questionStatusClass(question: TrainingQuestionResult): string {
-  if (question.isCorrect === null) return 'is-ungraded'
-  return question.isCorrect ? 'is-correct' : 'is-incorrect'
+function questionStatus(question: TrainingHistoryQuestionResult): string {
+  if (question.correct === null) {
+    return hasSubmittedAnswer(question) ? '채점 대상 아님' : '미제출'
+  }
+  return question.correct ? '정답' : '오답'
 }
 
-function questionDetail(value: string | null): string {
-  return value?.trim() || '제공되지 않음'
+function questionStatusClass(question: TrainingHistoryQuestionResult): string {
+  if (question.correct === null) return 'is-ungraded'
+  return question.correct ? 'is-correct' : 'is-incorrect'
+}
+
+function selectedAnswerDetail(question: TrainingHistoryQuestionResult): string {
+  const formatted = formatTrainingQuestionAnswer(
+    question.selectedAnswer,
+    question.responseType,
+    question.question,
+  )
+  if (formatted) return formatted
+  if (question.responseType === 'AUDIO' && hasSubmittedAnswer(question)) {
+    return '음성 응답 완료 · 전사 데이터 없음'
+  }
+  return hasSubmittedAnswer(question) ? '응답 데이터 없음' : '미제출'
+}
+
+function correctAnswerDetail(question: TrainingHistoryQuestionResult): string {
+  return (
+    formatTrainingQuestionAnswer(
+      question.correctAnswer,
+      question.responseType,
+      question.question,
+    ) ?? '정답 정보 없음'
+  )
+}
+
+function formatQuestionScore(score: number | null): string | null {
+  if (score === null) return null
+  return `${new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(score)}점`
 }
 </script>
 
@@ -493,7 +526,7 @@ function questionDetail(value: string | null): string {
                   </dd>
                 </div>
                 <div>
-                  <dt>채점 문항</dt>
+                  <dt>전체 문항</dt>
                   <dd>{{ questionSummary.total }}건</dd>
                 </div>
               </dl>
@@ -517,7 +550,7 @@ function questionDetail(value: string | null): string {
                     <dd>{{ questionSummary.incorrect }}건</dd>
                   </div>
                   <div>
-                    <dt>미채점</dt>
+                    <dt>미제출·미채점</dt>
                     <dd>{{ questionSummary.ungraded }}건</dd>
                   </div>
                 </dl>
@@ -525,9 +558,6 @@ function questionDetail(value: string | null): string {
                   저장된 문항 결과가 없습니다.
                 </p>
                 <template v-else>
-                  <p class="question-data-note">
-                    문항 내용과 답안은 오답 문항에 한해 제공됩니다.
-                  </p>
                   <div class="question-table">
                     <div class="question-table__head">
                       <span>문항</span>
@@ -537,18 +567,26 @@ function questionDetail(value: string | null): string {
                     </div>
                     <div
                       v-for="question in detailQuestions"
-                      :key="question.questionNumber"
+                      :key="question.questionNo"
                       class="question-table__row"
                     >
-                      <span>
-                        <b>{{ question.questionNumber }}</b>
-                        {{ questionDetail(question.question) }}
+                      <span class="question-content">
+                        <b>{{ question.questionNo }}</b>
+                        <span>
+                          <small>{{ trainingQuestionTypeLabel(question) }}</small>
+                          {{ formatTrainingQuestionContent(question.question) }}
+                        </span>
                       </span>
-                      <em :class="questionStatusClass(question)">
-                        {{ questionStatus(question) }}
-                      </em>
-                      <span>{{ questionDetail(question.selectedAnswer) }}</span>
-                      <span>{{ questionDetail(question.correctAnswer) }}</span>
+                      <span class="question-grading">
+                        <em :class="questionStatusClass(question)">
+                          {{ questionStatus(question) }}
+                        </em>
+                        <small v-if="formatQuestionScore(question.score)">
+                          {{ formatQuestionScore(question.score) }}
+                        </small>
+                      </span>
+                      <span>{{ selectedAnswerDetail(question) }}</span>
+                      <span>{{ correctAnswerDetail(question) }}</span>
                     </div>
                   </div>
                 </template>
@@ -884,12 +922,6 @@ dd {
   background: color-mix(in oklch, var(--muted) 32%, transparent);
 }
 
-.question-data-note {
-  margin: 0 0 8px;
-  color: var(--slate-500);
-  font-size: 11px;
-}
-
 .question-results > header {
   display: flex;
   align-items: center;
@@ -911,10 +943,10 @@ dd {
 .question-table__head,
 .question-table__row {
   display: grid;
-  min-width: 720px;
+  min-width: 750px;
   align-items: center;
   gap: 12px;
-  grid-template-columns: minmax(260px, 1.5fr) 80px minmax(130px, 0.8fr) minmax(130px, 0.8fr);
+  grid-template-columns: minmax(260px, 1.5fr) 110px minmax(130px, 0.8fr) minmax(130px, 0.8fr);
 }
 
 .question-table__head {
@@ -945,6 +977,20 @@ dd {
   gap: 8px;
 }
 
+.question-content > span,
+.question-grading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.question-content small,
+.question-grading small {
+  color: var(--slate-500);
+  font-size: 10px;
+}
+
 .question-table__row > span:first-child b {
   display: grid;
   width: 22px;
@@ -963,6 +1009,7 @@ dd {
   font-size: 10px;
   font-style: normal;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .is-correct {
