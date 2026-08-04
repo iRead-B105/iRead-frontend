@@ -38,15 +38,17 @@ export class ApiTestRepository implements TestRepository {
     return { currentTest, comparisonTests }
   }
 
-  async getGazeAnalysis(
+  async getQuestionGazeAnalysis(
     studentId: number,
     testId: string,
-    options: Parameters<TestRepository['getGazeAnalysis']>[2] = {},
+    questionNo: number,
+    options: Parameters<TestRepository['getQuestionGazeAnalysis']>[3] = {},
   ) {
     assertPositiveId(studentId, 'studentId')
     assertPositiveId(testId, 'testId')
+    assertPositiveId(questionNo, 'questionNo')
     try {
-      return await this.api.getGazeAnalysis(studentId, testId, options)
+      return await this.api.getQuestionGazeAnalysis(studentId, testId, questionNo, options)
     } catch (error) {
       if (isGazeAnalysisNotFoundError(error)) {
         return { status: 'NO_DATA' as const, analysis: null }

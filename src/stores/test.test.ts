@@ -22,7 +22,7 @@ function repository(overrides: Partial<TestRepository> = {}): TestRepository {
     getTests: vi.fn().mockResolvedValue([]),
     getTest: vi.fn(),
     compareTests: vi.fn(),
-    getGazeAnalysis: vi.fn().mockResolvedValue({ status: 'NO_DATA', analysis: null }),
+    getQuestionGazeAnalysis: vi.fn().mockResolvedValue({ status: 'NO_DATA', analysis: null }),
     ...overrides,
   }
 }
@@ -201,10 +201,10 @@ describe('Test store', () => {
               ? pending.promise.then((currentTest) => ({ currentTest, comparisonTests: [] }))
               : mock.compareTests(studentId, id, ids, options),
           ),
-        getGazeAnalysis: vi
+        getQuestionGazeAnalysis: vi
           .fn()
-          .mockImplementation((studentId, testId, options) =>
-            mock.getGazeAnalysis(studentId, testId, options),
+          .mockImplementation((studentId, testId, questionNo, options) =>
+            mock.getQuestionGazeAnalysis(studentId, testId, questionNo, options),
           ),
       }),
     )
@@ -223,45 +223,87 @@ describe('Test store', () => {
 
   it('선택 문항의 시선 집계만 조회하고 다른 학습자의 문항 ID를 차단한다', async () => {
     const mock = new TestTestRepository()
-    const getGazeAnalysis = vi.spyOn(mock, 'getGazeAnalysis')
+    const getQuestionGazeAnalysis = vi.spyOn(mock, 'getQuestionGazeAnalysis')
     const store = useTestStore()
     store.setRepository(mock)
     await store.loadForStudent(1)
 
     await expect(store.selectQuestionGaze(1, '10111', 1)).resolves.toBe(true)
 
-    expect(getGazeAnalysis).toHaveBeenCalledWith(
+    expect(getQuestionGazeAnalysis).toHaveBeenCalledWith(
       1,
       '10111',
+      1,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
     expect(store.questionGazeAnalysis?.status).toBe('AVAILABLE')
     await expect(store.selectQuestionGaze(2, '10111', 1)).resolves.toBe(false)
   })
 
-  it('중복 testId는 한 번만 확인하고 실제 시선 분석 존재 여부를 캐시한다', async () => {
+  it('같은 testId의 문항도 questionNo별로 확인하고 시선 분석을 캐시한다', async () => {
     const mock = new TestTestRepository()
-    const getGazeAnalysis = vi.spyOn(mock, 'getGazeAnalysis')
+    const getQuestionGazeAnalysis = vi.spyOn(mock, 'getQuestionGazeAnalysis')
     const store = useTestStore()
     store.setRepository(mock)
     await store.loadForStudent(1)
 
     await expect(
-      store.loadQuestionGazeAvailability(1, ['10111', '10111', '10112']),
+      store.loadQuestionGazeAvailability(1, [
+        { testId: '10111', questionNo: 1 },
+        { testId: '10111', questionNo: 1 },
+        { testId: '10111', questionNo: 2 },
+      ]),
     ).resolves.toBe(true)
 
-    expect(getGazeAnalysis).toHaveBeenCalledTimes(2)
+    expect(getQuestionGazeAnalysis).toHaveBeenCalledTimes(2)
     expect(store.questionGazeAvailability).toEqual({
-      '10111': 'AVAILABLE',
-      '10112': 'NO_DATA',
+      '10111:1': 'AVAILABLE',
+      '10111:2': 'AVAILABLE',
     })
-    await expect(store.selectQuestionGaze(1, '10111', 1)).resolves.toBe(true)
-    expect(getGazeAnalysis).toHaveBeenCalledTimes(2)
-    expect(store.selectedQuestionSequenceNo).toBe(1)
+    await expect(store.selectQuestionGaze(1, '10111', 2)).resolves.toBe(true)
+    expect(getQuestionGazeAnalysis).toHaveBeenCalledTimes(2)
+    expect(store.selectedQuestionNo).toBe(2)
+  })
+
+  it('문항별 시선 조회 실패와 재시도를 복합 키에만 반영한다', async () => {
+    const mock = new TestTestRepository()
+    const available = await mock.getQuestionGazeAnalysis(1, '10111', 2)
+    const getQuestionGazeAnalysis = vi
+      .fn<TestRepository['getQuestionGazeAnalysis']>()
+      .mockRejectedValueOnce(new Error('temporary failure'))
+      .mockResolvedValueOnce(available)
+    const store = useTestStore()
+    store.setRepository(
+      repository({
+        getTests: vi.fn().mockResolvedValue(await mock.getTests(1)),
+        getTest: vi
+          .fn()
+          .mockImplementation((studentId, id, options) => mock.getTest(studentId, id, options)),
+        compareTests: vi
+          .fn()
+          .mockImplementation((studentId, id, ids, options) =>
+            mock.compareTests(studentId, id, ids, options),
+          ),
+        getQuestionGazeAnalysis,
+      }),
+    )
+    await store.loadForStudent(1)
+
+    await expect(store.selectQuestionGaze(1, '10111', 2)).resolves.toBe(false)
+    expect(store.questionGazeAvailability['10111:2']).toBe('ERROR')
+
+    await store.retryQuestionGaze()
+
+    expect(store.questionGazeStatus).toBe('success')
+    expect(store.selectedQuestionNo).toBe(2)
+    expect(store.questionGazeAvailability['10111:2']).toBe('AVAILABLE')
+    expect(getQuestionGazeAnalysis).toHaveBeenCalledTimes(2)
   })
 
   it('같은 학습자의 background refresh가 진행 중인 시선 요청을 중단하지 않는다', async () => {
-    const pendingGaze = deferred<Awaited<ReturnType<TestRepository['getGazeAnalysis']>>>()
+    const pendingGaze = deferred<
+      Awaited<ReturnType<TestRepository['getQuestionGazeAnalysis']>>
+    >()
     const mock = new TestTestRepository()
     let gazeSignal: AbortSignal | undefined
     const store = useTestStore()
@@ -276,10 +318,12 @@ describe('Test store', () => {
         compareTests: vi.fn().mockImplementation((studentId, id, ids, options) =>
           mock.compareTests(studentId, id, ids, options),
         ),
-        getGazeAnalysis: vi.fn().mockImplementation((_studentId, _testId, options) => {
+        getQuestionGazeAnalysis: vi
+          .fn()
+          .mockImplementation((_studentId, _testId, _questionNo, options) => {
           gazeSignal = options?.signal
           return pendingGaze.promise
-        }),
+          }),
       }),
     )
     await store.loadForStudent(1)

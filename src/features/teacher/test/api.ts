@@ -33,6 +33,7 @@ interface TestAreaScoreDto {
 
 interface TestQuestionResultDto {
   readonly testId: string
+  readonly questionNo: number
   readonly sequenceNo: number
   readonly trackCode: string
   readonly questionType: string
@@ -51,13 +52,25 @@ interface TestDetailDto extends TestListItemDto {
   readonly areaScores?: readonly TestAreaScoreDto[] | null
   readonly solvingTimeSeconds?: number | null
   readonly questions?: readonly TestQuestionResultDto[] | null
-  readonly recommendationStatus?: string | null
-  readonly recommendationError?: string | null
-  readonly recommendationLastAttemptAt?: string | null
-  readonly recommendationRetryCount?: number | null
-  readonly dailyCurriculumId?: number | null
-  readonly contentGenerationStatus?: string | null
-  readonly teacherReviewStatus?: string | null
+}
+
+interface TestQuestionGazeWordMetricDto {
+  readonly targetIndex?: number | null
+  readonly tokenIndex?: number | null
+  readonly text?: string | null
+  readonly dwellDurationMs?: number | null
+  readonly visitCount?: number | null
+  readonly skipped?: boolean | null
+  readonly regressionCount?: number | null
+  readonly firstSeenMs?: number | null
+  readonly lastSeenMs?: number | null
+}
+
+interface TestQuestionGazeAnalysisDto extends RawGazeAnalysisDto {
+  readonly testId: string | number
+  readonly questionNo: number
+  readonly wordMetrics?: readonly TestQuestionGazeWordMetricDto[] | null
+  readonly analysisMeta: Readonly<Record<string, unknown>>
 }
 
 function requestInit(options?: TestRequestOptions): RequestInit {
@@ -93,6 +106,7 @@ function mapAreaScore(dto: TestAreaScoreDto): TestAreaScore {
 function mapQuestion(dto: TestQuestionResultDto): TestQuestionResult {
   return {
     testId: dto.testId,
+    questionNo: dto.questionNo,
     sequenceNo: dto.sequenceNo,
     trackCode: dto.trackCode,
     questionType: dto.questionType,
@@ -123,7 +137,9 @@ function mapDetail(dto: TestDetailDto): TestDetail {
   const questions = [...(dto.questions ?? [])]
     .sort(
       (left, right) =>
-        left.sequenceNo - right.sequenceNo || left.testId.localeCompare(right.testId),
+        left.sequenceNo - right.sequenceNo ||
+        left.testId.localeCompare(right.testId) ||
+        left.questionNo - right.questionNo,
     )
     .map(mapQuestion)
   return {
@@ -133,13 +149,6 @@ function mapDetail(dto: TestDetailDto): TestDetail {
     gazeDepartureCount: sumMeasured(questions.map((question) => question.gazeDepartureCount)),
     pronunciationScore: averageMeasured(questions.map((question) => question.pronunciationScore)),
     questions,
-    recommendationStatus: dto.recommendationStatus ?? null,
-    recommendationError: dto.recommendationError ?? null,
-    recommendationLastAttemptAt: dto.recommendationLastAttemptAt ?? null,
-    recommendationRetryCount: dto.recommendationRetryCount ?? 0,
-    dailyCurriculumId: dto.dailyCurriculumId ?? null,
-    contentGenerationStatus: dto.contentGenerationStatus ?? null,
-    teacherReviewStatus: dto.teacherReviewStatus ?? null,
   }
 }
 
@@ -153,9 +162,10 @@ export interface TestApi {
     testCurriculumId: string,
     options?: TestRequestOptions,
   ) => Promise<TestDetail>
-  readonly getGazeAnalysis: (
+  readonly getQuestionGazeAnalysis: (
     studentId: number,
     testId: string,
+    questionNo: number,
     options?: TestRequestOptions,
   ) => Promise<GazeAnalysisState>
 }
@@ -183,12 +193,32 @@ export function createTestApi(request: TestApiRequest = apiRequest): TestApi {
       )
       return mapDetail(dto)
     },
-    async getGazeAnalysis(studentId, testId, options) {
-      const dto = await request<RawGazeAnalysisDto>(
-        `/api/admin/test/${studentId}/${testId}/gaze-analysis`,
+    async getQuestionGazeAnalysis(studentId, testId, questionNo, options) {
+      const dto = await request<TestQuestionGazeAnalysisDto>(
+        `/api/admin/test/${studentId}/${testId}/questions/${questionNo}/gaze-analysis`,
         requestInit(options),
       )
-      return mapRawGazeAnalysis(dto)
+      if (dto.questionNo !== questionNo) {
+        throw new TypeError('[검사 문항 시선 API] 요청과 응답의 questionNo가 일치하지 않습니다.')
+      }
+      return mapRawGazeAnalysis({
+        ...dto,
+        replay: {
+          words: (dto.wordMetrics ?? []).map((word) => ({
+            questionNo,
+            targetIndex: word.targetIndex ?? null,
+            tokenIndex: word.tokenIndex ?? null,
+            text: word.text ?? '',
+            dwellMs: word.dwellDurationMs ?? 0,
+            visitCount: word.visitCount ?? 0,
+            skipped: word.skipped ?? false,
+            regressionCount: word.regressionCount ?? 0,
+            firstSeenMs: word.firstSeenMs ?? null,
+            lastSeenMs: word.lastSeenMs ?? null,
+          })),
+          samples: [],
+        },
+      })
     },
   }
 }

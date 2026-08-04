@@ -16,9 +16,6 @@ import { asyncStateKind } from '@/features/teacher/error'
 import type { GazeAnalysisState } from '@/features/teacher/gaze'
 import {
   averageTestMetric,
-  formatContentGenerationStatus,
-  formatRecommendationStatus,
-  formatTeacherReviewStatus,
   formatTestAnswer,
   formatTestDate,
   formatTestSeconds,
@@ -49,7 +46,7 @@ const {
   comparisonError,
   trendError,
   selectedQuestionTestId,
-  selectedQuestionSequenceNo,
+  selectedQuestionNo,
   questionGazeAnalysis,
   questionGazeStatus,
   questionGazeError,
@@ -78,31 +75,21 @@ const selectedQuestion = computed(
     currentDetail.value?.questions.find(
       (question) =>
         question.testId === selectedQuestionTestId.value &&
-        question.sequenceNo === selectedQuestionSequenceNo.value,
+        question.questionNo === selectedQuestionNo.value,
     ) ?? null,
 )
 const gazeButtonQuestionKeys = computed(() => {
   const keys = new Set<string>()
-  const seenTestIds = new Set<string>()
   for (const question of currentDetail.value?.questions ?? []) {
-    if (seenTestIds.has(question.testId)) continue
-    seenTestIds.add(question.testId)
-    if (questionGazeAvailability.value[question.testId] === 'AVAILABLE') {
+    const availability = questionGazeAvailability.value[questionKey(question)]
+    if (availability === 'AVAILABLE' || availability === 'ERROR') {
       keys.add(questionKey(question))
     }
   }
   return keys
 })
 const questionGazeAggregate = computed<GazeAnalysisState | null>(() => {
-  const state = questionGazeAnalysis.value
-  if (state?.status !== 'AVAILABLE') return state
-  return {
-    ...state,
-    analysis: {
-      ...state.analysis,
-      replay: null,
-    },
-  }
+  return questionGazeAnalysis.value
 })
 const questionContractWarning = computed(() => {
   const detail = currentDetail.value
@@ -221,7 +208,7 @@ watch(
     if (studentId.value === null || !detail || detail.questions.length === 0) return
     void testStore.loadQuestionGazeAvailability(
       studentId.value,
-      detail.questions.map((question) => question.testId),
+      detail.questions,
     )
   },
   { immediate: true },
@@ -271,28 +258,14 @@ function formatMetric(value: number | null, unit: string): string {
   return value === null ? '측정값 없음' : `${value}${unit}`
 }
 
-function formatDateTime(value: string | null): string {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return '-'
-  return new Intl.DateTimeFormat('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date)
-}
-
 function selectQuestion(question: TestQuestionResult): void {
   if (studentId.value !== null) {
-    void testStore.selectQuestionGaze(studentId.value, question.testId, question.sequenceNo)
+    void testStore.selectQuestionGaze(studentId.value, question.testId, question.questionNo)
   }
 }
 
 function questionKey(question: TestQuestionResult): string {
-  return `${question.testId}:${question.sequenceNo}`
+  return `${question.testId}:${question.questionNo}`
 }
 
 function hasGazeButton(question: TestQuestionResult): boolean {
@@ -302,18 +275,8 @@ function hasGazeButton(question: TestQuestionResult): boolean {
 function isSelectedQuestion(question: TestQuestionResult): boolean {
   return (
     selectedQuestionTestId.value === question.testId &&
-    selectedQuestionSequenceNo.value === question.sequenceNo
+    selectedQuestionNo.value === question.questionNo
   )
-}
-
-function openRecommendedCurriculum(): void {
-  const curriculumId = currentDetail.value?.dailyCurriculumId
-  if (studentId.value === null || curriculumId == null) return
-  void router.push({
-    name: 'student-curriculum',
-    params: { id: studentId.value },
-    query: { curriculumId: String(curriculumId) },
-  })
 }
 </script>
 
@@ -537,55 +500,6 @@ function openRecommendedCurriculum(): void {
             </div>
           </Card>
 
-          <Card class="recommendation-section">
-            <header class="section-heading">
-              <div>
-                <h2>추천 훈련 커리큘럼</h2>
-              </div>
-              <span class="status-pill">{{
-                formatRecommendationStatus(currentDetail?.recommendationStatus ?? null)
-              }}</span>
-            </header>
-            <p v-if="currentDetail?.recommendationError" class="error-copy" role="alert">
-              추천 생성 오류: {{ currentDetail.recommendationError }}
-            </p>
-            <dl class="recommendation-statuses">
-              <div>
-                <dt>AI 콘텐츠</dt>
-                <dd>
-                  {{
-                    formatContentGenerationStatus(currentDetail?.contentGenerationStatus ?? null)
-                  }}
-                </dd>
-              </div>
-              <div>
-                <dt>교수자 검수</dt>
-                <dd>{{ formatTeacherReviewStatus(currentDetail?.teacherReviewStatus ?? null) }}</dd>
-              </div>
-              <div>
-                <dt>최근 추천 시도</dt>
-                <dd>{{ formatDateTime(currentDetail?.recommendationLastAttemptAt ?? null) }}</dd>
-              </div>
-              <div>
-                <dt>재시도 횟수</dt>
-                <dd>{{ currentDetail?.recommendationRetryCount ?? 0 }}회</dd>
-              </div>
-            </dl>
-            <div class="recommendation-actions">
-              <span v-if="currentDetail?.dailyCurriculumId !== null">
-                추천 커리큘럼 #{{ currentDetail?.dailyCurriculumId }}
-              </span>
-              <span v-else>아직 연결된 추천 커리큘럼이 없습니다.</span>
-              <Button
-                type="button"
-                :disabled="currentDetail?.dailyCurriculumId === null"
-                @click="openRecommendedCurriculum"
-              >
-                추천 교안 검수하기
-              </Button>
-            </div>
-          </Card>
-
           <Card class="question-section">
             <header class="section-heading">
               <div>
@@ -630,7 +544,7 @@ function openRecommendedCurriculum(): void {
             <ol v-else class="question-list">
               <li
                 v-for="question in currentDetail?.questions"
-                :key="`${question.testId}:${question.sequenceNo}`"
+                :key="questionKey(question)"
                 :class="{ 'is-gaze-selected': isSelectedQuestion(question) }"
               >
                 <header>
@@ -640,7 +554,7 @@ function openRecommendedCurriculum(): void {
                   </div>
                   <span :class="questionStatusClass(question)">{{ questionStatus(question) }}</span>
                 </header>
-                <p>{{ question.question ?? '문항 내용 없음' }}</p>
+                <p>{{ question.question ?? '문항 원본 없음' }}</p>
                 <dl>
                   <div>
                     <dt>제출 답안</dt>
@@ -706,13 +620,13 @@ function openRecommendedCurriculum(): void {
 .comparison-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .comparison-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 12px; font-weight: 700; }
 .comparison-chip button { width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 17px; }
-.state-card, .metric-chart-section, .metric-section, .area-section, .recommendation-section, .question-section { padding: 20px; border-radius: var(--radius-lg); }
+.state-card, .metric-chart-section, .metric-section, .area-section, .question-section { padding: 20px; border-radius: var(--radius-lg); }
 .state-card { display: grid; justify-items: start; gap: 10px; }
 .state-card--error { border-color: color-mix(in oklch, var(--danger-600) 25%, var(--border)); }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .section-heading h2 { margin: 0; color: var(--slate-900); font-size: 17px; }
 .section-heading p { margin: 5px 0 0; color: var(--slate-500); font-size: 12px; }
-.metric-chart-section, .metric-section, .area-section, .recommendation-section, .question-section { display: grid; gap: 14px; }
+.metric-chart-section, .metric-section, .area-section, .question-section { display: grid; gap: 14px; }
 .metric-tabs { display: flex; gap: 6px; overflow-x: auto; }
 .metric-tab { min-height: 38px; padding: 0 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); color: var(--slate-600); font: inherit; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .metric-tab.active { border-color: var(--primary-300); background: var(--active-selection-background); color: var(--active-selection-foreground); }
@@ -730,10 +644,6 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
 .area-grid article { display: grid; gap: 6px; }
 .area-grid article strong { font-size: 22px; }
 .area-grid article small { color: var(--slate-500); }
-.recommendation-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px; border-radius: var(--radius-sm); background: var(--primary-50); color: var(--primary-800); font-size: 13px; font-weight: 700; }
-.recommendation-statuses { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; }
-.recommendation-statuses div { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: color-mix(in oklch, var(--muted) 28%, transparent); }
-.error-copy { margin: 0; color: var(--danger-600); font-size: 13px; }
 .question-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .question-list li { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); }
 .question-list li.is-gaze-selected { border-color: var(--primary-300); background: var(--primary-50); }
@@ -753,12 +663,10 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
 .inline-empty { padding: 24px; border: 1px dashed var(--slate-300); border-radius: var(--radius-sm); color: var(--slate-500); text-align: center; }
 @media (max-width: 760px) {
   .selection-field { min-width: 100%; }
-  .recommendation-actions, .section-heading { align-items: flex-start; flex-direction: column; }
-  .recommendation-statuses { grid-template-columns: 1fr 1fr; }
+  .section-heading { align-items: flex-start; flex-direction: column; }
   .question-list dl { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 480px) {
   .detail-card dl, .question-list dl { grid-template-columns: 1fr; }
-  .recommendation-statuses { grid-template-columns: 1fr; }
 }
 </style>

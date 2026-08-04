@@ -27,6 +27,7 @@ function detailDto(id = '11') {
     questions: [
       {
         testId: '102',
+        questionNo: 2,
         sequenceNo: 2,
         trackCode: 'PHONOLOGICAL_AWARENESS',
         questionType: 'VOICE',
@@ -42,6 +43,7 @@ function detailDto(id = '11') {
       },
       {
         testId: '101',
+        questionNo: 1,
         sequenceNo: 1,
         trackCode: 'PHONOLOGICAL_AWARENESS',
         questionType: 'SINGLE_CHOICE',
@@ -56,9 +58,6 @@ function detailDto(id = '11') {
         gazeDepartureCount: null,
       },
     ],
-    recommendationStatus: 'COMPLETED',
-    recommendationRetryCount: 0,
-    dailyCurriculumId: 201,
   }
 }
 
@@ -87,6 +86,7 @@ describe('Test API', () => {
 
     expect(request).toHaveBeenCalledWith('/api/admin/test/7/curriculums/11', {})
     expect(result.questions.map((question) => question.sequenceNo)).toEqual([1, 2])
+    expect(result.questions.map((question) => question.questionNo)).toEqual([1, 2])
     expect(result.questions[0]).toMatchObject({ score: null, gazeDepartureCount: null })
     expect(result.questions[1]).toMatchObject({ score: 0, gazeDepartureCount: 0 })
     expect(result.overallScore).toBe(0)
@@ -112,27 +112,69 @@ describe('Test API', () => {
     expect(result.pronunciationScore).toBe(0)
   })
 
-  it('개별 검사 문항 ID로 기존 시선 집계 API를 조회한다', async () => {
+  it('testId와 questionNo로 문항별 시선 분석 API를 조회한다', async () => {
     const request = vi.fn().mockResolvedValue({
+      testId: 101,
+      questionNo: 2,
       gazeSessionId: 91,
       gazeAnalysisId: 92,
       totalDwellTime: 1_200,
       dwellCount: 4,
       regressionCount: 1,
       averageFixationTime: 300,
+      wordMetrics: [
+        {
+          targetIndex: 0,
+          tokenIndex: 0,
+          text: '나비',
+          dwellDurationMs: 1_200,
+          visitCount: 4,
+          skipped: false,
+          regressionCount: 1,
+          firstSeenMs: 10,
+          lastSeenMs: 1_210,
+        },
+      ],
+      analysisMeta: { calculationVersion: 'gaze-word-v1', calculationSource: 'BACKEND' },
     })
 
-    const result = await createTestApi(request).getGazeAnalysis(7, '101')
+    const result = await createTestApi(request).getQuestionGazeAnalysis(7, '101', 2)
 
-    expect(request).toHaveBeenCalledWith('/api/admin/test/7/101/gaze-analysis', {})
+    expect(request).toHaveBeenCalledWith(
+      '/api/admin/test/7/101/questions/2/gaze-analysis',
+      {},
+    )
     expect(result).toMatchObject({
       status: 'AVAILABLE',
       analysis: {
         totalVisitedDurationMs: 1_200,
         totalVisitedCount: 4,
         reverseReadCount: 1,
+        replay: {
+          words: [expect.objectContaining({ questionNo: 2, text: '나비', dwellMs: 1_200 })],
+          samples: [],
+        },
       },
     })
+  })
+
+  it('문항별 시선 응답의 questionNo가 요청과 다르면 거부한다', async () => {
+    const request = vi.fn().mockResolvedValue({
+      testId: 101,
+      questionNo: 3,
+      gazeSessionId: 91,
+      gazeAnalysisId: 92,
+      totalDwellTime: 0,
+      dwellCount: 0,
+      regressionCount: 0,
+      averageFixationTime: null,
+      wordMetrics: [],
+      analysisMeta: { calculationVersion: 'gaze-word-v1' },
+    })
+
+    await expect(createTestApi(request).getQuestionGazeAnalysis(7, '101', 2)).rejects.toThrow(
+      'questionNo가 일치하지 않습니다',
+    )
   })
 })
 
@@ -157,7 +199,7 @@ describe('Test Repository', () => {
     const repository = new ApiTestRepository({
       getTests: vi.fn(),
       getTest,
-      getGazeAnalysis: vi.fn(),
+      getQuestionGazeAnalysis: vi.fn(),
     })
 
     const result = await repository.compareTests(1, '11', ['9', '7'])
@@ -195,10 +237,10 @@ describe('Test Repository', () => {
     const repository = new ApiTestRepository({
       getTests: vi.fn(),
       getTest: vi.fn(),
-      getGazeAnalysis: vi.fn().mockRejectedValue(notFound),
+      getQuestionGazeAnalysis: vi.fn().mockRejectedValue(notFound),
     })
 
-    await expect(repository.getGazeAnalysis(1, '101')).resolves.toEqual({
+    await expect(repository.getQuestionGazeAnalysis(1, '101', 1)).resolves.toEqual({
       status: 'NO_DATA',
       analysis: null,
     })

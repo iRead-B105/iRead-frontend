@@ -5,8 +5,6 @@ import {
   formatTestPercent,
   formatTestScore,
   formatTestSeconds,
-  formatContentGenerationStatus,
-  formatTeacherReviewStatus,
 } from './presenters'
 
 describe('test presenters', () => {
@@ -33,13 +31,4 @@ describe('test presenters', () => {
     expect(formatTestChange(-3)).toBe('이전 검사 대비 -3점')
   })
 
-  it('추천 콘텐츠 생성과 교수자 최종 검수 상태를 구분한다', () => {
-    expect(formatContentGenerationStatus('NOT_READY')).toBe('AI 콘텐츠 생성 대기')
-    expect(formatContentGenerationStatus('NOT_STARTED')).toBe('AI 콘텐츠 생성 완료')
-    expect(formatContentGenerationStatus('MIXED')).toBe('AI 콘텐츠 일부 생성')
-    expect(formatTeacherReviewStatus('GENERATION_PENDING')).toBe('AI 콘텐츠 생성 대기')
-    expect(formatTeacherReviewStatus('REVIEW_REQUIRED')).toBe('최종 검수 필요')
-    expect(formatTeacherReviewStatus('REGENERATION_REQUIRED')).toBe('AI 콘텐츠 재생성 필요')
-    expect(formatTeacherReviewStatus('REVIEW_COMPLETED')).toBe('최종 검수 완료')
-  })
 })

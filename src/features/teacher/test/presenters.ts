@@ -21,37 +21,6 @@ export function formatTestAnswer(value: unknown): string {
   }
 }
 
-export function formatRecommendationStatus(value: string | null): string {
-  const labels: Readonly<Record<string, string>> = {
-    NOT_REQUESTED: '추천 대기',
-    PENDING: '추천 구성 대기',
-    PROCESSING: '추천 구성 중',
-    COMPLETED: '추천 구성 완료',
-    FAILED: '추천 구성 실패',
-  }
-  return value === null ? '추천 상태 없음' : (labels[value] ?? value)
-}
-
-export function formatContentGenerationStatus(value: string | null): string {
-  const labels: Readonly<Record<string, string>> = {
-    NOT_READY: 'AI 콘텐츠 생성 대기',
-    NOT_STARTED: 'AI 콘텐츠 생성 완료',
-    MIXED: 'AI 콘텐츠 일부 생성',
-  }
-  return value === null ? '추천 커리큘럼 없음' : (labels[value] ?? value)
-}
-
-export function formatTeacherReviewStatus(value: string | null): string {
-  const labels: Readonly<Record<string, string>> = {
-    GENERATION_PENDING: 'AI 콘텐츠 생성 대기',
-    REVIEW_REQUIRED: '최종 검수 필요',
-    REGENERATION_REQUIRED: 'AI 콘텐츠 재생성 필요',
-    REVIEW_COMPLETED: '최종 검수 완료',
-    NOT_REQUIRED: '검수 불필요',
-  }
-  return value === null ? '검수 상태 없음' : (labels[value] ?? value)
-}
-
 export function formatTestSeconds(value: number | null): string {
   if (value === null) return '-'
   const minutes = Math.floor(value / 60)
