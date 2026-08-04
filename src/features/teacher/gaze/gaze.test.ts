@@ -24,6 +24,7 @@ describe('Gaze analysis target contract', () => {
         totalVisitedCount: 12,
         reverseReadCount: 3,
         avgVisitedDurationMs: null,
+        replay: null,
       },
     })
   })
