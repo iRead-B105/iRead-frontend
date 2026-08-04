@@ -1,5 +1,4 @@
 export * from './api'
-export * from './fixtures'
 export * from './lessonMaterial'
 export * from './lessonMaterialEditor'
 export * from './model'

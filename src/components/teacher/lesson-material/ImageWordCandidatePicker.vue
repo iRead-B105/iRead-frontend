@@ -73,7 +73,7 @@ function remove(index: number): void {
 
 <template>
   <div class="candidate-picker">
-    <p>Backend 후보 API와 동일한 이미지 식별자·URL·낱말 묶음을 Mock 후보에서 선택합니다.</p>
+    <p>Backend 후보 API에서 전달받은 이미지와 낱말 묶음 중 사용할 항목을 선택합니다.</p>
     <div v-for="(choice, index) in selected" :key="index" class="candidate-row">
       <img
         v-if="choice"

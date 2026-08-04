@@ -77,7 +77,6 @@ export const useSessionStore = defineStore('session', {
       }
     },
     async refreshAccessToken(repositories: AuthRepositories = authRepositories) {
-      if (repositories.source === 'mock') return false
       if (this.refreshPromise) return this.refreshPromise
 
       const refreshTask = (async () => {
@@ -106,11 +105,6 @@ export const useSessionStore = defineStore('session', {
       if (this.restorePromise) return this.restorePromise
 
       const restoreTask = (async () => {
-        if (repositories.source === 'mock') {
-          this.reset()
-          return false
-        }
-
         this.status = 'restoring'
         const refreshed = await this.refreshAccessToken(repositories)
         if (!refreshed) return false

@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import type { StoryHistoryList, StoryRepository } from '@/features/teacher/story'
-import { MockStoryRepository } from '@/features/teacher/story'
+import { TestStoryRepository } from '@/test/repositories'
 import { useStoryHistoryStore } from '@/stores/storyHistory'
 import StudentStoryHistoryView from './StudentStoryHistoryView.vue'
 
@@ -137,7 +137,7 @@ describe('StudentStoryHistoryView', () => {
   })
 
   it('상세 탭 없이 이야기 페이지와 선택 페이지 시선 분석을 동시에 표시한다', async () => {
-    const mockRepository = new MockStoryRepository({ delayMs: 0 })
+    const mockRepository = new TestStoryRepository({ delayMs: 0 })
     const getDetail = vi.spyOn(mockRepository, 'getDetail')
     const getGazeAnalysis = vi.spyOn(mockRepository, 'getGazeAnalysis')
     const { wrapper } = await mountView(mockRepository)

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { createTestApi } from '../api'
 import { ApiTestRepository } from './apiTestRepository'
-import { MockTestRepository } from './mockTestRepository'
+import { TestTestRepository } from '@/test/repositories'
 import { assertTestComparisonSelection } from './testRepository'
 
 function detailDto(id = '11') {
@@ -138,7 +138,7 @@ describe('Test API', () => {
 
 describe('Test Repository', () => {
   it('비교할 검사 커리큘럼 상세을 각각 현재 상세 API로 조회한다', async () => {
-    const repository = new MockTestRepository()
+    const repository = new TestTestRepository()
     const compare = await repository.compareTests(1, '1011', ['1008', '1005'])
 
     expect(compare.currentTest.testCurriculumId).toBe('1011')
@@ -180,7 +180,7 @@ describe('Test Repository', () => {
   })
 
   it('다른 학습자의 검사 커리큘럼 ID는 404로 거부한다', async () => {
-    await expect(new MockTestRepository().getTest(2, '1011')).rejects.toMatchObject({
+    await expect(new TestTestRepository().getTest(2, '1011')).rejects.toMatchObject({
       status: 404,
       code: 'TEST_CURRICULUM_NOT_FOUND',
     })

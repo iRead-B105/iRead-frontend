@@ -27,12 +27,6 @@ const realtimeHarness = vi.hoisted(() => ({
   options: null as unknown,
 }))
 
-vi.mock('@/config/runtimeEnv', () => ({
-  appEnvironment: {
-    dataSource: 'api',
-  },
-}))
-
 vi.mock('@/lib/realtime/realtimeClient', () => ({
   RealtimeClient: class {
     constructor(options: unknown) {

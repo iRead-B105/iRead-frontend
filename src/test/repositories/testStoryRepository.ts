@@ -1,13 +1,20 @@
 import { ApiError } from '@/lib/api'
-import { mapStoryDetail, mapStoryGazeAnalysis, mapStoryHistoryList } from '../adapters'
+import {
+  mapStoryDetail,
+  mapStoryGazeAnalysis,
+  mapStoryHistoryList,
+} from '@/features/teacher/story/adapters'
 import {
   storyDetailFixturesById,
   storyGazeFixturesByStoryId,
   storyHistoryFixturesByStudent,
   storyTemplateFixtures,
-} from '../fixtures'
-import { normalizeStoryHistoryQuery } from '../query'
-import type { StoryRepository, StoryRequestOptions } from './storyRepository'
+} from '@/test/fixtures/story'
+import { normalizeStoryHistoryQuery } from '@/features/teacher/story/query'
+import type {
+  StoryRepository,
+  StoryRequestOptions,
+} from '@/features/teacher/story/repositories/storyRepository'
 
 function activityDate(activityAt: string): string {
   return activityAt.slice(0, 10)
@@ -32,7 +39,7 @@ function wait(delayMs: number, signal?: AbortSignal): Promise<void> {
   })
 }
 
-export interface MockStoryRepositoryOptions {
+export interface TestStoryRepositoryOptions {
   readonly delayMs?: number
   readonly historiesByStudent?: Readonly<
     Record<number, (typeof storyHistoryFixturesByStudent)[number]>
@@ -42,14 +49,14 @@ export interface MockStoryRepositoryOptions {
   readonly gazeByStoryId?: typeof storyGazeFixturesByStoryId
 }
 
-export class MockStoryRepository implements StoryRepository {
+export class TestStoryRepository implements StoryRepository {
   private readonly delayMs: number
   private readonly historiesByStudent: typeof storyHistoryFixturesByStudent
   private readonly knownStudentIds: ReadonlySet<number>
   private readonly detailByStoryId: typeof storyDetailFixturesById
   private readonly gazeByStoryId: typeof storyGazeFixturesByStoryId
 
-  constructor(options: MockStoryRepositoryOptions = {}) {
+  constructor(options: TestStoryRepositoryOptions = {}) {
     this.delayMs = options.delayMs ?? 80
     this.historiesByStudent = options.historiesByStudent ?? storyHistoryFixturesByStudent
     this.knownStudentIds = new Set(options.knownStudentIds ?? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])

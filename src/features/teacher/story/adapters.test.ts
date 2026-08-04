@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mapStoryDetail, mapStoryGazeAnalysis } from './adapters'
-import { storyDetailFixturesById, storyGazeFixturesByStoryId } from './fixtures'
+import { storyDetailFixturesById, storyGazeFixturesByStoryId } from '@/test/fixtures/story'
 
 describe('story detail adapters', () => {
   it('이야기 페이지와 페이지별 시선 지표를 페이지 번호순으로 정렬한다', () => {

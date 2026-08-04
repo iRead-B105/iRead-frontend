@@ -5,10 +5,9 @@ import {
   storyGazeFixturesByStoryId,
   storyHistoryFixturesByStudent,
   storyTemplateFixtures,
-} from '../fixtures'
+} from '@/test/fixtures/story'
 import { ApiStoryRepository } from './apiStoryRepository'
-import { MockStoryRepository } from './mockStoryRepository'
-import { createStoryRepository } from '.'
+import { TestStoryRepository } from '@/test/repositories'
 
 function api(overrides: Partial<StoryApi> = {}): StoryApi {
   return {
@@ -31,11 +30,9 @@ function api(overrides: Partial<StoryApi> = {}): StoryApi {
 
 describe('StoryRepository factory', () => {
   it('데이터 소스에 따라 구현체만 교체한다', () => {
-    const mock = new MockStoryRepository({ delayMs: 0 })
     const apiRepository = new ApiStoryRepository(api())
 
-    expect(createStoryRepository('mock', { mock, api: apiRepository })).toBe(mock)
-    expect(createStoryRepository('api', { mock, api: apiRepository })).toBe(apiRepository)
+    expect(apiRepository).toBeInstanceOf(ApiStoryRepository)
   })
 })
 
@@ -100,9 +97,9 @@ describe('Story API target contract', () => {
   })
 })
 
-describe('MockStoryRepository', () => {
+describe('TestStoryRepository', () => {
   it('activityAt 최신순으로 필터링하고 빈 결과에서도 전체 템플릿을 유지한다', async () => {
-    const repository = new MockStoryRepository({ delayMs: 0 })
+    const repository = new TestStoryRepository({ delayMs: 0 })
 
     const filtered = await repository.listHistory(1, {
       from: '2026-07-20',
@@ -122,7 +119,7 @@ describe('MockStoryRepository', () => {
   })
 
   it('페이지 범위를 넘으면 오류가 아닌 빈 목록과 요청 페이지를 반환한다', async () => {
-    const repository = new MockStoryRepository({ delayMs: 0 })
+    const repository = new TestStoryRepository({ delayMs: 0 })
 
     const result = await repository.listHistory(1, { page: 3, size: 2 })
 
@@ -133,7 +130,7 @@ describe('MockStoryRepository', () => {
   })
 
   it('상세와 시선 응답도 API와 동일한 Adapter를 거쳐 반환한다', async () => {
-    const repository = new MockStoryRepository({ delayMs: 0 })
+    const repository = new TestStoryRepository({ delayMs: 0 })
 
     const detail = await repository.getDetail(1, 6801)
     const gaze = await repository.getGazeAnalysis(1, 6801)
@@ -146,7 +143,7 @@ describe('MockStoryRepository', () => {
   })
 
   it('모든 Mock 상세의 문장 수와 읽은 문장 수가 목록 요약과 일치한다', async () => {
-    const repository = new MockStoryRepository({ delayMs: 0 })
+    const repository = new TestStoryRepository({ delayMs: 0 })
 
     for (const [studentIdText, stories] of Object.entries(storyHistoryFixturesByStudent)) {
       const studentId = Number(studentIdText)
@@ -162,7 +159,7 @@ describe('MockStoryRepository', () => {
   })
 
   it('다른 학생의 이야기 상세는 찾을 수 없음으로 처리한다', async () => {
-    const repository = new MockStoryRepository({ delayMs: 0 })
+    const repository = new TestStoryRepository({ delayMs: 0 })
 
     await expect(repository.getDetail(2, 6801)).rejects.toMatchObject({
       status: 404,

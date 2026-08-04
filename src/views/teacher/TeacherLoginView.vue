@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { defineAsyncComponent, nextTick, onMounted, reactive, ref } from 'vue'
+import { nextTick, onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { isMockAuthSource } from '@/config/authSource'
 import { getLoginErrorMessage } from '@/features/teacher/auth'
 import { resolveTeacherRedirect } from '@/router'
 import { useSessionStore } from '@/stores/session'
@@ -21,10 +20,6 @@ const successMessage = ref(
     ? '비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해 주세요.'
     : '',
 )
-const MockAuthEntry = !import.meta.env.PROD
-  ? defineAsyncComponent(() => import('@/features/teacher/auth/components/MockAuthEntry.vue'))
-  : null
-
 onMounted(async () => {
   if (route.query.passwordReset !== 'success') return
 
@@ -66,8 +61,6 @@ async function login() {
           <p>교수자 계정으로 로그인해 주세요.</p>
         </header>
 
-        <MockAuthEntry v-if="isMockAuthSource" />
-
         <div class="login-fields">
           <div class="field">
             <label for="login-email">이메일</label>
@@ -78,7 +71,6 @@ async function login() {
               type="email"
               required
               maxlength="50"
-              :disabled="isMockAuthSource"
               placeholder="example@iread.co.kr"
               :aria-invalid="Boolean(errorMessage)"
               :aria-describedby="errorMessage ? 'login-error' : undefined"
@@ -95,7 +87,6 @@ async function login() {
                 minlength="8"
                 maxlength="100"
                 :type="showPassword ? 'text' : 'password'"
-                :disabled="isMockAuthSource"
                 placeholder="비밀번호 입력"
                 :aria-invalid="Boolean(errorMessage)"
                 :aria-describedby="errorMessage ? 'login-error' : undefined"
@@ -129,7 +120,7 @@ async function login() {
         >
           {{ errorMessage }}
         </p>
-        <Button class="login-submit" type="submit" :disabled="submitting || isMockAuthSource">
+        <Button class="login-submit" type="submit" :disabled="submitting">
           {{ submitting ? '로그인 중...' : '로그인' }}
         </Button>
         <p class="login-signup-link">

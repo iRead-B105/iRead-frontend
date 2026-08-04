@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import { refreshedReportGazeTrendFixture } from '@/features/teacher/report'
+import { refreshedReportGazeTrendFixture } from '@/test/fixtures/report'
 import ReportGazeTrend from './ReportGazeTrend.vue'
 
 function mountTrend(showAutomaticAnalysis: boolean) {

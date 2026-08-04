@@ -1,12 +1,12 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  MockReportRepository,
-  reportFixtures,
   type ReportDetail,
   type ReportListItem,
   type ReportRepository,
 } from '@/features/teacher/report'
+import { reportFixtures } from '@/test/fixtures/report'
+import { TestReportRepository } from '@/test/repositories'
 import { ApiError } from '@/lib/api'
 import { useReportStore } from './report'
 
@@ -213,7 +213,7 @@ describe('Report store', () => {
 
   it('reset이 진행 요청과 보고서 선택 상태를 모두 비운다', async () => {
     const store = useReportStore()
-    store.setRepository(new MockReportRepository({ delayMs: 0 }))
+    store.setRepository(new TestReportRepository({ delayMs: 0 }))
     await store.loadForStudent(1)
     await store.selectReport(1002)
 

@@ -5,7 +5,8 @@ import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
 import TeacherSidebar from './TeacherSidebar.vue'
 import StudentSwitcher from './StudentSwitcher.vue'
-import { MockReportRepository } from '@/features/teacher/report'
+import { TestReportRepository } from '@/test/repositories'
+import { authRepositories } from '@/features/teacher/auth'
 import type { StudentListItem, StudentRepository } from '@/features/teacher/student'
 import { useSessionStore } from '@/stores/session'
 import { useReportStore } from '@/stores/report'
@@ -258,7 +259,8 @@ describe('TeacherSidebar', () => {
     const session = useSessionStore(pinia)
     const students = useStudentStore(pinia)
     const reports = useReportStore(pinia)
-    reports.setRepository(new MockReportRepository({ delayMs: 0 }))
+    vi.spyOn(authRepositories.auth, 'logout').mockResolvedValueOnce()
+    reports.setRepository(new TestReportRepository({ delayMs: 0 }))
     await reports.loadForStudent(1)
     expect(reports.reports.length).toBeGreaterThan(0)
 

@@ -1,6 +1,5 @@
 export * from './adapters'
 export * from './api'
-export * from './fixtures'
 export * from './model'
 export * from './presenters'
 export * from './query'

@@ -33,10 +33,7 @@ describe('ApiClient.download', () => {
         },
       }),
     )
-    const client = new ApiClient({
-      baseUrl: 'https://api.example.com',
-      fetch: fetchMock,
-    })
+    const client = new ApiClient({ fetch: fetchMock })
 
     const result = await client.download('/api/admin/training/1/2/export?format=CSV', {
       method: 'POST',
@@ -46,7 +43,7 @@ describe('ApiClient.download', () => {
     expect(result.contentType).toBe('text/csv')
     await expect(result.blob.text()).resolves.toBe('studentId,accuracy\n1,98')
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.example.com/api/admin/training/1/2/export?format=CSV',
+      '/api/admin/training/1/2/export?format=CSV',
       expect.objectContaining({
         method: 'POST',
         credentials: 'include',

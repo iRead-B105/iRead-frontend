@@ -1,11 +1,11 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  MockTestRepository,
   type TestDetail,
   type TestListItem,
   type TestRepository,
 } from '@/features/teacher/test'
+import { TestTestRepository } from '@/test/repositories'
 import { ApiError } from '@/lib/api'
 import { useTestStore } from './test'
 
@@ -50,7 +50,7 @@ describe('Test store', () => {
   })
 
   it('preserves chart source references when a background refresh returns identical data', async () => {
-    const mock = new MockTestRepository()
+    const mock = new TestTestRepository()
     const store = useTestStore()
     store.setRepository(mock)
     await store.loadForStudent(1)
@@ -64,7 +64,7 @@ describe('Test store', () => {
   })
 
   it('최신 완료 검사 커리큘럼을 기본 선택하고 단일 상세를 요청한다', async () => {
-    const mock = new MockTestRepository()
+    const mock = new TestTestRepository()
     const compareTests = vi.spyOn(mock, 'compareTests')
     const store = useTestStore()
     store.setRepository(mock)
@@ -90,7 +90,7 @@ describe('Test store', () => {
 
   it('비교 검사를 최대 두 건만 추가하고 개별 해제한다', async () => {
     const store = useTestStore()
-    store.setRepository(new MockTestRepository())
+    store.setRepository(new TestTestRepository())
     await store.loadForStudent(1)
 
     await expect(store.addComparisonTest(1, '1008')).resolves.toBe(true)
@@ -106,7 +106,7 @@ describe('Test store', () => {
   })
 
   it('검사 목록 재조회 실패 시 이전 결과를 유지한다', async () => {
-    const mock = new MockTestRepository()
+    const mock = new TestTestRepository()
     const getTests = vi
       .fn()
       .mockResolvedValueOnce(await mock.getTests(1))
@@ -138,7 +138,7 @@ describe('Test store', () => {
   })
 
   it('전체 검사 상세 일부가 실패해도 성공 결과만 평균에 유지한다', async () => {
-    const mock = new MockTestRepository({ failedDetailTestCurriculumIds: ['1005'] })
+    const mock = new TestTestRepository({ failedDetailTestCurriculumIds: ['1005'] })
     const store = useTestStore()
     store.setRepository(mock)
 
@@ -156,7 +156,7 @@ describe('Test store', () => {
 
   it('빠른 기준 변경에서 늦게 끝난 이전 상세 응답을 무시한다', async () => {
     const oldDetail = deferred<TestDetail>()
-    const mock = new MockTestRepository()
+    const mock = new TestTestRepository()
     const compareTests = vi.fn().mockImplementation(async (studentId, id, ids, options) => {
       if (id === '1008') {
         return { currentTest: await oldDetail.promise, comparisonTests: [] }
@@ -186,7 +186,7 @@ describe('Test store', () => {
 
   it('기준 검사를 바꾸는 동안 이전 검사 상세와 시선 결과를 함께 숨긴다', async () => {
     const pending = deferred<TestDetail>()
-    const mock = new MockTestRepository()
+    const mock = new TestTestRepository()
     const store = useTestStore()
     store.setRepository(
       repository({
@@ -222,7 +222,7 @@ describe('Test store', () => {
   })
 
   it('선택 문항의 시선 집계만 조회하고 다른 학습자의 문항 ID를 차단한다', async () => {
-    const mock = new MockTestRepository()
+    const mock = new TestTestRepository()
     const getGazeAnalysis = vi.spyOn(mock, 'getGazeAnalysis')
     const store = useTestStore()
     store.setRepository(mock)
@@ -240,7 +240,7 @@ describe('Test store', () => {
   })
 
   it('중복 testId는 한 번만 확인하고 실제 시선 분석 존재 여부를 캐시한다', async () => {
-    const mock = new MockTestRepository()
+    const mock = new TestTestRepository()
     const getGazeAnalysis = vi.spyOn(mock, 'getGazeAnalysis')
     const store = useTestStore()
     store.setRepository(mock)
@@ -262,7 +262,7 @@ describe('Test store', () => {
 
   it('같은 학습자의 background refresh가 진행 중인 시선 요청을 중단하지 않는다', async () => {
     const pendingGaze = deferred<Awaited<ReturnType<TestRepository['getGazeAnalysis']>>>()
-    const mock = new MockTestRepository()
+    const mock = new TestTestRepository()
     let gazeSignal: AbortSignal | undefined
     const store = useTestStore()
     store.setRepository(
@@ -295,7 +295,7 @@ describe('Test store', () => {
 
   it('학습자 변경에서 늦게 끝난 이전 목록 응답을 무시한다', async () => {
     const oldList = deferred<readonly TestListItem[]>()
-    const mock = new MockTestRepository()
+    const mock = new TestTestRepository()
     const getTests = vi
       .fn()
       .mockReturnValueOnce(oldList.promise)
@@ -326,7 +326,7 @@ describe('Test store', () => {
 
   it('403 오류를 권한 안내로 변환하고 고정 결과를 표시하지 않는다', async () => {
     const store = useTestStore()
-    store.setRepository(new MockTestRepository({ forbiddenStudentIds: [1] }))
+    store.setRepository(new TestTestRepository({ forbiddenStudentIds: [1] }))
 
     await store.loadForStudent(1)
 

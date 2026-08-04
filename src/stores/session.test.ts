@@ -19,13 +19,11 @@ const teacher: TeacherProfile = {
 
 function createRepositories(
   overrides: {
-    source?: AuthRepositories['source']
     auth?: Partial<AuthRepository>
     teacher?: Partial<TeacherRepository>
   } = {},
 ): AuthRepositories {
   return {
-    source: overrides.source ?? 'api',
     auth: {
       login: vi.fn().mockResolvedValue({
         accessToken: 'access-token',

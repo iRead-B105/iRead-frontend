@@ -1,7 +1,6 @@
 import type { Pinia } from 'pinia'
 import { watch, type WatchStopHandle } from 'vue'
 import type { Router } from 'vue-router'
-import { appEnvironment } from '@/config/runtimeEnv'
 import { RealtimeClient, type RealtimeEvent } from '@/lib/realtime/realtimeClient'
 import { useRealtimeFreshnessStore, type RealtimeFreshnessScope } from '@/stores/realtimeFreshness'
 import { useSessionStore } from '@/stores/session'
@@ -49,8 +48,6 @@ function hasResolvedWithoutError(...statuses: readonly string[]): boolean {
 }
 
 export function installTeacherRealtimeSync(pinia: Pinia, router: Router): () => void {
-  if (appEnvironment.dataSource !== 'api') return () => undefined
-
   const session = useSessionStore(pinia)
   const freshness = useRealtimeFreshnessStore(pinia)
   const students = useStudentStore(pinia)
