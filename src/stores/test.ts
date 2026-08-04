@@ -5,6 +5,7 @@ import {
   type TestComparison,
   type TestDetail,
   type TestListItem,
+  type TestQuestionResult,
   type TestRepository,
   type TestRequestStatus,
 } from '@/features/teacher/test'
@@ -54,12 +55,12 @@ export const useTestStore = defineStore('test', () => {
   const trendError = ref<string | null>(null)
   const trendFailedCount = ref(0)
   const selectedQuestionTestId = ref<string | null>(null)
-  const selectedQuestionSequenceNo = ref<number | null>(null)
+  const selectedQuestionNo = ref<number | null>(null)
   const questionGazeAnalysis = ref<GazeAnalysisState | null>(null)
   const questionGazeStatus = ref<GazeAnalysisRequestStatus>('idle')
   const questionGazeError = ref<string | null>(null)
   const questionGazeAvailability = ref<Readonly<Record<string, QuestionGazeAvailability>>>({})
-  const questionGazeByTestId = ref<Readonly<Record<string, GazeAnalysisState>>>({})
+  const questionGazeByKey = ref<Readonly<Record<string, GazeAnalysisState>>>({})
   const questionGazeAvailabilityStatus = ref<GazeAnalysisRequestStatus>('idle')
   const questionGazeAvailabilityFailedCount = ref(0)
 
@@ -103,6 +104,10 @@ export const useTestStore = defineStore('test', () => {
     return `${currentStudentId}:${testCurriculumId}`
   }
 
+  function questionKey(testId: string, questionNo: number): string {
+    return `${testId}:${questionNo}`
+  }
+
   function cacheDetails(currentStudentId: number, details: readonly TestDetail[]): void {
     for (const detail of details) {
       detailCache.set(cacheKey(currentStudentId, detail.testCurriculumId), detail)
@@ -138,12 +143,12 @@ export const useTestStore = defineStore('test', () => {
     trendError.value = null
     trendFailedCount.value = 0
     selectedQuestionTestId.value = null
-    selectedQuestionSequenceNo.value = null
+    selectedQuestionNo.value = null
     questionGazeAnalysis.value = null
     questionGazeStatus.value = 'idle'
     questionGazeError.value = null
     questionGazeAvailability.value = {}
-    questionGazeByTestId.value = {}
+    questionGazeByKey.value = {}
     questionGazeAvailabilityStatus.value = 'idle'
     questionGazeAvailabilityFailedCount.value = 0
     detailCache.clear()
@@ -421,35 +426,47 @@ export const useTestStore = defineStore('test', () => {
     questionGazeGeneration += 1
     questionGazeAvailabilityGeneration += 1
     selectedQuestionTestId.value = null
-    selectedQuestionSequenceNo.value = null
+    selectedQuestionNo.value = null
     questionGazeAnalysis.value = null
     questionGazeStatus.value = 'idle'
     questionGazeError.value = null
     questionGazeAvailability.value = {}
-    questionGazeByTestId.value = {}
+    questionGazeByKey.value = {}
     questionGazeAvailabilityStatus.value = 'idle'
     questionGazeAvailabilityFailedCount.value = 0
   }
 
   async function loadQuestionGazeAvailability(
     currentStudentId: number,
-    testIds: readonly string[],
+    questions: readonly Pick<TestQuestionResult, 'testId' | 'questionNo'>[],
   ): Promise<boolean> {
-    const currentIds = new Set(
-      comparisonResult.value?.currentTest.questions.map((question) => question.testId) ?? [],
+    const currentKeys = new Set(
+      comparisonResult.value?.currentTest.questions.map((question) =>
+        questionKey(question.testId, question.questionNo),
+      ) ?? [],
     )
-    const uniqueTestIds = [...new Set(testIds)]
+    const uniqueQuestions = [
+      ...new Map(
+        questions.map((question) => [
+          questionKey(question.testId, question.questionNo),
+          question,
+        ]),
+      ).values(),
+    ]
+    const requestedKeys = uniqueQuestions.map((question) =>
+      questionKey(question.testId, question.questionNo),
+    )
     if (
       studentId.value !== currentStudentId ||
-      uniqueTestIds.length === 0 ||
-      uniqueTestIds.some((testId) => !currentIds.has(testId))
+      uniqueQuestions.length === 0 ||
+      requestedKeys.some((key) => !currentKeys.has(key))
     ) {
       return false
     }
-    const previousIds = Object.keys(questionGazeAvailability.value)
+    const previousKeys = Object.keys(questionGazeAvailability.value)
     if (
       questionGazeAvailabilityStatus.value === 'success' &&
-      sameIds(previousIds, uniqueTestIds)
+      sameIds(previousKeys, requestedKeys)
     ) {
       return questionGazeAvailabilityFailedCount.value === 0
     }
@@ -458,13 +475,16 @@ export const useTestStore = defineStore('test', () => {
     const controller = new AbortController()
     questionGazeAvailabilityController = controller
     const generation = ++questionGazeAvailabilityGeneration
-    if (previousIds.length === 0) questionGazeAvailabilityStatus.value = 'loading'
+    if (previousKeys.length === 0) questionGazeAvailabilityStatus.value = 'loading'
     questionGazeAvailabilityFailedCount.value = 0
     const results = await Promise.allSettled(
-      uniqueTestIds.map((testId) =>
-        repository.value.getGazeAnalysis(currentStudentId, testId, {
-          signal: controller.signal,
-        }),
+      uniqueQuestions.map((question) =>
+        repository.value.getQuestionGazeAnalysis(
+          currentStudentId,
+          question.testId,
+          question.questionNo,
+          { signal: controller.signal },
+        ),
       ),
     )
     if (
@@ -477,17 +497,17 @@ export const useTestStore = defineStore('test', () => {
     const analyses: Record<string, GazeAnalysisState> = {}
     let failedCount = 0
     results.forEach((result, index) => {
-      const testId = uniqueTestIds[index]!
+      const key = requestedKeys[index]!
       if (result.status === 'fulfilled') {
-        availability[testId] = result.value.status
-        analyses[testId] = result.value
+        availability[key] = result.value.status
+        analyses[key] = result.value
       } else if (!isAbortError(result.reason)) {
-        availability[testId] = 'ERROR'
+        availability[key] = 'ERROR'
         failedCount += 1
       }
     })
     questionGazeAvailability.value = availability
-    questionGazeByTestId.value = analyses
+    questionGazeByKey.value = analyses
     questionGazeAvailabilityFailedCount.value = failedCount
     questionGazeAvailabilityStatus.value = failedCount === results.length ? 'error' : 'success'
     if (questionGazeAvailabilityController === controller) {
@@ -499,17 +519,17 @@ export const useTestStore = defineStore('test', () => {
   async function loadQuestionGaze(
     currentStudentId: number,
     testId: string,
-    sequenceNo: number,
+    questionNo: number,
     force: boolean,
   ): Promise<boolean> {
     const questionExists = comparisonResult.value?.currentTest.questions.some(
-      (question) => question.testId === testId && question.sequenceNo === sequenceNo,
+      (question) => question.testId === testId && question.questionNo === questionNo,
     )
     if (studentId.value !== currentStudentId || !questionExists) return false
     if (
       !force &&
       selectedQuestionTestId.value === testId &&
-      selectedQuestionSequenceNo.value === sequenceNo &&
+      selectedQuestionNo.value === questionNo &&
       (questionGazeStatus.value === 'loading' || questionGazeStatus.value === 'success')
     ) {
       return questionGazeStatus.value === 'success'
@@ -521,15 +541,16 @@ export const useTestStore = defineStore('test', () => {
     const generation = ++questionGazeGeneration
     if (
       selectedQuestionTestId.value !== testId ||
-      selectedQuestionSequenceNo.value !== sequenceNo
+      selectedQuestionNo.value !== questionNo
     ) {
       questionGazeAnalysis.value = null
     }
     selectedQuestionTestId.value = testId
-    selectedQuestionSequenceNo.value = sequenceNo
+    selectedQuestionNo.value = questionNo
     questionGazeStatus.value = 'loading'
     questionGazeError.value = null
-    const cached = questionGazeByTestId.value[testId]
+    const key = questionKey(testId, questionNo)
+    const cached = questionGazeByKey.value[key]
     if (!force && cached?.status === 'AVAILABLE') {
       questionGazeController = null
       questionGazeAnalysis.value = cached
@@ -537,17 +558,29 @@ export const useTestStore = defineStore('test', () => {
       return true
     }
     try {
-      const state = await repository.value.getGazeAnalysis(currentStudentId, testId, {
-        signal: controller.signal,
-      })
+      const state = await repository.value.getQuestionGazeAnalysis(
+        currentStudentId,
+        testId,
+        questionNo,
+        { signal: controller.signal },
+      )
       if (
         generation !== questionGazeGeneration ||
         studentId.value !== currentStudentId ||
         selectedQuestionTestId.value !== testId ||
-        selectedQuestionSequenceNo.value !== sequenceNo
+        selectedQuestionNo.value !== questionNo
       ) {
         return false
       }
+      questionGazeByKey.value = { ...questionGazeByKey.value, [key]: state }
+      questionGazeAvailability.value = {
+        ...questionGazeAvailability.value,
+        [key]: state.status,
+      }
+      questionGazeAvailabilityFailedCount.value = Object.values(
+        questionGazeAvailability.value,
+      ).filter((status) => status === 'ERROR').length
+      questionGazeAvailabilityStatus.value = 'success'
       questionGazeAnalysis.value = state
       questionGazeStatus.value = 'success'
       return true
@@ -556,6 +589,18 @@ export const useTestStore = defineStore('test', () => {
       questionGazeAnalysis.value = null
       questionGazeStatus.value = 'error'
       questionGazeError.value = gazeErrorMessage(error)
+      questionGazeAvailability.value = {
+        ...questionGazeAvailability.value,
+        [key]: 'ERROR',
+      }
+      questionGazeAvailabilityFailedCount.value = Object.values(
+        questionGazeAvailability.value,
+      ).filter((status) => status === 'ERROR').length
+      questionGazeAvailabilityStatus.value =
+        questionGazeAvailabilityFailedCount.value ===
+        Object.keys(questionGazeAvailability.value).length
+          ? 'error'
+          : 'success'
       return false
     } finally {
       if (questionGazeController === controller) questionGazeController = null
@@ -565,23 +610,23 @@ export const useTestStore = defineStore('test', () => {
   function selectQuestionGaze(
     currentStudentId: number,
     testId: string,
-    sequenceNo: number,
+    questionNo: number,
   ): Promise<boolean> {
-    return loadQuestionGaze(currentStudentId, testId, sequenceNo, false)
+    return loadQuestionGaze(currentStudentId, testId, questionNo, false)
   }
 
   async function retryQuestionGaze(): Promise<void> {
     if (
       studentId.value === null ||
       selectedQuestionTestId.value === null ||
-      selectedQuestionSequenceNo.value === null
+      selectedQuestionNo.value === null
     ) {
       return
     }
     await loadQuestionGaze(
       studentId.value,
       selectedQuestionTestId.value,
-      selectedQuestionSequenceNo.value,
+      selectedQuestionNo.value,
       true,
     )
   }
@@ -616,7 +661,7 @@ export const useTestStore = defineStore('test', () => {
     trendError,
     trendFailedCount,
     selectedQuestionTestId,
-    selectedQuestionSequenceNo,
+    selectedQuestionNo,
     questionGazeAnalysis,
     questionGazeStatus,
     questionGazeError,

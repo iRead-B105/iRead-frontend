@@ -24,6 +24,7 @@ export type TestAnswer = unknown
 
 export interface TestQuestionResult {
   readonly testId: string
+  readonly questionNo: number
   readonly sequenceNo: number
   readonly trackCode: string
   readonly questionType: string
@@ -44,13 +45,6 @@ export interface TestDetail extends TestListItem {
   readonly gazeDepartureCount: number | null
   readonly pronunciationScore: number | null
   readonly questions: readonly TestQuestionResult[]
-  readonly recommendationStatus: string | null
-  readonly recommendationError: string | null
-  readonly recommendationLastAttemptAt: string | null
-  readonly recommendationRetryCount: number
-  readonly dailyCurriculumId: number | null
-  readonly contentGenerationStatus: string | null
-  readonly teacherReviewStatus: string | null
 }
 
 export interface TestComparison {

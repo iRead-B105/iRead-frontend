@@ -90,21 +90,24 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.findAll('.question-list > li')).toHaveLength(9)
     expect(wrapper.text()).toContain('제출 답안')
     expect(wrapper.text()).toContain('발음 점수')
-    expect(wrapper.text()).toContain('AI 콘텐츠 생성 완료')
-    expect(wrapper.text()).toContain('최종 검수 필요')
-    expect(wrapper.text()).toContain('최근 추천 시도')
-    expect(wrapper.text()).toContain('재시도 횟수')
+    expect(wrapper.text()).not.toContain('추천 훈련 커리큘럼')
+    expect(wrapper.text()).not.toContain('추천 교안 검수하기')
     expect(wrapper.text()).toContain('9문항 확인')
   })
 
-  it('문항 testId로 실제 시선 집계를 조회하고 raw replay는 표시하지 않는다', async () => {
+  it('testId와 questionNo로 문항별 시선 분석을 조회한다', async () => {
     const repository = new TestTestRepository()
-    const getGazeAnalysis = vi.spyOn(repository, 'getGazeAnalysis')
+    const getQuestionGazeAnalysis = vi.spyOn(repository, 'getQuestionGazeAnalysis')
     const { wrapper } = await mountHistory(repository)
 
-    expect(getGazeAnalysis).toHaveBeenCalledTimes(9)
-    expect(getGazeAnalysis.mock.calls.map((call) => call[1])).toContain('10111')
-    expect(wrapper.findAll('.question-list button')).toHaveLength(1)
+    expect(getQuestionGazeAnalysis).toHaveBeenCalledTimes(9)
+    expect(getQuestionGazeAnalysis).toHaveBeenCalledWith(
+      1,
+      '10111',
+      2,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(wrapper.findAll('.question-list button')).toHaveLength(3)
     expect(wrapper.text()).toContain('이 검사 구간의 시선 분석 보기')
     expect(wrapper.text()).not.toContain('문항 1 시선 분석')
 
@@ -113,10 +116,10 @@ describe('StudentTestHistoryView', () => {
 
     expect(wrapper.text()).toContain('문항 1 시선 분석')
     expect(wrapper.text()).toContain('총 시선 체류 시간')
-    expect(wrapper.text()).not.toContain('단어별 시선 머무름')
+    expect(wrapper.text()).toContain('단어별 시선 머무름')
   })
 
-  it('같은 testId로 펼쳐진 세 문항 중 첫 문항에만 버튼을 표시하고 하나만 선택한다', async () => {
+  it('같은 testId로 묶인 세 문항을 questionNo로 각각 선택한다', async () => {
     const source = testDetailFixtures.find((detail) => detail.testCurriculumId === '1011')!
     const legacy = {
       ...source,
@@ -129,24 +132,43 @@ describe('StudentTestHistoryView', () => {
       details: testDetailFixtures.map((detail) =>
         detail.testCurriculumId === legacy.testCurriculumId ? legacy : detail,
       ),
-      gazeByTestId: {
-        '3001': testGazeFixtures[1_011]!,
-        '3002': { status: 'NO_DATA', analysis: null },
-        '3003': { status: 'NO_DATA', analysis: null },
+      gazeByQuestionKey: {
+        '3001:1': testGazeFixtures[1_011]!,
+        '3001:2': testGazeFixtures[1_011]!,
+        '3001:3': testGazeFixtures[1_011]!,
       },
     })
     const { wrapper } = await mountHistory(repository)
 
-    expect(wrapper.findAll('.question-list button')).toHaveLength(1)
+    expect(wrapper.findAll('.question-list button')).toHaveLength(3)
     expect(wrapper.findAll('.question-list > li').at(0)?.find('button').exists()).toBe(true)
-    expect(wrapper.findAll('.question-list > li').at(1)?.find('button').exists()).toBe(false)
-    expect(wrapper.findAll('.question-list > li').at(2)?.find('button').exists()).toBe(false)
+    expect(wrapper.findAll('.question-list > li').at(1)?.find('button').exists()).toBe(true)
+    expect(wrapper.findAll('.question-list > li').at(2)?.find('button').exists()).toBe(true)
 
-    await wrapper.get('.question-list button').trigger('click')
+    await wrapper.findAll('.question-list button')[1]!.trigger('click')
     await flushPromises()
 
     expect(wrapper.findAll('.question-list > li.is-gaze-selected')).toHaveLength(1)
-    expect(wrapper.findAll('.question-list > li').at(0)?.classes()).toContain('is-gaze-selected')
+    expect(wrapper.findAll('.question-list > li').at(1)?.classes()).toContain('is-gaze-selected')
+  })
+
+  it('문항 원본이 null이면 원본 없음 상태를 명시한다', async () => {
+    const source = testDetailFixtures.find((detail) => detail.testCurriculumId === '1011')!
+    const missingOriginal = {
+      ...source,
+      questions: source.questions.map((question, index) =>
+        index === 0 ? { ...question, question: null } : question,
+      ),
+    }
+    const repository = new TestTestRepository({
+      details: testDetailFixtures.map((detail) =>
+        detail.testCurriculumId === missingOriginal.testCurriculumId ? missingOriginal : detail,
+      ),
+    })
+
+    const { wrapper } = await mountHistory(repository)
+
+    expect(wrapper.text()).toContain('문항 원본 없음')
   })
 
   it('전체 점수·풀이 시간·시선 이탈·발음 점수를 검사 단위로 비교한다', async () => {
@@ -168,21 +190,6 @@ describe('StudentTestHistoryView', () => {
     await flushPromises()
     expect(wrapper.findAll('.detail-card')).toHaveLength(2)
     expect(wrapper.text()).toContain('비교 1/2건')
-  })
-
-  it('추천 커리큘럼 ID를 보존해 해당 검수 화면으로 이동한다', async () => {
-    const { wrapper, router } = await mountHistory(new TestTestRepository())
-
-    expect(wrapper.text()).toContain('추천 커리큘럼 #201')
-    const button = wrapper
-      .findAll('button')
-      .find((item) => item.text().includes('추천 교안 검수하기'))
-    await button?.trigger('click')
-    await flushPromises()
-
-    expect(router.currentRoute.value.name).toBe('student-curriculum')
-    expect(router.currentRoute.value.params.id).toBe('1')
-    expect(router.currentRoute.value.query.curriculumId).toBe('201')
   })
 
   it('실제 0점·0초·0회를 측정값 없음과 구분한다', async () => {

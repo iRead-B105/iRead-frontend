@@ -10,7 +10,8 @@ function questions(scores: readonly number[]): readonly TestQuestionResult[] {
     const track = tracks[Math.floor(index / 3)]!
     const voice = index >= 6
     return {
-      testId: String(11_001 + index),
+      testId: String(11_001 + Math.floor(index / 3)),
+      questionNo: (index % 3) + 1,
       sequenceNo: index + 1,
       trackCode: track[0],
       questionType: voice ? 'VOICE' : index % 2 === 0 ? 'SINGLE_CHOICE' : 'DIRECT_INPUT',
@@ -32,11 +33,10 @@ function detail(
   completedAt: string,
   overallScore: number | null,
   scores: readonly number[],
-  dailyCurriculumId: number | null = null,
 ): TestDetail {
-  const questionResults = questions(scores).map((question) => ({
+  const questionResults = questions(scores).map((question, index) => ({
     ...question,
-    testId: `${id}${question.sequenceNo}`,
+    testId: `${id}${Math.floor(index / 3) + 1}`,
   }))
   const areaScores = ['음운 인식', '짧은 글', '유창성'].map((title, index) => {
     const area = scores.slice(index * 3, index * 3 + 3)
@@ -80,19 +80,12 @@ function detail(
               10,
           ) / 10,
     questions: questionResults,
-    recommendationStatus: dailyCurriculumId === null ? 'PENDING' : 'COMPLETED',
-    recommendationError: null,
-    recommendationLastAttemptAt: completedAt,
-    recommendationRetryCount: 0,
-    dailyCurriculumId,
-    contentGenerationStatus: dailyCurriculumId === null ? null : 'NOT_STARTED',
-    teacherReviewStatus: dailyCurriculumId === null ? null : 'REVIEW_REQUIRED',
   }
 }
 
 export const testDetailFixtures: readonly TestDetail[] = [
-  detail('1011', '2026-07-24T10:30:00', 86, [100, 80, 80, 100, 60, 80, 90, 80, 84], 201),
-  detail('1008', '2026-06-28T11:20:00', 78, [80, 80, 70, 80, 70, 80, 90, 70, 82], 189),
+  detail('1011', '2026-07-24T10:30:00', 86, [100, 80, 80, 100, 60, 80, 90, 80, 84]),
+  detail('1008', '2026-06-28T11:20:00', 78, [80, 80, 70, 80, 70, 80, 90, 70, 82]),
   detail('1005', '2026-05-30T09:10:00', 70, [60, 70, 80, 70, 60, 80, 70, 70, 70]),
   detail('1004', '2026-04-30T09:00:00', 0, [0, 0, 0, 0, 0, 0, 0, 0, 0]),
   detail('2001', '2026-07-18T13:00:00', 82, [80, 80, 90, 80, 80, 80, 90, 80, 78]),

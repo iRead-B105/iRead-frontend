@@ -22,9 +22,10 @@ export interface TestRepository {
     comparisonTestCurriculumIds: readonly string[],
     options?: TestRequestOptions,
   ) => Promise<TestComparison>
-  readonly getGazeAnalysis: (
+  readonly getQuestionGazeAnalysis: (
     studentId: number,
     testId: string,
+    questionNo: number,
     options?: TestRequestOptions,
   ) => Promise<GazeAnalysisState>
 }

@@ -15,11 +15,38 @@ export interface TestTestRepositoryFixtures {
   readonly details?: readonly TestDetail[]
   readonly forbiddenStudentIds?: readonly number[]
   readonly failedDetailTestCurriculumIds?: readonly string[]
-  readonly gazeByTestId?: Readonly<Record<string, GazeAnalysisState>>
+  readonly gazeByQuestionKey?: Readonly<Record<string, GazeAnalysisState>>
 }
 
 function clone<T>(value: T): T {
   return structuredClone(value)
+}
+
+function withQuestionWord(state: GazeAnalysisState, questionNo: number): GazeAnalysisState {
+  if (state.status !== 'AVAILABLE') return state
+  return {
+    ...state,
+    analysis: {
+      ...state.analysis,
+      replay: {
+        words: [
+          {
+            questionNo,
+            targetIndex: 0,
+            tokenIndex: 0,
+            text: `문항 ${questionNo}`,
+            dwellMs: state.analysis.totalVisitedDurationMs,
+            visitCount: state.analysis.totalVisitedCount,
+            skipped: false,
+            regressionCount: state.analysis.reverseReadCount,
+            firstSeenMs: 0,
+            lastSeenMs: state.analysis.totalVisitedDurationMs,
+          },
+        ],
+        samples: [],
+      },
+    },
+  }
 }
 
 function assertNotAborted(options?: TestRequestOptions): void {
@@ -35,7 +62,7 @@ export class TestTestRepository implements TestRepository {
   private readonly details = new Map<string, TestDetail>()
   private readonly forbiddenStudentIds: ReadonlySet<number>
   private readonly failedDetailIds: ReadonlySet<string>
-  private readonly gazeByTestId: ReadonlyMap<string, GazeAnalysisState>
+  private readonly gazeByQuestionKey: ReadonlyMap<string, GazeAnalysisState>
 
   constructor(fixtures: TestTestRepositoryFixtures = {}) {
     this.testsByStudent = clone(fixtures.testsByStudent ?? testListFixtures)
@@ -44,14 +71,16 @@ export class TestTestRepository implements TestRepository {
     }
     this.forbiddenStudentIds = new Set(fixtures.forbiddenStudentIds ?? [])
     this.failedDetailIds = new Set(fixtures.failedDetailTestCurriculumIds ?? [])
-    this.gazeByTestId = new Map(
+    this.gazeByQuestionKey = new Map(
       Object.entries(
-        fixtures.gazeByTestId ?? {
-          '10111': testGazeFixtures[1_011]!,
-          '10081': testGazeFixtures[1_008]!,
-          '10051': testGazeFixtures[1_005]!,
-          '10041': testGazeFixtures[1_004]!,
-          '20011': testGazeFixtures[2_001]!,
+        fixtures.gazeByQuestionKey ?? {
+          '10111:1': withQuestionWord(testGazeFixtures[1_011]!, 1),
+          '10111:2': withQuestionWord(testGazeFixtures[1_011]!, 2),
+          '10111:3': withQuestionWord(testGazeFixtures[1_011]!, 3),
+          '10081:1': testGazeFixtures[1_008]!,
+          '10051:1': testGazeFixtures[1_005]!,
+          '10041:1': testGazeFixtures[1_004]!,
+          '20011:1': testGazeFixtures[2_001]!,
         },
       ),
     )
@@ -109,14 +138,22 @@ export class TestTestRepository implements TestRepository {
     return { currentTest, comparisonTests }
   }
 
-  async getGazeAnalysis(studentId: number, testId: string, options?: TestRequestOptions) {
+  async getQuestionGazeAnalysis(
+    studentId: number,
+    testId: string,
+    questionNo: number,
+    options?: TestRequestOptions,
+  ) {
     this.assertStudentAccess(studentId)
     assertPositiveId(testId, 'testId')
+    assertPositiveId(questionNo, 'questionNo')
     assertNotAborted(options)
     const belongsToStudent = (this.testsByStudent[studentId] ?? []).some((item) =>
       this.details
         .get(item.testCurriculumId)
-        ?.questions.some((question) => question.testId === testId),
+        ?.questions.some(
+          (question) => question.testId === testId && question.questionNo === questionNo,
+        ),
     )
     if (!belongsToStudent) {
       throw new ApiError({
@@ -125,7 +162,12 @@ export class TestTestRepository implements TestRepository {
         message: '검사 문항을 찾을 수 없습니다.',
       })
     }
-    return clone(this.gazeByTestId.get(testId) ?? { status: 'NO_DATA' as const, analysis: null })
+    return clone(
+      this.gazeByQuestionKey.get(`${testId}:${questionNo}`) ?? {
+        status: 'NO_DATA' as const,
+        analysis: null,
+      },
+    )
   }
 
   private assertStudentAccess(studentId: number): void {
