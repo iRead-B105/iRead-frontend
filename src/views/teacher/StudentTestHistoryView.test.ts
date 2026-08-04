@@ -2,12 +2,10 @@ import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  MockTestRepository,
-  testDetailFixtures,
-  type TestRepository,
-} from '@/features/teacher/test'
-import { testGazeFixtures } from '@/features/teacher/gaze'
+import type { TestRepository } from '@/features/teacher/test'
+import { testDetailFixtures } from '@/test/fixtures/test'
+import { TestTestRepository } from '@/test/repositories'
+import { testGazeFixtures } from '@/test/fixtures/gaze'
 import { useTestStore } from '@/stores/test'
 import StudentTestHistoryView from './StudentTestHistoryView.vue'
 
@@ -69,7 +67,7 @@ async function mountHistory(
 
 describe('StudentTestHistoryView', () => {
   it('잘못된 studentId에서는 Repository를 호출하지 않는다', async () => {
-    const repository = new MockTestRepository()
+    const repository = new TestTestRepository()
     const getTests = vi.spyOn(repository, 'getTests')
     const { wrapper } = await mountHistory(
       repository,
@@ -81,7 +79,7 @@ describe('StudentTestHistoryView', () => {
   })
 
   it('검사 커리큘럼 한 건에 3개 영역과 실제 9문항 제출 결과를 표시한다', async () => {
-    const { wrapper, store } = await mountHistory(new MockTestRepository())
+    const { wrapper, store } = await mountHistory(new TestTestRepository())
 
     expect(store.currentTestCurriculumId).toBe('1011')
     expect(wrapper.text()).toContain('실력 도전 #1011')
@@ -100,7 +98,7 @@ describe('StudentTestHistoryView', () => {
   })
 
   it('문항 testId로 실제 시선 집계를 조회하고 raw replay는 표시하지 않는다', async () => {
-    const repository = new MockTestRepository()
+    const repository = new TestTestRepository()
     const getGazeAnalysis = vi.spyOn(repository, 'getGazeAnalysis')
     const { wrapper } = await mountHistory(repository)
 
@@ -127,7 +125,7 @@ describe('StudentTestHistoryView', () => {
         testId: String(3001 + Math.floor(index / 3)),
       })),
     }
-    const repository = new MockTestRepository({
+    const repository = new TestTestRepository({
       details: testDetailFixtures.map((detail) =>
         detail.testCurriculumId === legacy.testCurriculumId ? legacy : detail,
       ),
@@ -152,7 +150,7 @@ describe('StudentTestHistoryView', () => {
   })
 
   it('전체 점수·풀이 시간·시선 이탈·발음 점수를 검사 단위로 비교한다', async () => {
-    const { wrapper } = await mountHistory(new MockTestRepository())
+    const { wrapper } = await mountHistory(new TestTestRepository())
 
     expect(wrapper.findAll('[role="tab"]')).toHaveLength(4)
     expect(wrapper.text()).toContain('전체 점수')
@@ -173,7 +171,7 @@ describe('StudentTestHistoryView', () => {
   })
 
   it('추천 커리큘럼 ID를 보존해 해당 검수 화면으로 이동한다', async () => {
-    const { wrapper, router } = await mountHistory(new MockTestRepository())
+    const { wrapper, router } = await mountHistory(new TestTestRepository())
 
     expect(wrapper.text()).toContain('추천 커리큘럼 #201')
     const button = wrapper
@@ -188,7 +186,7 @@ describe('StudentTestHistoryView', () => {
   })
 
   it('실제 0점·0초·0회를 측정값 없음과 구분한다', async () => {
-    const { wrapper } = await mountHistory(new MockTestRepository())
+    const { wrapper } = await mountHistory(new TestTestRepository())
 
     await wrapper.get<HTMLSelectElement>('#current-test').setValue('1004')
     await flushPromises()
@@ -199,7 +197,7 @@ describe('StudentTestHistoryView', () => {
   })
 
   it('학습자 변경 시 검사 없음 상태를 표시한다', async () => {
-    const { wrapper, router, store } = await mountHistory(new MockTestRepository())
+    const { wrapper, router, store } = await mountHistory(new TestTestRepository())
 
     await router.push('/teacher/students/3/test-history')
     await flushPromises()
@@ -209,7 +207,7 @@ describe('StudentTestHistoryView', () => {
   })
 
   it('403 오류에서 고정 결과 대신 권한 안내를 표시한다', async () => {
-    const { wrapper } = await mountHistory(new MockTestRepository({ forbiddenStudentIds: [1] }))
+    const { wrapper } = await mountHistory(new TestTestRepository({ forbiddenStudentIds: [1] }))
 
     expect(wrapper.text()).toContain('이 학습자의 검사 기록을 볼 권한이 없습니다.')
     expect(wrapper.find('.question-list').exists()).toBe(false)

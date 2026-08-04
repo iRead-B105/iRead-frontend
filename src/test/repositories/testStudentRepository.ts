@@ -1,8 +1,10 @@
-import { studentFixtures, type StudentFixtureRecord } from '../fixtures'
-import { createLearningInsightsFixture } from '../learningInsightsFixtures'
-import { normalizeStudentListQuery } from '../query'
-import { resolveTrainingHistoryDateRange } from '../trainingHistoryPeriod'
-import { createMockDemoDate } from '@/features/teacher/demo'
+import {
+  studentFixtures,
+  type StudentFixtureRecord,
+} from '@/test/fixtures/student'
+import { createLearningInsightsFixture } from '@/test/fixtures/studentLearningInsights'
+import { normalizeStudentListQuery } from '@/features/teacher/student/query'
+import { resolveTrainingHistoryDateRange } from '@/features/teacher/student/trainingHistoryPeriod'
 import { ApiError } from '@/lib/api'
 import type {
   StudentAccuracyPoint,
@@ -17,8 +19,12 @@ import type {
   StudentTrainingHistoryItem,
   StudentTrainingHistoryQuery,
   StudentUpdateInput,
-} from '../model'
-import type { StudentRepository, StudentRequestOptions } from './studentRepository'
+} from '@/features/teacher/student/model'
+import type {
+  StudentRepository,
+  StudentRequestOptions,
+} from '@/features/teacher/student/repositories/studentRepository'
+import { createTestDate } from './testDate'
 
 function startOfDay(value: Date): Date {
   const result = new Date(value)
@@ -51,7 +57,7 @@ function throwIfAborted(options?: StudentRequestOptions): void {
   options?.signal?.throwIfAborted()
 }
 
-export class MockStudentRepository implements StudentRepository {
+export class TestStudentRepository implements StudentRepository {
   private readonly students: StudentFixtureRecord[]
   private readonly details = new Map<number, StudentDetail>()
   private readonly learningSummaries = new Map<number, StudentLearningSummary>()
@@ -63,7 +69,7 @@ export class MockStudentRepository implements StudentRepository {
 
   constructor(
     students: readonly StudentFixtureRecord[] = studentFixtures,
-    private readonly now: () => Date = createMockDemoDate,
+    private readonly now: () => Date = createTestDate,
   ) {
     this.students = students.map((student) => ({ ...student }))
     for (const student of this.students) {

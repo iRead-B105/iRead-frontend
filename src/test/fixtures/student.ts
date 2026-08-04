@@ -1,4 +1,4 @@
-import type { StudentGender, StudentListItem } from './model'
+import type { StudentGender, StudentListItem } from '@/features/teacher/student/model'
 
 export interface StudentFixtureRecord extends StudentListItem {
   readonly gender: StudentGender

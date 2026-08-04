@@ -1,16 +1,27 @@
 import { ApiError } from '@/lib/api'
-import { createMockDemoDate } from '@/features/teacher/demo'
 import {
   completedLearningDatesByStudentFixture,
   createMockReportSnapshot,
   refreshedReportGazeTrendFixture,
   reportFixtures,
-} from '../fixtures'
-import type { CreateReportInput, ReportDetail, ReportListItem } from '../model'
-import { localDateString, REPORT_MEMO_MAX_LENGTH, validateReportPeriod } from '../validation'
-import type { ReportRepository, ReportRequestOptions } from './reportRepository'
+} from '@/test/fixtures/report'
+import type {
+  CreateReportInput,
+  ReportDetail,
+  ReportListItem,
+} from '@/features/teacher/report/model'
+import {
+  localDateString,
+  REPORT_MEMO_MAX_LENGTH,
+  validateReportPeriod,
+} from '@/features/teacher/report/validation'
+import type {
+  ReportRepository,
+  ReportRequestOptions,
+} from '@/features/teacher/report/repositories/reportRepository'
+import { createTestDate } from './testDate'
 
-export interface MockReportRepositoryOptions {
+export interface TestReportRepositoryOptions {
   readonly reports?: readonly ReportDetail[]
   readonly completedLearningDatesByStudent?: Readonly<Record<number, readonly string[]>>
   readonly now?: () => Date
@@ -59,20 +70,20 @@ function toListItem(report: ReportDetail): ReportListItem {
   }
 }
 
-export class MockReportRepository implements ReportRepository {
+export class TestReportRepository implements ReportRepository {
   private readonly reports = new Map<number, ReportDetail>()
   private readonly completedLearningDatesByStudent: Readonly<Record<number, readonly string[]>>
   private readonly now: () => Date
   private readonly delayMs: number
   private nextReportId: number
 
-  constructor(options: MockReportRepositoryOptions = {}) {
+  constructor(options: TestReportRepositoryOptions = {}) {
     for (const report of options.reports ?? reportFixtures) {
       this.reports.set(report.reportId, clone(report))
     }
     this.completedLearningDatesByStudent =
       options.completedLearningDatesByStudent ?? completedLearningDatesByStudentFixture
-    this.now = options.now ?? createMockDemoDate
+    this.now = options.now ?? createTestDate
     this.delayMs = options.delayMs ?? 80
     this.nextReportId = Math.max(0, ...Array.from(this.reports.keys())) + 1
   }

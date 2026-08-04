@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { testDetailFixtures } from './fixtures'
+import { testDetailFixtures } from '@/test/fixtures/test'
 import { averageTestMetric, testMetricValue } from './metrics'
 
 describe('실력 도전 검사 지표 계산', () => {

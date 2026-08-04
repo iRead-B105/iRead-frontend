@@ -5,7 +5,7 @@ import type {
   ReportGazeSeries,
   ReportGazeTrend,
   ReportSnapshot,
-} from './model'
+} from '@/features/teacher/report/model'
 
 function metricChange(first: number | null, latest: number | null): GazeMetricChange {
   return {

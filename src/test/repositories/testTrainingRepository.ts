@@ -1,11 +1,12 @@
 import { ApiError } from '@/lib/api'
-import { trainingGazeFixtures, type GazeAnalysisState } from '@/features/teacher/gaze'
+import type { GazeAnalysisState } from '@/features/teacher/gaze'
+import { trainingGazeFixtures } from '@/test/fixtures/gaze'
 import {
   assertLessonMaterialResponseCount,
   assertSaveLessonMaterialRequest,
-  createMockLessonMaterialDocument,
+  createLessonMaterialDocumentFromLegacy,
   normalizeSavedMaterials,
-} from '../lessonMaterial'
+} from '@/features/teacher/training/lessonMaterial'
 import {
   curriculumLogFixtures,
   currentCurriculumFixture,
@@ -13,7 +14,7 @@ import {
   trainingDetailFixtures,
   trainingLogFixtures,
   trainingStatisticsFixtures,
-} from '../fixtures'
+} from '@/test/fixtures/training'
 import type {
   CurriculumLog,
   CurriculumTraining,
@@ -29,14 +30,14 @@ import type {
   TrainingExportFormat,
   TrainingPeriod,
   TrainingStatistics,
-} from '../model'
+} from '@/features/teacher/training/model'
 import {
   assertSaveCurriculumRequest,
   type TrainingRepository,
   type TrainingRequestOptions,
-} from './trainingRepository'
+} from '@/features/teacher/training/repositories/trainingRepository'
 
-export interface MockTrainingRepositoryFixtures {
+export interface TestTrainingRepositoryFixtures {
   readonly catalog?: readonly TrainingCatalogItem[]
   readonly curricula?: Readonly<Record<number, DailyCurriculum | null>>
   readonly details?: readonly TrainingDetail[]
@@ -67,7 +68,7 @@ function assertPositiveId(value: number, name: string): void {
   }
 }
 
-export class MockTrainingRepository implements TrainingRepository {
+export class TestTrainingRepository implements TrainingRepository {
   private readonly catalog: readonly TrainingCatalogItem[]
   private readonly curricula = new Map<number, DailyCurriculum | null>()
   private readonly details = new Map<number, TrainingDetail>()
@@ -82,7 +83,7 @@ export class MockTrainingRepository implements TrainingRepository {
   private nextCurriculumId = 300
   private nextTrainingId = 1_000
 
-  constructor(fixtures: MockTrainingRepositoryFixtures = {}) {
+  constructor(fixtures: TestTrainingRepositoryFixtures = {}) {
     this.catalog = clone(fixtures.catalog ?? trainingCatalogFixture)
     const curricula = fixtures.curricula ?? { 1: currentCurriculumFixture }
     for (const [studentId, curriculum] of Object.entries(curricula)) {
@@ -317,7 +318,7 @@ export class MockTrainingRepository implements TrainingRepository {
         message: '해당 학습자의 훈련을 찾을 수 없습니다.',
       })
     }
-    const created = createMockLessonMaterialDocument(training, detail)
+    const created = createLessonMaterialDocumentFromLegacy(training, detail)
     this.lessonMaterials.set(trainingId, created)
     return clone(created)
   }

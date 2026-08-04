@@ -1,4 +1,4 @@
-import type { TestDetail, TestListItem, TestQuestionResult } from './model'
+import type { TestDetail, TestListItem, TestQuestionResult } from '@/features/teacher/test/model'
 
 function questions(scores: readonly number[]): readonly TestQuestionResult[] {
   const tracks = [

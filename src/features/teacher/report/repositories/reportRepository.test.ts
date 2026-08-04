@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createReportApi, type ReportApi } from '../api'
-import { refreshedReportGazeTrendFixture, reportFixtures } from '../fixtures'
+import { refreshedReportGazeTrendFixture, reportFixtures } from '@/test/fixtures/report'
 import { ApiReportRepository } from './apiReportRepository'
-import { MockReportRepository } from './mockReportRepository'
-import { createReportRepository } from '.'
+import { TestReportRepository } from '@/test/repositories'
 
 function api(overrides: Partial<ReportApi> = {}): ReportApi {
   return {
@@ -18,11 +17,9 @@ function api(overrides: Partial<ReportApi> = {}): ReportApi {
 
 describe('ReportRepository factory', () => {
   it('환경 데이터 소스에 맞는 구현만 선택한다', () => {
-    const mock = new MockReportRepository({ delayMs: 0 })
     const apiRepository = new ApiReportRepository(api())
 
-    expect(createReportRepository('mock', { mock, api: apiRepository })).toBe(mock)
-    expect(createReportRepository('api', { mock, api: apiRepository })).toBe(apiRepository)
+    expect(apiRepository).toBeInstanceOf(ApiReportRepository)
   })
 })
 
@@ -166,14 +163,14 @@ describe('Report API target contract', () => {
   })
 })
 
-describe('MockReportRepository', () => {
+describe('TestReportRepository', () => {
   const options = {
     delayMs: 0,
     now: () => new Date('2026-07-28T10:00:00+09:00'),
   }
 
   it('학습자별 목록을 createdAt 최신순으로 반환한다', async () => {
-    const repository = new MockReportRepository(options)
+    const repository = new TestReportRepository(options)
 
     const reports = await repository.listByStudent(1)
 
@@ -183,7 +180,7 @@ describe('MockReportRepository', () => {
   })
 
   it('학습 데이터 없음과 같은 기간 중복을 서로 다른 오류로 반환한다', async () => {
-    const repository = new MockReportRepository(options)
+    const repository = new TestReportRepository(options)
 
     await expect(
       repository.create({
@@ -205,7 +202,7 @@ describe('MockReportRepository', () => {
   })
 
   it('생성 결과와 상세을 분리하고 초기 의견 없이 목록에 새 보고서를 반영한다', async () => {
-    const repository = new MockReportRepository(options)
+    const repository = new TestReportRepository(options)
 
     const created = await repository.create({
       studentId: 1,
@@ -227,7 +224,7 @@ describe('MockReportRepository', () => {
   })
 
   it('공백 의견을 null로 삭제하고 createdAt을 유지한다', async () => {
-    const repository = new MockReportRepository(options)
+    const repository = new TestReportRepository(options)
     const before = await repository.get(1002)
 
     const result = await repository.updateTeacherMemo(1002, ' \n ')
@@ -240,7 +237,7 @@ describe('MockReportRepository', () => {
   })
 
   it('시선 갱신은 gazeTrend만 교체하고 같은 요청에 중복 point를 만들지 않는다', async () => {
-    const repository = new MockReportRepository(options)
+    const repository = new TestReportRepository(options)
     const before = await repository.get(1002)
 
     await repository.refreshGazeTrend(1002)

@@ -27,10 +27,7 @@ describe('ApiClient', () => {
         },
       }),
     )
-    const client = new ApiClient({
-      baseUrl: 'https://api.example.com:8443',
-      fetch: fetchMock,
-    })
+    const client = new ApiClient({ fetch: fetchMock })
 
     await expect(client.request<{ teacherId: number }>('/api/admin/teacher/info')).resolves.toEqual(
       {
@@ -39,7 +36,7 @@ describe('ApiClient', () => {
     )
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0]!
-    expect(requestUrl).toBe('https://api.example.com:8443/api/admin/teacher/info')
+    expect(requestUrl).toBe('/api/admin/teacher/info')
     expect(requestInit?.credentials).toBe('include')
   })
 

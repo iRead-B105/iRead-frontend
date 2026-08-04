@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { responsiveLongTextFixture } from './responsiveFixtures'
+import { responsiveLongTextFixture } from '@/test/fixtures/responsive'
 
 describe('responsiveLongTextFixture', () => {
   it('핵심 화면의 긴 텍스트 경계값을 재현한다', () => {

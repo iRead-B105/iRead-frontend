@@ -1,16 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createStudentApi } from '../api'
-import { studentFixtures } from '../fixtures'
+import { studentFixtures } from '@/test/fixtures/student'
 import { ApiStudentRepository } from './apiStudentRepository'
-import { MockStudentRepository } from './mockStudentRepository'
-import { createStudentRepository } from '.'
+import { TestStudentRepository } from '@/test/repositories'
 
 describe('StudentRepository factory', () => {
   it('데이터 소스에 맞는 구현만 선택한다', () => {
-    const mock = new MockStudentRepository()
     const api = new ApiStudentRepository()
-    expect(createStudentRepository('mock', { mock, api })).toBe(mock)
-    expect(createStudentRepository('api', { mock, api })).toBe(api)
+    expect(api).toBeInstanceOf(ApiStudentRepository)
   })
 })
 
@@ -42,8 +39,8 @@ describe('ApiStudentRepository', () => {
   })
 })
 
-describe('MockStudentRepository', () => {
-  const repository = new MockStudentRepository(
+describe('TestStudentRepository', () => {
+  const repository = new TestStudentRepository(
     studentFixtures,
     () => new Date('2026-07-27T12:00:00'),
   )
@@ -74,7 +71,7 @@ describe('MockStudentRepository', () => {
   })
 
   it('등록·부분 수정·삭제가 목록과 상세에 같은 상태로 반영된다', async () => {
-    const mutableRepository = new MockStudentRepository([], () => new Date('2026-07-27T12:00:00'))
+    const mutableRepository = new TestStudentRepository([], () => new Date('2026-07-27T12:00:00'))
     const studentId = await mutableRepository.create({
       input: {
         name: '새아동',
@@ -186,7 +183,7 @@ describe('MockStudentRepository', () => {
   })
 
   it('단일 교수자 메모를 저장하고 null로 삭제한다', async () => {
-    const mutableRepository = new MockStudentRepository(studentFixtures)
+    const mutableRepository = new TestStudentRepository(studentFixtures)
 
     await mutableRepository.updateTeacherMemo(1, '받침 읽기 연습 필요')
     await expect(mutableRepository.getDetail(1)).resolves.toMatchObject({

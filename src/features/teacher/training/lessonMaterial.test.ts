@@ -6,7 +6,7 @@ import {
   LESSON_MATERIAL_MIN_COUNT,
   assertLessonMaterialRequestCount,
   assertLessonMaterialResponseCount,
-  createMockLessonMaterialDocument,
+  createLessonMaterialDocumentFromLegacy,
   normalizeLessonMaterialDocument,
   saveRequestFromDocument,
 } from './lessonMaterial'
@@ -37,14 +37,14 @@ const detail: TrainingDetail = {
 
 describe('lesson material count contract', () => {
   it('Mock 교안을 항상 자료 5개와 연속된 문항 번호로 구성한다', () => {
-    const document = createMockLessonMaterialDocument(training, detail)
+    const document = createLessonMaterialDocumentFromLegacy(training, detail)
 
     expect(document.materials).toHaveLength(LESSON_MATERIAL_COUNT)
     expect(document.materials.map((material) => material.questionNo)).toEqual([1, 2, 3, 4, 5])
   })
 
   it('API 응답은 자료 1~5개를 허용한다', () => {
-    const document = createMockLessonMaterialDocument(training, detail)
+    const document = createLessonMaterialDocumentFromLegacy(training, detail)
 
     expect(
       assertLessonMaterialResponseCount({
@@ -60,7 +60,7 @@ describe('lesson material count contract', () => {
   it.each([0, LESSON_MATERIAL_MAX_COUNT + 1])(
     'API 응답 자료가 %i개면 계약 불일치로 거부한다',
     (count) => {
-      const document = createMockLessonMaterialDocument(training, detail)
+      const document = createLessonMaterialDocumentFromLegacy(training, detail)
 
       expect(() =>
         assertLessonMaterialResponseCount({
@@ -79,7 +79,7 @@ describe('lesson material count contract', () => {
   it.each([0, LESSON_MATERIAL_MAX_COUNT + 1])(
     '저장 요청 자료가 %i개면 전송 전에 거부한다',
     (count) => {
-      const document = createMockLessonMaterialDocument(training, detail)
+      const document = createLessonMaterialDocumentFromLegacy(training, detail)
       const validRequest = saveRequestFromDocument(document)
       const invalidRequest: SaveLessonMaterialRequest = {
         ...validRequest,
@@ -96,7 +96,7 @@ describe('lesson material count contract', () => {
   )
 
   it('presentation이 null인 API 자료를 편집 가능한 기본 문구로 정규화한다', () => {
-    const document = createMockLessonMaterialDocument(training, detail)
+    const document = createLessonMaterialDocumentFromLegacy(training, detail)
     const normalized = normalizeLessonMaterialDocument({
       ...document,
       materials: [{ ...document.materials[0]!, presentation: null as never }],

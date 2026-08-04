@@ -4,8 +4,8 @@ import type {
   StudentLearningEventDetail,
   StudentReadingSpeedPoint,
   StudentTrainingHistoryItem,
-} from './model'
-import type { StudentFixtureRecord } from './fixtures'
+} from '@/features/teacher/student/model'
+import type { StudentFixtureRecord } from './student'
 
 export interface StudentLearningInsightsFixture {
   readonly events: readonly StudentLearningEvent[]

@@ -1,4 +1,3 @@
-import { resolveEnvironment } from '@/config/env'
 import { ApiError } from './apiError'
 import { createDownloadResult, type DownloadResult } from './download'
 import { isAbortError } from './isAbortError'
@@ -35,7 +34,6 @@ export interface ApiAuthHooks {
 }
 
 export interface ApiClientOptions extends ApiAuthHooks {
-  readonly baseUrl?: string
   readonly fetch?: FetchImplementation
 }
 
@@ -91,16 +89,10 @@ function isFormDataBody(body: BodyInit | null | undefined): body is FormData {
 }
 
 export class ApiClient {
-  private readonly baseUrl: string
   private readonly fetchImplementation: FetchImplementation
   private authHooks: ApiAuthHooks
 
   constructor(options: ApiClientOptions = {}) {
-    this.baseUrl = resolveEnvironment({
-      VITE_AUTH_SOURCE: 'api',
-      VITE_DATA_SOURCE: 'api',
-      VITE_API_BASE_URL: options.baseUrl ?? '',
-    }).apiBaseUrl
     this.fetchImplementation = options.fetch ?? ((input, init) => fetch(input, init))
     this.authHooks = {
       getAccessToken: options.getAccessToken,
@@ -177,7 +169,7 @@ export class ApiClient {
     let response: Response
 
     try {
-      response = await this.fetchImplementation(`${this.baseUrl}${endpoint}`, {
+      response = await this.fetchImplementation(endpoint, {
         ...init,
         headers,
         credentials: 'include',

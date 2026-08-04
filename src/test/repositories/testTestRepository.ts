@@ -1,15 +1,16 @@
 import { ApiError } from '@/lib/api'
-import { testGazeFixtures, type GazeAnalysisState } from '@/features/teacher/gaze'
-import { testDetailFixtures, testListFixtures } from '../fixtures'
-import type { TestDetail, TestListItem } from '../model'
+import type { GazeAnalysisState } from '@/features/teacher/gaze'
+import { testGazeFixtures } from '@/test/fixtures/gaze'
+import { testDetailFixtures, testListFixtures } from '@/test/fixtures/test'
+import type { TestDetail, TestListItem } from '@/features/teacher/test/model'
 import {
   assertPositiveId,
   assertTestComparisonSelection,
   type TestRepository,
   type TestRequestOptions,
-} from './testRepository'
+} from '@/features/teacher/test/repositories/testRepository'
 
-export interface MockTestRepositoryFixtures {
+export interface TestTestRepositoryFixtures {
   readonly testsByStudent?: Readonly<Record<number, readonly TestListItem[]>>
   readonly details?: readonly TestDetail[]
   readonly forbiddenStudentIds?: readonly number[]
@@ -29,14 +30,14 @@ function compareDecimalIdsDescending(left: string, right: string): number {
   return right.length - left.length || right.localeCompare(left)
 }
 
-export class MockTestRepository implements TestRepository {
+export class TestTestRepository implements TestRepository {
   private readonly testsByStudent: Readonly<Record<number, readonly TestListItem[]>>
   private readonly details = new Map<string, TestDetail>()
   private readonly forbiddenStudentIds: ReadonlySet<number>
   private readonly failedDetailIds: ReadonlySet<string>
   private readonly gazeByTestId: ReadonlyMap<string, GazeAnalysisState>
 
-  constructor(fixtures: MockTestRepositoryFixtures = {}) {
+  constructor(fixtures: TestTestRepositoryFixtures = {}) {
     this.testsByStudent = clone(fixtures.testsByStudent ?? testListFixtures)
     for (const detail of fixtures.details ?? testDetailFixtures) {
       this.details.set(detail.testCurriculumId, clone(detail))

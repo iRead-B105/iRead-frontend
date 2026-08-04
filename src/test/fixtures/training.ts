@@ -6,7 +6,7 @@ import type {
   TrainingDetail,
   TrainingPeriod,
   TrainingStatistics,
-} from './model'
+} from '@/features/teacher/training/model'
 
 const trainingCatalogMetadata = [
   [1, '글자 따라 보기', 1, '모음 따라 보기'],

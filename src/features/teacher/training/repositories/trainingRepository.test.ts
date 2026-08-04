@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
 import { createTrainingApi, type TrainingApi } from '../api'
-import { trainingCatalogFixture } from '../fixtures'
+import { trainingCatalogFixture } from '@/test/fixtures/training'
 import { ApiTrainingRepository } from './apiTrainingRepository'
-import { MockTrainingRepository } from './mockTrainingRepository'
-import { createTrainingRepository } from '.'
+import { TestTrainingRepository } from '@/test/repositories'
 
 function api(overrides: Partial<TrainingApi> = {}): TrainingApi {
   return {
@@ -29,11 +28,9 @@ function api(overrides: Partial<TrainingApi> = {}): TrainingApi {
 
 describe('TrainingRepository factory', () => {
   it('환경 데이터 소스에 맞는 구현만 선택한다', () => {
-    const mock = new MockTrainingRepository()
     const apiRepository = new ApiTrainingRepository(api())
 
-    expect(createTrainingRepository('mock', { mock, api: apiRepository })).toBe(mock)
-    expect(createTrainingRepository('api', { mock, api: apiRepository })).toBe(apiRepository)
+    expect(apiRepository).toBeInstanceOf(ApiTrainingRepository)
   })
 })
 
@@ -503,9 +500,9 @@ describe('Training API target contract', () => {
   })
 })
 
-describe('MockTrainingRepository', () => {
+describe('TestTrainingRepository', () => {
   it('비활성 6·14·24번을 제외한 31개 template ID와 배열 순서를 공통으로 사용한다', async () => {
-    const repository = new MockTrainingRepository()
+    const repository = new TestTrainingRepository()
 
     await expect(repository.getCatalog(1)).resolves.toEqual(trainingCatalogFixture)
     expect(trainingCatalogFixture).toHaveLength(31)
@@ -522,7 +519,7 @@ describe('MockTrainingRepository', () => {
   })
 
   it('순서 변경과 반복 증감에서 유지된 실제 training ID를 보존한다', async () => {
-    const repository = new MockTrainingRepository()
+    const repository = new TestTrainingRepository()
 
     const updated = await repository.updateCurriculum(1, 201, {
       trainingTemplateIds: [13, 12, 12, 15, 11],
@@ -534,7 +531,7 @@ describe('MockTrainingRepository', () => {
   })
 
   it('준비 전 훈련의 AI 교안을 생성하고 상태를 시작 전으로 전환한다', async () => {
-    const repository = new MockTrainingRepository()
+    const repository = new TestTrainingRepository()
 
     await expect(repository.getTrainingDetail(1, 102)).resolves.toMatchObject({
       generatedData: null,
@@ -550,7 +547,7 @@ describe('MockTrainingRepository', () => {
   })
 
   it('교안 전체 저장 후 순서와 revision을 유지하고 오래된 저장은 거부한다', async () => {
-    const repository = new MockTrainingRepository()
+    const repository = new TestTrainingRepository()
     const document = await repository.getLessonMaterial(1, 101)
     const first = document.materials[0]
     expect(first).toBeDefined()
@@ -586,7 +583,7 @@ describe('MockTrainingRepository', () => {
   })
 
   it('정확히 5개가 아닌 draft를 거부하고 기존 차회가 있으면 중복 생성을 거부한다', async () => {
-    const repository = new MockTrainingRepository()
+    const repository = new TestTrainingRepository()
 
     await expect(repository.createCurriculum(2, { trainingTemplateIds: [] })).rejects.toMatchObject(
       {
@@ -604,7 +601,7 @@ describe('MockTrainingRepository', () => {
   })
 
   it('기간별 완료 커리큘럼과 실제 훈련 상세를 분리해 반환한다', async () => {
-    const repository = new MockTrainingRepository()
+    const repository = new TestTrainingRepository()
 
     const thirtyDays = await repository.getCurriculumLogs(1, '30d')
     const threeMonths = await repository.getCurriculumLogs(1, '3m')
@@ -622,7 +619,7 @@ describe('MockTrainingRepository', () => {
   })
 
   it('훈련별 AVAILABLE·NO_DATA·FAILED 시선 상태를 그대로 반환한다', async () => {
-    const repository = new MockTrainingRepository()
+    const repository = new TestTrainingRepository()
 
     await expect(repository.getGazeAnalysis(1, 901)).resolves.toMatchObject({
       status: 'AVAILABLE',
@@ -641,7 +638,7 @@ describe('MockTrainingRepository', () => {
   })
 
   it('mock CSV와 JSON 다운로드를 실제 Backend 파일과 구분한다', async () => {
-    const repository = new MockTrainingRepository()
+    const repository = new TestTrainingRepository()
 
     const csv = await repository.exportTraining(1, 901, 'CSV')
     const json = await repository.exportTraining(1, 901, 'JSON')

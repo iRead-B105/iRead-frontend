@@ -1,7 +1,6 @@
 export * from './api/authApi'
 export * from './api/teacherApi'
 export * from './errorMessage'
-export * from './fixtures'
 export * from './formValidation'
 export * from './model'
 export * from './profileValidation'

@@ -142,7 +142,7 @@ function legacyQuestions(detail: TrainingDetail): readonly Readonly<Record<strin
   return Array.isArray(questions) ? questions.filter(isRecord) : []
 }
 
-export function createMockLessonMaterialDocument(
+export function createLessonMaterialDocumentFromLegacy(
   training: CurriculumTraining,
   detail: TrainingDetail,
 ): LessonMaterialDocument {

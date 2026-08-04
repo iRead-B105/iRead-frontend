@@ -6,8 +6,8 @@ import type {
   StoryPageDto,
   StorySummaryDto,
   StoryTemplateDto,
-} from './adapters'
-import type { StoryImageGenerationStatus } from './model'
+} from '@/features/teacher/story/adapters'
+import type { StoryImageGenerationStatus } from '@/features/teacher/story/model'
 
 export const storyTemplateFixtures: readonly StoryTemplateDto[] = [
   {

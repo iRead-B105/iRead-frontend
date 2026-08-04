@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import { reportSnapshotFixture } from '@/features/teacher/report'
+import { reportSnapshotFixture } from '@/test/fixtures/report'
 import ReportLearningSnapshot from './ReportLearningSnapshot.vue'
 
 function mountSnapshot(readingSpeedUnit: string | null) {

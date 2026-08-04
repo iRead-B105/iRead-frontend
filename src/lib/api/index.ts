@@ -1,4 +1,3 @@
-import { appEnvironment } from '@/config/runtimeEnv'
 import {
   ApiClient,
   type ApiAuthHooks,
@@ -13,9 +12,7 @@ export * from './apiTypes'
 export * from './download'
 export * from './isAbortError'
 
-export const apiClient = new ApiClient({
-  baseUrl: appEnvironment.apiBaseUrl,
-})
+export const apiClient = new ApiClient()
 
 export function configureApiAuth(hooks: ApiAuthHooks): void {
   apiClient.configureAuth(hooks)

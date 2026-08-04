@@ -2,8 +2,8 @@ import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
-import { MockReportRepository, reportFixtures } from '@/features/teacher/report'
-import { MockStudentRepository } from '@/features/teacher/student'
+import { reportFixtures } from '@/test/fixtures/report'
+import { TestReportRepository, TestStudentRepository } from '@/test/repositories'
 import { useReportStore } from '@/stores/report'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
@@ -11,14 +11,14 @@ import StudentReportView from './StudentReportView.vue'
 
 async function mountReport(
   initialPath = '/teacher/students/1/report',
-  reportRepository = new MockReportRepository({
+  reportRepository = new TestReportRepository({
     delayMs: 0,
     now: () => new Date('2026-07-28T10:00:00+09:00'),
   }),
 ) {
   const pinia = createPinia()
   useReportStore(pinia).setRepository(reportRepository)
-  useStudentStore(pinia).setRepository(new MockStudentRepository())
+  useStudentStore(pinia).setRepository(new TestStudentRepository())
   useSessionStore(pinia).initialize({
     email: 'teacher@example.com',
     name: '이선생',
@@ -68,7 +68,7 @@ function buttonWithText(wrapper: ReturnType<typeof mount>, text: string) {
 
 describe('StudentReportView', () => {
   it('잘못된 studentId에서는 보고서 Repository를 호출하지 않는다', async () => {
-    const repository = new MockReportRepository({ delayMs: 0 })
+    const repository = new TestReportRepository({ delayMs: 0 })
     const listByStudent = vi.spyOn(repository, 'listByStudent')
     const { wrapper } = await mountReport('/teacher/students/not-a-number/report', repository)
 
@@ -99,7 +99,7 @@ describe('StudentReportView', () => {
     }))
     const { wrapper } = await mountReport(
       '/teacher/students/1/report',
-      new MockReportRepository({ reports, delayMs: 0 }),
+      new TestReportRepository({ reports, delayMs: 0 }),
     )
 
     expect(wrapper.findAll('.saved-report-row')).toHaveLength(6)
@@ -152,7 +152,7 @@ describe('StudentReportView', () => {
   })
 
   it('완료 학습이 없는 기간은 입력을 유지하고 빈 보고서를 만들지 않는다', async () => {
-    const repository = new MockReportRepository({ delayMs: 0 })
+    const repository = new TestReportRepository({ delayMs: 0 })
     const create = vi.spyOn(repository, 'create')
     const { wrapper, pinia } = await mountReport('/teacher/students/3/report', repository)
     const store = useReportStore(pinia)
@@ -171,7 +171,7 @@ describe('StudentReportView', () => {
   })
 
   it('생성 버튼 중복 제출을 막고 POST 후 상세을 표시한다', async () => {
-    const repository = new MockReportRepository({
+    const repository = new TestReportRepository({
       delayMs: 0,
       now: () => new Date('2026-07-28T10:00:00+09:00'),
     })

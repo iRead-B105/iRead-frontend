@@ -2,13 +2,12 @@ import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
+import type { DailyCurriculum, TrainingRepository } from '@/features/teacher/training'
 import {
   currentCurriculumFixture,
   trainingCatalogFixture,
   trainingDetailFixtures,
-  type DailyCurriculum,
-  type TrainingRepository,
-} from '@/features/teacher/training'
+} from '@/test/fixtures/training'
 import { ApiError } from '@/lib/api'
 import * as api from '@/lib/api'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'

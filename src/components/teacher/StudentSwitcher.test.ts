@@ -1,7 +1,7 @@
 import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import { studentFixtures } from '@/features/teacher/student/fixtures'
+import { studentFixtures } from '@/test/fixtures/student'
 import { toStudentNavigationItem } from '@/features/teacher/student'
 import StudentSwitcher from './StudentSwitcher.vue'
 

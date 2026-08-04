@@ -2,7 +2,7 @@ import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { describe, expect, it, vi } from 'vitest'
-import { MockTrainingRepository } from '@/features/teacher/training'
+import { TestTrainingRepository } from '@/test/repositories'
 import { useTrainingStore } from '@/stores/training'
 import StudentTrainingHistoryView from './StudentTrainingHistoryView.vue'
 
@@ -16,7 +16,7 @@ vi.mock('@/lib/api', async (importOriginal) => ({
 }))
 
 async function mountHistory(
-  repository: MockTrainingRepository,
+  repository: TestTrainingRepository,
   initialPath = '/teacher/students/1/training-history',
 ) {
   const pinia = createPinia()
@@ -68,7 +68,7 @@ function buttonWithText(wrapper: ReturnType<typeof mount>, text: string) {
 
 describe('StudentTrainingHistoryView', () => {
   it('잘못된 studentId에서는 Repository를 호출하지 않고 목록 이동 action을 표시한다', async () => {
-    const repository = new MockTrainingRepository()
+    const repository = new TestTrainingRepository()
     const getCurriculumLogs = vi.spyOn(repository, 'getCurriculumLogs')
     const { wrapper } = await mountHistory(
       repository,
@@ -81,7 +81,7 @@ describe('StudentTrainingHistoryView', () => {
   })
 
   it('최신 커리큘럼의 첫 실제 훈련 상세·정확도 비교·시선 집계를 표시한다', async () => {
-    const { wrapper } = await mountHistory(new MockTrainingRepository())
+    const { wrapper } = await mountHistory(new TestTrainingRepository())
 
     const selectionCard = wrapper.get('[data-test="history-selection-card"]')
     expect(selectionCard.findAll('.history-selection-section')).toHaveLength(2)
@@ -118,7 +118,7 @@ describe('StudentTrainingHistoryView', () => {
   })
 
   it('훈련 gaze에서는 공식 네 집계만 표시하고 replay 상세는 표시하지 않는다', async () => {
-    const repository = new MockTrainingRepository({
+    const repository = new TestTrainingRepository({
       gazeByTrainingId: {
         901: {
           status: 'AVAILABLE',
@@ -159,7 +159,7 @@ describe('StudentTrainingHistoryView', () => {
   })
 
   it('훈련 선택에 따라 NO_DATA와 FAILED를 요청 오류 없이 구분한다', async () => {
-    const { wrapper, store } = await mountHistory(new MockTrainingRepository())
+    const { wrapper, store } = await mountHistory(new TestTrainingRepository())
     const rows = wrapper.findAll('.training-row')
 
     await rows.find((row) => row.text().includes('비슷한 소리 고르기'))?.trigger('click')
@@ -175,7 +175,7 @@ describe('StudentTrainingHistoryView', () => {
   })
 
   it('기간 변경을 서버 query용 값으로 Repository에 전달한다', async () => {
-    const repository = new MockTrainingRepository()
+    const repository = new TestTrainingRepository()
     const getCurriculumLogs = vi.spyOn(repository, 'getCurriculumLogs')
     const { wrapper } = await mountHistory(repository)
 
@@ -191,7 +191,7 @@ describe('StudentTrainingHistoryView', () => {
   })
 
   it('정확도 0을 기록 없음과 구분하고 실제 훈련 선택을 보정한다', async () => {
-    const { wrapper, store } = await mountHistory(new MockTrainingRepository())
+    const { wrapper, store } = await mountHistory(new TestTrainingRepository())
     const zeroCurriculum = wrapper
       .findAll('.curriculum-row')
       .find((row) => row.text().includes('2026.07.05'))
@@ -207,7 +207,7 @@ describe('StudentTrainingHistoryView', () => {
 
   it('공통 saveDownload으로 선택 훈련 CSV를 저장한다', async () => {
     saveDownloadMock.mockClear()
-    const { wrapper } = await mountHistory(new MockTrainingRepository())
+    const { wrapper } = await mountHistory(new TestTrainingRepository())
 
     await buttonWithText(wrapper, 'CSV 저장')?.trigger('click')
     await flushPromises()
@@ -219,7 +219,7 @@ describe('StudentTrainingHistoryView', () => {
   })
 
   it('훈련 전환 중 상세와 시선 분석 외곽을 유지하고 내부 로딩 상태를 표시한다', async () => {
-    const { wrapper, store } = await mountHistory(new MockTrainingRepository())
+    const { wrapper, store } = await mountHistory(new TestTrainingRepository())
     const detailCard = wrapper.get('.detail-card').element
     const detailShell = wrapper.get('.detail-content-shell').element
 
@@ -240,7 +240,7 @@ describe('StudentTrainingHistoryView', () => {
   })
 
   it('학습자 route 변경 시 이전 선택을 비우고 새 학습자의 빈 상태를 표시한다', async () => {
-    const repository = new MockTrainingRepository()
+    const repository = new TestTrainingRepository()
     const getCurriculumLogs = vi.spyOn(repository, 'getCurriculumLogs')
     const { wrapper, router, store } = await mountHistory(repository)
 

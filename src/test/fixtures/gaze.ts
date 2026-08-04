@@ -1,4 +1,4 @@
-import type { GazeAnalysisState } from './model'
+import type { GazeAnalysisState } from '@/features/teacher/gaze/model'
 
 export const trainingGazeFixtures: Readonly<Record<number, GazeAnalysisState>> = {
   901: {

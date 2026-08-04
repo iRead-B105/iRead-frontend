@@ -2,11 +2,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   CurriculumSynchronizationError,
-  currentCurriculumFixture,
-  MockTrainingRepository,
   type DailyCurriculum,
   type TrainingRepository,
 } from '@/features/teacher/training'
+import { currentCurriculumFixture } from '@/test/fixtures/training'
+import { TestTrainingRepository } from '@/test/repositories'
 import type { GazeAnalysisState } from '@/features/teacher/gaze'
 import { ApiError } from '@/lib/api'
 import { useTrainingStore } from './training'
@@ -58,7 +58,7 @@ beforeEach(() => {
 describe('Training store', () => {
   it('applies five AI recommendations as an unsaved editable draft', async () => {
     const store = useTrainingStore()
-    store.setRepository(new MockTrainingRepository())
+    store.setRepository(new TestTrainingRepository())
     await store.loadForStudent(1)
 
     expect(store.applyRecommendedTemplates([1, 2, 3, 4, 5])).toBe(true)
@@ -70,7 +70,7 @@ describe('Training store', () => {
 
   it('rejects incomplete or unknown AI recommendation template sets', async () => {
     const store = useTrainingStore()
-    store.setRepository(new MockTrainingRepository())
+    store.setRepository(new TestTrainingRepository())
     await store.loadForStudent(1)
     const previousDraft = [...store.draftTrainingIds]
 
@@ -100,7 +100,7 @@ describe('Training store', () => {
   })
 
   it('keeps rendered history data during a same-student background refresh', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     const store = useTrainingStore()
     store.setRepository(mock)
     await store.loadHistoryForStudent(1)
@@ -128,7 +128,7 @@ describe('Training store', () => {
   })
 
   it('keeps curriculum rows rendered during a same-student realtime refresh', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     const store = useTrainingStore()
     store.setRepository(mock)
     await store.loadForStudent(1)
@@ -191,7 +191,7 @@ describe('Training store', () => {
   })
 
   it('훈련 이력 재조회 실패 시 이전 커리큘럼을 유지한다', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     const getCurriculumLogs = vi.spyOn(mock, 'getCurriculumLogs')
     const store = useTrainingStore()
     store.setRepository(mock)
@@ -214,7 +214,7 @@ describe('Training store', () => {
   })
 
   it('훈련 이력 재조회가 빈 결과이면 이전 하위 선택을 정리한다', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     const getCurriculumLogs = vi.spyOn(mock, 'getCurriculumLogs')
     const store = useTrainingStore()
     store.setRepository(mock)
@@ -234,7 +234,7 @@ describe('Training store', () => {
 
   it('저장된 커리큘럼과 local draft를 분리하고 실제 ID를 유지한다', async () => {
     const store = useTrainingStore()
-    store.setRepository(new MockTrainingRepository())
+    store.setRepository(new TestTrainingRepository())
 
     await store.loadForStudent(1)
     store.selectTemplate(15)
@@ -254,7 +254,7 @@ describe('Training store', () => {
   })
 
   it('차회 커리큘럼이 없으면 빈 draft에서 최초 POST로 생성한다', async () => {
-    const mock = new MockTrainingRepository({ curricula: { 2: null } })
+    const mock = new TestTrainingRepository({ curricula: { 2: null } })
     const store = useTrainingStore()
     store.setRepository(mock)
 
@@ -386,7 +386,7 @@ describe('Training store', () => {
   })
 
   it('409 저장 충돌 시 draft를 유지하고 명시적 최신 상태 복구 후에만 편집을 푼다', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     const getCurrentCurriculum = vi.spyOn(mock, 'getCurrentCurriculum')
     const updateCurriculum = vi.spyOn(mock, 'updateCurriculum').mockRejectedValueOnce(
       new ApiError({
@@ -488,7 +488,7 @@ describe('Training store', () => {
   })
 
   it('준비 전 훈련의 AI 교안을 재생성하고 실제 응답으로 미리보기를 갱신한다', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     const generateTraining = vi.spyOn(mock, 'generateTraining')
     const store = useTrainingStore()
     store.setRepository(mock)
@@ -510,7 +510,7 @@ describe('Training store', () => {
 
   it('교안 저장 성공 응답으로 같은 화면 문서의 revision과 자료를 교체한다', async () => {
     const store = useTrainingStore()
-    store.setRepository(new MockTrainingRepository())
+    store.setRepository(new TestTrainingRepository())
     await store.loadForStudent(1)
     const document = store.selectedLessonMaterial
     expect(document).not.toBeNull()
@@ -539,7 +539,7 @@ describe('Training store', () => {
   })
 
   it('교안 revision 충돌은 서버 기준과 편집 상태를 유지하고 최신 조회를 요구한다', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     vi.spyOn(mock, 'saveLessonMaterial').mockRejectedValue(
       new ApiError({
         status: 409,
@@ -569,7 +569,7 @@ describe('Training store', () => {
   })
 
   it('편집 불가 응답은 서버 자료를 유지한 채 교안을 읽기 전용으로 전환한다', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     vi.spyOn(mock, 'saveLessonMaterial').mockRejectedValue(
       new ApiError({
         status: 409,
@@ -595,7 +595,7 @@ describe('Training store', () => {
   })
 
   it('교안 검증 오류의 path와 message를 필드 오류로 보존하고 수정 시 제거한다', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     vi.spyOn(mock, 'saveLessonMaterial').mockRejectedValue(
       new ApiError({
         status: 422,
@@ -644,7 +644,7 @@ describe('Training store', () => {
   })
 
   it('네트워크 저장 실패는 마지막 서버 revision과 자료 및 편집 상태를 유지한다', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     vi.spyOn(mock, 'saveLessonMaterial').mockRejectedValue(new Error('network'))
     const store = useTrainingStore()
     store.setRepository(mock)
@@ -668,7 +668,7 @@ describe('Training store', () => {
   })
 
   it('CONTENT_UPDATED는 수정 초안을 덮어쓰지 않고 revision 차이가 있을 때만 알린다', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     const store = useTrainingStore()
     store.setRepository(mock)
     await store.loadForStudent(1)
@@ -710,7 +710,7 @@ describe('Training store', () => {
 
   it('reset이 커리큘럼·교안·선택 상태를 모두 비운다', async () => {
     const store = useTrainingStore()
-    store.setRepository(new MockTrainingRepository())
+    store.setRepository(new TestTrainingRepository())
     await store.loadForStudent(1)
     await store.selectDraftItem(1, 'training-101')
 
@@ -725,7 +725,7 @@ describe('Training store', () => {
 
   it('기본 30일 이력에서 최신 커리큘럼과 첫 실제 훈련을 선택한다', async () => {
     const store = useTrainingStore()
-    store.setRepository(new MockTrainingRepository())
+    store.setRepository(new TestTrainingRepository())
 
     await store.loadHistoryForStudent(1)
 
@@ -744,7 +744,7 @@ describe('Training store', () => {
   })
 
   it('훈련 전환 중 이전 훈련의 상세와 시선 집계를 새 선택에 표시하지 않는다', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     const nextDetail = await mock.getTrainingDetail(1, 902)
     const nextGaze = await mock.getGazeAnalysis(1, 902)
     const pendingDetail = deferred<Awaited<ReturnType<TrainingRepository['getTrainingDetail']>>>()
@@ -773,7 +773,7 @@ describe('Training store', () => {
 
   it('빠른 훈련 선택 변경에서 늦게 끝난 이전 시선 응답을 무시한다', async () => {
     const oldGaze = deferred<GazeAnalysisState>()
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     vi.spyOn(mock, 'getGazeAnalysis')
       .mockResolvedValueOnce({
         status: 'AVAILABLE',
@@ -805,7 +805,7 @@ describe('Training store', () => {
   })
 
   it('시선 요청 오류를 상세 성공과 도메인 상태에서 분리한다', async () => {
-    const mock = new MockTrainingRepository()
+    const mock = new TestTrainingRepository()
     vi.spyOn(mock, 'getGazeAnalysis').mockRejectedValue(new Error('internal details'))
     const store = useTrainingStore()
     store.setRepository(mock)
@@ -912,7 +912,7 @@ describe('Training store', () => {
 
   it('선택한 실제 훈련의 mock 파일을 형식별로 내려받는다', async () => {
     const store = useTrainingStore()
-    store.setRepository(new MockTrainingRepository())
+    store.setRepository(new TestTrainingRepository())
     await store.loadHistoryForStudent(1)
 
     const csv = await store.exportSelectedTraining(1, 'CSV')
