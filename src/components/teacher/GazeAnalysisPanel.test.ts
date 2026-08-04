@@ -26,7 +26,7 @@ describe('GazeAnalysisPanel', () => {
     expect(wrapper.text()).toContain('3회')
     expect(wrapper.text()).toContain('집계 지표 비교')
     expect(wrapper.get('[aria-label="실제 시선 집계 지표 비교 그래프"]')).toBeDefined()
-    expect(wrapper.text()).toContain('의학적·임상적 진단 결과가 아닙니다.')
+    expect(wrapper.text()).toContain('의학적 진단 결과가 아닙니다.')
     expect(wrapper.text()).not.toContain('읽기 이탈')
     expect(wrapper.text()).not.toContain('권장')
     expect(wrapper.text()).not.toContain('%')

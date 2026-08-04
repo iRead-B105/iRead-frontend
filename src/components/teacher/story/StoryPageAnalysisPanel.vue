@@ -40,8 +40,6 @@ function formatOffset(milliseconds: number): string {
 const MAX_REPLAY_STEPS = Number.MAX_SAFE_INTEGER
 const MAX_DISPLAY_GAP_MS = 5_000
 const COMPRESSED_GAP_MS = 350
-const REPLAY_READ_DWELL_MS = 1_000
-const REPLAY_FIXATION_DWELL_MS = 2_000
 const REPLAY_SAMPLE_TAIL_MS = 80
 
 interface ReplayWordView {
