@@ -1,4 +1,12 @@
-import type { GazeMetricChange } from './model'
+import type { GazeMetricChange, ReportSnapshot } from './model'
+
+export const ALIGNED_REPORT_READING_SPEED_UNIT = 'CORRECT_WORDS_PER_MINUTE'
+
+export function hasAlignedReportLearningMetrics(
+  snapshot: Pick<ReportSnapshot, 'readingSpeedUnit'>,
+): boolean {
+  return snapshot.readingSpeedUnit === ALIGNED_REPORT_READING_SPEED_UNIT
+}
 
 export function formatReportDate(value: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
@@ -54,8 +62,6 @@ export function formatGazeChange(
   if (change.delta === 0) return '변화 없음'
   const prefix = change.delta > 0 ? '+' : ''
   const value =
-    kind === 'duration'
-      ? `${Number((change.delta / 1_000).toFixed(2))}초`
-      : `${change.delta}회`
+    kind === 'duration' ? `${Number((change.delta / 1_000).toFixed(2))}초` : `${change.delta}회`
   return `${prefix}${value}`
 }

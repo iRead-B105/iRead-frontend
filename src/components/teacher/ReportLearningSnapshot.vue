@@ -7,6 +7,7 @@ import {
   formatReportDate,
   formatReportMinutes,
   formatReportNumber,
+  hasAlignedReportLearningMetrics,
   type ReportSnapshot,
 } from '@/features/teacher/report'
 
@@ -21,63 +22,74 @@ const readingSpeedUnit = computed(() => {
     : props.snapshot.readingSpeedUnit
 })
 
-const growthChart = computed<EChartsOption>(() => ({
-  animation: false,
-  tooltip: { trigger: 'axis' },
-  legend: {
-    data: ['정확도', '읽기 속도', '발음 점수'],
-    top: 0,
-    textStyle: { fontSize: 10 },
+type GrowthMetricKey = 'accuracy' | 'readingSpeed' | 'pronunciationScore'
+
+interface GrowthMetricDefinition {
+  readonly key: GrowthMetricKey
+  readonly title: string
+  readonly unit: string
+  readonly color: string
+  readonly max?: number
+}
+
+const metricDefinitions = computed<readonly GrowthMetricDefinition[]>(() => [
+  { key: 'accuracy', title: '읽기 정확도', unit: '%', color: chartColors.blue, max: 100 },
+  {
+    key: 'readingSpeed',
+    title: '읽기 속도',
+    unit: readingSpeedUnit.value || '단어/분',
+    color: chartColors.green,
   },
-  grid: { left: 44, right: 44, top: 38, bottom: 34 },
-  xAxis: {
-    type: 'category',
-    data: props.snapshot.growthHistory.map((point) => formatReportDate(point.date)),
-    axisLabel: { fontSize: 9 },
-  },
-  yAxis: [
-    {
-      type: 'value',
-      name: '점수',
-      min: 0,
-      max: 100,
-      axisLabel: { fontSize: 9 },
-    },
-    {
-      type: 'value',
-      name: readingSpeedUnit.value || '읽기 속도',
-      min: 0,
-      axisLabel: { fontSize: 9 },
-    },
-  ],
-  series: [
-    {
-      name: '정확도',
-      type: 'line',
-      connectNulls: false,
-      data: props.snapshot.growthHistory.map((point) => point.accuracy),
-      lineStyle: { color: chartColors.blue, width: 2 },
-      itemStyle: { color: chartColors.blue },
-    },
-    {
-      name: '읽기 속도',
-      type: 'line',
-      yAxisIndex: 1,
-      connectNulls: false,
-      data: props.snapshot.growthHistory.map((point) => point.readingSpeed),
-      lineStyle: { color: chartColors.green, width: 2 },
-      itemStyle: { color: chartColors.green },
-    },
-    {
-      name: '발음 점수',
-      type: 'line',
-      connectNulls: false,
-      data: props.snapshot.growthHistory.map((point) => point.pronunciationScore),
-      lineStyle: { color: chartColors.amber, width: 2 },
-      itemStyle: { color: chartColors.amber },
-    },
-  ],
-}))
+  { key: 'pronunciationScore', title: '발음 점수', unit: '점', color: chartColors.amber, max: 100 },
+])
+
+const alignedLearningMetrics = computed(() => hasAlignedReportLearningMetrics(props.snapshot))
+
+const growthCards = computed(() =>
+  metricDefinitions.value.map((definition) => {
+    const points = props.snapshot.growthHistory.filter((point) => point[definition.key] !== null)
+    const option: EChartsOption = {
+      animation: false,
+      tooltip: { trigger: 'axis' },
+      grid: { left: 44, right: 18, top: 24, bottom: 34 },
+      xAxis: {
+        type: 'category',
+        data: points.map((point) => formatReportDate(point.date)),
+        axisLabel: { fontSize: 9 },
+      },
+      yAxis: {
+        type: 'value',
+        name: definition.unit,
+        min: 0,
+        ...(definition.max === undefined ? {} : { max: definition.max }),
+        axisLabel: { fontSize: 9 },
+      },
+      series: [
+        {
+          name: definition.title,
+          type: 'line',
+          connectNulls: false,
+          data: points.map((point) => point[definition.key]),
+          lineStyle: { color: definition.color, width: 2 },
+          itemStyle: { color: definition.color },
+        },
+      ],
+    }
+    return {
+      ...definition,
+      option,
+      pointCount: points.length,
+      summary: points.length
+        ? `${definition.title} 추이: ${points
+            .map(
+              (point) =>
+                `${formatReportDate(point.date)} ${formatReportNumber(point[definition.key], definition.unit)}`,
+            )
+            .join('; ')}`
+        : `${definition.title} 기록이 없습니다.`,
+    }
+  }),
+)
 
 const participationItems = computed(() => [
   { label: '학습일', value: `${props.snapshot.learningDays}일` },
@@ -94,15 +106,6 @@ const performanceItems = computed(() => [
         : `${formatReportNumber(props.snapshot.averageReadingSpeed)} ${readingSpeedUnit.value}`.trim(),
   },
 ])
-const growthChartSummary = computed(
-  () =>
-    `기간별 성장 추이: ${props.snapshot.growthHistory
-      .map(
-        (point) =>
-          `${formatReportDate(point.date)} 정확도 ${formatReportNumber(point.accuracy, '%')}, 읽기 속도 ${formatReportNumber(point.readingSpeed, readingSpeedUnit.value)}, 발음 점수 ${formatReportNumber(point.pronunciationScore)}`,
-      )
-      .join('; ')}`,
-)
 </script>
 
 <template>
@@ -122,7 +125,14 @@ const growthChartSummary = computed(
     <header class="section-heading">
       <h2 id="performance-summary-title">핵심 성과 요약</h2>
     </header>
-    <dl class="summary-grid summary-grid--performance">
+    <div v-if="!alignedLearningMetrics" class="metric-pending" role="status">
+      <strong>정확도·읽기 속도 계산 기준 연동 예정</strong>
+      <p>
+        학습 현황과 같은 단어별 점수 평균 및 분당 정답 단어 수 기준이 확인되기 전에는 이전 기준 값을
+        표시하지 않습니다.
+      </p>
+    </div>
+    <dl v-else class="summary-grid summary-grid--performance">
       <div v-for="item in performanceItems" :key="item.label">
         <dt>{{ item.label }}</dt>
         <dd>{{ item.value }}</dd>
@@ -134,16 +144,56 @@ const growthChartSummary = computed(
     <header class="section-heading">
       <h2 id="growth-history-title">기간별 성장 추이</h2>
     </header>
-    <p v-if="snapshot.growthHistory.length === 0" class="empty-state">
-      표시할 성장 기록이 없습니다.
-    </p>
-    <ChartPanel
-      v-else
-      :option="growthChart"
-      height="260px"
-      aria-label="보고서 기간별 정확도, 읽기 속도와 발음 점수 추이"
-      :summary="growthChartSummary"
-    />
+    <div v-if="!alignedLearningMetrics" class="metric-pending" role="status">
+      <strong>성장 그래프 데이터 연동 예정</strong>
+      <p>통일된 계산 결과가 제공되면 정확도·읽기 속도·발음 점수를 각각 표시합니다.</p>
+    </div>
+    <div v-else class="growth-grid">
+      <article v-for="metric in growthCards" :key="metric.key" class="growth-card">
+        <header>
+          <h3>{{ metric.title }}</h3>
+          <span>{{ metric.pointCount }}일</span>
+        </header>
+        <p v-if="metric.pointCount === 0" class="empty-state">표시할 기록이 없습니다.</p>
+        <ChartPanel
+          v-else
+          :option="metric.option"
+          height="220px"
+          :aria-label="`보고서 기간별 ${metric.title} 추이`"
+          :summary="metric.summary"
+        />
+      </article>
+    </div>
+  </section>
+
+  <section class="snapshot-section" aria-labelledby="automatic-analysis-title">
+    <header class="section-heading">
+      <h2 id="automatic-analysis-title">자동 분석</h2>
+    </header>
+    <div v-if="!alignedLearningMetrics" class="metric-pending" role="status">
+      <strong>규칙 기반 자동 분석 연동 예정</strong>
+      <p>
+        Backend 계산이 준비되면 향상 항목과 지속 관찰 항목을 보고서 생성 시점 기준으로 표시합니다.
+      </p>
+    </div>
+    <div v-else class="analysis-grid">
+      <article>
+        <h3>향상 항목</h3>
+        <ul v-if="snapshot.improvedPatterns.length">
+          <li v-for="pattern in snapshot.improvedPatterns" :key="pattern">{{ pattern }}</li>
+        </ul>
+        <p v-else class="analysis-empty">비교할 향상 기록이 부족합니다.</p>
+      </article>
+      <article>
+        <h3>지속 관찰 항목</h3>
+        <ul v-if="snapshot.persistentDifficultyPatterns.length">
+          <li v-for="pattern in snapshot.persistentDifficultyPatterns" :key="pattern">
+            {{ pattern }}
+          </li>
+        </ul>
+        <p v-else class="analysis-empty">지속적으로 확인된 어려움이 없습니다.</p>
+      </article>
+    </div>
   </section>
 
   <section class="snapshot-section" aria-labelledby="area-achievement-title">
@@ -155,9 +205,14 @@ const growthChartSummary = computed(
     </p>
     <div v-else class="table-wrap">
       <table>
-        <caption class="sr-only">영역별 성취도</caption>
+        <caption class="sr-only">
+          영역별 성취도
+        </caption>
         <thead>
-          <tr><th>영역</th><th>성취도</th></tr>
+          <tr>
+            <th>영역</th>
+            <th>성취도</th>
+          </tr>
         </thead>
         <tbody>
           <tr v-for="item in snapshot.areaAchievements" :key="item.area">
@@ -178,9 +233,16 @@ const growthChartSummary = computed(
     </p>
     <div v-else class="table-wrap">
       <table>
-        <caption class="sr-only">자주 틀리는 낱말과 오답률</caption>
+        <caption class="sr-only">
+          자주 틀리는 낱말과 오답률
+        </caption>
         <thead>
-          <tr><th>낱말</th><th>시도</th><th>오답</th><th>오답률</th></tr>
+          <tr>
+            <th>낱말</th>
+            <th>시도</th>
+            <th>오답</th>
+            <th>오답률</th>
+          </tr>
         </thead>
         <tbody>
           <tr v-for="word in snapshot.frequentlyIncorrectWords" :key="word.wordId">
@@ -193,7 +255,6 @@ const growthChartSummary = computed(
       </table>
     </div>
   </section>
-
 </template>
 
 <style scoped>
@@ -252,6 +313,69 @@ dd {
   font-size: 12px;
   place-items: center;
 }
+.metric-pending {
+  display: grid;
+  min-height: 96px;
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--muted) 35%, transparent);
+  place-content: center;
+  text-align: center;
+}
+.metric-pending strong {
+  color: var(--foreground);
+  font-size: 13px;
+}
+.metric-pending p {
+  max-width: 620px;
+  margin: 7px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.growth-grid,
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.growth-card,
+.analysis-grid article {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.growth-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.growth-card h3,
+.analysis-grid h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.growth-card header span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.analysis-grid ul {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.analysis-empty {
+  margin: 12px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
 .table-wrap {
   overflow-x: auto;
 }
@@ -276,6 +400,10 @@ tbody th {
 }
 @media (max-width: 760px) {
   .summary-grid {
+    grid-template-columns: 1fr;
+  }
+  .growth-grid,
+  .analysis-grid {
     grid-template-columns: 1fr;
   }
   .summary-grid > div + div {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import ReportActionPanel from '@/components/teacher/ReportActionPanel.vue'
 import ReportGazeTrend from '@/components/teacher/ReportGazeTrend.vue'
 import ReportLearningSnapshot from '@/components/teacher/ReportLearningSnapshot.vue'
@@ -6,13 +7,14 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   formatReportDate,
   formatReportDateTime,
+  hasAlignedReportLearningMetrics,
   REPORT_MEMO_MAX_LENGTH,
   type ReportDetail,
   type ReportGazeRefreshStatus,
   type ReportMemoStatus,
 } from '@/features/teacher/report'
 
-defineProps<{
+const props = defineProps<{
   report: ReportDetail
   studentName: string
   studentSchool: string | null
@@ -25,6 +27,10 @@ defineProps<{
   gazeRefreshStatus: ReportGazeRefreshStatus
   gazeRefreshError: string | null
 }>()
+
+const alignedLearningMetrics = computed(() =>
+  hasAlignedReportLearningMetrics(props.report.snapshot),
+)
 
 const emit = defineEmits<{
   'update:teacherMemoDraft': [value: string]
@@ -79,7 +85,10 @@ const emit = defineEmits<{
     <p class="report-snapshot-notice">완료된 학습 데이터를 기준으로 생성된 보고서입니다.</p>
 
     <ReportLearningSnapshot :snapshot="report.snapshot" />
-    <ReportGazeTrend :trend="report.snapshot.gazeTrend" />
+    <ReportGazeTrend
+      :trend="report.snapshot.gazeTrend"
+      :show-automatic-analysis="alignedLearningMetrics"
+    />
 
     <section class="report-opinion" aria-labelledby="opinion-title">
       <header>

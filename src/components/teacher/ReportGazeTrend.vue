@@ -14,6 +14,7 @@ import {
 
 defineProps<{
   trend: ReportGazeTrend
+  showAutomaticAnalysis: boolean
 }>()
 
 const seriesSections = [
@@ -53,9 +54,7 @@ type Metric = (typeof metrics)[number]
 function metricValue(point: ReportGazePoint | undefined, metric: Metric): string {
   if (!point) return '-'
   const value = point[metric.key]
-  return metric.kind === 'duration'
-    ? formatGazeDuration(value)
-    : formatGazeCount(value)
+  return metric.kind === 'duration' ? formatGazeDuration(value) : formatGazeCount(value)
 }
 
 function chartOption(series: ReportGazeSeries, metric: Metric): EChartsOption {
@@ -136,7 +135,10 @@ function statusLabel(status: ReportGazeSeries['status']): string {
       <div v-if="trend[section.key].status === 'NO_DATA'" class="series-empty">
         시선 분석 데이터가 없습니다.
       </div>
-      <div v-else-if="trend[section.key].status === 'FAILED'" class="series-empty series-empty--error">
+      <div
+        v-else-if="trend[section.key].status === 'FAILED'"
+        class="series-empty series-empty--error"
+      >
         시선 분석을 완료하지 못했습니다.
       </div>
       <template v-else>
@@ -147,20 +149,14 @@ function statusLabel(status: ReportGazeSeries['status']): string {
             <small>
               {{
                 trend[section.key].comparisonAvailable
-                  ? formatGazeChange(
-                      trend[section.key].changes?.[metric.key],
-                      metric.kind,
-                    )
+                  ? formatGazeChange(trend[section.key].changes?.[metric.key], metric.kind)
                   : '현재 결과'
               }}
             </small>
           </div>
         </dl>
 
-        <p
-          v-if="!trend[section.key].comparisonAvailable"
-          class="comparison-notice"
-        >
+        <p v-if="!trend[section.key].comparisonAvailable" class="comparison-notice">
           변화를 비교하려면 두 건 이상의 결과가 필요합니다.
         </p>
 
@@ -176,16 +172,23 @@ function statusLabel(status: ReportGazeSeries['status']): string {
           </article>
         </div>
 
-        <ul v-if="trend[section.key].descriptions.length" class="gaze-descriptions">
-          <li
-            v-for="description in trend[section.key].descriptions"
-            :key="description"
-          >
+        <ul
+          v-if="showAutomaticAnalysis && trend[section.key].descriptions.length"
+          class="gaze-descriptions"
+        >
+          <li v-for="description in trend[section.key].descriptions" :key="description">
             {{ description }}
           </li>
         </ul>
+        <p
+          v-else-if="!showAutomaticAnalysis && trend[section.key].descriptions.length"
+          class="comparison-notice"
+        >
+          시선 자동 분석 문구는 규칙 기반 Backend 연동 후 제공됩니다.
+        </p>
         <p v-if="trend[section.key].failedSessionCount > 0" class="failed-sessions">
-          집계값이 없는 실패 세션 {{ trend[section.key].failedSessionCount }}건은 추이에서 제외했습니다.
+          집계값이 없는 실패 세션 {{ trend[section.key].failedSessionCount }}건은 추이에서
+          제외했습니다.
         </p>
       </template>
     </section>
