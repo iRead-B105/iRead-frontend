@@ -295,6 +295,34 @@ export class TestStudentRepository implements StudentRepository {
     }
   }
 
+  async getAccuracyRecords(studentId: number, options?: StudentRequestOptions) {
+    throwIfAborted(options)
+    await this.getDetail(studentId, options)
+    const { from, to } = resolveTrainingHistoryDateRange('30d', this.now())
+    const history = this.trainingHistories.get(studentId) ?? []
+    const records = [...(this.accuracyTrends.get(studentId) ?? [])]
+      .filter((point) => point.date >= from && point.date <= to)
+      .sort((left, right) => right.date.localeCompare(left.date))
+      .map((point, index) => ({
+        sourceType: 'TRAINING',
+        sourceId: history[index]?.trainingId ?? index + 1,
+        trainingName: history[index]?.learningType ?? '훈련',
+        measuredAt: `${point.date}T12:00:00+09:00`,
+        correctAttemptCount: Math.round(point.accuracy),
+        attemptCount: 100,
+        accuracy: point.accuracy,
+        unit: 'PERCENT',
+        calculationVersion: 'reading-metrics-v1',
+      }))
+    return {
+      from,
+      to,
+      unit: 'PERCENT',
+      calculationVersion: 'reading-metrics-v1',
+      records,
+    }
+  }
+
   async getReadingSpeedTrend(studentId: number, options?: StudentRequestOptions) {
     throwIfAborted(options)
     await this.getDetail(studentId, options)
@@ -313,6 +341,34 @@ export class TestStudentRepository implements StudentRepository {
       unit: 'CORRECT_WORDS_PER_MINUTE' as const,
       changeRate,
       points,
+    }
+  }
+
+  async getReadingSpeedRecords(studentId: number, options?: StudentRequestOptions) {
+    throwIfAborted(options)
+    await this.getDetail(studentId, options)
+    const { from, to } = resolveTrainingHistoryDateRange('30d', this.now())
+    const history = this.trainingHistories.get(studentId) ?? []
+    const records = [...(this.readingSpeedTrends.get(studentId) ?? [])]
+      .filter((point) => point.date >= from && point.date <= to)
+      .sort((left, right) => right.date.localeCompare(left.date))
+      .map((point, index) => ({
+        sourceType: 'TRAINING',
+        sourceId: history[index]?.trainingId ?? index + 1,
+        trainingName: history[index]?.learningType ?? '훈련',
+        measuredAt: `${point.date}T12:00:00+09:00`,
+        correctWordCount: point.correctWordCount ?? Math.round(point.speed),
+        measuredDurationMs: point.measuredDurationMs ?? 60_000,
+        speed: point.speed,
+        unit: 'CORRECT_WORDS_PER_MINUTE',
+        calculationVersion: 'reading-metrics-v1',
+      }))
+    return {
+      from,
+      to,
+      unit: 'CORRECT_WORDS_PER_MINUTE',
+      calculationVersion: 'reading-metrics-v1',
+      records,
     }
   }
 

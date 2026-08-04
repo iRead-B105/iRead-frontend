@@ -6,6 +6,7 @@ import {
 import { serializeStudentListQuery } from './query'
 import { resolveTrainingHistoryDateRange } from './trainingHistoryPeriod'
 import type {
+  StudentAccuracyRecords,
   StudentAccuracyTrend,
   StudentCreateInput,
   StudentDetail,
@@ -16,6 +17,7 @@ import type {
   StudentListQuery,
   StudentListResult,
   StudentMutationCommand,
+  StudentReadingSpeedRecords,
   StudentReadingSpeedTrend,
   StudentGender,
   StudentSummary,
@@ -59,10 +61,18 @@ export interface StudentApi {
     studentId: number,
     options?: StudentRequestOptions,
   ) => Promise<StudentAccuracyTrend>
+  readonly getAccuracyRecords: (
+    studentId: number,
+    options?: StudentRequestOptions,
+  ) => Promise<StudentAccuracyRecords>
   readonly getReadingSpeedTrend: (
     studentId: number,
     options?: StudentRequestOptions,
   ) => Promise<StudentReadingSpeedTrend>
+  readonly getReadingSpeedRecords: (
+    studentId: number,
+    options?: StudentRequestOptions,
+  ) => Promise<StudentReadingSpeedRecords>
   readonly getTrainingHistory: (
     studentId: number,
     query: StudentTrainingHistoryQuery,
@@ -146,15 +156,51 @@ interface StudentAccuracyTrendDto {
   }[]
 }
 
+interface StudentAccuracyRecordsDto {
+  readonly from: string
+  readonly to: string
+  readonly unit: string
+  readonly calculationVersion: string
+  readonly records: readonly {
+    readonly sourceType: string
+    readonly sourceId: number
+    readonly trainingName: string
+    readonly measuredAt: string
+    readonly correctAttemptCount: number
+    readonly attemptCount: number
+    readonly accuracyRate: number
+    readonly unit: string
+    readonly calculationVersion: string
+  }[]
+}
+
 interface StudentReadingSpeedTrendDto {
   readonly unit: string
   readonly voiceChangeRate: number | null
   readonly points: readonly {
     readonly date: string
     readonly voiceSpeed: number | null
-    readonly voiceWordCount?: number | null
+    readonly correctWordCount?: number | null
     readonly voiceDurationMs?: number | null
     readonly trainingCount?: number | null
+  }[]
+}
+
+interface StudentReadingSpeedRecordsDto {
+  readonly from: string
+  readonly to: string
+  readonly unit: string
+  readonly calculationVersion: string
+  readonly records: readonly {
+    readonly sourceType: string
+    readonly sourceId: number
+    readonly trainingName: string
+    readonly measuredAt: string
+    readonly correctWordCount: number
+    readonly measuredDurationMs: number
+    readonly readingSpeed: number
+    readonly unit: string
+    readonly calculationVersion: string
   }[]
 }
 
@@ -287,6 +333,22 @@ export function createStudentApi(
         })),
       }
     },
+    async getAccuracyRecords(studentId, options) {
+      const today = await resolveReferenceDate(studentId, now, referenceDate, options)
+      const { from, to } = resolveTrainingHistoryDateRange('30d', today)
+      const search = new URLSearchParams({ from, to })
+      const result = await request<StudentAccuracyRecordsDto>(
+        `/api/admin/student/${studentId}/accuracy-records?${search}`,
+        { signal: options?.signal },
+      )
+      return {
+        ...result,
+        records: result.records.map(({ accuracyRate, ...record }) => ({
+          ...record,
+          accuracy: accuracyRate,
+        })),
+      }
+    },
     async getReadingSpeedTrend(studentId, options) {
       const today = await resolveReferenceDate(studentId, now, referenceDate, options)
       const { from, to } = resolveTrainingHistoryDateRange('30d', today)
@@ -304,15 +366,31 @@ export function createStudentApi(
               point.voiceSpeed !== null,
           )
           .map(
-            ({ date, voiceSpeed, voiceWordCount, voiceDurationMs, trainingCount }) => ({
+            ({ date, voiceSpeed, correctWordCount, voiceDurationMs, trainingCount }) => ({
               date,
               speed: voiceSpeed,
-              correctWordCount: voiceWordCount ?? null,
+              correctWordCount: correctWordCount ?? null,
               measuredDurationMs: voiceDurationMs ?? null,
               trainingCount: trainingCount ?? null,
             }),
           )
           .sort((left, right) => left.date.localeCompare(right.date)),
+      }
+    },
+    async getReadingSpeedRecords(studentId, options) {
+      const today = await resolveReferenceDate(studentId, now, referenceDate, options)
+      const { from, to } = resolveTrainingHistoryDateRange('30d', today)
+      const search = new URLSearchParams({ from, to })
+      const result = await request<StudentReadingSpeedRecordsDto>(
+        `/api/admin/student/${studentId}/reading-speed-records?${search}`,
+        { signal: options?.signal },
+      )
+      return {
+        ...result,
+        records: result.records.map(({ readingSpeed, ...record }) => ({
+          ...record,
+          speed: readingSpeed,
+        })),
       }
     },
     async getTrainingHistory(studentId, query, options) {

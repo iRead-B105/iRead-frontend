@@ -250,14 +250,13 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
                   <span v-else>추가로 확인할 신호 없음</span>
                 </div>
               </section>
+              <section v-if="hasRecommendation(detail)" class="recommendation">
+                <span>다음 학습 제안</span>
+                <strong>{{ detail.recommendedCurriculumUnitName ?? '추천 단원 정보 없음' }}</strong>
+                <p>{{ detail.recommendationReason ?? '추천 이유가 제공되지 않았습니다.' }}</p>
+              </section>
+              <p v-else class="recommendation-empty">다음 학습으로 제안된 훈련이 없습니다.</p>
             </div>
-
-            <section v-if="hasRecommendation(detail)" class="recommendation">
-              <span>다음 학습 제안</span>
-              <strong>{{ detail.recommendedCurriculumUnitName ?? '추천 단원 정보 없음' }}</strong>
-              <p>{{ detail.recommendationReason ?? '추천 이유가 제공되지 않았습니다.' }}</p>
-            </section>
-            <p v-else class="recommendation-empty">다음 학습으로 제안된 훈련이 없습니다.</p>
 
             <div class="event-detail__actions">
               <Button
@@ -486,7 +485,7 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
   display: grid;
   margin: 0;
   gap: 10px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .event-summary-grid > div,
@@ -514,7 +513,7 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
 .event-insight-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .event-insight {
@@ -577,7 +576,11 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
 }
 
 .recommendation-empty {
-  padding: 12px 14px;
+  display: grid;
+  align-content: center;
+  min-height: 100%;
+  padding: 14px;
+  border: 1px solid var(--slate-200);
   border-radius: var(--radius-md);
   background: var(--slate-100);
 }
@@ -618,7 +621,8 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
   }
 
   .event-summary-grid,
-  .recommendation dl {
+  .recommendation dl,
+  .event-insight-grid {
     grid-template-columns: 1fr;
   }
 

@@ -180,6 +180,16 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('시선 분석을 완료하지 못했습니다.')
   })
 
+  it('source record 링크의 trainingId에 해당하는 훈련 상세를 선택한다', async () => {
+    const { store } = await mountHistory(
+      new TestTrainingRepository(),
+      '/teacher/students/1/training-history?trainingId=891',
+    )
+
+    expect(store.selectedCurriculumId).toBe(189)
+    expect(store.selectedHistoryTrainingId).toBe(891)
+  })
+
   it('기간 변경을 서버 query용 값으로 Repository에 전달한다', async () => {
     const repository = new TestTrainingRepository()
     const getCurriculumLogs = vi.spyOn(repository, 'getCurriculumLogs')

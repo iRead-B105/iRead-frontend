@@ -1,4 +1,5 @@
 import type {
+  StudentAccuracyRecords,
   StudentAccuracyTrend,
   StudentCreateInput,
   StudentDetail,
@@ -9,6 +10,7 @@ import type {
   StudentListQuery,
   StudentListResult,
   StudentMutationCommand,
+  StudentReadingSpeedRecords,
   StudentReadingSpeedTrend,
   StudentSummary,
   StudentTrainingHistory,
@@ -55,10 +57,18 @@ export interface StudentRepository {
     studentId: number,
     options?: StudentRequestOptions,
   ) => Promise<StudentAccuracyTrend>
+  readonly getAccuracyRecords: (
+    studentId: number,
+    options?: StudentRequestOptions,
+  ) => Promise<StudentAccuracyRecords>
   readonly getReadingSpeedTrend: (
     studentId: number,
     options?: StudentRequestOptions,
   ) => Promise<StudentReadingSpeedTrend>
+  readonly getReadingSpeedRecords: (
+    studentId: number,
+    options?: StudentRequestOptions,
+  ) => Promise<StudentReadingSpeedRecords>
   readonly getTrainingHistory: (
     studentId: number,
     query: StudentTrainingHistoryQuery,

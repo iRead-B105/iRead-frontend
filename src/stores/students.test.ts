@@ -79,7 +79,9 @@ const mutationRepositoryMethods = {
   listLearningEvents: vi.fn(),
   getLearningEvent: vi.fn(),
   getAccuracyTrend: vi.fn(),
+  getAccuracyRecords: vi.fn(),
   getReadingSpeedTrend: vi.fn(),
+  getReadingSpeedRecords: vi.fn(),
   getTrainingHistory: vi.fn(),
   updateTeacherMemo: vi.fn(),
 }
@@ -346,10 +348,48 @@ describe('Student store', () => {
       getAccuracyTrend: vi.fn().mockResolvedValue({
         dailyAccuracy: [{ date: '2026-07-27', accuracy: 68 }],
       }),
+      getAccuracyRecords: vi.fn().mockResolvedValue({
+        from: '2026-06-28',
+        to: '2026-07-27',
+        unit: 'PERCENT',
+        calculationVersion: 'reading-metrics-v1',
+        records: [
+          {
+            sourceType: 'TRAINING',
+            sourceId: 801,
+            trainingName: '낱말의 끝소리 고르기',
+            measuredAt: '2026-07-27T16:00:00+09:00',
+            correctAttemptCount: 68,
+            attemptCount: 100,
+            accuracy: 68,
+            unit: 'PERCENT',
+            calculationVersion: 'reading-metrics-v1',
+          },
+        ],
+      }),
       getReadingSpeedTrend: vi.fn().mockResolvedValue({
         unit: 'CORRECT_WORDS_PER_MINUTE',
         changeRate: 8.5,
         points: [{ date: '2026-07-27', speed: 89 }],
+      }),
+      getReadingSpeedRecords: vi.fn().mockResolvedValue({
+        from: '2026-06-28',
+        to: '2026-07-27',
+        unit: 'CORRECT_WORDS_PER_MINUTE',
+        calculationVersion: 'reading-metrics-v1',
+        records: [
+          {
+            sourceType: 'TRAINING',
+            sourceId: 801,
+            trainingName: '낱말의 끝소리 고르기',
+            measuredAt: '2026-07-27T16:00:00+09:00',
+            correctWordCount: 44,
+            measuredDurationMs: 30_000,
+            speed: 88,
+            unit: 'CORRECT_WORDS_PER_MINUTE',
+            calculationVersion: 'reading-metrics-v1',
+          },
+        ],
       }),
       getTrainingHistory: vi.fn().mockResolvedValue({
         learningHistory: [
@@ -370,7 +410,9 @@ describe('Student store', () => {
     await Promise.all([
       store.loadLearningEvents(1, 3),
       store.loadAccuracyTrend(1),
+      store.loadAccuracyRecords(1),
       store.loadReadingSpeedTrend(1),
+      store.loadReadingSpeedRecords(1),
       store.loadTrainingHistory(1, '30d'),
     ])
     await store.loadLearningEvent(1, 'TRAINING', 701)
@@ -380,7 +422,9 @@ describe('Student store', () => {
     expect(store.learningEventsById[1]).toEqual([learningEvent])
     expect(store.learningEventDetailsByKey['1:TRAINING:701']).toEqual(learningEventDetail)
     expect(store.accuracyTrendById[1]?.dailyAccuracy).toHaveLength(1)
+    expect(store.accuracyRecordsById[1]?.records).toHaveLength(1)
     expect(store.readingSpeedTrendById[1]?.points).toHaveLength(1)
+    expect(store.readingSpeedRecordsById[1]?.records).toHaveLength(1)
     expect(store.trainingHistoryByKey['1:30d']?.learningHistory).toHaveLength(1)
   })
 
