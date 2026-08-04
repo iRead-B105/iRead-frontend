@@ -438,6 +438,34 @@ export const useTrainingStore = defineStore('training', () => {
     selectedTrainingId.value = null
   }
 
+  function applyRecommendedTemplates(templateIds: readonly number[]): boolean {
+    if (
+      !canEditCurriculum.value ||
+      isSavingCurriculum.value ||
+      templateIds.length !== CURRICULUM_TRAINING_COUNT
+    ) {
+      return false
+    }
+    const availableIds = new Set(catalog.value.map((item) => item.trainingTemplateId))
+    if (
+      new Set(templateIds).size !== CURRICULUM_TRAINING_COUNT ||
+      templateIds.some((templateId) => !availableIds.has(templateId))
+    ) {
+      return false
+    }
+
+    clearSelectedTrainingResources()
+    draftItems.value = templateIds.map((trainingTemplateId) => ({
+      key: `ai-draft-${++draftKeySequence}`,
+      trainingTemplateId,
+      trainingId: null,
+    }))
+    const first = draftItems.value[0] ?? null
+    selectedDraftItemKey.value = first?.key ?? null
+    selectedTemplateId.value = first?.trainingTemplateId ?? null
+    return true
+  }
+
   function removeDraftItem(key: string): void {
     if (!canEditCurriculum.value || isSavingCurriculum.value) return
     const index = draftItems.value.findIndex((item) => item.key === key)
@@ -1550,6 +1578,7 @@ export const useTrainingStore = defineStore('training', () => {
     refreshHistoryForStudent,
     selectTemplate,
     addSelectedTemplate,
+    applyRecommendedTemplates,
     removeDraftItem,
     moveDraftItem,
     discardDraft,
