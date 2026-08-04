@@ -309,7 +309,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
       <section class="form-subsection" aria-labelledby="guardian-section-title">
         <div class="form-subsection__heading">
           <h3 id="guardian-section-title">보호자 정보</h3>
-          <p>연락 및 안내에 필요한 보호자 정보를 관리합니다.</p>
         </div>
         <div class="form-grid">
           <div class="field">
@@ -376,10 +375,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
       </section>
 
       <section v-if="mode === 'edit'" class="danger-zone" aria-label="아동 삭제">
-        <div>
-          <h3>데이터 관리</h3>
-          <p>아동과 연결된 모든 학습 기록을 영구 삭제합니다.</p>
-        </div>
         <Button variant="outline" size="sm" type="button" @click="openDeleteDialog">
           아동 영구 삭제
         </Button>

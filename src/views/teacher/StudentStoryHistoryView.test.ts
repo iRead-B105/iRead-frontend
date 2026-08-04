@@ -123,21 +123,15 @@ async function mountView(storyRepository: StoryRepository = repository()) {
 }
 
 describe('StudentStoryHistoryView', () => {
-  it('목록 성공 후 이야기를 자동 선택하지 않고 선택 시 요약을 표시한다', async () => {
+  it('목록 성공 후 가장 최근 이야기를 자동 선택해 표시한다', async () => {
     const { wrapper, pinia } = await mountView()
 
     expect(wrapper.text()).toContain('별빛 숲의 친구')
-    expect(wrapper.text()).toContain('아직 이야기를 읽지 않았어요')
-    expect(useStoryHistoryStore(pinia).selectedStoryId).toBeNull()
-
-    await wrapper.get('.story-title-tab').trigger('click')
-    await flushPromises()
-
     expect(useStoryHistoryStore(pinia).selectedStoryId).toBe(6801)
+    expect(wrapper.text()).not.toContain('아직 이야기를 읽지 않았어요')
     expect(wrapper.text()).not.toContain('선택한 이야기')
     expect(wrapper.find('.story-detail-heading').exists()).toBe(false)
-    expect(wrapper.text()).toContain('읽는 중 (9/12)')
-    expect(wrapper.text()).toContain('시선 분석 완료')
+    expect(wrapper.find('.story-detail-summary').exists()).toBe(false)
     expect(wrapper.find('.story-list-panel').exists()).toBe(false)
     expect(wrapper.get('.story-workspace').classes()).toContain('story-workspace')
   })
@@ -149,17 +143,21 @@ describe('StudentStoryHistoryView', () => {
     const { wrapper } = await mountView(mockRepository)
     expect(wrapper.findAll('.story-title-tab')).toHaveLength(3)
 
-    await wrapper.get('.story-title-tab').trigger('click')
-    await flushPromises()
-
     expect(wrapper.find('.story-detail-tabs').exists()).toBe(false)
     expect(wrapper.find('.story-page-layout').exists()).toBe(true)
     expect(wrapper.get('.story-reader-scene img').attributes('src')).toBe(
       '/images/story-scene-forest.svg',
     )
+    const previewChildren = wrapper.get('.story-reader-frame').element.children
+    expect(previewChildren[0]?.classList.contains('story-reader-copy')).toBe(true)
+    expect(previewChildren[1]?.classList.contains('story-reader-scene')).toBe(true)
     expect(wrapper.text()).toContain('별빛이 내려앉은 숲에서 토끼가 길을 찾아요.')
-    expect(wrapper.text()).toContain('시선 분석 기록')
-    expect(wrapper.text()).toContain('6.2초')
+    expect(wrapper.text()).toContain('읽기 리플레이')
+    expect(wrapper.text()).toContain('전체 체류 시간')
+    expect(wrapper.text()).toContain('되돌아본 횟수')
+    expect(wrapper.text()).toContain('단어 건너뛴 횟수')
+    expect(wrapper.text()).not.toContain('보정 상태')
+    expect(wrapper.findAll('.story-reader-word').length).toBeGreaterThan(0)
     expect(wrapper.get('.story-page-navigator').text()).toContain('1')
     expect(wrapper.get('.story-page-navigator').text()).toContain('12')
 
@@ -168,7 +166,7 @@ describe('StudentStoryHistoryView', () => {
       .find((button) => button.text() === '다음 페이지')!
     await nextButton.trigger('click')
     expect(wrapper.text()).toContain('반짝이는 나뭇잎이 토끼에게 북쪽을 가리켰어요.')
-    expect(wrapper.text()).toContain('7.4초')
+    expect(wrapper.get('.story-page-navigator').text()).toContain('2')
 
     await nextButton.trigger('click')
     await nextButton.trigger('click')
@@ -179,7 +177,7 @@ describe('StudentStoryHistoryView', () => {
     expect(wrapper.get('.story-reader-scene img').attributes('src')).toBe(
       '/images/story-scene-owl.svg',
     )
-    expect(wrapper.text()).toContain('9.1초')
+    expect(wrapper.text()).toContain('이 페이지의 분기 기록')
     expect(getDetail).toHaveBeenCalledTimes(1)
     expect(getGazeAnalysis).toHaveBeenCalledTimes(1)
   })
@@ -200,9 +198,6 @@ describe('StudentStoryHistoryView', () => {
       getGazeAnalysis,
     }
     const { wrapper } = await mountView(detailRepository)
-
-    await wrapper.get('.story-title-tab').trigger('click')
-    await flushPromises()
 
     expect(getGazeAnalysis).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('시선 분석을 준비하고 있어요')

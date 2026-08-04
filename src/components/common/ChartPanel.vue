@@ -47,10 +47,12 @@ const summaryId = `chart-summary-${useId()}`
 let chart: ECharts | null = null
 let resizeObserver: ResizeObserver | null = null
 let reducedMotionQuery: MediaQueryList | null = null
+let renderFrame: number | null = null
+let resizeFrame: number | null = null
 
 const reducedMotion = ref(false)
 
-function renderChart() {
+function renderChartNow() {
   // 아직 div가 화면에 만들어지지 않았다면 그릴 곳이 없으므로 종료합니다.
   if (!chartElement.value) return
   // ??=는 chart가 없을 때만 새 인스턴스를 만든다는 뜻이라 중복 생성을 방지합니다.
@@ -58,8 +60,24 @@ function renderChart() {
   // 부모가 전달한 최신 설정으로 차트를 다시 그립니다.
   chart.setOption(
     { ...props.option, animation: Boolean(props.animated) && !reducedMotion.value },
-    true,
+    { notMerge: false, lazyUpdate: true },
   )
+}
+
+function renderChart() {
+  if (renderFrame !== null) window.cancelAnimationFrame(renderFrame)
+  renderFrame = window.requestAnimationFrame(() => {
+    renderFrame = null
+    renderChartNow()
+  })
+}
+
+function resizeChart() {
+  if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame)
+  resizeFrame = window.requestAnimationFrame(() => {
+    resizeFrame = null
+    chart?.resize({ animation: { duration: 0 } })
+  })
 }
 
 function updateReducedMotion(event: MediaQueryListEvent | MediaQueryList) {
@@ -77,7 +95,7 @@ onMounted(async () => {
   renderChart()
   if (chartElement.value) {
     // 부모 영역 크기가 달라지면 차트도 빈 공간에 맞춰 다시 계산합니다.
-    resizeObserver = new ResizeObserver(() => chart?.resize())
+    resizeObserver = new ResizeObserver(resizeChart)
     resizeObserver.observe(chartElement.value)
   }
 })
@@ -89,6 +107,8 @@ onBeforeUnmount(() => {
   // 페이지를 떠날 때 감시와 차트 메모리를 정리해 누수를 막습니다.
   resizeObserver?.disconnect()
   reducedMotionQuery?.removeEventListener('change', updateReducedMotion)
+  if (renderFrame !== null) window.cancelAnimationFrame(renderFrame)
+  if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame)
   chart?.dispose()
 })
 </script>

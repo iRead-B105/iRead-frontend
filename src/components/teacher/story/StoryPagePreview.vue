@@ -1,18 +1,42 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import type { GazeReplayWord } from '@/features/teacher/gaze'
 import {
   formatStoryActivityAt,
   type StoryImageGenerationStatus,
   type StoryPage,
 } from '@/features/teacher/story'
+import { resolveTeacherStoryImage } from '@/features/teacher/story/authenticatedStoryImage'
 
 const props = defineProps<{
   page: StoryPage
+  studentId: number
+  storyId: number
   activeReplayKind?: 'read' | 'regression' | 'skip' | null
   activeReplayTokenIndexes?: readonly number[]
   activeReplayDwellMs?: number
+  heatmapWords?: readonly GazeReplayWord[]
+  heatmapVisible?: boolean
 }>()
 
+const imageFailed = ref(false)
+const resolvedImageUrl = ref<string | null>(null)
+let imageRequestSequence = 0
+watch(
+  () => [props.studentId, props.storyId, props.page.backgroundImageUrl] as const,
+  async ([studentId, storyId, imageUrl]) => {
+    const requestSequence = ++imageRequestSequence
+    imageFailed.value = false
+    resolvedImageUrl.value = null
+    try {
+      const resolved = await resolveTeacherStoryImage(studentId, storyId, imageUrl)
+      if (requestSequence === imageRequestSequence) resolvedImageUrl.value = resolved
+    } catch {
+      if (requestSequence === imageRequestSequence) imageFailed.value = true
+    }
+  },
+  { immediate: true },
+)
 interface StoryPreviewWord {
   readonly key: string
   readonly text: string
@@ -31,11 +55,47 @@ const imageStateLabel = computed(() => {
 })
 
 const activeReplayTokenIndexSet = computed(() => new Set(props.activeReplayTokenIndexes ?? []))
+const maxHeatmapDwellMs = computed(() => Math.max(1, ...(props.heatmapWords ?? []).map((word) => word.dwellMs)))
+const heatmapByTokenIndex = computed(() => new Map(
+  (props.heatmapWords ?? [])
+    .filter((word) => word.tokenIndex !== null)
+    .map((word) => [word.tokenIndex!, word]),
+))
+
+function splitStorySentences(source: string): string[] {
+  const normalized = source
+    .replace(/\s+([”’"])/g, '$1')
+    .replace(/([”’"])(?=[가-힣])/g, '$1 ')
+  const sentences: string[] = []
+  let buffer = ''
+  let insideDoubleQuote = false
+  let insideSingleQuote = false
+
+  for (const character of normalized) {
+    buffer += character
+    if (character === '“') insideDoubleQuote = true
+    else if (character === '”') insideDoubleQuote = false
+    else if (character === '‘') insideSingleQuote = true
+    else if (character === '’') insideSingleQuote = false
+
+    if (/[.!?。？！]/.test(character) && !insideDoubleQuote && !insideSingleQuote) {
+      const sentence = buffer.trim()
+      if (sentence) sentences.push(sentence)
+      buffer = ''
+    }
+  }
+
+  const remainder = buffer.trim()
+  if (remainder) sentences.push(remainder)
+  return sentences
+}
 
 const previewTextLines = computed(() => {
   let tokenIndex = 0
-  return props.page.textLines.map((line, lineIndex) =>
-    line
+  const sentences = splitStorySentences(props.page.textLines.join(' ').trim())
+
+  return sentences.map((sentence, lineIndex) =>
+    sentence
       .trim()
       .split(/\s+/)
       .filter(Boolean)
@@ -60,22 +120,48 @@ function wordReplayClass(word: StoryPreviewWord) {
     'is-replay-dwell': isActive && (props.activeReplayDwellMs ?? 0) > 0,
   }
 }
+
+function wordHeatmapStyle(word: StoryPreviewWord) {
+  if (!props.heatmapVisible) return undefined
+  const gaze = heatmapByTokenIndex.value.get(word.tokenIndex)
+  const intensity = !gaze || gaze.dwellMs <= 0
+    ? 0.08
+    : 0.16 + 0.56 * Math.min(1, gaze.dwellMs / maxHeatmapDwellMs.value)
+  return { '--heatmap-intensity': intensity.toFixed(2) }
+}
 </script>
 
 <template>
   <div class="story-page-preview">
     <section class="story-reader-frame" :aria-label="`이야기 ${page.pageNo}페이지 미리보기`">
+      <div class="story-reader-copy">
+        <p v-for="(line, index) in previewTextLines" :key="`${page.storyLineId}-${index}`">
+          <span
+            v-for="word in line"
+            :key="word.key"
+            class="story-reader-word"
+            :class="wordReplayClass(word)"
+            :style="wordHeatmapStyle(word)"
+          >
+            {{ word.text }}{{ ' ' }}
+          </span>
+        </p>
+        <p v-if="page.textLines.length === 0" class="story-reader-copy__empty">
+          표시할 이야기 본문이 없습니다.
+        </p>
+      </div>
       <div class="story-reader-scene">
         <img
-          v-if="page.backgroundImageUrl"
-          :src="page.backgroundImageUrl"
+          v-if="resolvedImageUrl && !imageFailed"
+          :src="resolvedImageUrl"
           :alt="`${page.pageNo}페이지 이야기 장면`"
           :style="{ objectPosition: page.backgroundImagePosition }"
+          @error="imageFailed = true"
         />
         <div
           v-else
           class="story-reader-placeholder"
-          :class="`is-${page.imageGenerationStatus.toLowerCase()}`"
+          :class="`is-${imageFailed ? 'failed' : page.imageGenerationStatus.toLowerCase()}`"
           role="img"
           :aria-label="imageStateLabel ?? '배경 이미지 없음'"
         >
@@ -83,21 +169,6 @@ function wordReplayClass(word: StoryPreviewWord) {
           <p>{{ imageStateLabel }}</p>
         </div>
         <div class="story-reader-shade" aria-hidden="true" />
-        <div class="story-reader-copy">
-          <p v-for="(line, index) in previewTextLines" :key="`${page.storyLineId}-${index}`">
-            <span
-              v-for="word in line"
-              :key="word.key"
-              class="story-reader-word"
-              :class="wordReplayClass(word)"
-            >
-              {{ word.text }}{{ ' ' }}
-            </span>
-          </p>
-          <p v-if="page.textLines.length === 0" class="story-reader-copy__empty">
-            표시할 이야기 본문이 없습니다.
-          </p>
-        </div>
       </div>
     </section>
 
@@ -137,10 +208,10 @@ function wordReplayClass(word: StoryPreviewWord) {
 }
 
 .story-reader-frame {
-  position: relative;
+  display: grid;
   width: 100%;
-  aspect-ratio: 1520 / 850;
   min-height: 0;
+  gap: 8px;
   padding: 8px;
   border: 1px solid #eadfbf;
   border-radius: 18px;
@@ -151,7 +222,7 @@ function wordReplayClass(word: StoryPreviewWord) {
 .story-reader-scene {
   position: relative;
   width: 100%;
-  height: 100%;
+  aspect-ratio: 16 / 9;
   min-height: 0;
   overflow: hidden;
   border-radius: 13px;
@@ -203,33 +274,28 @@ function wordReplayClass(word: StoryPreviewWord) {
 
 .story-reader-shade {
   position: absolute;
-  inset: 34% 0 0;
-  background: linear-gradient(transparent, rgb(30 37 34 / 16%) 42%, rgb(30 37 34 / 38%));
+  inset: 0;
+  background: linear-gradient(180deg, transparent 72%, rgb(30 37 34 / 12%));
   pointer-events: none;
 }
 
 .story-reader-copy {
-  position: absolute;
-  z-index: 2;
-  top: clamp(34px, 10%, 76px);
-  left: clamp(34px, 8%, 88px);
-  width: min(68%, 760px);
-  max-height: 72%;
-  overflow: hidden;
+  width: 100%;
+  padding: clamp(18px, 3vw, 34px);
+  border-radius: 13px;
+  background: #fffdf7;
 }
 
 .story-reader-copy p {
   margin: 0 0 0.22em;
-  color: #132b67;
-  font-size: clamp(18px, 3.1vw, 40px);
+  color: #26364f;
+  font-size: clamp(18px, 2.5vw, 32px);
   font-weight: 800;
-  line-height: 1.35;
-  letter-spacing: 0;
+  line-height: 1.55;
+  letter-spacing: .025em;
   overflow-wrap: normal;
   text-align: left;
-  text-shadow:
-    0 2px 0 rgb(255 255 255 / 80%),
-    0 0 12px rgb(255 252 225 / 92%);
+  text-shadow: none;
   word-break: keep-all;
 }
 
@@ -238,6 +304,11 @@ function wordReplayClass(word: StoryPreviewWord) {
   display: inline-block;
   margin-right: 0.22em;
   border-radius: 0.12em;
+}
+
+.story-reader-word[style] {
+  background: rgb(239 68 68 / var(--heatmap-intensity));
+  box-shadow: 0 0 0 .08em rgb(185 28 28 / calc(var(--heatmap-intensity) * .65));
 }
 
 .story-reader-word.is-replay-active {
@@ -338,9 +409,7 @@ function wordReplayClass(word: StoryPreviewWord) {
   }
 
   .story-reader-copy {
-    top: 14%;
-    left: 8%;
-    width: 76%;
+    padding: 16px;
   }
 
   .story-branch-record header {

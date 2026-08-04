@@ -15,6 +15,7 @@ export interface StoryHistoryItem {
   readonly storyId: number
   readonly storyTemplateId: number
   readonly title: string
+  readonly chapterTitle?: string | null
   readonly imageUrl: string | null
   readonly storyStatus: Exclude<StoryStatus, 'DELETED'>
   readonly generationProgress: number

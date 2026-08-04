@@ -18,10 +18,12 @@ const props = defineProps<{
   requestStatus: StoryRequestStatus
   error: string | null
   contractError: string | null
+  heatmapVisible: boolean
 }>()
 
 const emit = defineEmits<{
   retry: []
+  heatmapVisibilityChange: [visible: boolean]
   replayStepChange: [
     step: {
       readonly kind: 'read' | 'regression' | 'skip'
@@ -659,6 +661,14 @@ const replayDwellDetails = computed(() =>
 const replaySkippedDetails = computed(() =>
   summarizeReplaySteps(pageMovementSteps.value.filter((step) => step.isSkipped), false),
 )
+const totalSkippedWordCount = computed(() => {
+  const skippedWords = props.analysis?.replay?.words.filter((word) => word.skipped) ?? []
+  return new Set(
+    skippedWords.map(
+      (word) => `${word.questionNo ?? 'story'}:${word.targetIndex ?? 'line'}:${word.tokenIndex ?? word.text}`,
+    ),
+  ).size
+})
 const replayRegressionWordDetails = computed(() =>
   summarizeReplaySteps(replayRegressionDetails.value, false),
 )
@@ -673,10 +683,10 @@ const visibleRegressionCountsByTokenIndex = computed(() => {
 
 const replayDataLabel = computed(() =>
   rawPageReplaySamples.value.length > 0
-    ? `${rawPageReplaySamples.value.length}개 시선 샘플 · ${pageMovementSteps.value.length}개 판정 프레임`
+    ? `${rawPageReplaySamples.value.length}개 시선 데이터`
     : rawPageReplayWords.value.length > 0
-      ? `${rawPageReplayWords.value.length}개 단어 샘플`
-      : '페이지 지표 기반',
+      ? `${rawPageReplayWords.value.length}개 시선 데이터`
+      : `${pageHeatmapWords.value.length}개 시선 데이터`,
 )
 
 const activeReplayStep = computed(() => pageMovementSteps.value[replayStepIndex.value] ?? null)
@@ -727,7 +737,7 @@ function advanceReplayStep(): void {
     return
   }
   if (replayStepIndex.value + 1 >= total) {
-    replayStepIndex.value = 0
+    stopReplay()
     return
   }
   replayStepIndex.value += 1
@@ -763,18 +773,21 @@ function moveReplayFrame(delta: number): void {
 
 watch(
   () => [props.metric?.pageNo, pageMovementSteps.value.length] as const,
-  () => resetReplay(),
+  () => {
+    resetReplay()
+    emit('heatmapVisibilityChange', false)
+  },
 )
+
+function toggleHeatmap(): void {
+  emit('heatmapVisibilityChange', !props.heatmapVisible)
+}
 
 onBeforeUnmount(stopReplay)
 </script>
 
 <template>
-  <aside class="story-page-analysis" aria-labelledby="story-page-analysis-title">
-    <header class="story-page-analysis__heading">
-      <p>선택 페이지</p>
-      <h3 id="story-page-analysis-title">읽기 리플레이</h3>
-    </header>
+  <aside class="story-page-analysis" aria-label="페이지 시선 분석">
 
     <AsyncStatePanel
       v-if="storyStatus === 'NOT_COLLECTED'"
@@ -880,6 +893,15 @@ onBeforeUnmount(stopReplay)
             @click="moveReplayToEnd"
           >
             마지막
+          </button>
+          <button
+            class="story-page-replay__heatmap"
+            type="button"
+            :aria-pressed="props.heatmapVisible"
+            :disabled="pageHeatmapWords.length === 0"
+            @click="toggleHeatmap"
+          >
+            {{ props.heatmapVisible ? '히트맵 끄기' : '히트맵 보기' }}
           </button>
         </div>
       </section>
@@ -1027,7 +1049,7 @@ onBeforeUnmount(stopReplay)
         <h4 id="story-overall-summary-title">이야기 전체 요약</h4>
         <dl>
           <div>
-            <dt>전체 체류</dt>
+            <dt>전체 체류 시간</dt>
             <dd>{{ formatGazeDuration(replayOverallDwellSummary?.dwellMs ?? analysis.totalVisitedDurationMs) }}</dd>
           </div>
           <div>
@@ -1035,12 +1057,12 @@ onBeforeUnmount(stopReplay)
             <dd>{{ replayOverallDwellSummary?.count ?? analysis.totalVisitedCount }}회</dd>
           </div>
           <div>
-            <dt>전체 되돌아보기</dt>
+            <dt>되돌아본 횟수</dt>
             <dd>{{ analysis.reverseReadCount }}회</dd>
           </div>
           <div>
-            <dt>보정 상태</dt>
-            <dd>{{ analysis.calibrationStatus }}</dd>
+            <dt>단어 건너뛴 횟수</dt>
+            <dd>{{ totalSkippedWordCount }}회</dd>
           </div>
         </dl>
       </section>
@@ -1164,7 +1186,8 @@ onBeforeUnmount(stopReplay)
 .story-overall-summary h4 {
   margin: 0;
   color: var(--slate-800);
-  font-size: 13px;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .story-page-regressions__heading span,
@@ -1265,6 +1288,17 @@ onBeforeUnmount(stopReplay)
   color: var(--white);
 }
 
+.story-page-replay__actions .story-page-replay__heatmap {
+  margin-left: auto;
+  border-color: var(--primary-600);
+  color: var(--primary-700);
+}
+
+.story-page-replay__actions .story-page-replay__heatmap[aria-pressed='true'] {
+  background: var(--primary-600);
+  color: var(--white);
+}
+
 .story-page-replay__actions button:disabled {
   border-color: var(--slate-200);
   background: var(--slate-100);
@@ -1273,11 +1307,16 @@ onBeforeUnmount(stopReplay)
 }
 
 .story-page-regressions ol {
-  display: grid;
+  display: flex;
   gap: 7px;
   margin: 0;
-  padding: 0;
+  overflow-x: auto;
+  padding: 0 0 8px;
   list-style: none;
+  scroll-padding-inline: 1px;
+  scroll-snap-type: x proximity;
+  scrollbar-color: var(--slate-300) transparent;
+  scrollbar-width: thin;
 }
 
 .story-page-heatmap ol {
@@ -1396,18 +1435,23 @@ onBeforeUnmount(stopReplay)
 
 .story-page-regressions li {
   display: grid;
-  align-items: center;
-  gap: 5px 8px;
-  padding: 10px;
+  align-content: start;
+  min-width: min(184px, 68%);
+  min-height: 112px;
+  flex: 0 0 min(184px, 68%);
+  gap: 8px;
+  padding: 14px;
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-sm);
-  grid-template-columns: auto 1fr auto;
+  background: var(--white);
+  grid-template-columns: 1fr;
+  scroll-snap-align: start;
 }
 
 .story-page-regressions strong,
 .story-page-regressions span,
 .story-page-regressions time {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .story-page-regressions strong {

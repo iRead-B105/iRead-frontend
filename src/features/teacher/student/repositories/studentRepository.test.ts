@@ -89,6 +89,9 @@ describe('MockStudentRepository', () => {
     })
 
     await expect(mutableRepository.getSummary()).resolves.toMatchObject({ totalStudents: 1 })
+    await expect(mutableRepository.getDetail(studentId)).resolves.toMatchObject({
+      imageUrl: '/images/student-profile-girl.png',
+    })
     await mutableRepository.update(studentId, {
       input: { school: '푸른초등학교', guardianEmail: null, address: null },
     })

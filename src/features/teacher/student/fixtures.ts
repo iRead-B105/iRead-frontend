@@ -1,6 +1,7 @@
-import type { StudentListItem } from './model'
+import type { StudentGender, StudentListItem } from './model'
 
 export interface StudentFixtureRecord extends StudentListItem {
+  readonly gender: StudentGender
   readonly scheduledToday: boolean
 }
 
@@ -8,9 +9,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 1,
     name: '김하늘',
+    gender: 'Girl',
     school: '새봄초등학교',
     age: 8,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-girl.png',
     recentTraining: '문장 이해력 향상',
     recentLearningDate: '2026-07-27',
     weeklyScheduledCount: 4,
@@ -22,9 +24,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 2,
     name: '이도윤',
+    gender: 'Boy',
     school: '한빛초등학교',
     age: 9,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-boy.png',
     recentTraining: '낱말 유창성 훈련',
     recentLearningDate: '2026-07-26',
     weeklyScheduledCount: 5,
@@ -36,9 +39,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 3,
     name: '박서아',
+    gender: 'Girl',
     school: '푸른초등학교',
     age: 7,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-girl.png',
     recentTraining: null,
     recentLearningDate: null,
     weeklyScheduledCount: 0,
@@ -50,9 +54,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 4,
     name: '최지우',
+    gender: 'Girl',
     school: '새봄초등학교',
     age: 10,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-girl.png',
     recentTraining: '핵심 내용 찾기',
     recentLearningDate: '2026-07-20',
     weeklyScheduledCount: 4,
@@ -64,9 +69,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 5,
     name: '정민준',
+    gender: 'Boy',
     school: '가람초등학교',
     age: 11,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-boy.png',
     recentTraining: '문장 억양과 끊어 읽기',
     recentLearningDate: '2026-07-18',
     weeklyScheduledCount: 3,
@@ -78,9 +84,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 6,
     name: '윤서준',
+    gender: 'Boy',
     school: '한빛초등학교',
     age: 12,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-boy.png',
     recentTraining: '어휘 의미 연결',
     recentLearningDate: '2026-06-30',
     weeklyScheduledCount: 2,
@@ -92,9 +99,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 7,
     name: '한지민',
+    gender: 'Girl',
     school: '솔빛초등학교',
     age: 6,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-girl.png',
     recentTraining: '낱말 소리 구별',
     recentLearningDate: '2026-07-25',
     weeklyScheduledCount: 3,
@@ -106,9 +114,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 8,
     name: '강유진',
+    gender: 'Girl',
     school: '가람초등학교',
     age: 8,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-girl.png',
     recentTraining: '문장 따라 읽기',
     recentLearningDate: '2026-07-24',
     weeklyScheduledCount: 4,
@@ -120,9 +129,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 9,
     name: '오시우',
+    gender: 'Boy',
     school: '푸른초등학교',
     age: 9,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-boy.png',
     recentTraining: '문맥 낱말 찾기',
     recentLearningDate: '2026-07-22',
     weeklyScheduledCount: 5,
@@ -134,9 +144,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 10,
     name: '송예린',
+    gender: 'Girl',
     school: '솔빛초등학교',
     age: 10,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-girl.png',
     recentTraining: '짧은 글 요약',
     recentLearningDate: '2026-07-21',
     weeklyScheduledCount: 2,
@@ -148,9 +159,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 11,
     name: '임도현',
+    gender: 'Boy',
     school: '새봄초등학교',
     age: 11,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-boy.png',
     recentTraining: '중심 문장 찾기',
     recentLearningDate: '2026-07-19',
     weeklyScheduledCount: 3,
@@ -162,9 +174,10 @@ export const studentFixtures: readonly StudentFixtureRecord[] = [
   {
     studentId: 12,
     name: '배수아',
+    gender: 'Girl',
     school: '한빛초등학교',
     age: 7,
-    imageUrl: null,
+    imageUrl: '/images/student-profile-girl.png',
     recentTraining: '그림과 낱말 연결',
     recentLearningDate: '2026-07-17',
     weeklyScheduledCount: 4,

@@ -15,9 +15,6 @@ import { asyncStateKind } from '@/features/teacher/error'
 import {
   formatStoryActivityAt,
   normalizeStoryHistoryQuery,
-  storyGazeStatusLabel,
-  storyReadingStatusLabel,
-  storyStatusLabel,
   type StoryHistoryItem,
 } from '@/features/teacher/story'
 import { useStoryHistoryStore } from '@/stores/storyHistory'
@@ -68,6 +65,7 @@ const filterTo = ref('')
 const filterTemplateId = ref('')
 const filterError = ref('')
 const activeStoryReplayStep = ref<StoryReplayPreviewState>(null)
+const storyHeatmapVisible = ref(false)
 
 watch(
   studentId,
@@ -77,6 +75,10 @@ watch(
       return
     }
     await storyStore.loadList(id)
+    const latestStory = stories.value[0]
+    if (studentId.value === id && selectedStoryId.value === null && latestStory) {
+      await storyStore.selectAndLoad(id, latestStory.storyId)
+    }
   },
   { immediate: true },
 )
@@ -85,6 +87,7 @@ watch(
   () => selectedPage.value?.storyLineId ?? null,
   () => {
     activeStoryReplayStep.value = null
+    storyHeatmapVisible.value = false
   },
 )
 
@@ -208,7 +211,6 @@ function refreshEditedPage(): void {
           <div class="story-selector-heading">
             <div>
               <h2 id="story-selector-title">이야기 선택</h2>
-              <p>이야기 제목을 선택하면 아래에서 상세 기록을 확인할 수 있습니다.</p>
             </div>
             <strong>{{ totalElements }}개</strong>
           </div>
@@ -255,6 +257,7 @@ function refreshEditedPage(): void {
               @click="selectStory(story)"
             >
               <strong>{{ story.title }}</strong>
+              <small v-if="story.chapterTitle" class="story-title-tab__chapter">{{ story.chapterTitle }}</small>
               <time :datetime="story.activityAt">
                 {{ formatStoryActivityAt(story.activityAt) }}
               </time>
@@ -296,22 +299,6 @@ function refreshEditedPage(): void {
           "
         >
           <template v-if="selectedStory">
-            <div class="story-detail-summary">
-              <dl>
-                <div>
-                  <dt>이야기 상태</dt>
-                  <dd>{{ storyStatusLabel(selectedStory.storyStatus) }}</dd>
-                </div>
-                <div>
-                  <dt>읽기 상태</dt>
-                  <dd>{{ storyReadingStatusLabel(selectedStory) }}</dd>
-                </div>
-                <div>
-                  <dt>시선 분석</dt>
-                  <dd>{{ storyGazeStatusLabel(selectedStory.gazeAnalysisStatus) }}</dd>
-                </div>
-              </dl>
-            </div>
             <div class="story-page-detail">
               <p
                 v-if="detailStatus === 'loading' && currentDetail"
@@ -346,10 +333,14 @@ function refreshEditedPage(): void {
                   <div class="story-page-layout">
                     <div class="story-page-main">
                         <StoryPagePreview
+                          :student-id="studentId!"
+                          :story-id="selectedStory.storyId"
                           :page="selectedPage"
                           :active-replay-kind="activeStoryReplayStep?.kind ?? null"
                           :active-replay-token-indexes="activeStoryReplayStep?.tokenIndexes ?? []"
                           :active-replay-dwell-ms="activeStoryReplayStep?.dwellMs ?? 0"
+                          :heatmap-words="currentGazeAnalysis?.replay?.words.filter((word) => word.questionNo === null || word.questionNo === (selectedPage?.pageNo ?? -1)) ?? []"
+                          :heatmap-visible="storyHeatmapVisible"
                         />
                       <StoryPageEditor
                         v-if="selectedPage.editable"
@@ -367,7 +358,9 @@ function refreshEditedPage(): void {
                       :request-status="gazeStatus"
                       :error="gazeError"
                       :contract-error="pageMetricContractError"
+                      :heatmap-visible="storyHeatmapVisible"
                       @replay-step-change="activeStoryReplayStep = $event"
+                      @heatmap-visibility-change="storyHeatmapVisible = $event"
                       @retry="retryGaze"
                     />
                   </div>
@@ -543,6 +536,15 @@ function refreshEditedPage(): void {
   color: var(--primary-700);
   font-size: 14px;
   font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.story-title-tab__chapter {
+  overflow: hidden;
+  color: var(--slate-700);
+  font-size: 12px;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

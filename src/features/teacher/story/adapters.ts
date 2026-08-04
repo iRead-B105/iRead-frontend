@@ -30,6 +30,7 @@ export interface StorySummaryDto {
   readonly storyId: number
   readonly storyTemplateId: number
   readonly storyTemplateTitle: string
+  readonly chapterTitle?: string | null
   readonly storyTemplateImageUrl: string | null
   readonly storyStatus: StoryStatus
   readonly generationProgress: number
@@ -171,6 +172,7 @@ export function mapStorySummary(dto: StorySummaryDto): StoryHistoryItem | null {
     storyId: dto.storyId,
     storyTemplateId: dto.storyTemplateId,
     title: dto.storyTemplateTitle,
+    chapterTitle: dto.chapterTitle ?? null,
     imageUrl: nullableUrl(dto.storyTemplateImageUrl),
     storyStatus: dto.storyStatus,
     generationProgress: dto.generationProgress,

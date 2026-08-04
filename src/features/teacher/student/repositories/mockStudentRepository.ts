@@ -43,7 +43,7 @@ function matchesKeyword(student: StudentFixtureRecord, keyword?: string): boolea
 }
 
 function toListItem(student: StudentFixtureRecord): StudentListItem {
-  const { scheduledToday: _scheduledToday, ...item } = student
+  const { scheduledToday: _scheduledToday, gender: _gender, ...item } = student
   return { ...item }
 }
 
@@ -72,7 +72,7 @@ export class MockStudentRepository implements StudentRepository {
         studentId: student.studentId,
         name: student.name,
         birthday: `${birthdayYear}-03-15`,
-        gender: student.studentId % 2 === 0 ? 'Girl' : 'Boy',
+        gender: student.gender,
         school: student.school,
         guardian: `${student.name.slice(0, 1)}보호자`,
         guardianContact: `010-0000-${String(student.studentId).padStart(4, '0')}`,
@@ -171,6 +171,7 @@ export class MockStudentRepository implements StudentRepository {
     this.students.push({
       studentId,
       name: detail.name,
+      gender: command.input.gender,
       school: detail.school,
       age: this.ageFromBirthday(detail.birthday),
       imageUrl: detail.imageUrl,
@@ -340,7 +341,9 @@ export class MockStudentRepository implements StudentRepository {
       guardianEmail: input.guardianEmail ?? null,
       address: input.address ?? null,
       createdAt: this.now().toISOString(),
-      imageUrl: image ? this.mockImageUrl(studentId, image) : null,
+      imageUrl: image
+        ? this.mockImageUrl(studentId, image)
+        : `/images/student-profile-${input.gender === 'Girl' ? 'girl' : 'boy'}.png`,
       teacherMemo: null,
     }
   }

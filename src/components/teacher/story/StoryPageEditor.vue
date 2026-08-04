@@ -104,14 +104,14 @@ function uploadImage(event: Event) {
       </label>
     </div>
     <div class="editor-actions">
-      <Button type="button" :disabled="pending" @click="saveContent">내용 저장</Button>
       <Button type="button" variant="outline" :disabled="pending" @click="regenerateImage">
-        Gemini 이미지 다시 생성
+        이미지 다시 생성
       </Button>
-      <label class="upload-button">
-        이미지 직접 업로드
+      <Button as="label" type="button" variant="outline" class="upload-button" :aria-disabled="pending">
+        이미지 업로드
         <input type="file" accept="image/png,image/jpeg,image/webp" :disabled="pending" @change="uploadImage" />
-      </label>
+      </Button>
+      <Button type="button" :disabled="pending" @click="saveContent">내용 저장</Button>
     </div>
     <p v-if="message" class="editor-message" role="status">{{ message }}</p>
   </section>
@@ -125,8 +125,10 @@ function uploadImage(event: Event) {
 .story-page-editor label { display: grid; gap: 6px; color: var(--slate-700); font-size: 12px; font-weight: 700; }
 .story-page-editor input, .story-page-editor textarea { width: 100%; border: 1px solid var(--slate-300); border-radius: 10px; padding: 10px 12px; background: white; color: var(--slate-900); font: inherit; line-height: 1.6; }
 .choice-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.upload-button { display: inline-flex !important; cursor: pointer; border: 1px solid var(--slate-300); border-radius: 8px; padding: 8px 13px; background: white; }
+.editor-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.editor-actions > * { min-width: 120px; font-family: inherit; font-size: 14px; font-weight: 600; }
+.upload-button { cursor: pointer; }
+.upload-button[aria-disabled='true'] { pointer-events: none; opacity: .5; }
 .upload-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .editor-message { margin: 0; color: var(--primary-700); font-size: 13px; }
 @media (max-width: 720px) { .choice-fields { grid-template-columns: 1fr; } .story-page-editor header { flex-direction: column; } }

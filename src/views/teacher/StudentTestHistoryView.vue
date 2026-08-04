@@ -444,7 +444,6 @@ function openRecommendedCurriculum(): void {
             <header class="section-heading">
               <div>
                 <h2>검사 지표 비교</h2>
-                <p>실력 도전 검사 한 건을 하나의 기준으로 비교합니다.</p>
               </div>
               <span v-if="trendStatus === 'loading'" class="status-pill">전체 평균 계산 중</span>
             </header>
@@ -526,10 +525,7 @@ function openRecommendedCurriculum(): void {
 
           <Card class="area-section">
             <header class="section-heading">
-              <div>
-                <h2>영역별 점수</h2>
-                <p>각 영역 3문항의 결과입니다.</p>
-              </div>
+              <div><h2>영역별 점수</h2></div>
               <strong>{{ formatMetric(currentDetail?.overallScore ?? null, '점') }}</strong>
             </header>
             <div class="area-grid">
@@ -545,7 +541,6 @@ function openRecommendedCurriculum(): void {
             <header class="section-heading">
               <div>
                 <h2>추천 훈련 커리큘럼</h2>
-                <p>이 검사를 근거로 생성된 추천 훈련과 검수 화면으로 이동합니다.</p>
               </div>
               <span class="status-pill">{{
                 formatRecommendationStatus(currentDetail?.recommendationStatus ?? null)
@@ -594,8 +589,7 @@ function openRecommendedCurriculum(): void {
           <Card class="question-section">
             <header class="section-heading">
               <div>
-                <h2>문항별 검사 결과</h2>
-                <p>아동 앱이 저장한 실제 제출 결과와 생성 문항을 결합한 결과입니다.</p>
+                <h2>9개 문항 결과</h2>
               </div>
               <span v-if="questionContractWarning === null" class="question-contract-ok">
                 9문항 확인
