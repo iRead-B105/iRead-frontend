@@ -26,6 +26,7 @@ const emit = defineEmits<{
     step: {
       readonly kind: 'read' | 'regression' | 'skip'
       readonly tokenIndexes: readonly number[]
+      readonly dwellMs: number
     } | null,
   ]
 }>()
@@ -34,9 +35,12 @@ function formatOffset(milliseconds: number): string {
   return `${Number((milliseconds / 1_000).toFixed(2))}초`
 }
 
-const MAX_REPLAY_STEPS = 24
+const MAX_REPLAY_STEPS = Number.MAX_SAFE_INTEGER
 const MAX_DISPLAY_GAP_MS = 5_000
 const COMPRESSED_GAP_MS = 350
+const REPLAY_READ_DWELL_MS = 1_000
+const REPLAY_FIXATION_DWELL_MS = 2_000
+const REPLAY_SAMPLE_TAIL_MS = 80
 
 interface ReplayWordView {
   readonly key: string
@@ -62,6 +66,10 @@ interface ReplayStepView {
   readonly kind: 'read' | 'regression' | 'skip'
   readonly isRegression: boolean
   readonly isSkipped: boolean
+  readonly isDwell?: boolean
+  readonly dwellMs?: number
+  /** 원시 샘플 시간축에서 이 이벤트가 완료된 시점 */
+  readonly eventAtMs?: number
 }
 
 interface DisplayRegressionView {
@@ -71,8 +79,17 @@ interface DisplayRegressionView {
   readonly isSkipReturn: boolean
 }
 
+interface ReplayWordSummary {
+  readonly key: string
+  readonly label: string
+  readonly count: number
+  readonly dwellMs: number
+}
+
 function pageMatches(value: number | null | undefined, pageNo: number): boolean {
-  return value === pageNo || value === pageNo - 1
+  // 스토리 원시 데이터는 백엔드에서 pageNo를 questionNumber로 정규화한다.
+  // 인접 페이지까지 허용하면 1페이지 표본이 2페이지 리플레이에 섞인다.
+  return value === pageNo
 }
 
 function tokenLabel(tokenIndex: number | null | undefined, text: string): string {
@@ -128,6 +145,79 @@ const rawPageReplaySamples = computed(() => {
     .filter((sample) => pageMatches(sample.questionNumber, pageNo))
     .slice()
     .sort((first, second) => (first.capturedAtMs ?? 0) - (second.capturedAtMs ?? 0))
+})
+
+// 리플레이의 읽음/건너뜀/되돌아보기 판정도 한 번의 연속 응시가 1초 이상일 때만 만든다.
+const rawPageReadSamples = computed(() => {
+  const samples: typeof rawPageReplaySamples.value = []
+  let active: {
+    readonly key: string
+    readonly sample: typeof rawPageReplaySamples.value[number]
+    readonly startedAtMs: number
+    lastAtMs: number
+  } | null = null
+  const flush = () => {
+    // 마지막 샘플도 다음 샘플 간격만큼 해당 단어에 머문 것으로 계산한다.
+    if (!active || active.lastAtMs - active.startedAtMs + REPLAY_SAMPLE_TAIL_MS < REPLAY_READ_DWELL_MS) return
+    samples.push({ ...active.sample, capturedAtMs: active.startedAtMs })
+  }
+
+  rawPageReplaySamples.value.forEach((sample) => {
+    if (!sample.text.trim() || sample.capturedAtMs === null) return
+    const key = `${sample.questionNumber}:${sample.tokenIndex}:${sample.text}`
+    if (active?.key === key) {
+      active.lastAtMs = sample.capturedAtMs
+      return
+    }
+    flush()
+    active = { key, sample, startedAtMs: sample.capturedAtMs, lastAtMs: sample.capturedAtMs }
+  })
+  flush()
+  return samples
+})
+
+const rawPageDwellSteps = computed((): readonly Omit<ReplayStepView, 'order'>[] => {
+  const steps: Omit<ReplayStepView, 'order'>[] = []
+  let active: {
+    readonly key: string
+    readonly sample: typeof rawPageReplaySamples.value[number]
+    readonly startedAtMs: number
+    lastAtMs: number
+  } | null = null
+
+  const flush = () => {
+    if (!active) return
+    const dwellMs = Math.max(0, active.lastAtMs - active.startedAtMs + REPLAY_SAMPLE_TAIL_MS)
+    if (dwellMs >= REPLAY_FIXATION_DWELL_MS) {
+      steps.push({
+        key: `${active.key}:dwell:${active.startedAtMs}`,
+        label: tokenLabel(active.sample.tokenIndex, active.sample.text),
+        detail: `체류 · ${formatGazeDuration(dwellMs)}`,
+        tokenIndex: active.sample.tokenIndex,
+        targetTokenIndexes: active.sample.tokenIndex === null ? [] : [active.sample.tokenIndex],
+        kind: 'read',
+        isRegression: false,
+        isSkipped: false,
+        isDwell: true,
+        dwellMs,
+        // 체류는 다음 단어로 옮겨가기 직전에 완료되므로 마지막 샘플 시점에 배치한다.
+        eventAtMs: active.lastAtMs,
+      })
+    }
+  }
+
+  rawPageReplaySamples.value.forEach((sample) => {
+    if (!sample.text.trim() || sample.capturedAtMs === null) return
+    const key = `${sample.questionNumber}:${sample.tokenIndex}:${sample.text}`
+    if (active?.key === key) {
+      active.lastAtMs = sample.capturedAtMs
+      return
+    }
+    flush()
+    active = { key, sample, startedAtMs: sample.capturedAtMs, lastAtMs: sample.capturedAtMs }
+  })
+  flush()
+  return steps
 })
 
 const metricReplayWords = computed((): readonly Omit<ReplayWordView, 'style'>[] => {
@@ -202,36 +292,55 @@ const pageMovementSteps = computed(() => {
       order: steps.length + 1,
     })
   }
-  const sampleBaseMs = rawPageReplaySamples.value.find((sample) => sample.capturedAtMs !== null)?.capturedAtMs ?? 0
+  const sampleBaseMs = rawPageReadSamples.value.find((sample) => sample.capturedAtMs !== null)?.capturedAtMs ?? 0
   let previousKey = ''
-  let previousTokenIndex: number | null = null
+  // 순서 판정은 직전 이동 방향이 아니라 다음에 읽어야 할 단어를 기준으로 한다.
+  let nextExpectedTokenIndex = 0
   let previousRawOffsetMs: number | null = null
   let previousDisplayOffsetMs: number | null = null
   let currentMovementKind: 'read' | 'regression' | 'skip' = 'read'
   let currentMovementDetail = ''
-  const skippedReturnTokenIndexes = new Set<number>()
 
-  rawPageReplaySamples.value.forEach((sample) => {
+  rawPageReadSamples.value.forEach((sample) => {
     if (!sample.text.trim()) return
     const key = `${sample.questionNumber}:${sample.tokenIndex}:${sample.text}`
     const elapsedMs = sample.capturedAtMs === null ? null : Math.max(0, sample.capturedAtMs - sampleBaseMs)
     const displayOffsetMs = compressedOffset(elapsedMs, previousRawOffsetMs, previousDisplayOffsetMs)
     previousRawOffsetMs = elapsedMs
     previousDisplayOffsetMs = displayOffsetMs
-    if (key === previousKey || steps.length >= MAX_REPLAY_STEPS) return
-    previousKey = key
+    if (steps.length >= MAX_REPLAY_STEPS) return
+    const isNewWord = key !== previousKey
+    if (isNewWord) previousKey = key
     currentMovementKind = 'read'
     currentMovementDetail = sample.capturedAtMs === null ? '샘플 이동' : formatOffset(displayOffsetMs)
 
-    if (previousTokenIndex !== null && sample.tokenIndex !== null) {
-      if (sample.tokenIndex < previousTokenIndex) {
+    if (sample.tokenIndex !== null && isNewWord) {
+      if (sample.tokenIndex > nextExpectedTokenIndex) {
+        currentMovementKind = 'skip'
+        currentMovementDetail = `\uAC74\uB108\uB700 \u00B7 ${formatOffset(displayOffsetMs)}`
+      } else if (sample.tokenIndex < nextExpectedTokenIndex) {
+        currentMovementKind = 'regression'
+        currentMovementDetail = `\uB4A4\uB3CC\uC544\uBCF4\uAE30 \u00B7 ${formatOffset(displayOffsetMs)}`
+      } else {
+        nextExpectedTokenIndex += 1
+      }
+    }
+
+    /* 이전에는 직전 위치만 비교해, 건너뛴 단어를 거꾸로 읽어도 정상으로 처리했다.
+      if (previousTokenIndex === null && sample.tokenIndex > 0) {
+        currentMovementKind = 'skip'
+        currentMovementDetail = `건너뜀 · ${formatOffset(displayOffsetMs)}`
+        for (let skippedIndex = 0; skippedIndex < sample.tokenIndex; skippedIndex += 1) {
+          skippedReturnTokenIndexes.add(skippedIndex)
+        }
+      } else if (previousTokenIndex !== null && sample.tokenIndex < previousTokenIndex) {
         if (skippedReturnTokenIndexes.has(sample.tokenIndex)) {
           skippedReturnTokenIndexes.delete(sample.tokenIndex)
         } else {
           currentMovementKind = 'regression'
           currentMovementDetail = `되돌아보기 · ${formatOffset(displayOffsetMs)}`
         }
-      } else if (sample.tokenIndex > previousTokenIndex + 1) {
+      } else if (previousTokenIndex !== null && sample.tokenIndex > previousTokenIndex + 1) {
         currentMovementKind = 'skip'
         currentMovementDetail = `건너뜀 · ${formatOffset(displayOffsetMs)}`
         for (let skippedIndex = previousTokenIndex + 1; skippedIndex < sample.tokenIndex; skippedIndex += 1) {
@@ -240,6 +349,12 @@ const pageMovementSteps = computed(() => {
       }
     }
 
+    */
+    // 같은 단어에 연속으로 머문 원시 샘플은 하나의 판정 이벤트로 묶는다.
+    if (!isNewWord) return
+    if (currentMovementKind === 'read') {
+      currentMovementDetail = `\uC77D\uC74C \u00B7 ${formatOffset(displayOffsetMs)}`
+    }
     addStep({
       key: `${key}:${sample.capturedAtMs ?? steps.length}`,
       label: tokenLabel(sample.tokenIndex, sample.text),
@@ -249,13 +364,15 @@ const pageMovementSteps = computed(() => {
       kind: currentMovementKind,
       isRegression: currentMovementKind === 'regression',
       isSkipped: currentMovementKind === 'skip',
+      eventAtMs: sample.capturedAtMs ?? undefined,
     })
-    if (sample.tokenIndex !== null && currentMovementKind === 'read') {
-      skippedReturnTokenIndexes.delete(sample.tokenIndex)
-    }
-    previousTokenIndex = sample.tokenIndex
   })
-  if (steps.length > 0) return steps
+  if (steps.length > 0) {
+    return [...steps, ...rawPageDwellSteps.value]
+      .sort((first, second) => (first.eventAtMs ?? Number.MAX_SAFE_INTEGER) - (second.eventAtMs ?? Number.MAX_SAFE_INTEGER))
+      .slice(0, MAX_REPLAY_STEPS)
+      .map((step, index) => ({ ...step, order: index + 1 }))
+  }
 
   const usedRegressionIndexes = new Set<number>()
   const sortedWords = pageHeatmapWords.value
@@ -405,6 +522,38 @@ const visibleRegressions = computed(() =>
   displayRegressions.value.filter((regression) => !regression.isSkipReturn),
 )
 
+// 상세 목록은 요약 지표가 아니라 화면에서 실제로 판정한 리플레이 프레임을 사용한다.
+const replayRegressionDetails = computed(() =>
+  pageMovementSteps.value.filter((step) => step.isRegression),
+)
+
+function summarizeReplaySteps(
+  steps: readonly ReplayStepView[],
+  dwell: boolean,
+): readonly ReplayWordSummary[] {
+  const summaries = new Map<string, ReplayWordSummary>()
+  steps.forEach((step) => {
+    const existing = summaries.get(step.label)
+    summaries.set(step.label, {
+      key: step.label,
+      label: step.label,
+      count: (existing?.count ?? 0) + 1,
+      dwellMs: (existing?.dwellMs ?? 0) + (dwell ? (step.dwellMs ?? 0) : 0),
+    })
+  })
+  return [...summaries.values()]
+}
+
+const replayDwellDetails = computed(() =>
+  summarizeReplaySteps(pageMovementSteps.value.filter((step) => step.isDwell), true),
+)
+const replaySkippedDetails = computed(() =>
+  summarizeReplaySteps(pageMovementSteps.value.filter((step) => step.isSkipped), false),
+)
+const replayRegressionWordDetails = computed(() =>
+  summarizeReplaySteps(replayRegressionDetails.value, false),
+)
+
 const visibleRegressionCountsByTokenIndex = computed(() => {
   const counts = new Map<number, number>()
   visibleRegressions.value.forEach((regression) => {
@@ -415,7 +564,7 @@ const visibleRegressionCountsByTokenIndex = computed(() => {
 
 const replayDataLabel = computed(() =>
   rawPageReplaySamples.value.length > 0
-    ? `${rawPageReplaySamples.value.length}개 시선 샘플`
+    ? `${rawPageReplaySamples.value.length}개 시선 샘플 · ${pageMovementSteps.value.length}개 판정 프레임`
     : rawPageReplayWords.value.length > 0
       ? `${rawPageReplayWords.value.length}개 단어 샘플`
       : '페이지 지표 기반',
@@ -429,6 +578,7 @@ watch(
       ? {
           kind: step.kind,
           tokenIndexes: step.targetTokenIndexes,
+          dwellMs: step.isDwell ? (step.dwellMs ?? 0) : 0,
         }
       : null)
   },
@@ -487,6 +637,12 @@ function toggleReplay(): void {
 function resetReplay(): void {
   stopReplay()
   replayStepIndex.value = 0
+}
+
+function moveReplayToEnd(): void {
+  stopReplay()
+  const total = pageMovementSteps.value.length
+  if (total > 0) replayStepIndex.value = total - 1
 }
 
 function moveReplayFrame(delta: number): void {
@@ -595,10 +751,11 @@ onBeforeUnmount(stopReplay)
           <span :style="replayProgressStyle"></span>
         </div>
         <div class="story-page-replay__actions">
+          <button type="button" :disabled="pageMovementSteps.length === 0 || replayStepIndex === 0" @click="resetReplay">처음</button>
           <button type="button" :disabled="pageMovementSteps.length === 0 || replayStepIndex === 0" @click="moveReplayFrame(-1)">
             이전
           </button>
-          <button type="button" :disabled="pageMovementSteps.length === 0" @click="toggleReplay">
+          <button class="story-page-replay__toggle" type="button" :disabled="pageMovementSteps.length === 0" @click="toggleReplay">
             {{ replayPlaying ? '일시정지' : '재생' }}
           </button>
           <button
@@ -608,14 +765,20 @@ onBeforeUnmount(stopReplay)
           >
             다음
           </button>
-          <button type="button" :disabled="pageMovementSteps.length === 0" @click="resetReplay">처음</button>
+          <button
+            type="button"
+            :disabled="pageMovementSteps.length === 0 || replayStepIndex >= pageMovementSteps.length - 1"
+            @click="moveReplayToEnd"
+          >
+            마지막
+          </button>
         </div>
       </section>
 
-      <section class="story-page-analysis-record" aria-label="시선 분석 기록">
+      <!--
         <div class="story-page-heatmap__heading">
           <h4>시선 분석 기록</h4>
-          <span>{{ visibleRegressions.length }}회 되돌아보기</span>
+          <span>{{ replayRegressionDetails.length }}회 되돌아보기</span>
         </div>
 
       <dl class="story-page-analysis__metrics">
@@ -639,7 +802,7 @@ onBeforeUnmount(stopReplay)
         </div>
         <div>
           <dt>되돌아보기 횟수</dt>
-          <dd>{{ visibleRegressions.length }}회</dd>
+          <dd>{{ replayRegressionDetails.length }}회</dd>
         </div>
       </dl>
 
@@ -655,7 +818,8 @@ onBeforeUnmount(stopReplay)
       </dl>
       </section>
 
-      <section v-if="pageHeatmapWords.length > 0" class="story-page-heatmap" aria-label="페이지 시선 히트맵">
+      -->
+      <section v-if="false" class="story-page-heatmap" aria-label="페이지 시선 히트맵">
         <div class="story-page-heatmap__heading">
           <h4>페이지 히트맵</h4>
           <span>{{ pageHeatmapWords.length }}개 단어</span>
@@ -678,7 +842,7 @@ onBeforeUnmount(stopReplay)
         </ol>
       </section>
 
-      <section v-if="pageMovementSteps.length > 0" class="story-page-movement" aria-label="페이지 시선 이동 순서">
+      <section v-if="false" class="story-page-movement" aria-label="페이지 시선 이동 순서">
         <div class="story-page-heatmap__heading">
           <h4>이동 순서</h4>
           <span>{{ pageMovementSteps.length }}개 구간</span>
@@ -700,24 +864,52 @@ onBeforeUnmount(stopReplay)
         </ol>
       </section>
 
+      <section class="story-page-regressions" aria-labelledby="story-page-dwell-title">
+        <div class="story-page-regressions__heading">
+          <h4 id="story-page-dwell-title">체류 상세</h4>
+          <span>{{ replayDwellDetails.length }}개 단어</span>
+        </div>
+        <p v-if="replayDwellDetails.length === 0" class="story-page-regressions__empty">2초 이상 체류한 단어가 없습니다.</p>
+        <ol v-else>
+          <li v-for="dwell in replayDwellDetails" :key="dwell.key">
+            <strong>{{ dwell.label }}</strong>
+            <span>{{ dwell.count }}회 체류</span>
+            <time>{{ formatGazeDuration(dwell.dwellMs) }}</time>
+          </li>
+        </ol>
+      </section>
+
+      <section class="story-page-regressions" aria-labelledby="story-page-skipped-title">
+        <div class="story-page-regressions__heading">
+          <h4 id="story-page-skipped-title">건너뜀 단어</h4>
+          <span>{{ replaySkippedDetails.length }}개 단어</span>
+        </div>
+        <p v-if="replaySkippedDetails.length === 0" class="story-page-regressions__empty">건너뛴 단어가 없습니다.</p>
+        <ol v-else>
+          <li v-for="skipped in replaySkippedDetails" :key="skipped.key">
+            <strong>{{ skipped.label }}</strong>
+            <span>{{ skipped.count }}회 건너뜀</span>
+          </li>
+        </ol>
+      </section>
+
       <section class="story-page-regressions" aria-labelledby="story-page-regressions-title">
         <div class="story-page-regressions__heading">
-          <h4 id="story-page-regressions-title">되돌아보기 상세</h4>
-          <span>{{ visibleRegressions.length }}회</span>
+          <h4 id="story-page-regressions-title">되돌아보기 단어</h4>
+          <span>{{ replayRegressionWordDetails.length }}개 단어</span>
         </div>
-        <p v-if="visibleRegressions.length === 0" class="story-page-regressions__empty">
+        <p v-if="replayRegressionWordDetails.length === 0" class="story-page-regressions__empty">
           이 페이지에서 되돌아본 기록이 없습니다.
         </p>
         <ol v-else>
           <li
-            v-for="(regression, index) in visibleRegressions"
-            :key="`${regression.offsetMs}-${index}`"
+            v-for="regression in replayRegressionWordDetails"
+            :key="regression.key"
           >
-            <strong>{{ index + 1 }}번째</strong>
+            <strong>{{ regression.label }}</strong>
             <span>
-              {{ tokenPositionLabel(regression.fromTokenIndex) }} → {{ tokenPositionLabel(regression.toTokenIndex) }}
+              {{ regression.count }}회 되돌아봄
             </span>
-            <time>{{ formatOffset(regression.offsetMs) }}</time>
           </li>
         </ol>
       </section>
@@ -958,7 +1150,7 @@ onBeforeUnmount(stopReplay)
   font-weight: 750;
 }
 
-.story-page-replay__actions button:nth-child(2) {
+.story-page-replay__actions .story-page-replay__toggle {
   border-color: var(--primary-600);
   background: var(--primary-600);
   color: var(--white);

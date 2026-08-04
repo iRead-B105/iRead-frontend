@@ -10,6 +10,7 @@ const props = defineProps<{
   page: StoryPage
   activeReplayKind?: 'read' | 'regression' | 'skip' | null
   activeReplayTokenIndexes?: readonly number[]
+  activeReplayDwellMs?: number
 }>()
 
 interface StoryPreviewWord {
@@ -56,6 +57,7 @@ function wordReplayClass(word: StoryPreviewWord) {
     'is-replay-active': isActive,
     'is-replay-regression': isActive && props.activeReplayKind === 'regression',
     'is-replay-skip': isActive && props.activeReplayKind === 'skip',
+    'is-replay-dwell': isActive && (props.activeReplayDwellMs ?? 0) > 0,
   }
 }
 </script>
@@ -253,6 +255,11 @@ function wordReplayClass(word: StoryPreviewWord) {
   box-shadow: 0 0 0 0.06em rgb(220 38 38 / 40%);
   text-decoration: underline dashed rgb(220 38 38 / 72%);
   text-underline-offset: 0.18em;
+}
+
+.story-reader-word.is-replay-dwell {
+  background: linear-gradient(transparent 58%, rgb(168 85 247 / 40%) 58%);
+  box-shadow: 0 0 0 0.06em rgb(126 34 206 / 54%), 0 0 0.5em rgb(192 132 252 / 48%);
 }
 
 .story-reader-copy .story-reader-copy__empty {

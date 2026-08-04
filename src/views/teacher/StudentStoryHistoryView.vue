@@ -25,6 +25,7 @@ import { useStoryHistoryStore } from '@/stores/storyHistory'
 type StoryReplayPreviewState = {
   readonly kind: 'read' | 'regression' | 'skip'
   readonly tokenIndexes: readonly number[]
+  readonly dwellMs: number
 } | null
 
 function parseStudentId(value: unknown): number | null {
@@ -344,11 +345,12 @@ function refreshEditedPage(): void {
                 <template v-else>
                   <div class="story-page-layout">
                     <div class="story-page-main">
-                      <StoryPagePreview
-                        :page="selectedPage"
-                        :active-replay-kind="activeStoryReplayStep?.kind ?? null"
-                        :active-replay-token-indexes="activeStoryReplayStep?.tokenIndexes ?? []"
-                      />
+                        <StoryPagePreview
+                          :page="selectedPage"
+                          :active-replay-kind="activeStoryReplayStep?.kind ?? null"
+                          :active-replay-token-indexes="activeStoryReplayStep?.tokenIndexes ?? []"
+                          :active-replay-dwell-ms="activeStoryReplayStep?.dwellMs ?? 0"
+                        />
                       <StoryPageEditor
                         v-if="selectedPage.editable"
                         :student-id="studentId!"
