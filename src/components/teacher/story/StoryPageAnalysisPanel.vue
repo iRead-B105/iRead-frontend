@@ -147,6 +147,22 @@ const rawPageReplaySamples = computed(() => {
     .sort((first, second) => (first.capturedAtMs ?? 0) - (second.capturedAtMs ?? 0))
 })
 
+const pageCharacterAverageMs = computed(() => {
+  const samples = rawPageReplaySamples.value.filter((sample) => sample.capturedAtMs !== null)
+  if (samples.length === 0) return 0
+  const durationMs = Math.max(0, samples[samples.length - 1]!.capturedAtMs! - samples[0]!.capturedAtMs! + REPLAY_SAMPLE_TAIL_MS)
+  const characterCount = pageTextTokens().reduce(
+    (total, word) => total + Math.max(1, Array.from(word).filter((character) => /[\p{L}\p{N}]/u.test(character)).length),
+    0,
+  )
+  return characterCount === 0 ? 0 : durationMs / characterCount
+})
+
+function pageWordBaselineMs(text: string): number {
+  const characters = Math.max(1, Array.from(text).filter((character) => /[\p{L}\p{N}]/u.test(character)).length)
+  return pageCharacterAverageMs.value * characters
+}
+
 // 리플레이의 읽음/건너뜀/되돌아보기 판정도 한 번의 연속 응시가 1초 이상일 때만 만든다.
 const rawPageReadSamples = computed(() => {
   const samples: typeof rawPageReplaySamples.value = []
@@ -158,7 +174,7 @@ const rawPageReadSamples = computed(() => {
   } | null = null
   const flush = () => {
     // 마지막 샘플도 다음 샘플 간격만큼 해당 단어에 머문 것으로 계산한다.
-    if (!active || active.lastAtMs - active.startedAtMs + REPLAY_SAMPLE_TAIL_MS < REPLAY_READ_DWELL_MS) return
+    if (!active) return
     samples.push({ ...active.sample, capturedAtMs: active.startedAtMs })
   }
 
@@ -188,7 +204,7 @@ const rawPageDwellSteps = computed((): readonly Omit<ReplayStepView, 'order'>[] 
   const flush = () => {
     if (!active) return
     const dwellMs = Math.max(0, active.lastAtMs - active.startedAtMs + REPLAY_SAMPLE_TAIL_MS)
-    if (dwellMs >= REPLAY_FIXATION_DWELL_MS) {
+    if (dwellMs > pageWordBaselineMs(active.sample.text)) {
       steps.push({
         key: `${active.key}:dwell:${active.startedAtMs}`,
         label: tokenLabel(active.sample.tokenIndex, active.sample.text),
@@ -219,6 +235,10 @@ const rawPageDwellSteps = computed((): readonly Omit<ReplayStepView, 'order'>[] 
   flush()
   return steps
 })
+
+const rawPageDwellMovementKeys = computed(() => new Set(
+  rawPageDwellSteps.value.map((step) => step.key.replace(':dwell:', ':')),
+))
 
 const metricReplayWords = computed((): readonly Omit<ReplayWordView, 'style'>[] => {
   const metric = props.metric
@@ -315,14 +335,16 @@ const pageMovementSteps = computed(() => {
     currentMovementDetail = sample.capturedAtMs === null ? '샘플 이동' : formatOffset(displayOffsetMs)
 
     if (sample.tokenIndex !== null && isNewWord) {
-      if (sample.tokenIndex > nextExpectedTokenIndex) {
+      const isExpectedWord = sample.tokenIndex === nextExpectedTokenIndex
+      const isDwellVisit = rawPageDwellMovementKeys.value.has(`${key}:${sample.capturedAtMs}`)
+      if (isExpectedWord) {
+        nextExpectedTokenIndex += 1
+      } else if (isDwellVisit && sample.tokenIndex > nextExpectedTokenIndex) {
         currentMovementKind = 'skip'
         currentMovementDetail = `\uAC74\uB108\uB700 \u00B7 ${formatOffset(displayOffsetMs)}`
-      } else if (sample.tokenIndex < nextExpectedTokenIndex) {
+      } else if (isDwellVisit && sample.tokenIndex < nextExpectedTokenIndex) {
         currentMovementKind = 'regression'
         currentMovementDetail = `\uB4A4\uB3CC\uC544\uBCF4\uAE30 \u00B7 ${formatOffset(displayOffsetMs)}`
-      } else {
-        nextExpectedTokenIndex += 1
       }
     }
 
