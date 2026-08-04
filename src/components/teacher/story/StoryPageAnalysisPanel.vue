@@ -86,6 +86,8 @@ interface ReplayWordSummary {
   readonly dwellMs: number
 }
 
+type StoryReplaySample = NonNullable<StoryGazeAnalysis['replay']>['samples'][number]
+
 function pageMatches(value: number | null | undefined, pageNo: number): boolean {
   // 스토리 원시 데이터는 백엔드에서 pageNo를 questionNumber로 정규화한다.
   // 인접 페이지까지 허용하면 1페이지 표본이 2페이지 리플레이에 섞인다.
@@ -162,6 +164,91 @@ function pageWordBaselineMs(text: string): number {
   const characters = Math.max(1, Array.from(text).filter((character) => /[\p{L}\p{N}]/u.test(character)).length)
   return pageCharacterAverageMs.value * characters
 }
+
+function textCharacterCount(text: string): number {
+  return Array.from(text).filter((character) => /[\p{L}\p{N}]/u.test(character)).length
+}
+
+function summarizeDwellVisits(
+  samples: readonly StoryReplaySample[],
+  pageText: string,
+): { readonly dwellMs: number; readonly count: number } {
+  const timedSamples = samples
+    .filter((sample) => sample.capturedAtMs !== null)
+    .slice()
+    .sort((first, second) => first.capturedAtMs! - second.capturedAtMs!)
+  if (timedSamples.length === 0) return { dwellMs: 0, count: 0 }
+
+  const pageCharacterCount = Math.max(
+    1,
+    textCharacterCount(pageText) || timedSamples.reduce((total, sample) => total + textCharacterCount(sample.text), 0),
+  )
+  const pageDurationMs = Math.max(
+    0,
+    timedSamples[timedSamples.length - 1]!.capturedAtMs! - timedSamples[0]!.capturedAtMs! + REPLAY_SAMPLE_TAIL_MS,
+  )
+  const characterAverageMs = pageDurationMs / pageCharacterCount
+  let dwellMs = 0
+  let count = 0
+  let active: {
+    readonly key: string
+    readonly text: string
+    readonly startedAtMs: number
+    lastAtMs: number
+  } | null = null
+
+  const flush = () => {
+    if (!active) return
+    const visitDwellMs = Math.max(0, active.lastAtMs - active.startedAtMs + REPLAY_SAMPLE_TAIL_MS)
+    if (visitDwellMs > characterAverageMs * Math.max(1, textCharacterCount(active.text))) {
+      dwellMs += visitDwellMs
+      count += 1
+    }
+  }
+
+  timedSamples.forEach((sample) => {
+    if (!sample.text.trim()) return
+    const key = `${sample.questionNumber}:${sample.tokenIndex}:${sample.text}`
+    if (active?.key === key) {
+      active.lastAtMs = sample.capturedAtMs!
+      return
+    }
+    flush()
+    active = {
+      key,
+      text: sample.text,
+      startedAtMs: sample.capturedAtMs!,
+      lastAtMs: sample.capturedAtMs!,
+    }
+  })
+  flush()
+  return { dwellMs, count }
+}
+
+const replayOverallDwellSummary = computed(() => {
+  const replaySamples = props.analysis?.replay?.samples ?? []
+  if (replaySamples.length === 0) return null
+  const pageTextByNo = new Map(
+    (props.analysis?.pageMetrics ?? []).map((metric) => [metric.pageNo, metric.surfaceText]),
+  )
+  const samplesByPage = new Map<number, StoryReplaySample[]>()
+  replaySamples.forEach((sample) => {
+    if (sample.questionNumber === null) return
+    const pageSamples = samplesByPage.get(sample.questionNumber) ?? []
+    pageSamples.push(sample)
+    samplesByPage.set(sample.questionNumber, pageSamples)
+  })
+
+  let dwellMs = 0
+  let count = 0
+  samplesByPage.forEach((pageSamples, pageNo) => {
+    const fallbackText = pageSamples.map((sample) => sample.text).filter(Boolean).join(' ')
+    const summary = summarizeDwellVisits(pageSamples, pageTextByNo.get(pageNo) ?? fallbackText)
+    dwellMs += summary.dwellMs
+    count += summary.count
+  })
+  return { dwellMs, count }
+})
 
 // 리플레이의 읽음/건너뜀/되돌아보기 판정도 한 번의 연속 응시가 1초 이상일 때만 만든다.
 const rawPageReadSamples = computed(() => {
@@ -891,7 +978,7 @@ onBeforeUnmount(stopReplay)
           <h4 id="story-page-dwell-title">체류 상세</h4>
           <span>{{ replayDwellDetails.length }}개 단어</span>
         </div>
-        <p v-if="replayDwellDetails.length === 0" class="story-page-regressions__empty">2초 이상 체류한 단어가 없습니다.</p>
+        <p v-if="replayDwellDetails.length === 0" class="story-page-regressions__empty">페이지별 기대 시간을 초과해 체류한 단어가 없습니다.</p>
         <ol v-else>
           <li v-for="dwell in replayDwellDetails" :key="dwell.key">
             <strong>{{ dwell.label }}</strong>
@@ -941,11 +1028,11 @@ onBeforeUnmount(stopReplay)
         <dl>
           <div>
             <dt>전체 체류</dt>
-            <dd>{{ formatGazeDuration(analysis.totalVisitedDurationMs) }}</dd>
+            <dd>{{ formatGazeDuration(replayOverallDwellSummary?.dwellMs ?? analysis.totalVisitedDurationMs) }}</dd>
           </div>
           <div>
             <dt>전체 체류 횟수</dt>
-            <dd>{{ analysis.totalVisitedCount }}회</dd>
+            <dd>{{ replayOverallDwellSummary?.count ?? analysis.totalVisitedCount }}회</dd>
           </div>
           <div>
             <dt>전체 되돌아보기</dt>
