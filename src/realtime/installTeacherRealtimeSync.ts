@@ -130,7 +130,9 @@ export function installTeacherRealtimeSync(pinia: Pinia, router: Router): () => 
             students.learningSummaryStatusById[studentId] === 'success' &&
             students.learningEventsStatusById[studentId] === 'success' &&
             students.accuracyTrendStatusById[studentId] === 'success' &&
-            students.readingSpeedTrendStatusById[studentId] === 'success',
+            students.readingSpeedTrendStatusById[studentId] === 'success' &&
+            (students.accuracyTrendErrorById[studentId] ?? null) === null &&
+            (students.readingSpeedTrendErrorById[studentId] ?? null) === null,
         )
         break
     }

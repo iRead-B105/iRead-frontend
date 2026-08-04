@@ -106,6 +106,9 @@ export interface StudentAccuracyTrend {
 export interface StudentReadingSpeedPoint {
   readonly date: string
   readonly speed: number
+  readonly correctWordCount?: number | null
+  readonly measuredDurationMs?: number | null
+  readonly trainingCount?: number | null
 }
 
 export interface StudentReadingSpeedTrend {

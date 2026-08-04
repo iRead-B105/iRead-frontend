@@ -50,6 +50,7 @@ const emit = defineEmits<{
   retryList: []
   retryDetail: [event: StudentLearningEvent]
   addToMemo: [event: StudentLearningEventDetail]
+  openHistory: [eventType: Exclude<StudentLearningEventType, 'GAZE'>]
 }>()
 
 function isSelectedEvent(event: StudentLearningEvent): boolean {
@@ -58,6 +59,43 @@ function isSelectedEvent(event: StudentLearningEvent): boolean {
 
 function isPendingEvent(event: StudentLearningEvent): boolean {
   return props.pendingEventId === event.eventId && props.pendingEventType === event.eventType
+}
+
+function eventResultLabel(event: StudentLearningEvent): string {
+  if (event.accuracy !== null) return `${event.accuracy}%`
+  if (event.eventType === 'STORY') return '이야기 학습'
+  if (event.eventType === 'GAZE') return '시선 분석'
+  return '점수 미측정'
+}
+
+function detailResultLabel(event: StudentLearningEventDetail): string {
+  if (event.accuracy !== null) return `${event.accuracy}%`
+  if (event.eventType === 'STORY') return '이야기 학습'
+  if (event.eventType === 'GAZE') return '시선 분석'
+  return '미측정'
+}
+
+function detailResultTerm(eventType: StudentLearningEventType): string {
+  if (eventType === 'TEST') return '검사 점수'
+  if (eventType === 'TRAINING') return '읽기 정확도'
+  return '기록 유형'
+}
+
+function detailStatusLabel(eventType: StudentLearningEventType): string {
+  return eventType === 'STORY' ? '읽기 기록 완료' : '시선 분석 기록'
+}
+
+function hasRecommendation(event: StudentLearningEventDetail): boolean {
+  return (
+    event.recommendedTrainingTemplateId !== null ||
+    event.recommendedCurriculumUnitId !== null ||
+    event.recommendedCurriculumUnitName !== null ||
+    event.recommendationReason !== null
+  )
+}
+
+function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>): string {
+  return `${studentLearningEventTypeLabels[eventType]} 상세 이력 보기`
 }
 </script>
 
@@ -114,7 +152,7 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
           <span class="learning-event__result">
             <span>
               <Badge v-if="event.attentionRequired" variant="secondary">확인 필요</Badge>
-              <b>{{ event.accuracy === null ? '정확도 없음' : `${event.accuracy}%` }}</b>
+              <b>{{ eventResultLabel(event) }}</b>
             </span>
             <LoaderCircleIcon
               v-if="isPendingEvent(event)"
@@ -156,6 +194,14 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
             class="event-detail"
             aria-live="polite"
           >
+            <header class="event-detail__heading">
+              <div>
+                <span>선택 기록 상세</span>
+                <h3>{{ studentLearningEventTypeLabels[detail.eventType] }}</h3>
+              </div>
+              <Badge variant="secondary">{{ detailResultLabel(detail) }}</Badge>
+            </header>
+
             <dl class="event-summary-grid">
               <div>
                 <dt>학습 종류</dt>
@@ -166,14 +212,16 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
                 <dd>{{ formatStudentDateTime(detail.occurredAt) }}</dd>
               </div>
               <div>
-                <dt>정확도</dt>
-                <dd>
-                  {{ detail.accuracy === null ? '산정할 수 없음' : `${detail.accuracy}%` }}
-                </dd>
+                <dt>{{ detailResultTerm(detail.eventType) }}</dt>
+                <dd>{{ detailResultLabel(detail) }}</dd>
               </div>
-              <div>
+              <div v-if="detail.eventType === 'TRAINING' || detail.eventType === 'TEST'">
                 <dt>재시도</dt>
                 <dd>{{ detail.retryCount }}회</dd>
+              </div>
+              <div v-else>
+                <dt>기록 상태</dt>
+                <dd>{{ detailStatusLabel(detail.eventType) }}</dd>
               </div>
             </dl>
 
@@ -204,24 +252,23 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
               </section>
             </div>
 
-            <section v-if="detail.recommendedTrainingTemplateId !== null" class="recommendation">
+            <section v-if="hasRecommendation(detail)" class="recommendation">
               <span>다음 학습 제안</span>
-              <strong>{{ detail.recommendedCurriculumUnitName }}</strong>
-              <p>{{ detail.recommendationReason }}</p>
-              <dl>
-                <div>
-                  <dt>권장 시간</dt>
-                  <dd>{{ detail.recommendedMinutes }}분</dd>
-                </div>
-                <div>
-                  <dt>권장 반복</dt>
-                  <dd>{{ detail.recommendedRepeatCount }}회</dd>
-                </div>
-              </dl>
+              <strong>{{ detail.recommendedCurriculumUnitName ?? '추천 단원 정보 없음' }}</strong>
+              <p>{{ detail.recommendationReason ?? '추천 이유가 제공되지 않았습니다.' }}</p>
             </section>
             <p v-else class="recommendation-empty">다음 학습으로 제안된 훈련이 없습니다.</p>
 
             <div class="event-detail__actions">
+              <Button
+                v-if="detail.eventType !== 'GAZE'"
+                variant="outline"
+                size="sm"
+                type="button"
+                @click="emit('openHistory', detail.eventType)"
+              >
+                {{ historyButtonLabel(detail.eventType) }}
+              </Button>
               <Button variant="outline" size="sm" type="button" @click="emit('addToMemo', detail)">
                 학습 기록에 추가
               </Button>
@@ -402,6 +449,31 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
   gap: 16px;
   padding: 18px;
   background: var(--slate-50);
+}
+
+.event-detail__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.event-detail__heading div {
+  display: grid;
+  gap: 3px;
+}
+
+.event-detail__heading span {
+  color: var(--slate-500);
+  font-size: 11px;
+}
+
+.event-detail__heading h3 {
+  margin: 0;
+  color: var(--slate-900);
+  font-size: 15px;
 }
 
 .recommendation > span {

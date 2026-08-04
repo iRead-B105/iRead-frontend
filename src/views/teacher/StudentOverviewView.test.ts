@@ -390,7 +390,7 @@ describe('StudentOverviewView', () => {
     expect(learningEventButton.attributes('aria-expanded')).toBe('true')
     const expandedEvent = wrapper.get('.learning-event-item.is-expanded')
     expect(expandedEvent.find('.event-detail-shell').exists()).toBe(true)
-    expect(expandedEvent.find('.event-detail__heading').exists()).toBe(false)
+    expect(expandedEvent.get('.event-detail__heading').text()).toContain('선택 기록 상세')
     expect(expandedEvent.text()).toContain('학습 결과')
     expect(expandedEvent.text()).toContain('교수자 확인')
     expect(expandedEvent.text()).toContain('다음 학습 제안')
