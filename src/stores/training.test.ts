@@ -714,9 +714,37 @@ describe('Training store', () => {
       trainingId: 901,
       status: 'COMPLETED',
     })
-    expect(store.statistics?.readingSpeedTrend.unit).toBe('CORRECT_WORDS_PER_MINUTE')
+    expect(store.statistics?.accuracyComparisons).toHaveLength(3)
     expect(store.historyGazeStatus).toBe('success')
     expect(store.historyGazeAnalysis).toMatchObject({ status: 'AVAILABLE' })
+  })
+
+  it('훈련 전환 중 이전 훈련의 상세와 시선 집계를 새 선택에 표시하지 않는다', async () => {
+    const mock = new MockTrainingRepository()
+    const nextDetail = await mock.getTrainingDetail(1, 902)
+    const nextGaze = await mock.getGazeAnalysis(1, 902)
+    const pendingDetail = deferred<Awaited<ReturnType<TrainingRepository['getTrainingDetail']>>>()
+    const pendingGaze = deferred<Awaited<ReturnType<TrainingRepository['getGazeAnalysis']>>>()
+    const store = useTrainingStore()
+    store.setRepository(mock)
+    await store.loadHistoryForStudent(1)
+
+    vi.spyOn(mock, 'getTrainingDetail').mockReturnValueOnce(pendingDetail.promise)
+    vi.spyOn(mock, 'getGazeAnalysis').mockReturnValueOnce(pendingGaze.promise)
+    const selection = store.selectHistoryTraining(1, 902)
+
+    expect(store.selectedHistoryTrainingId).toBe(902)
+    expect(store.historyTrainingDetail).toBeNull()
+    expect(store.historyDetailStatus).toBe('loading')
+    expect(store.historyGazeAnalysis).toBeNull()
+    expect(store.historyGazeStatus).toBe('loading')
+
+    pendingDetail.resolve(nextDetail)
+    pendingGaze.resolve(nextGaze)
+    await selection
+
+    expect(store.historyTrainingDetail?.trainingId).toBe(902)
+    expect(store.historyGazeAnalysis).toEqual(nextGaze)
   })
 
   it('빠른 훈련 선택 변경에서 늦게 끝난 이전 시선 응답을 무시한다', async () => {

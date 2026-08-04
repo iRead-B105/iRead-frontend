@@ -169,7 +169,6 @@ export const trainingDetailFixtures: readonly TrainingDetail[] = [
     startedAt: '2026-07-20T09:00:00+09:00',
     finishedAt: '2026-07-20T09:08:30+09:00',
     result: {
-      learningAssessment: '받침 소리를 안정적으로 구분했습니다.',
       questions: [
         {
           questionNumber: 1,
@@ -325,7 +324,22 @@ export const trainingLogFixtures: Readonly<Record<number, CurriculumTrainingLog>
         startedAt: '2026-07-20T09:00:00+09:00',
         finishedAt: '2026-07-20T09:08:30+09:00',
         accuracy: 80,
-        questions: trainingDetailFixtures[3]?.result?.questions ?? [],
+        questions: [
+          {
+            questionNumber: 1,
+            question: null,
+            isCorrect: true,
+            selectedAnswer: null,
+            correctAnswer: null,
+          },
+          {
+            questionNumber: 2,
+            question: '‘낮’을 소리 내어 읽어 보세요.',
+            isCorrect: false,
+            selectedAnswer: '나',
+            correctAnswer: '낟',
+          },
+        ],
       },
       {
         trainingId: 902,
@@ -333,7 +347,15 @@ export const trainingLogFixtures: Readonly<Record<number, CurriculumTrainingLog>
         startedAt: '2026-07-20T09:10:00+09:00',
         finishedAt: '2026-07-20T09:14:00+09:00',
         accuracy: 100,
-        questions: trainingDetailFixtures[4]?.result?.questions ?? [],
+        questions: [
+          {
+            questionNumber: 1,
+            question: null,
+            isCorrect: true,
+            selectedAnswer: null,
+            correctAnswer: null,
+          },
+        ],
       },
       {
         trainingId: 903,
@@ -354,7 +376,15 @@ export const trainingLogFixtures: Readonly<Record<number, CurriculumTrainingLog>
         startedAt: '2026-07-05T10:00:00+09:00',
         finishedAt: '2026-07-05T10:05:00+09:00',
         accuracy: 0,
-        questions: trainingDetailFixtures[6]?.result?.questions ?? [],
+        questions: [
+          {
+            questionNumber: 1,
+            question: null,
+            isCorrect: false,
+            selectedAnswer: null,
+            correctAnswer: '바다',
+          },
+        ],
       },
     ],
   },
@@ -373,8 +403,8 @@ export const trainingLogFixtures: Readonly<Record<number, CurriculumTrainingLog>
   },
 }
 
-export const trainingStatisticsFixtures: Readonly<Record<string, TrainingStatistics>> = {
-  '190:30d': {
+export const trainingStatisticsFixtures: Readonly<Record<number, TrainingStatistics>> = {
+  190: {
     accuracyComparisons: [
       {
         trainingId: 901,
@@ -401,37 +431,8 @@ export const trainingStatisticsFixtures: Readonly<Record<string, TrainingStatist
         previousAccuracy: null,
       },
     ],
-    readingSpeedTrend: {
-      unit: 'CORRECT_WORDS_PER_MINUTE',
-      changeRate: 16.36,
-      points: [
-        { trainingId: 891, date: '2026-07-05', speed: 55 },
-        { trainingId: 901, date: '2026-07-20', speed: 64 },
-      ],
-    },
   },
-  '190:3m': {
-    accuracyComparisons: [
-      {
-        trainingId: 901,
-        trainingName: '서로 다른 받침 음절 비교하기',
-        date: '2026-07-20',
-        accuracy: 80,
-        previousTrainingDate: '2026-05-18',
-        previousAccuracy: 60,
-      },
-    ],
-    readingSpeedTrend: {
-      unit: 'CORRECT_WORDS_PER_MINUTE',
-      changeRate: 33.33,
-      points: [
-        { trainingId: 801, date: '2026-05-18', speed: 48 },
-        { trainingId: 891, date: '2026-07-05', speed: 55 },
-        { trainingId: 901, date: '2026-07-20', speed: 64 },
-      ],
-    },
-  },
-  '189:30d': {
+  189: {
     accuracyComparisons: [
       {
         trainingId: 891,
@@ -442,29 +443,8 @@ export const trainingStatisticsFixtures: Readonly<Record<string, TrainingStatist
         previousAccuracy: null,
       },
     ],
-    readingSpeedTrend: {
-      unit: 'CORRECT_WORDS_PER_MINUTE',
-      changeRate: null,
-      points: [{ trainingId: 891, date: '2026-07-05', speed: 55 }],
-    },
   },
-  '189:3m': {
+  180: {
     accuracyComparisons: [],
-    readingSpeedTrend: {
-      unit: 'CORRECT_WORDS_PER_MINUTE',
-      changeRate: 14.58,
-      points: [
-        { trainingId: 801, date: '2026-05-18', speed: 48 },
-        { trainingId: 891, date: '2026-07-05', speed: 55 },
-      ],
-    },
-  },
-  '180:3m': {
-    accuracyComparisons: [],
-    readingSpeedTrend: {
-      unit: 'CORRECT_WORDS_PER_MINUTE',
-      changeRate: null,
-      points: [],
-    },
   },
 }

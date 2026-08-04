@@ -15,8 +15,6 @@ import { chartColors } from '@/features/teacher/chartTheme'
 import { asyncStateKind } from '@/features/teacher/error'
 import {
   formatTrainingDuration,
-  trainingDetailQuestions,
-  trainingLearningAssessment,
   trainingStatusLabel,
   type CurriculumLog,
   type CurriculumTrainingLogItem,
@@ -24,6 +22,7 @@ import {
   type TrainingPeriod,
   type TrainingQuestionResult,
 } from '@/features/teacher/training'
+import type { GazeAnalysisState } from '@/features/teacher/gaze'
 import { saveDownload } from '@/lib/api'
 import { useTrainingStore } from '@/stores/training'
 
@@ -64,13 +63,30 @@ function parseStudentId(value: unknown): number | null {
 
 const studentId = computed(() => parseStudentId(route.params.id))
 const invalidStudentId = computed(() => studentId.value === null)
-const detailQuestions = computed(() => trainingDetailQuestions(historyTrainingDetail.value))
 const selectedHistoryTraining = computed(
   () =>
     trainingLog.value?.trainings.find(
       (training) => training.trainingId === selectedHistoryTrainingId.value,
     ) ?? null,
 )
+const detailQuestions = computed(() => selectedHistoryTraining.value?.questions ?? [])
+const questionSummary = computed(() => ({
+  total: detailQuestions.value.length,
+  correct: detailQuestions.value.filter((question) => question.isCorrect === true).length,
+  incorrect: detailQuestions.value.filter((question) => question.isCorrect === false).length,
+  ungraded: detailQuestions.value.filter((question) => question.isCorrect === null).length,
+}))
+const historyGazeAggregate = computed<GazeAnalysisState | null>(() => {
+  const state = historyGazeAnalysis.value
+  if (state?.status !== 'AVAILABLE') return state
+  return {
+    ...state,
+    analysis: {
+      ...state.analysis,
+      replay: null,
+    },
+  }
+})
 const selectedAccuracyComparison = computed(
   () =>
     statistics.value?.accuracyComparisons.find(
@@ -203,6 +219,10 @@ function questionStatusClass(question: TrainingQuestionResult): string {
   if (question.isCorrect === null) return 'is-ungraded'
   return question.isCorrect ? 'is-correct' : 'is-incorrect'
 }
+
+function questionDetail(value: string | null): string {
+  return value?.trim() || '제공되지 않음'
+}
 </script>
 
 <template>
@@ -237,7 +257,19 @@ function questionStatusClass(question: TrainingQuestionResult): string {
         </HistoryToolbar>
       </Card>
 
-      <div class="history-grid">
+      <Card
+        v-if="curriculumLogsStatus === 'success' && curriculumLogs.length === 0"
+        class="history-empty-card"
+        data-test="history-empty-card"
+      >
+        <AsyncStatePanel
+          kind="empty"
+          title="완료된 훈련 이력이 없습니다"
+          message="선택한 기간에 완료된 커리큘럼과 훈련이 없습니다."
+        />
+      </Card>
+
+      <div v-else class="history-grid">
         <Card class="history-selection-card" data-test="history-selection-card">
           <section class="history-selection-section curriculum-section">
             <header class="section-heading">
@@ -260,12 +292,6 @@ function questionStatusClass(question: TrainingQuestionResult): string {
               :retry-label="curriculumLogsUiError?.retryable ? '다시 불러오기' : undefined"
               compact
               @retry="trainingStore.retryHistory()"
-            />
-            <AsyncStatePanel
-              v-else-if="curriculumLogsStatus === 'success' && curriculumLogs.length === 0"
-              kind="empty"
-              message="선택한 기간에 완료된 커리큘럼이 없습니다."
-              compact
             />
             <div v-else class="curriculum-list">
               <AsyncStatePanel
@@ -467,8 +493,8 @@ function questionStatusClass(question: TrainingQuestionResult): string {
                   </dd>
                 </div>
                 <div>
-                  <dt>학습 판단</dt>
-                  <dd>{{ trainingLearningAssessment(historyTrainingDetail) }}</dd>
+                  <dt>채점 문항</dt>
+                  <dd>{{ questionSummary.total }}건</dd>
                 </div>
               </dl>
 
@@ -477,32 +503,55 @@ function questionStatusClass(question: TrainingQuestionResult): string {
                   <h3 id="question-results-title">문항 결과</h3>
                   <span>{{ detailQuestions.length }}건</span>
                 </header>
+                <dl v-if="detailQuestions.length > 0" class="result-summary">
+                  <div>
+                    <dt>전체</dt>
+                    <dd>{{ questionSummary.total }}건</dd>
+                  </div>
+                  <div>
+                    <dt>정답</dt>
+                    <dd>{{ questionSummary.correct }}건</dd>
+                  </div>
+                  <div>
+                    <dt>오답</dt>
+                    <dd>{{ questionSummary.incorrect }}건</dd>
+                  </div>
+                  <div>
+                    <dt>미채점</dt>
+                    <dd>{{ questionSummary.ungraded }}건</dd>
+                  </div>
+                </dl>
                 <p v-if="detailQuestions.length === 0" class="section-state">
                   저장된 문항 결과가 없습니다.
                 </p>
-                <div v-else class="question-table">
-                  <div class="question-table__head">
-                    <span>문항</span>
-                    <span>정답 여부</span>
-                    <span>학습자 답</span>
-                    <span>정답</span>
+                <template v-else>
+                  <p class="question-data-note">
+                    문항 내용과 답안은 오답 문항에 한해 제공됩니다.
+                  </p>
+                  <div class="question-table">
+                    <div class="question-table__head">
+                      <span>문항</span>
+                      <span>정답 여부</span>
+                      <span>학습자 답</span>
+                      <span>정답</span>
+                    </div>
+                    <div
+                      v-for="question in detailQuestions"
+                      :key="question.questionNumber"
+                      class="question-table__row"
+                    >
+                      <span>
+                        <b>{{ question.questionNumber }}</b>
+                        {{ questionDetail(question.question) }}
+                      </span>
+                      <em :class="questionStatusClass(question)">
+                        {{ questionStatus(question) }}
+                      </em>
+                      <span>{{ questionDetail(question.selectedAnswer) }}</span>
+                      <span>{{ questionDetail(question.correctAnswer) }}</span>
+                    </div>
                   </div>
-                  <div
-                    v-for="question in detailQuestions"
-                    :key="question.questionNumber"
-                    class="question-table__row"
-                  >
-                    <span>
-                      <b>{{ question.questionNumber }}</b>
-                      {{ question.question ?? '-' }}
-                    </span>
-                    <em :class="questionStatusClass(question)">
-                      {{ questionStatus(question) }}
-                    </em>
-                    <span>{{ question.selectedAnswer ?? '-' }}</span>
-                    <span>{{ question.correctAnswer ?? '-' }}</span>
-                  </div>
-                </div>
+                </template>
               </section>
 
               <p v-if="exportError" class="export-error" role="alert">{{ exportError }}</p>
@@ -530,7 +579,7 @@ function questionStatusClass(question: TrainingQuestionResult): string {
           <div v-if="selectedHistoryTrainingId !== null" class="history-gaze-shell">
             <GazeAnalysisPanel
               title="훈련 시선 분석"
-              :state="historyGazeAnalysis"
+              :state="historyGazeAggregate"
               :status="historyGazeStatus"
               :error="historyGazeError"
               @retry="trainingStore.retryHistoryGaze()"
@@ -583,6 +632,11 @@ function questionStatusClass(question: TrainingQuestionResult): string {
   align-items: stretch;
   gap: 20px;
   grid-template-columns: minmax(560px, 1.6fr) minmax(360px, 1fr);
+}
+
+.history-empty-card {
+  min-height: 240px;
+  padding: 24px;
 }
 
 .history-selection-card,
@@ -816,6 +870,26 @@ dd {
   margin-top: 18px;
 }
 
+.result-summary {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.result-summary > div {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--muted) 32%, transparent);
+}
+
+.question-data-note {
+  margin: 0 0 8px;
+  color: var(--slate-500);
+  font-size: 11px;
+}
+
 .question-results > header {
   display: flex;
   align-items: center;
@@ -944,7 +1018,8 @@ dd {
 @container (max-width: 720px) {
   .history-grid,
   .detail-metrics,
-  .accuracy-comparison dl {
+  .accuracy-comparison dl,
+  .result-summary {
     grid-template-columns: 1fr;
   }
 

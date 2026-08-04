@@ -45,7 +45,7 @@ export interface MockTrainingRepositoryFixtures {
     Record<number, Readonly<Record<TrainingPeriod, readonly CurriculumLog[]>>>
   >
   readonly trainingLogs?: Readonly<Record<number, CurriculumTrainingLog>>
-  readonly statistics?: Readonly<Record<string, TrainingStatistics>>
+  readonly statistics?: Readonly<Record<number, TrainingStatistics>>
   readonly gazeByTrainingId?: Readonly<Record<number, GazeAnalysisState>>
 }
 
@@ -77,7 +77,7 @@ export class MockTrainingRepository implements TrainingRepository {
     Readonly<Record<TrainingPeriod, readonly CurriculumLog[]>>
   >()
   private readonly trainingLogs = new Map<number, CurriculumTrainingLog>()
-  private readonly statistics = new Map<string, TrainingStatistics>()
+  private readonly statistics = new Map<number, TrainingStatistics>()
   private readonly gazeByTrainingId = new Map<number, GazeAnalysisState>()
   private nextCurriculumId = 300
   private nextTrainingId = 1_000
@@ -105,10 +105,10 @@ export class MockTrainingRepository implements TrainingRepository {
     )) {
       this.trainingLogs.set(Number(curriculumId), clone(log))
     }
-    for (const [key, statistics] of Object.entries(
+    for (const [curriculumId, statistics] of Object.entries(
       fixtures.statistics ?? trainingStatisticsFixtures,
     )) {
-      this.statistics.set(key, clone(statistics))
+      this.statistics.set(Number(curriculumId), clone(statistics))
     }
     for (const [trainingId, gaze] of Object.entries(
       fixtures.gazeByTrainingId ?? trainingGazeFixtures,
@@ -398,19 +398,13 @@ export class MockTrainingRepository implements TrainingRepository {
   async getStatistics(
     studentId: number,
     curriculumId: number,
-    period: TrainingPeriod,
     options?: TrainingRequestOptions,
   ) {
     this.assertCurriculumBelongsToStudent(studentId, curriculumId)
     assertNotAborted(options)
-    const statistics = this.statistics.get(`${curriculumId}:${period}`)
+    const statistics = this.statistics.get(curriculumId)
     const emptyStatistics: TrainingStatistics = {
       accuracyComparisons: [],
-      readingSpeedTrend: {
-        unit: 'CORRECT_WORDS_PER_MINUTE',
-        changeRate: null,
-        points: [],
-      },
     }
     return clone(statistics ?? emptyStatistics)
   }
