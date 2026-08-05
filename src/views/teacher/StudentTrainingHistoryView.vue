@@ -14,7 +14,6 @@ import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
 import { asyncStateKind } from '@/features/teacher/error'
 import {
   formatTrainingDuration,
@@ -51,7 +50,7 @@ const {
   historyGazeError,
 } = storeToRefs(trainingStore)
 const curriculumLogsErrorKind = computed(() => asyncStateKind(curriculumLogsUiError.value))
-const CURRICULUM_PAGE_SIZE = 4
+const CURRICULUM_PAGE_SIZE = 5
 const curriculumPage = ref(1)
 
 function parseStudentId(value: unknown): number | null {
@@ -262,9 +261,9 @@ function formatQuestionScore(score: number | null): string | null {
             <header class="section-heading curriculum-browser__heading">
               <h2>완료한 커리큘럼</h2>
               <div class="period-field">
-                <Label for="training-period">조회 기간</Label>
                 <select
                   id="training-period"
+                  aria-label="조회 기간"
                   :value="period"
                   :disabled="curriculumLogsStatus === 'loading'"
                   @change="changePeriod"
@@ -547,20 +546,8 @@ function formatQuestionScore(score: number | null): string | null {
 
 .period-field {
   display: flex;
-  width: 100%;
-  min-height: 44px;
+  width: auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 8px 6px 12px;
-  border-radius: 10px;
-  background: var(--slate-50);
-}
-
-.period-field label {
-  color: var(--slate-600);
-  font-size: 11px;
-  font-weight: 700;
 }
 
 .period-field select {
@@ -638,9 +625,8 @@ function formatQuestionScore(score: number | null): string | null {
 }
 
 .curriculum-browser__heading {
-  align-items: stretch;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  flex-direction: row;
 }
 
 .detail-heading p {
@@ -653,13 +639,13 @@ function formatQuestionScore(score: number | null): string | null {
   display: grid;
   flex: 1;
   align-content: start;
-  gap: 20px;
+  gap: 14px;
   margin-top: 16px;
   overflow: hidden;
 }
 
 .curriculum-group h3 {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   color: var(--slate-600);
   font-size: 13px;
   font-weight: 700;
@@ -668,15 +654,15 @@ function formatQuestionScore(score: number | null): string | null {
 .curriculum-list,
 .training-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .curriculum-row {
   display: grid;
   width: 100%;
-  min-height: 64px;
-  padding: 8px 12px;
-  grid-template-columns: 38px minmax(90px, 1fr) auto 18px;
+  min-height: 54px;
+  padding: 6px 10px;
+  grid-template-columns: 34px minmax(90px, 1fr) auto 16px;
   justify-content: stretch;
   border: 1px solid var(--slate-200);
   border-radius: 14px;
@@ -695,14 +681,14 @@ function formatQuestionScore(score: number | null): string | null {
 }
 
 .curriculum-row__icon {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
 }
 
 .curriculum-row__icon svg,
 .curriculum-row__chevron {
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
 }
 
 .curriculum-row strong {
@@ -1173,7 +1159,7 @@ dd {
   }
 
   .curriculum-row {
-    grid-template-columns: 38px minmax(0, 1fr) 18px;
+    grid-template-columns: 34px minmax(0, 1fr) 16px;
   }
 
   .curriculum-row small {
