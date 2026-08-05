@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { Sparkles, X } from '@lucide/vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import SaveToast from '@/components/common/SaveToast.vue'
@@ -74,6 +75,8 @@ const reorderAnnouncement = ref('')
 const aiRecommendationStatus = ref<'idle' | 'loading' | 'success' | 'error'>('idle')
 const aiRecommendationError = ref<string | null>(null)
 const aiRecommendation = ref<AiCurriculumRecommendation | null>(null)
+const aiRecommendationDetailsOpen = ref(false)
+const aiRecommendationAppliedTemplateIds = ref<readonly number[] | null>(null)
 const { visible: saved, show: showSaved } = useTemporaryNotice()
 
 interface AiCurriculumRecommendation {
@@ -114,6 +117,58 @@ let suppressRowClickUntil = 0
 
 const DRAG_ACTIVATION_THRESHOLD = 6
 
+const recommendationRoleLabels: Record<string, string> = {
+  CORE: '집중 연습',
+  REINFORCEMENT: '기초 복습',
+  STRETCH: '가벼운 도전',
+}
+
+const recommendationFeatureLabels: Record<string, string> = {
+  'PHONOLOGY.LIAISON.CODA_TO_SILENT_ONSET': '받침 뒤에 모음이 이어질 때 소리 연결하기',
+  'PHONOLOGY.LIAISON': '연음',
+  'PHONOLOGY.ASPIRATION': '거센소리 변화',
+  'PHONOLOGY.NASALIZATION': '비음화',
+  'PHONOLOGY.PALATALIZATION': '구개음화',
+  'PHONOLOGY.LIQUIDIZATION': '유음화',
+  'PHONOLOGY.TENSIFICATION': '된소리되기',
+  'PHONOLOGY.CODA_NEUTRALIZATION': '받침 대표음',
+  'SYLLABLE.COMPLEX_CODA': '겹받침 음절',
+  'WORD.DECODING': '낱말 읽기',
+  'SENTENCE.FLUENCY': '문장 유창성',
+}
+
+function recommendationRoleLabel(role: string): string {
+  return recommendationRoleLabels[role] ?? '맞춤 연습'
+}
+
+function recommendationFeatureLabel(featureCode: string): string {
+  if (recommendationFeatureLabels[featureCode]) {
+    return recommendationFeatureLabels[featureCode]
+  }
+  const finalPart = featureCode.split('.').at(-1) ?? ''
+  if (featureCode.startsWith('GRAPHEME.ONSET.TENSE.')) return `된소리 초성 ${finalPart}`
+  if (featureCode.startsWith('GRAPHEME.ONSET.ASPIRATED.')) return `거센소리 초성 ${finalPart}`
+  if (featureCode.startsWith('GRAPHEME.ONSET.')) return `첫소리 ${finalPart}`
+  if (featureCode.startsWith('GRAPHEME.VOWEL.')) return `모음 ${finalPart}`
+  if (featureCode.startsWith('GRAPHEME.CODA.COMPLEX.')) return `겹받침 ${finalPart}`
+  if (featureCode.startsWith('GRAPHEME.CODA.')) return `받침 ${finalPart}`
+  if (featureCode.startsWith('WORD.SYLLABLE_COUNT.')) return `${finalPart}음절 낱말`
+  return '읽기 기초'
+}
+
+function recommendationFeatureSummary(featureCodes: readonly string[]): string {
+  const codes = featureCodes.filter(
+    (code) =>
+      code !== 'PHONOLOGY.LIAISON' ||
+      !featureCodes.includes('PHONOLOGY.LIAISON.CODA_TO_SILENT_ONSET'),
+  )
+  return [...new Set(codes.map(recommendationFeatureLabel))].join(' · ') || '읽기 기초 다지기'
+}
+
+function closeAiRecommendationDetails(): void {
+  aiRecommendationDetailsOpen.value = false
+}
+
 function parseStudentId(value: unknown): number | null {
   const normalized = Array.isArray(value) ? value[0] : value
   const parsed = typeof normalized === 'string' ? Number(normalized) : Number.NaN
@@ -124,6 +179,15 @@ const studentId = computed(() => parseStudentId(route.params.id))
 const requestedCurriculumId = computed(() => parseStudentId(route.query.curriculumId))
 const invalidStudentId = computed(() => studentId.value === null)
 const canEditCurriculum = computed(() => canEditCurriculumFromStore.value)
+const isCurrentDraftAiRecommendation = computed(() => {
+  const appliedTemplateIds = aiRecommendationAppliedTemplateIds.value
+  return (
+    aiRecommendation.value !== null &&
+    appliedTemplateIds !== null &&
+    appliedTemplateIds.length === draftTrainingIds.value.length &&
+    appliedTemplateIds.every((templateId, index) => templateId === draftTrainingIds.value[index])
+  )
+})
 const canSave = computed(
   () =>
     hasChanges.value &&
@@ -192,6 +256,8 @@ watch(
     aiRecommendationStatus.value = 'idle'
     aiRecommendationError.value = null
     aiRecommendation.value = null
+    aiRecommendationDetailsOpen.value = false
+    aiRecommendationAppliedTemplateIds.value = null
     cancelPointerDragging()
     if (id === null) {
       trainingStore.reset()
@@ -213,6 +279,10 @@ watch(catalogUnitTabs, (tabs) => {
   if (!tabs.some((tab) => tab.key === selectedCatalogUnit.value)) {
     selectedCatalogUnit.value = 'all'
   }
+})
+
+watch(isCurrentDraftAiRecommendation, (isCurrent) => {
+  if (!isCurrent) aiRecommendationDetailsOpen.value = false
 })
 
 function confirmDiscard(): boolean {
@@ -411,9 +481,10 @@ async function saveChanges(): Promise<void> {
   }
 }
 
-async function loadAiRecommendation(): Promise<void> {
+async function loadAiRecommendation(options: { confirmReplacement?: boolean } = {}): Promise<void> {
   if (studentId.value === null || !canEditCurriculum.value) return
   if (
+    options.confirmReplacement !== false &&
     hasChanges.value &&
     !window.confirm('현재 편집 중인 커리큘럼을 AI 추천 5개로 바꿀까요?')
   ) {
@@ -422,6 +493,7 @@ async function loadAiRecommendation(): Promise<void> {
 
   aiRecommendationStatus.value = 'loading'
   aiRecommendationError.value = null
+  aiRecommendationDetailsOpen.value = false
   try {
     const result = await apiRequest<AiCurriculumRecommendation>(
       `/api/admin/training/${studentId.value}/ai-recommendation`,
@@ -434,13 +506,30 @@ async function loadAiRecommendation(): Promise<void> {
       throw new Error('AI 추천을 현재 커리큘럼 편집 목록에 적용할 수 없습니다.')
     }
     aiRecommendation.value = result
+    aiRecommendationAppliedTemplateIds.value = result.recommendations.map(
+      (item) => item.trainingTemplateId,
+    )
     aiRecommendationStatus.value = 'success'
   } catch (error) {
     aiRecommendation.value = null
+    aiRecommendationAppliedTemplateIds.value = null
     aiRecommendationStatus.value = 'error'
+    aiRecommendationDetailsOpen.value = false
     aiRecommendationError.value =
       error instanceof Error ? error.message : 'AI 추천을 불러오지 못했습니다.'
   }
+}
+
+async function handleAiRecommendationStar(): Promise<void> {
+  if (isCurrentDraftAiRecommendation.value) {
+    aiRecommendationDetailsOpen.value = !aiRecommendationDetailsOpen.value
+    return
+  }
+  await loadAiRecommendation()
+}
+
+async function regenerateAiRecommendation(): Promise<void> {
+  await loadAiRecommendation({ confirmReplacement: false })
 }
 
 async function retryResources(): Promise<void> {
@@ -729,21 +818,42 @@ function deletionMessage(): string {
               </div>
               <div class="next-session__actions">
                 <Button
-                  variant="outline"
-                  size="sm"
+                  class="ai-recommendation-toggle"
+                  :class="{
+                    'is-ai-active': isCurrentDraftAiRecommendation,
+                    'is-loading': aiRecommendationStatus === 'loading',
+                  }"
+                  variant="ghost"
+                  size="icon"
                   type="button"
+                  aria-controls="ai-recommendation-details"
+                  :aria-expanded="aiRecommendationDetailsOpen"
                   :disabled="
                     !canEditCurriculum ||
                     aiRecommendationStatus === 'loading' ||
                     isSavingCurriculum
                   "
-                  @click="loadAiRecommendation"
-                >
-                  {{
+                  :aria-label="
                     aiRecommendationStatus === 'loading'
-                      ? 'AI 추천 중...'
-                      : 'AI 추천 불러오기'
-                  }}
+                      ? 'AI 커리큘럼 생성 중'
+                      : isCurrentDraftAiRecommendation
+                        ? aiRecommendationDetailsOpen
+                          ? 'AI 추천 설명 닫기'
+                          : 'AI 추천 설명 보기'
+                        : 'AI 커리큘럼 생성'
+                  "
+                  :title="
+                    aiRecommendationStatus === 'loading'
+                      ? 'AI 커리큘럼 생성 중'
+                      : isCurrentDraftAiRecommendation
+                        ? aiRecommendationDetailsOpen
+                          ? 'AI 추천 설명 닫기'
+                          : 'AI 추천 설명 보기'
+                        : 'AI 커리큘럼 생성'
+                  "
+                  @click="handleAiRecommendationStar"
+                >
+                  <Sparkles aria-hidden="true" />
                 </Button>
                 <Button
                   class="save-curriculum-button"
@@ -771,22 +881,67 @@ function deletionMessage(): string {
               {{ aiRecommendationError }}
             </div>
             <div
-              v-else-if="aiRecommendation"
+              v-else-if="aiRecommendation && isCurrentDraftAiRecommendation"
+              v-show="aiRecommendationDetailsOpen"
+              id="ai-recommendation-details"
               class="ai-recommendation-preview"
               aria-live="polite"
+              role="status"
             >
-              <strong>
-                AI 추천 적용 · {{ aiRecommendation.recommendationProvider }} · 현재 단계
-                {{ aiRecommendation.currentStage }} / 허용 {{ aiRecommendation.maximumAllowedStage }}
-              </strong>
-              <ol>
-                <li v-for="item in aiRecommendation.recommendations" :key="item.trainingTemplateId">
-                  <span>{{ item.role }}</span>
-                  {{ item.trainingName }}
-                  <small>{{ item.targetFeatureCodes.join(', ') }}</small>
+              <header class="ai-recommendation-preview__header">
+                <span class="ai-recommendation-preview__icon" aria-hidden="true">
+                  <Sparkles />
+                </span>
+                <div class="ai-recommendation-preview__title">
+                  <small>AI 커리큘럼 제안</small>
+                  <strong>학습 기록을 바탕으로 이렇게 구성했어요</strong>
+                </div>
+                <Button
+                  class="ai-recommendation-preview__close"
+                  variant="ghost"
+                  size="icon-sm"
+                  type="button"
+                  aria-label="AI 추천 설명 닫기"
+                  title="AI 추천 설명 닫기"
+                  @click="closeAiRecommendationDetails"
+                >
+                  <X aria-hidden="true" />
+                </Button>
+              </header>
+              <p class="ai-recommendation-preview__summary">
+                {{ aiRecommendation.stageRationale }}
+              </p>
+              <ol class="ai-recommendation-preview__list">
+                <li
+                  v-for="(item, index) in aiRecommendation.recommendations"
+                  :key="item.trainingTemplateId"
+                >
+                  <span class="ai-recommendation-preview__order">{{ index + 1 }}</span>
+                  <span>
+                    <strong>{{ item.trainingName }}</strong>
+                    <small>
+                      {{ recommendationRoleLabel(item.role) }} ·
+                      {{ recommendationFeatureSummary(item.targetFeatureCodes) }}
+                    </small>
+                  </span>
                 </li>
               </ol>
-              <p>{{ aiRecommendation.stageRationale }}</p>
+              <footer class="ai-recommendation-preview__footer">
+                <p class="ai-recommendation-preview__notice">
+                  추천 순서가 편집 목록에 반영되었습니다. 저장하기 전에 확인해 주세요.
+                </p>
+                <Button
+                  class="ai-recommendation-preview__regenerate"
+                  variant="outline"
+                  size="xs"
+                  type="button"
+                  :disabled="aiRecommendationStatus === 'loading'"
+                  @click="regenerateAiRecommendation"
+                >
+                  <Sparkles aria-hidden="true" />
+                  AI로 다시 생성
+                </Button>
+              </footer>
             </div>
 
             <div v-if="showCurriculumFeedback" class="curriculum-feedback" aria-live="polite">
@@ -1300,44 +1455,192 @@ function deletionMessage(): string {
 .next-session__actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
 }
+.ai-recommendation-toggle {
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--slate-400);
+}
+.ai-recommendation-toggle svg {
+  transition: fill 160ms ease, filter 160ms ease, transform 160ms ease;
+}
+.ai-recommendation-toggle.is-ai-active {
+  border-color: color-mix(in oklch, var(--primary-600) 42%, var(--border));
+  background: color-mix(in oklch, var(--primary-50) 74%, var(--white));
+  color: var(--primary-700);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary-500) 14%, transparent);
+}
+.ai-recommendation-toggle.is-ai-active svg {
+  fill: currentcolor;
+  filter: drop-shadow(0 0 4px color-mix(in oklch, var(--primary-500) 55%, transparent));
+}
+.ai-recommendation-toggle.is-loading svg {
+  animation: ai-star-pulse 800ms ease-in-out infinite alternate;
+}
+@keyframes ai-star-pulse {
+  to {
+    opacity: 0.45;
+    transform: scale(0.82) rotate(-8deg);
+  }
+}
 .ai-recommendation-preview {
+  position: relative;
   display: grid;
-  gap: 8px;
+  gap: 14px;
   margin-top: 10px;
-  padding: 12px 14px;
+  padding: 18px;
+  overflow: hidden;
   border: 1px solid color-mix(in oklch, var(--primary-600) 35%, var(--border));
-  border-radius: var(--radius-sm);
-  background: color-mix(in oklch, var(--primary-50) 55%, var(--white));
+  border-radius: 16px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklch, var(--primary-50) 78%, var(--white)) 0%,
+    var(--white) 72%
+  );
   color: var(--slate-700);
   font-size: 12px;
+  box-shadow: 0 12px 30px color-mix(in oklch, var(--primary-900) 9%, transparent);
+}
+.ai-recommendation-preview::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary-500), var(--primary-300), transparent);
+  content: '';
 }
 .ai-recommendation-preview.is-error {
   border-color: color-mix(in oklch, var(--danger-600) 35%, var(--border));
   color: var(--danger-600);
 }
-.ai-recommendation-preview ol {
+.ai-recommendation-preview__header {
   display: grid;
-  gap: 4px;
-  margin: 0;
-  padding-left: 20px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
 }
-.ai-recommendation-preview li span {
-  display: inline-block;
-  min-width: 104px;
+.ai-recommendation-preview__title {
+  display: grid;
+  gap: 2px;
+}
+.ai-recommendation-preview__close {
+  align-self: start;
+  border-radius: 999px;
+  color: var(--slate-400);
+}
+.ai-recommendation-preview__close:hover {
+  background: color-mix(in oklch, var(--slate-200) 55%, transparent);
+  color: var(--slate-700);
+}
+.ai-recommendation-preview__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 11px;
+  border-top: 1px solid color-mix(in oklch, var(--primary-600) 12%, var(--border));
+}
+.ai-recommendation-preview__header small {
   color: var(--primary-700);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.ai-recommendation-preview__header strong {
+  color: var(--slate-900);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.ai-recommendation-preview__icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--primary-600) 18%, transparent);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--primary-600) 13%, var(--white));
+  color: var(--primary-700);
+  box-shadow: 0 5px 12px color-mix(in oklch, var(--primary-700) 10%, transparent);
+}
+.ai-recommendation-preview__icon svg {
+  width: 17px;
+  height: 17px;
+}
+.ai-recommendation-preview__summary {
+  margin: 0;
+  padding: 11px 12px;
+  border-left: 3px solid color-mix(in oklch, var(--primary-600) 54%, transparent);
+  border-radius: 0 10px 10px 0;
+  background: color-mix(in oklch, var(--primary-50) 50%, transparent);
+  color: var(--slate-700);
+  line-height: 1.6;
+}
+.ai-recommendation-preview__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ai-recommendation-preview__list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in oklch, var(--primary-600) 16%, var(--border));
+  border-radius: 11px;
+  background: color-mix(in oklch, var(--white) 90%, transparent);
+  box-shadow: 0 3px 10px color-mix(in oklch, var(--primary-900) 4%, transparent);
+}
+.ai-recommendation-preview__list li > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.ai-recommendation-preview__list li strong {
+  overflow: hidden;
+  color: var(--slate-900);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-recommendation-preview__list li small {
+  color: var(--slate-500);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.ai-recommendation-preview__order {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary-600) 12%, var(--white));
+  color: var(--primary-700);
+  font-size: 10px;
   font-weight: 800;
 }
-.ai-recommendation-preview li small {
-  display: block;
-  margin-left: 108px;
-  color: var(--slate-500);
-}
-.ai-recommendation-preview p {
+.ai-recommendation-preview__notice {
   margin: 0;
   color: var(--slate-500);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.ai-recommendation-preview__regenerate {
+  flex: none;
+  border-color: color-mix(in oklch, var(--primary-600) 26%, var(--border));
+  background: var(--white);
+  color: var(--primary-700);
+  box-shadow: 0 3px 9px color-mix(in oklch, var(--primary-900) 6%, transparent);
 }
 .curriculum-feedback {
   height: 92px;
@@ -1514,6 +1817,10 @@ function deletionMessage(): string {
   }
   .recommendation-actions {
     grid-column: 3;
+  }
+
+  .ai-recommendation-preview__list {
+    grid-template-columns: 1fr;
   }
 
   .draft-actions {
