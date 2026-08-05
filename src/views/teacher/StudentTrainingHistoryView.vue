@@ -329,32 +329,32 @@ function formatQuestionScore(score: number | null): string | null {
                   </Button>
                 </div>
               </section>
-              <nav
-                v-if="curriculumPageCount > 1"
-                class="curriculum-pagination"
-                aria-label="완료 커리큘럼 페이지"
-              >
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  :disabled="curriculumPage === 1"
-                  @click="curriculumPage -= 1"
-                >
-                  이전
-                </Button>
-                <span>{{ curriculumPage }} / {{ curriculumPageCount }}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  :disabled="curriculumPage === curriculumPageCount"
-                  @click="curriculumPage += 1"
-                >
-                  다음
-                </Button>
-              </nav>
             </div>
+            <nav
+              v-if="curriculumLogs.length > 0 && curriculumPageCount > 1"
+              class="curriculum-pagination"
+              aria-label="완료 커리큘럼 페이지"
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                :disabled="curriculumPage === 1"
+                @click="curriculumPage -= 1"
+              >
+                이전
+              </Button>
+              <span>{{ curriculumPage }} / {{ curriculumPageCount }}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                :disabled="curriculumPage === curriculumPageCount"
+                @click="curriculumPage += 1"
+              >
+                다음
+              </Button>
+            </nav>
           </Card>
 
           <Card class="curriculum-overview">
@@ -612,6 +612,7 @@ function formatQuestionScore(score: number | null): string | null {
 
 .curriculum-browser {
   display: flex;
+  height: 500px;
   flex-direction: column;
   align-content: start;
 }
@@ -651,9 +652,12 @@ function formatQuestionScore(score: number | null): string | null {
 .curriculum-groups {
   display: grid;
   flex: 1;
+  min-height: 0;
   align-content: start;
   gap: 20px;
   margin-top: 16px;
+  padding-right: 4px;
+  overflow-y: auto;
 }
 
 .curriculum-group h3 {
@@ -1131,6 +1135,17 @@ dd {
 @container (max-width: 1050px) {
   .history-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .curriculum-browser,
+  .curriculum-overview {
+    height: auto;
+  }
+
+  .curriculum-groups {
+    max-height: none;
+    padding-right: 0;
+    overflow-y: visible;
   }
 }
 @container (max-width: 720px) {
