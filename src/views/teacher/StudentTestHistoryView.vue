@@ -65,12 +65,22 @@ function parseStudentId(value: unknown): number | null {
 const studentId = computed(() => parseStudentId(route.params.id))
 const invalidStudentId = computed(() => studentId.value === null)
 const selectedMetricKey = ref<TestMetricKey>('overallScore')
+type TestPeriod = '30d' | '3m'
+const testPeriod = ref<TestPeriod>('30d')
 const TEST_PAGE_SIZE = 5
 const testPage = ref(1)
-const testPageCount = computed(() => Math.max(1, Math.ceil(tests.value.length / TEST_PAGE_SIZE)))
+const filteredTests = computed(() => {
+  const periodDays = testPeriod.value === '30d' ? 30 : 90
+  const cutoff = Date.now() - periodDays * 24 * 60 * 60 * 1000
+  return tests.value.filter((test) => {
+    const timestamp = new Date(test.completedAt ?? test.createdAt).getTime()
+    return !Number.isFinite(timestamp) || timestamp >= cutoff
+  })
+})
+const testPageCount = computed(() => Math.max(1, Math.ceil(filteredTests.value.length / TEST_PAGE_SIZE)))
 const paginatedTests = computed(() => {
   const start = (testPage.value - 1) * TEST_PAGE_SIZE
-  return tests.value.slice(start, start + TEST_PAGE_SIZE)
+  return filteredTests.value.slice(start, start + TEST_PAGE_SIZE)
 })
 const testGroups = computed(() => {
   const groups = new Map<string, { label: string; items: TestListItem[] }>()
@@ -124,6 +134,17 @@ const questionContractWarning = computed(() => {
   }
   return `9문항 완료 결과가 필요하지만 현재 ${detail.completedQuestions}/${detail.totalQuestions}문항, 상세 ${detail.questions.length}건이 제공되었습니다.`
 })
+
+function changeTestPeriod(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value
+  if (value !== '30d' && value !== '3m') return
+  testPeriod.value = value
+  testPage.value = 1
+  const nextTest = filteredTests.value[0]
+  if (nextTest && !filteredTests.value.some((test) => test.testCurriculumId === currentTestCurriculumId.value)) {
+    void selectCurrentTest(nextTest)
+  }
+}
 
 interface MetricDefinition {
   readonly key: TestMetricKey
@@ -462,7 +483,19 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
 
         <div class="test-comparison-workspace">
           <Card class="test-browser">
-            <header class="section-heading"><h2>완료한 검사</h2></header>
+            <header class="section-heading test-browser__heading">
+              <h2>완료한 검사</h2>
+              <select
+                class="history-period-select"
+                :value="testPeriod"
+                aria-label="조회 기간"
+                :disabled="listStatus === 'loading'"
+                @change="changeTestPeriod"
+              >
+                <option value="30d">최근 30일</option>
+                <option value="3m">최근 3개월</option>
+              </select>
+            </header>
             <select
               id="current-test"
               class="sr-only"
@@ -734,12 +767,14 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
 .test-history { gap: 20px; container-type: inline-size; }
 .test-comparison-workspace { display: grid; align-items: stretch; gap: 20px; grid-template-columns: minmax(270px, 0.72fr) minmax(560px, 1.7fr); }
 .test-browser { display: flex; min-width: 0; height: 500px; flex-direction: column; gap: 0; padding: 20px; border-radius: var(--radius-lg); }
-.test-groups { display: grid; min-height: 0; flex: 1; align-content: start; gap: 20px; margin-top: 16px; padding-right: 4px; overflow-y: auto; }
-.test-group h3 { margin: 0 0 10px; color: var(--slate-600); font-size: 13px; font-weight: 700; }
-.test-list { display: grid; gap: 8px; }
-.test-row { display: grid; width: 100%; min-height: 64px; padding: 8px 12px; grid-template-columns: 38px minmax(90px, 1fr) auto 18px; justify-content: stretch; border: 1px solid var(--slate-200); border-radius: 14px; background: transparent; color: var(--slate-700); text-align: left; }
-.test-row__icon { display: grid; width: 34px; height: 34px; border-radius: 50%; background: var(--slate-100); color: var(--slate-600); place-items: center; }
-.test-row__icon svg, .test-row__chevron { width: 17px; height: 17px; }
+.test-browser__heading { align-items: center; }
+.history-period-select { width: 120px; min-height: 34px; padding: 0 28px 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); color: var(--slate-800); font-size: 11px; }
+.test-groups { display: grid; flex: 1; align-content: start; gap: 14px; margin-top: 16px; overflow: hidden; }
+.test-group h3 { margin: 0 0 8px; color: var(--slate-600); font-size: 13px; font-weight: 700; }
+.test-list { display: grid; gap: 6px; }
+.test-row { display: grid; width: 100%; min-height: 54px; padding: 6px 10px; grid-template-columns: 34px minmax(90px, 1fr) auto 16px; justify-content: stretch; border: 1px solid var(--slate-200); border-radius: 14px; background: transparent; color: var(--slate-700); text-align: left; }
+.test-row__icon { display: grid; width: 30px; height: 30px; border-radius: 50%; background: var(--slate-100); color: var(--slate-600); place-items: center; }
+.test-row__icon svg, .test-row__chevron { width: 15px; height: 15px; }
 .test-row strong { font-size: 14px; }
 .test-row__score { text-align: right; }
 .test-row__score small { display: block; color: var(--slate-500); font-size: 9px; line-height: 1.2; white-space: nowrap; }
@@ -794,7 +829,7 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
 @container (max-width: 1050px) {
   .test-comparison-workspace { grid-template-columns: 1fr; }
   .test-browser, .metric-chart-section { height: auto; }
-  .test-groups { max-height: none; padding-right: 0; overflow-y: visible; }
+  .test-groups { max-height: none; overflow: visible; }
 }
 @media (max-width: 760px) {
   .selection-field { min-width: 100%; }
@@ -803,7 +838,7 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
 }
 @media (max-width: 480px) {
   .test-browser, .metric-chart-section, .question-section { padding: 16px; }
-  .test-row { grid-template-columns: 38px minmax(0, 1fr) auto 18px; }
+  .test-row { grid-template-columns: 34px minmax(0, 1fr) auto 16px; }
   .test-row__score small { display: none; }
   .metric-chart-heading { align-items: stretch; }
   .question-list dl { grid-template-columns: 1fr; }
