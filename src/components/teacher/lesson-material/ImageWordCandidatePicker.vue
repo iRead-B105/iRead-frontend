@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Button } from '@/components/ui/button'
 
 interface ImageWordCandidate {
   readonly imageId: number
@@ -10,24 +9,7 @@ interface ImageWordCandidate {
 
 const props = defineProps<{
   choices: readonly unknown[]
-  disabled: boolean
 }>()
-
-const emit = defineEmits<{
-  update: [choices: readonly ImageWordCandidate[]]
-}>()
-
-function emojiImage(emoji: string, color: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160"><rect width="100%" height="100%" rx="20" fill="${color}"/><text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle" font-size="72">${emoji}</text></svg>`
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`
-}
-
-const candidates: readonly ImageWordCandidate[] = [
-  { imageId: 101, imageUrl: emojiImage('🍉', '#ecfdf5'), text: '수박' },
-  { imageId: 102, imageUrl: emojiImage('🦌', '#fff7ed'), text: '사슴' },
-  { imageId: 103, imageUrl: emojiImage('🚆', '#eff6ff'), text: '기차' },
-  { imageId: 104, imageUrl: emojiImage('✏️', '#fefce8'), text: '연필' },
-]
 
 function candidate(value: unknown): ImageWordCandidate | null {
   if (typeof value !== 'object' || value === null) return null
@@ -40,80 +22,22 @@ function candidate(value: unknown): ImageWordCandidate | null {
 }
 
 const selected = computed(() => props.choices.map(candidate))
-
-function replace(index: number, event: Event): void {
-  const imageId = Number((event.target as HTMLSelectElement).value)
-  const nextCandidate = candidates.find((item) => item.imageId === imageId)
-  if (!nextCandidate) return
-  const next = [...selected.value]
-  next[index] = nextCandidate
-  emit('update', next.filter((item): item is ImageWordCandidate => Boolean(item)))
-}
-
-function add(): void {
-  const used = new Set(selected.value.map((item) => item?.imageId))
-  const nextCandidate = candidates.find((item) => !used.has(item.imageId))
-  if (!nextCandidate) return
-  emit('update', [
-    ...selected.value.filter((item): item is ImageWordCandidate => Boolean(item)),
-    nextCandidate,
-  ])
-}
-
-function remove(index: number): void {
-  emit(
-    'update',
-    selected.value.filter(
-      (item, candidateIndex): item is ImageWordCandidate =>
-        candidateIndex !== index && Boolean(item),
-    ),
-  )
-}
 </script>
 
 <template>
   <div class="candidate-picker">
-    <p>Backend 후보 API에서 전달받은 이미지와 낱말 묶음 중 사용할 항목을 선택합니다.</p>
+    <p class="candidate-picker__notice" role="status">
+      이미지–낱말 후보 API 연동 준비 중입니다. 새 후보 선택은 아직 지원되지 않습니다.
+    </p>
     <div v-for="(choice, index) in selected" :key="index" class="candidate-row">
-      <img
-        v-if="choice"
-        :src="choice.imageUrl"
-        :alt="`${choice.text} 후보 이미지`"
-      />
-      <div v-else class="candidate-placeholder">후보 미선택</div>
-      <label>
+      <img v-if="choice" :src="choice.imageUrl" :alt="`${choice.text} 후보 이미지`" />
+      <div v-else class="candidate-placeholder">후보 정보 없음</div>
+      <div class="candidate-info">
         <span>선택지 {{ index + 1 }}</span>
-        <select
-          :value="choice?.imageId ?? ''"
-          :disabled="disabled"
-          @change="replace(index, $event)"
-        >
-          <option value="" disabled>후보를 선택해 주세요</option>
-          <option v-for="item in candidates" :key="item.imageId" :value="item.imageId">
-            {{ item.text }} · #{{ item.imageId }}
-          </option>
-        </select>
-      </label>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        type="button"
-        :disabled="disabled"
-        :aria-label="`이미지–낱말 선택지 ${index + 1} 삭제`"
-        @click="remove(index)"
-      >
-        ×
-      </Button>
+        <strong v-if="choice">{{ choice.text }} · #{{ choice.imageId }}</strong>
+        <strong v-else>저장된 후보 정보를 표시할 수 없습니다.</strong>
+      </div>
     </div>
-    <Button
-      variant="outline"
-      size="sm"
-      type="button"
-      :disabled="disabled || selected.length >= candidates.length"
-      @click="add"
-    >
-      + 후보 추가
-    </Button>
   </div>
 </template>
 
@@ -123,15 +47,19 @@ function remove(index: number): void {
   gap: 0.6rem;
 }
 
-.candidate-picker > p {
+.candidate-picker__notice {
   margin: 0;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.65rem;
+  background: #f8fafc;
+  padding: 0.6rem 0.7rem;
   color: #64748b;
   font-size: 0.75rem;
 }
 
 .candidate-row {
   display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
   align-items: center;
   gap: 0.6rem;
   border: 1px solid #dbe3ef;
@@ -155,22 +83,19 @@ function remove(index: number): void {
   font-size: 0.65rem;
 }
 
-.candidate-row label {
+.candidate-info {
   display: grid;
   gap: 0.3rem;
 }
 
-.candidate-row label span {
+.candidate-info span {
   color: #475569;
   font-size: 0.72rem;
   font-weight: 700;
 }
 
-.candidate-row select {
-  width: 100%;
-  border: 1px solid #d7dee8;
-  border-radius: 0.55rem;
-  background: white;
-  padding: 0.55rem;
+.candidate-info strong {
+  color: #0f172a;
+  font-size: 0.85rem;
 }
 </style>

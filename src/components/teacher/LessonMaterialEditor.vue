@@ -236,6 +236,11 @@ function updateField(section: 'content' | 'answer', key: string, value: unknown)
   )
   if (!field || field.readonly) return
   material[section] = { ...material[section], [key]: value }
+  // 따라보기(E01)의 허용 발음 텍스트는 읽기 전용이므로, 화면 표시 글자를 바꾸면
+  // 정답도 함께 맞춰 저장 시 백엔드 ANSWER_MISMATCH가 나지 않게 한다.
+  if (definition?.editorCode === 'E01' && section === 'content' && key === 'target') {
+    material.answer = { ...material.answer, target: value }
+  }
   emit('fieldEdited', materialPath(selectedMaterialIndex.value, section, key))
 }
 
