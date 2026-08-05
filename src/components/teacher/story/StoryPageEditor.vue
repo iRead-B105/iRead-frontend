@@ -14,11 +14,13 @@ const message = ref('')
 
 watch(
   () => props.page,
-  (page) => {
+  (page, previousPage) => {
     subtitle.value = page.subtitle ?? ''
     body.value = page.textLines.join(' ')
     choices.value = [0, 1, 2].map((index) => page.choices?.[index] ?? '')
-    message.value = ''
+    if (!previousPage || page.storyLineId !== previousPage.storyLineId) {
+      message.value = ''
+    }
   },
   { immediate: true },
 )
