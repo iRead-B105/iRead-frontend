@@ -1,331 +1,556 @@
 <script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, type Component } from 'vue'
 import {
   ArrowRight,
   BookOpenText,
-  ChartNoAxesCombined,
+  BrainCircuit,
   CheckCircle2,
   Download,
-  HeartHandshake,
+  Eye,
+  Mic,
   Sparkles,
+  Users,
 } from '@lucide/vue'
 import { RouterLink } from 'vue-router'
 
+interface ServiceCard {
+  id: string
+  category: string
+  badge: string
+  title: string
+  subtitle: string
+  description: string
+  highlights: string[]
+  type: 'image' | 'visual-gaze' | 'visual-story' | 'visual-teacher'
+  imageSrc: string
+  imageAlt: string
+  icon: Component
+  tone: string
+}
+
 const childAppDownloadUrl = import.meta.env.VITE_CHILD_APP_DOWNLOAD_URL?.trim()
 
-const features = [
+const cards: ServiceCard[] = [
   {
+    id: 'learner-app',
+    category: '아동용 앱',
+    badge: '실제 화면',
+    title: '아동에게 맞춰진 즐거운 읽기 첫걸음',
+    subtitle: '나의 성장 · 이야기 나라 · 글자 연습 · 실력 도전',
+    description:
+      '초등 저학년 아동이 부담 없이 자신의 속도에 맞춰 글자와 소리를 익히고 이야기 탐험을 이어갈 수 있는 아동 전용 인터페이스입니다.',
+    highlights: [
+      '아동 친화적 UI 및 흥미 유도 캐릭터 구성',
+      '오늘의 읽기 미션으로 꾸준한 습관 형성',
+      '난이도 자동 조절로 아동별 읽기 자신감 향상',
+    ],
+    type: 'image',
+    imageSrc: '/images/learner-home-screenshot.png',
+    imageAlt: '나의 성장, 이야기 나라, 글자 연습, 실력 도전으로 구성된 아동용 아이리드 메인 화면',
     icon: Sparkles,
-    title: '아이에게 맞춘 훈련',
-    description: '아이의 읽기 흐름과 학습 결과를 바탕으로 오늘 필요한 연습을 이어갑니다.',
-    tone: 'orange',
+    tone: 'blue',
   },
   {
-    icon: BookOpenText,
-    title: '이야기로 이어지는 읽기',
-    description: '글자와 소리 연습이 흥미로운 이야기 경험으로 자연스럽게 연결됩니다.',
+    id: 'eyetracking-voice',
+    category: '시선·음성 훈련',
+    badge: 'AI 정밀 분석',
+    title: '시선 추적과 음성 반응으로 정밀하게',
+    subtitle: '읽기 흐름과 발음 정확도를 한 번에',
+    description:
+      '아이가 글을 읽는 시선의 이탈과 머무름을 분석하고, Azure Speech 기반 음성 평가로 발음 정확도와 억양을 다각도로 관측합니다.',
+    highlights: [
+      '시선 고정(Fixation) 및 역행(Regression) 실시간 관측',
+      '단어별 발음 정확도 및 음성 훈련 피드백',
+      '비침습적 웹캠 기반 시선 인식 기술 지원',
+    ],
+    type: 'visual-gaze',
+    imageSrc: '',
+    imageAlt: '',
+    icon: Eye,
     tone: 'purple',
   },
   {
-    icon: ChartNoAxesCombined,
-    title: '한눈에 보는 성장 기록',
-    description: '교수자는 학습 과정과 변화를 확인하고 다음 지원 방향을 세울 수 있습니다.',
+    id: 'story-practice',
+    category: '이야기 읽기',
+    badge: '맞춤 훈련',
+    title: '이야기 속에서 자연스럽게 자라는 문해력',
+    subtitle: '단어 연습에서 단락 이해까지',
+    description:
+      '재미있는 동화와 이야기 속에서 글자-소리 대응을 익히고, 아이의 개별 반응 데이터에 맞춰 유기적인 커리큘럼을 제공합니다.',
+    highlights: [
+      '단계별 어휘 및 상호작용형 동화 콘텐츠',
+      '오독·재시도 시 따뜻한 안내 및 힌트 팝업',
+      '아동의 읽기 동기를 높이는 스티커 보상',
+    ],
+    type: 'visual-story',
+    imageSrc: '',
+    imageAlt: '',
+    icon: BookOpenText,
+    tone: 'amber',
+  },
+  {
+    id: 'teacher-web',
+    category: '교수자 웹',
+    badge: '학습 관리',
+    title: '아이의 오늘을 보고 다음 성장을 지원합니다',
+    subtitle: '학습 현황 · 정밀 분석 · 개별 커리큘럼',
+    description:
+      '교수자는 아동별 훈련 이력, 검사 결과, 시선·음성 분석 리포트를 종합적으로 확인하고 최적의 교육 지침을 수립할 수 있습니다.',
+    highlights: [
+      '아동별 실시간 학습 현황 및 출석 관리',
+      '시선 히트맵 및 읽기 속도 데이터 시각화',
+      '전문가 가이드라인에 맞춘 개별 보고서 생성',
+    ],
+    type: 'visual-teacher',
+    imageSrc: '',
+    imageAlt: '',
+    icon: Users,
     tone: 'green',
   },
 ]
 
-const journey = [
-  { number: '01', title: '오늘의 읽기 시작', description: '부담 없는 분량으로 학습을 시작해요.' },
-  {
-    number: '02',
-    title: '읽고, 듣고, 말하기',
-    description: '시선과 음성을 활용해 다양한 방식으로 연습해요.',
-  },
-  {
-    number: '03',
-    title: '성장 과정 함께 보기',
-    description: '아이와 교수자가 변화를 함께 확인해요.',
-  },
-]
+const scrollY = ref(0)
+const heroHeight = ref(0)
+const activeSectionIndex = ref(-1)
+
+function handleScroll() {
+  scrollY.value = window.scrollY
+  heroHeight.value = window.innerHeight
+
+  // 현재 활성화된 섹션 계산 (Nav 활성화용)
+  const threshold = heroHeight.value * 0.5
+  let currentIndex = -1
+  for (let i = 0; i < cards.length; i++) {
+    const el = document.getElementById(`section-${i}`)
+    if (el) {
+      const rect = el.getBoundingClientRect()
+      if (rect.top <= threshold && rect.bottom >= threshold) {
+        currentIndex = i
+        break
+      }
+    }
+  }
+  activeSectionIndex.value = currentIndex
+}
+
+onMounted(() => {
+  heroHeight.value = window.innerHeight
+  window.addEventListener('scroll', handleScroll, { passive: true })
+  window.addEventListener('resize', handleScroll)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('resize', handleScroll)
+})
+
+const overlayOpacity = computed(() => {
+  if (heroHeight.value === 0) return 0
+  
+  // 1. Initial fade in (0 to 0.82)
+  const heroProgress = Math.min(scrollY.value / (heroHeight.value * 0.8), 1)
+  let opacity = heroProgress * 0.82
+  
+  // 2. Final viewport fade in (0.82 to 1.0)
+  const ctaStartScroll = heroHeight.value * cards.length
+  
+  if (scrollY.value > ctaStartScroll) {
+    const endProgress = Math.min((scrollY.value - ctaStartScroll) / (heroHeight.value * 0.8), 1)
+    opacity = 0.82 + (0.18 * endProgress)
+  }
+  
+  return opacity
+})
+
+function scrollToSection(index: number) {
+  if (index === -1) {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    return
+  }
+  const target = document.getElementById(`section-${index}`)
+  if (target) {
+    target.scrollIntoView({ behavior: 'smooth' })
+  }
+}
 </script>
 
 <template>
-  <div class="landing-page">
+  <div class="landing-page-wrapper">
+    <!-- 고정 배경 및 화이트 오버레이 -->
+    <div class="fixed-background"></div>
+    <div class="dynamic-overlay" :style="{ opacity: overlayOpacity }"></div>
+
     <a class="skip-link" href="#main-content">본문으로 바로가기</a>
 
+    <!-- Header -->
     <header class="landing-header">
-      <div class="landing-container landing-header__inner">
-        <RouterLink class="landing-brand" to="/" aria-label="아이리드 홈">
+      <div class="header-inner">
+        <button class="landing-brand-btn" aria-label="아이리드 홈" @click="scrollToSection(-1)">
           <span class="landing-brand__mark" aria-hidden="true">
             <span>아</span><span>이</span><span>리</span><span>드</span>
           </span>
-        </RouterLink>
+          <span class="landing-brand__text">iRead</span>
+        </button>
 
-        <nav class="landing-nav" aria-label="주요 메뉴">
-          <a href="#service">서비스 소개</a>
-          <a href="#journey">학습 과정</a>
-          <a href="#educator">교수자 기능</a>
-        </nav>
+        <div class="header-actions">
+          <RouterLink class="landing-header__cta" to="/login">
+            <span>교수자 웹 바로가기</span>
+            <span class="landing-header__cta-icon">
+              <ArrowRight :size="14" aria-hidden="true" />
+            </span>
+          </RouterLink>
 
-        <RouterLink class="landing-header__cta" to="/login">
-          <span>교수자 웹</span>
-          <span class="landing-header__cta-icon">
-            <ArrowRight :size="16" aria-hidden="true" />
-          </span>
-        </RouterLink>
+          <a
+            v-if="childAppDownloadUrl"
+            class="landing-header__dl"
+            :href="childAppDownloadUrl"
+            download
+          >
+            <span>아동용 앱 다운로드</span>
+            <span class="landing-header__dl-icon">
+              <Download :size="14" aria-hidden="true" />
+            </span>
+          </a>
+          <button v-else class="landing-header__dl btn-disabled" type="button" disabled>
+            <span>아동용 앱 다운로드</span>
+            <span class="landing-header__dl-icon">
+              <Download :size="14" aria-hidden="true" />
+            </span>
+          </button>
+        </div>
       </div>
     </header>
 
-    <main id="main-content">
-      <section class="hero-section" aria-labelledby="hero-title">
-        <div class="landing-container hero-grid">
-          <div class="hero-copy">
-            <p class="eyebrow"><span aria-hidden="true"></span> 아이와 함께 자라는 읽기 여정</p>
-            <h1 id="hero-title">
-              아이마다 다른<br />
-              <span>읽기의 속도</span>를<br />
-              함께 찾아갑니다
-            </h1>
-            <p class="hero-description">
-              아이리드는 초등 저학년 아이가 자신에게 맞는 방식으로 읽기를 연습하고, 교수자가 그 성장
-              과정을 함께 살펴볼 수 있는 개인화 읽기 학습 서비스입니다.
-            </p>
-            <div class="hero-actions">
-              <RouterLink class="landing-button landing-button--primary" to="/login">
-                교수자 웹 시작하기
-                <ArrowRight :size="20" aria-hidden="true" />
-              </RouterLink>
-              <a
-                v-if="childAppDownloadUrl"
-                class="landing-button landing-button--secondary"
-                :href="childAppDownloadUrl"
-                download
-              >
-                <Download :size="20" aria-hidden="true" />
-                아동용 앱 다운로드
-              </a>
-              <button
-                v-else
-                class="landing-button landing-button--secondary landing-button--pending"
-                type="button"
-                disabled
-              >
-                <Download :size="20" aria-hidden="true" />
-                아동용 앱 다운로드
-              </button>
-            </div>
-            <p class="hero-note">
-              <CheckCircle2 :size="18" aria-hidden="true" />
-              교수자 웹에서 아동별 학습 현황을 바로 확인할 수 있어요.
-            </p>
-          </div>
+    <!-- Main Content Grid -->
+    <main id="main-content" class="content-wrapper">
+      
+      <!-- Hero Section -->
+      <section class="viewport-section hero-section" id="hero">
+        <div class="hero-content-top-left">
+          <h1 class="main-hero-title">아이마다 다른 읽기의 속도를<br/>함께 찾아갑니다</h1>
+          <p class="main-hero-subtitle">AI 맞춤형 읽기 교육 서비스, 아이리드</p>
+          <p class="main-hero-desc">
+            개인화된 학습과 정밀한 시선·음성 분석으로 아이의 문해력 성장을 돕습니다.<br/>
+            아래로 스크롤하여 아이리드의 주요 서비스들을 확인해보세요.
+          </p>
+          <div class="action-row hero-actions">
+            <RouterLink class="btn btn-primary" to="/login">
+              교수자 웹 바로가기
+              <ArrowRight :size="18" aria-hidden="true" />
+            </RouterLink>
 
-          <div class="hero-visual" aria-label="아동용 아이리드 실제 서비스 화면">
-            <span class="hero-visual__label">아동용 앱 · 실제 화면</span>
-            <img
-              src="/images/learner-home-screenshot.png"
-              alt="나의 성장, 이야기 나라, 글자 연습, 실력 도전으로 구성된 아동용 아이리드 메인 화면"
-            />
+            <a
+              v-if="childAppDownloadUrl"
+              class="btn btn-black"
+              :href="childAppDownloadUrl"
+              download
+            >
+              아동용 앱 다운로드
+              <Download :size="18" aria-hidden="true" />
+            </a>
+            <button v-else class="btn btn-black btn-disabled" type="button" disabled>
+              아동용 앱 다운로드
+              <Download :size="18" aria-hidden="true" />
+            </button>
           </div>
         </div>
       </section>
 
-      <section id="service" class="service-section" aria-labelledby="service-title">
-        <div class="landing-container">
-          <div class="section-heading section-heading--center">
-            <p class="section-kicker">아이리드가 함께하는 방법</p>
-            <h2 id="service-title">읽기의 시작부터 성장까지</h2>
-            <p>아이에게는 즐거운 연습을, 교수자에게는 다음 지원을 위한 근거를 제공합니다.</p>
-          </div>
-
-          <div class="feature-grid">
-            <article v-for="feature in features" :key="feature.title" class="feature-card">
-              <span class="feature-card__icon" :class="`feature-card__icon--${feature.tone}`">
-                <component :is="feature.icon" :size="30" :stroke-width="1.9" aria-hidden="true" />
+      <!-- Service Sections -->
+      <section 
+        v-for="(card, idx) in cards" 
+        :key="card.id"
+        :id="`section-${idx}`"
+        class="viewport-section service-section"
+      >
+        <div class="hero-grid">
+          <!-- Left Side: Card Information -->
+          <div class="hero-left">
+            <div class="card-meta">
+              <span class="category-chip" :class="`chip--${card.tone}`">
+                <component :is="card.icon" :size="14" aria-hidden="true" />
+                {{ card.category }}
               </span>
-              <h3>{{ feature.title }}</h3>
-              <p>{{ feature.description }}</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section id="journey" class="journey-section" aria-labelledby="journey-title">
-        <div class="landing-container journey-grid">
-          <div class="journey-copy">
-            <p class="section-kicker">매일 이어지는 작은 변화</p>
-            <h2 id="journey-title">한 번에 많이보다,<br />꾸준히 나답게</h2>
-            <p>
-              아이가 지치지 않도록 오늘의 학습에 집중하고, 각자의 속도에 맞춰 읽기 경험을
-              이어갑니다.
-            </p>
-            <div class="journey-quote">
-              <HeartHandshake :size="24" aria-hidden="true" />
-              <span
-                >전문가의 판단을 대신하지 않고,<br /><strong>더 나은 지원을 돕습니다.</strong></span
-              >
+              <span class="badge-chip">{{ card.badge }}</span>
             </div>
-          </div>
 
-          <ol class="journey-list">
-            <li v-for="item in journey" :key="item.number">
-              <span class="journey-list__number">{{ item.number }}</span>
-              <span class="journey-list__content">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.description }}</span>
-              </span>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section id="educator" class="educator-section" aria-labelledby="educator-title">
-        <div class="landing-container educator-grid">
-          <div class="educator-preview" aria-label="교수자용 학습 관리 화면 예시">
-            <div class="preview-window">
-              <div class="preview-window__topbar">
-                <span class="preview-logo">iRead</span>
-                <span class="preview-user">교수자</span>
-              </div>
-              <div class="preview-window__body">
-                <div class="preview-sidebar">
-                  <span class="is-active">아동 목록</span>
-                  <span>학습 기록</span>
-                  <span>보고서</span>
-                </div>
-                <div class="preview-content">
-                  <div class="preview-heading">
-                    <span><strong>김아이</strong><small>학습 현황</small></span>
-                    <span class="preview-period">최근 4주</span>
-                  </div>
-                  <div class="preview-metrics">
-                    <span><small>오늘의 훈련</small><strong>완료</strong></span>
-                    <span><small>이어온 학습</small><strong>12일</strong></span>
-                    <span><small>읽은 이야기</small><strong>6권</strong></span>
-                  </div>
-                  <div class="preview-chart">
-                    <div class="preview-chart__label">
-                      <span>읽기 활동 변화</span><small>꾸준히 성장하고 있어요</small>
-                    </div>
-                    <div class="preview-bars" aria-hidden="true">
-                      <i style="height: 34%"></i><i style="height: 48%"></i
-                      ><i style="height: 43%"></i><i style="height: 68%"></i
-                      ><i style="height: 82%"></i><i style="height: 92%"></i>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <div class="card-typography">
+              <h2 class="card-title">{{ card.title }}</h2>
+              <p class="card-subtitle">{{ card.subtitle }}</p>
+              <p class="card-description">{{ card.description }}</p>
             </div>
-          </div>
 
-          <div class="educator-copy">
-            <p class="section-kicker">교수자 웹</p>
-            <h2 id="educator-title">아이의 오늘을 보고,<br />다음 학습을 준비하세요</h2>
-            <p>
-              아동별 학습 현황과 훈련·검사·이야기 이력을 한곳에서 살펴보고, 필요한 지원을 계획할 수
-              있습니다.
-            </p>
-            <ul>
-              <li><CheckCircle2 :size="20" aria-hidden="true" />아동별 학습 현황과 최근 활동</li>
-              <li><CheckCircle2 :size="20" aria-hidden="true" />훈련·검사·이야기 이력 확인</li>
-              <li><CheckCircle2 :size="20" aria-hidden="true" />성장 보고서와 커리큘럼 관리</li>
+            <!-- Feature Highlights -->
+            <ul class="highlight-list">
+              <li v-for="point in card.highlights" :key="point">
+                <CheckCircle2 :size="17" class="check-icon" aria-hidden="true" />
+                <span>{{ point }}</span>
+              </li>
             </ul>
-            <RouterLink class="text-link" to="/login">
-              교수자 웹으로 이동
-              <ArrowRight :size="19" aria-hidden="true" />
-            </RouterLink>
+          </div>
+
+          <!-- Right Side: Content Showcase Card -->
+          <div class="hero-right">
+            <div class="card-frame" :class="`frame--${card.tone}`">
+              <!-- Card Type 1: Learner App Image Screenshot -->
+              <div v-if="card.type === 'image'" class="showcase-box image-showcase">
+                <div class="showcase-topbar">
+                  <span class="dot red"></span>
+                  <span class="dot yellow"></span>
+                  <span class="dot green"></span>
+                  <span class="showcase-title">아동용 아이리드 실행 화면</span>
+                </div>
+                <div class="image-wrapper">
+                  <img :src="card.imageSrc" :alt="card.imageAlt" />
+                  <div class="image-overlay-tag">
+                    <Sparkles :size="16" />
+                    <span>개인화 학습 홈</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card Type 2: Eyetracking & Voice Visual -->
+              <div v-else-if="card.type === 'visual-gaze'" class="showcase-box gaze-showcase">
+                <div class="showcase-topbar">
+                  <span class="dot red"></span>
+                  <span class="dot yellow"></span>
+                  <span class="dot green"></span>
+                  <span class="showcase-title">시선 추적 & 음성 평가 엔진</span>
+                </div>
+                <div class="gaze-visual-body">
+                  <div class="gaze-reader-preview">
+                    <div class="reader-header">
+                      <span class="student-badge">
+                        <img src="/images/student-profile-boy.png" alt="아동 프로필" class="mini-avatar" />
+                        민우 아동 훈련 중
+                      </span>
+                      <span class="gaze-status">
+                        <Eye :size="14" /> 시선 추적 활성
+                      </span>
+                    </div>
+
+                    <div class="reader-text-box">
+                      <p class="sample-text">
+                        <span class="word read-perfect">소나무가</span>
+                        <span class="word read-perfect">바람에</span>
+                        <span class="word gaze-target">살랑살랑</span>
+                        <span class="word read-pending">흔들립니다.</span>
+                      </p>
+                      <div class="gaze-point-pulse" style="top: 48%; left: 52%">
+                        <span class="pulse-ring"></span>
+                        <span class="pulse-dot"></span>
+                      </div>
+                    </div>
+
+                    <div class="voice-meter-bar">
+                      <div class="voice-label">
+                        <Mic :size="15" /> Azure Speech 음성 정밀 분석
+                      </div>
+                      <div class="sound-wave">
+                        <i style="height: 60%"></i><i style="height: 100%"></i><i style="height: 40%"></i><i style="height: 80%"></i><i style="height: 50%"></i>
+                      </div>
+                      <span class="score-badge">발음 정확도 94점</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card Type 3: Story Scene Visual -->
+              <div v-else-if="card.type === 'visual-story'" class="showcase-box story-showcase">
+                <div class="showcase-topbar">
+                  <span class="dot red"></span>
+                  <span class="dot yellow"></span>
+                  <span class="dot green"></span>
+                  <span class="showcase-title">이야기 나라 · 부엉이의 숲</span>
+                </div>
+                <div class="story-visual-body">
+                  <div class="story-canvas">
+                    <img src="/images/story-scene-owl.svg" alt="부엉이 이야기 장면" class="owl-illustration" />
+                    <div class="story-speech-bubble">
+                      <p class="story-quote">"밤하늘의 별들이 반짝이며 길을 밝혀주어요!"</p>
+                      <div class="interactive-word-chips">
+                        <span class="word-chip active">밤하늘</span>
+                        <span class="word-chip">반짝반짝</span>
+                        <span class="word-chip">길잡이</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card Type 4: Teacher Web Visual -->
+              <div v-else-if="card.type === 'visual-teacher'" class="showcase-box teacher-showcase">
+                <div class="showcase-topbar">
+                  <span class="dot red"></span>
+                  <span class="dot yellow"></span>
+                  <span class="dot green"></span>
+                  <span class="showcase-title">교수자 학습 관리 콘솔</span>
+                </div>
+                <div class="teacher-visual-body">
+                  <div class="teacher-dashboard-preview">
+                    <div class="dash-sidebar">
+                      <span class="dash-menu active"><Users :size="14" /> 아동 목록</span>
+                      <span class="dash-menu"><BrainCircuit :size="14" /> 분석 리포트</span>
+                    </div>
+                    <div class="dash-content">
+                      <div class="student-info-row">
+                        <img src="/images/student-profile-girl.png" alt="학생" class="dash-avatar" />
+                        <div>
+                          <strong>이지은 아동</strong>
+                          <small>최근 학습: 오늘 14:20</small>
+                        </div>
+                        <span class="status-tag tag-success">훈련 정상</span>
+                      </div>
+
+                      <div class="dash-metrics-grid">
+                        <div class="metric-card">
+                          <small>주간 학습 시간</small>
+                          <strong>140분</strong>
+                        </div>
+                        <div class="metric-card">
+                          <small>읽기 속도 (WPM)</small>
+                          <strong>118 WPM</strong>
+                        </div>
+                      </div>
+
+                      <div class="dash-chart-box">
+                        <div class="chart-title">주간 읽기 수행률 변화</div>
+                        <div class="chart-bars">
+                          <div class="bar-col"><span style="height: 45%"></span><small>월</small></div>
+                          <div class="bar-col"><span style="height: 60%"></span><small>화</small></div>
+                          <div class="bar-col"><span style="height: 75%"></span><small>수</small></div>
+                          <div class="bar-col"><span style="height: 90%"></span><small>목</small></div>
+                          <div class="bar-col highlight"><span style="height: 95%"></span><small>금</small></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="closing-section" aria-labelledby="closing-title">
-        <div class="landing-container closing-card">
-          <div>
-            <p class="section-kicker">아이리드와 함께</p>
-            <h2 id="closing-title">아이의 읽기 여정을<br />오늘부터 함께해 보세요.</h2>
+      <!-- Final CTA Section -->
+      <section class="viewport-section final-cta-section" id="final-cta">
+        <div class="cta-content">
+          <div class="cta-mascot-wrapper">
+            <img :src="'/images/cta-mascot.png'" alt="아이리드 마스코트" class="cta-mascot-img" />
           </div>
-          <div class="closing-actions">
-            <RouterLink class="landing-button landing-button--light" to="/login">
-              교수자 웹 시작하기
-              <ArrowRight :size="20" aria-hidden="true" />
+          <h2 class="cta-title">모든 아이가 읽는 즐거움을 깨닫는 그날까지</h2>
+          <p class="cta-subtitle">iRead와 함께 맞춤형 읽기 여정을 시작해 보세요.</p>
+          <div class="action-row cta-actions">
+            <RouterLink class="btn btn-primary" to="/login">
+              교수자 웹 바로가기
+              <ArrowRight :size="18" aria-hidden="true" />
             </RouterLink>
-            <p>아동용 Windows 앱을 함께 제공합니다.</p>
+
+            <a
+              v-if="childAppDownloadUrl"
+              class="btn btn-black"
+              :href="childAppDownloadUrl"
+              download
+            >
+              아동용 앱 다운로드
+              <Download :size="18" aria-hidden="true" />
+            </a>
+            <button v-else class="btn btn-black btn-disabled" type="button" disabled>
+              아동용 앱 다운로드
+              <Download :size="18" aria-hidden="true" />
+            </button>
           </div>
         </div>
       </section>
     </main>
 
-    <footer class="landing-footer">
-      <div class="landing-container landing-footer__inner">
-        <div>
-          <strong>iRead</strong>
-          <span>아이마다 다른 읽기의 속도를 함께 찾아갑니다.</span>
-        </div>
-        <p>© 2026 iRead. All rights reserved.</p>
-      </div>
-    </footer>
   </div>
 </template>
 
 <style scoped>
-.landing-page {
-  --landing-ink: #193b79;
-  --landing-text: #263853;
-  --landing-soft: #60708b;
-  --landing-blue: #287fdf;
-  --landing-blue-dark: #1765bd;
-  --landing-cream: #fffaf0;
-  --landing-yellow: #ffd54a;
-  --landing-green: #59b93b;
-  min-width: 0;
-  overflow: hidden;
-  background: #fff;
-  color: var(--landing-text);
-  font-size: 16px;
+.landing-page-wrapper {
+  --ink: #112546;
+  --text-main: #203456;
+  --text-soft: #5b6f90;
+  --brand-blue: #287fdf;
+  --brand-blue-dark: #1664be;
+  
+  position: relative;
+  width: 100%;
+  background: #ffffff; /* Fallback */
+  color: var(--text-main);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
 }
 
-.landing-container {
-  width: min(1180px, calc(100% - 48px));
-  margin-inline: auto;
+/* Fixed Background Image */
+.fixed-background {
+  position: fixed;
+  inset: 0;
+  background-image: url('/images/landing-reading-journey.png');
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  z-index: 0;
+}
+
+/* Dynamic White Overlay */
+.dynamic-overlay {
+  position: fixed;
+  inset: 0;
+  background: #ffffff; /* White Wash */
+  z-index: 1;
+  pointer-events: none;
+  transition: opacity 0.1s linear;
 }
 
 .skip-link {
-  position: fixed;
-  z-index: 100;
-  top: 12px;
-  left: 12px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--landing-ink);
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 999;
+  padding: 8px 12px;
+  background: #112546;
   color: #fff;
+  border-radius: 8px;
   transform: translateY(-150%);
+  transition: transform 0.2s ease;
 }
-
 .skip-link:focus {
   transform: translateY(0);
 }
 
+/* Header */
 .landing-header {
-  position: absolute;
-  z-index: 20;
+  position: fixed;
   top: 0;
-  right: 0;
   left: 0;
-  border-bottom: 1px solid rgb(25 59 121 / 8%);
-  background: rgb(255 255 255 / 86%);
-  backdrop-filter: blur(18px);
+  width: 100%;
+  z-index: 50;
+  height: 68px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
 }
 
-.landing-header__inner {
+.header-inner {
+  max-width: 1320px;
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 24px;
   display: flex;
-  height: 78px;
   align-items: center;
   justify-content: space-between;
-  gap: 28px;
+  gap: 20px;
 }
 
-.landing-brand {
+.landing-brand-btn {
   display: flex;
   align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
 }
 
 .landing-brand__mark {
@@ -336,976 +561,795 @@ const journey = [
 
 .landing-brand__mark span {
   display: grid;
-  width: 25px;
-  height: 25px;
-  margin-left: -3px;
-  border-radius: 7px;
+  width: 22px;
+  height: 22px;
+  margin-left: -2px;
+  border-radius: 6px;
   color: #fff;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 900;
   place-items: center;
-  box-shadow: 0 3px 0 rgb(25 59 121 / 12%);
 }
 
-.landing-brand__mark span:nth-child(1) {
-  background: #f5a623;
-  transform: rotate(-8deg);
-}
-.landing-brand__mark span:nth-child(2) {
-  background: #7bc601;
-  transform: rotate(4deg);
-}
-.landing-brand__mark span:nth-child(3) {
-  background: #22a6e8;
-  transform: rotate(-3deg);
-}
-.landing-brand__mark span:nth-child(4) {
-  background: #8f59bb;
-  transform: rotate(7deg);
+.landing-brand__mark span:nth-child(1) { background: #f5a623; }
+.landing-brand__mark span:nth-child(2) { background: #7bc601; }
+.landing-brand__mark span:nth-child(3) { background: #22a6e8; }
+.landing-brand__mark span:nth-child(4) { background: #8f59bb; }
+
+.landing-brand__text {
+  font-size: 20px;
+  font-weight: 850;
+  color: var(--ink);
+  letter-spacing: -0.03em;
 }
 
-.landing-nav {
+/* Header Actions */
+.header-actions {
   display: flex;
   align-items: center;
-  gap: 34px;
-  margin-left: auto;
-  color: #52617d;
-  font-size: 14px;
-  font-weight: 650;
+  gap: 12px;
 }
-
-.landing-nav a {
-  padding-block: 12px;
-}
-
-.landing-nav a:hover {
-  color: var(--landing-blue-dark);
-}
-
-.landing-header__cta,
-.landing-button,
-.text-link {
+.landing-header__cta {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
+  padding: 6px 6px 6px 16px;
+  border-radius: 999px;
+  background: var(--brand-blue);
+  color: #fff;
+  text-decoration: none;
+  font-size: 13px;
   font-weight: 750;
+  transition: all 0.2s ease;
 }
 
-.landing-header__cta {
-  min-height: 46px;
-  padding: 5px 6px 5px 18px;
-  border: 1px solid #d5e6f7;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 78%);
-  color: var(--landing-blue-dark);
-  box-shadow: 0 7px 22px rgb(25 59 121 / 8%);
-  transition:
-    border-color 160ms ease,
-    background 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
+.landing-header__cta:hover {
+  background: var(--brand-blue-dark);
+  transform: translateY(-1px);
 }
 
 .landing-header__cta-icon {
   display: grid;
-  width: 34px;
-  height: 34px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: var(--landing-blue);
-  color: #fff;
   place-items: center;
-  transition: transform 160ms ease;
 }
 
-.landing-header__cta:hover {
-  border-color: #b8d7f4;
-  background: #f6fbff;
-  box-shadow: 0 10px 26px rgb(25 59 121 / 12%);
-}
-
-.landing-header__cta:hover .landing-header__cta-icon {
-  transform: translateX(2px);
-}
-
-.hero-section {
-  position: relative;
-  padding: 156px 0 98px;
-  background:
-    radial-gradient(circle at 8% 18%, rgb(255 213 74 / 16%), transparent 20%),
-    linear-gradient(135deg, #fffdf7 0%, #fff 43%, #eefaff 100%);
-}
-
-.hero-section::before {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(
-      90deg,
-      #fffdf8 0%,
-      rgb(255 255 255 / 92%) 38%,
-      rgb(255 255 255 / 18%) 72%,
-      rgb(255 255 255 / 4%) 100%
-    ),
-    url('/images/landing-reading-journey.png');
-  background-position:
-    center,
-    right -80px bottom -145px;
-  background-repeat: no-repeat;
-  background-size:
-    cover,
-    min(920px, 72vw) auto;
-  content: '';
-  opacity: 0.76;
-  pointer-events: none;
-}
-
-.hero-section::after {
-  position: absolute;
-  right: -150px;
-  bottom: -180px;
-  width: 430px;
-  height: 430px;
-  border-radius: 50%;
-  background: rgb(176 224 248 / 10%);
-  content: '';
-}
-
-.hero-grid {
-  position: relative;
-  z-index: 1;
-  display: grid;
+/* Download Button in Header */
+.landing-header__dl {
+  display: inline-flex;
   align-items: center;
-  grid-template-columns: minmax(0, 0.88fr) minmax(500px, 1.12fr);
-  gap: 54px;
+  gap: 8px;
+  padding: 6px 6px 6px 16px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 750;
+  transition: all 0.2s ease;
 }
 
-.eyebrow,
-.section-kicker {
-  color: var(--landing-blue-dark);
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+.landing-header__dl:not(:disabled):hover {
+  background: #000;
+  transform: translateY(-1px);
 }
 
-.eyebrow {
+.landing-header__dl-icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  place-items: center;
+}
+
+/* Main Content Wrapper */
+.content-wrapper {
+  position: relative;
+  z-index: 10;
+}
+
+/* Viewport Section */
+.viewport-section {
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-bottom: 22px;
+  justify-content: center;
+  padding: 80px 24px 40px; /* offset header */
+  max-width: 1320px;
+  margin: 0 auto;
 }
 
-.eyebrow span {
-  width: 29px;
-  height: 3px;
-  border-radius: 999px;
-  background: var(--landing-yellow);
+/* Hero Section (Top Left Aligned) */
+.hero-section {
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-top: 220px; /* Push down from header */
 }
 
-.hero-copy h1 {
-  margin-bottom: 27px;
-  color: var(--landing-ink);
-  font-size: clamp(45px, 4.3vw, 64px);
-  font-weight: 850;
-  letter-spacing: -0.055em;
-  line-height: 1.14;
+.hero-content-top-left {
+  text-align: left;
+  max-width: 600px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 32px;
+  padding: 48px;
+  box-shadow: 0 24px 48px rgba(17, 37, 70, 0.08);
 }
 
-.hero-copy h1 span {
-  position: relative;
-  color: var(--landing-blue);
-  white-space: nowrap;
+.main-hero-title {
+  font-size: clamp(32px, 3.5vw, 48px);
+  font-weight: 900;
+  color: var(--ink);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  margin-bottom: 16px;
 }
 
-.hero-copy h1 span::after {
-  position: absolute;
-  z-index: -1;
-  right: -5px;
-  bottom: 2px;
-  left: -5px;
-  height: 13px;
-  border-radius: 999px;
-  background: rgb(255 213 74 / 55%);
-  content: '';
-  transform: rotate(-1deg);
+.main-hero-subtitle {
+  font-size: 20px;
+  font-weight: 750;
+  color: var(--brand-blue-dark);
+  margin-bottom: 24px;
 }
 
-.hero-description {
-  max-width: 540px;
-  margin-bottom: 31px;
-  color: var(--landing-soft);
+.main-hero-desc {
   font-size: 17px;
-  line-height: 1.75;
-  word-break: keep-all;
+  line-height: 1.6;
+  color: var(--text-main);
+  margin-bottom: 40px;
 }
 
 .hero-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.landing-button {
-  min-height: 54px;
-  padding: 0 22px;
-  border: 1px solid transparent;
-  border-radius: 15px;
-  transition:
-    transform 160ms ease,
-    box-shadow 160ms ease,
-    background 160ms ease;
-}
-
-.landing-button:not(:disabled):hover,
-.landing-header__cta:hover {
-  transform: translateY(-2px);
-}
-
-.landing-button--primary {
-  background: var(--landing-blue);
-  color: #fff;
-  box-shadow: 0 12px 25px rgb(40 127 223 / 24%);
-}
-
-.landing-button--primary:hover {
-  background: var(--landing-blue-dark);
-}
-
-.landing-button--secondary {
-  border-color: #dbe6f1;
-  background: #fff;
-  color: var(--landing-text);
-  box-shadow: 0 8px 22px rgb(25 59 121 / 8%);
-}
-
-.landing-button--pending {
-  color: #76849a;
-  cursor: not-allowed;
-  opacity: 1;
-}
-
-.hero-note {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 20px 0 0;
-  color: #687892;
-  font-size: 13px;
-}
-
-.hero-note svg {
-  color: var(--landing-green);
-}
-
-.hero-visual {
-  position: relative;
-  min-width: 0;
-  padding: 13px;
-  border: 1px solid rgb(195 218 237 / 92%);
-  border-radius: 32px;
-  background: rgb(255 255 255 / 86%);
-  box-shadow:
-    0 32px 75px rgb(33 77 115 / 20%),
-    0 2px 0 rgb(255 255 255 / 85%) inset;
-  transform: rotate(0.5deg);
-  backdrop-filter: blur(10px);
-}
-
-.hero-visual img {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: 21px;
-  object-fit: cover;
-}
-
-.hero-visual__label {
-  position: absolute;
-  z-index: 2;
-  top: -18px;
-  left: 28px;
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  padding: 0 14px;
-  border: 1px solid #d4e5f5;
-  border-radius: 999px;
-  background: #fff;
-  color: var(--landing-blue-dark);
-  font-size: 12px;
-  font-weight: 800;
-  box-shadow: 0 8px 22px rgb(25 59 121 / 12%);
-}
-
-.service-section,
-.journey-section,
-.educator-section {
-  padding: 112px 0;
-}
-
-.section-heading--center {
-  max-width: 700px;
-  margin: 0 auto 52px;
-  text-align: center;
-}
-
-.section-kicker {
-  margin-bottom: 13px;
-}
-
-.section-heading h2,
-.journey-copy h2,
-.educator-copy h2,
-.closing-card h2 {
-  margin-bottom: 17px;
-  color: var(--landing-ink);
-  font-size: clamp(34px, 3.3vw, 48px);
-  font-weight: 830;
-  letter-spacing: -0.045em;
-  line-height: 1.25;
-}
-
-.section-heading > p:last-child,
-.journey-copy > p,
-.educator-copy > p {
-  color: var(--landing-soft);
-  font-size: 17px;
-  line-height: 1.75;
-  word-break: keep-all;
-}
-
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 22px;
-}
-
-.feature-card {
-  min-width: 0;
-  padding: 34px 31px 32px;
-  border: 1px solid #e7eef5;
-  border-radius: 26px;
-  background: #fff;
-  box-shadow: 0 12px 35px rgb(25 59 121 / 6%);
-  transition:
-    transform 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.feature-card:hover {
-  box-shadow: 0 18px 40px rgb(25 59 121 / 10%);
-  transform: translateY(-5px);
-}
-
-.feature-card__icon {
-  display: grid;
-  width: 60px;
-  height: 60px;
-  margin-bottom: 25px;
-  border-radius: 19px;
-  place-items: center;
-}
-
-.feature-card__icon--orange {
-  background: #fff3df;
-  color: #e98a18;
-}
-.feature-card__icon--purple {
-  background: #f3edfb;
-  color: #8051b3;
-}
-.feature-card__icon--green {
-  background: #eaf8e6;
-  color: #4ba132;
-}
-
-.feature-card h3 {
-  margin-bottom: 12px;
-  color: var(--landing-text);
-  font-size: 21px;
-}
-
-.feature-card p {
+  justify-content: flex-start;
   margin-bottom: 0;
-  color: var(--landing-soft);
-  line-height: 1.7;
-  word-break: keep-all;
 }
 
-.journey-section {
-  background: var(--landing-cream);
-}
-
-.journey-grid {
+/* Service Section Grid */
+.hero-grid {
   display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: 36px;
   align-items: center;
-  grid-template-columns: 0.82fr 1.18fr;
-  gap: 92px;
+  width: 100%;
 }
 
-.journey-copy > p {
-  max-width: 480px;
+/* Left Column */
+.hero-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: transparent;
+  padding: 12px 0;
 }
 
-.journey-quote {
+.card-meta {
   display: flex;
   align-items: center;
-  gap: 14px;
-  width: fit-content;
-  margin-top: 28px;
-  padding: 16px 19px;
-  border: 1px solid #f1e5cc;
-  border-radius: 17px;
-  background: #fff;
-  color: #6d7890;
-  font-size: 14px;
-  line-height: 1.55;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
-.journey-quote svg {
-  color: #ef8a7f;
-}
-.journey-quote strong {
-  color: var(--landing-text);
-}
-
-.journey-list {
-  position: relative;
-  display: grid;
-  gap: 16px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.journey-list::before {
-  position: absolute;
-  top: 56px;
-  bottom: 56px;
-  left: 36px;
-  width: 2px;
-  background: #dbe7c9;
-  content: '';
-}
-
-.journey-list li {
-  position: relative;
-  display: flex;
+.category-chip {
+  display: inline-flex;
   align-items: center;
-  gap: 22px;
-  padding: 22px 25px 22px 18px;
-  border: 1px solid #efe6d6;
-  border-radius: 22px;
-  background: rgb(255 255 255 / 88%);
-}
-
-.journey-list__number {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 auto;
-  border-radius: 13px;
-  background: var(--landing-blue);
-  color: #fff;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
   font-size: 12px;
   font-weight: 800;
-  place-items: center;
 }
 
-.journey-list__content,
-.journey-list__content strong,
-.journey-list__content span {
-  display: block;
-}
+.chip--blue { background: #e8f3ff; color: #1e70cf; }
+.chip--purple { background: #f3ebfc; color: #7f44c4; }
+.chip--amber { background: #fff5e0; color: #d97706; }
+.chip--green { background: #e6f7ec; color: #16a34a; }
 
-.journey-list__content strong {
-  margin-bottom: 5px;
-  color: var(--landing-text);
-  font-size: 18px;
-}
-
-.journey-list__content span {
-  color: var(--landing-soft);
-  font-size: 14px;
-}
-
-.educator-grid {
-  display: grid;
-  align-items: center;
-  grid-template-columns: 1.12fr 0.88fr;
-  gap: 82px;
-}
-
-.educator-preview {
-  padding: 18px;
-  border-radius: 32px;
-  background: #eaf6ff;
-}
-
-.preview-window {
-  overflow: hidden;
-  border: 1px solid #d7e2ec;
-  border-radius: 20px;
-  background: #fff;
-  box-shadow: 0 22px 55px rgb(25 59 121 / 15%);
-}
-
-.preview-window__topbar {
-  display: flex;
-  height: 52px;
-  align-items: center;
-  justify-content: space-between;
-  padding-inline: 20px;
-  border-bottom: 1px solid #e7edf3;
-}
-
-.preview-logo {
-  color: var(--landing-blue);
-  font-weight: 850;
-}
-.preview-user {
-  color: #718099;
+.badge-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(17, 37, 70, 0.06);
+  color: var(--text-soft);
   font-size: 11px;
-}
-
-.preview-window__body {
-  display: grid;
-  min-height: 320px;
-  grid-template-columns: 118px 1fr;
-}
-
-.preview-sidebar {
-  display: flex;
-  padding: 24px 13px;
-  border-right: 1px solid #e9eef3;
-  background: #fbfcfd;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.preview-sidebar span {
-  padding: 8px 10px;
-  border-radius: 8px;
-  color: #8793a5;
-  font-size: 10px;
-}
-
-.preview-sidebar .is-active {
-  background: #eaf4ff;
-  color: var(--landing-blue-dark);
-  font-weight: 750;
-}
-
-.preview-content {
-  min-width: 0;
-  padding: 26px;
-  background: #f7f9fb;
-}
-
-.preview-heading,
-.preview-heading > span:first-child {
-  display: flex;
-  align-items: center;
-}
-
-.preview-heading {
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.preview-heading > span:first-child {
-  gap: 8px;
-}
-.preview-heading strong {
-  color: #263853;
-  font-size: 15px;
-}
-.preview-heading small {
-  color: #8995a7;
-  font-size: 10px;
-}
-
-.preview-period {
-  padding: 6px 9px;
-  border: 1px solid #dde5ed;
-  border-radius: 7px;
-  background: #fff;
-  color: #718099;
-  font-size: 9px;
-}
-
-.preview-metrics {
-  display: grid;
-  margin-top: 22px;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 9px;
-}
-
-.preview-metrics > span {
-  padding: 13px;
-  border: 1px solid #e5ebf1;
-  border-radius: 11px;
-  background: #fff;
-}
-
-.preview-metrics small,
-.preview-metrics strong {
-  display: block;
-}
-.preview-metrics small {
-  margin-bottom: 7px;
-  color: #8b97a8;
-  font-size: 8px;
-}
-.preview-metrics strong {
-  color: #263853;
-  font-size: 15px;
-}
-
-.preview-chart {
-  margin-top: 12px;
-  padding: 16px 17px;
-  border: 1px solid #e5ebf1;
-  border-radius: 12px;
-  background: #fff;
-}
-
-.preview-chart__label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: #42516a;
-  font-size: 10px;
   font-weight: 700;
 }
 
-.preview-chart__label small {
-  color: #54a13b;
-  font-size: 8px;
-  font-weight: 650;
+.card-title {
+  font-size: clamp(28px, 2.5vw, 38px);
+  font-weight: 850;
+  color: var(--ink);
+  line-height: 1.25;
+  letter-spacing: -0.04em;
+  margin-bottom: 8px;
 }
 
-.preview-bars {
-  display: flex;
-  height: 85px;
-  align-items: end;
-  gap: 8px;
-  margin-top: 18px;
-  padding: 0 5px;
-  border-bottom: 1px solid #e8edf3;
+.card-subtitle {
+  font-size: 16px;
+  font-weight: 750;
+  color: var(--brand-blue-dark);
+  margin-bottom: 12px;
 }
 
-.preview-bars i {
-  width: 100%;
-  border-radius: 5px 5px 0 0;
-  background: linear-gradient(180deg, #75b8f0, #358ad6);
+.card-description {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--text-soft);
+  margin-bottom: 20px;
+  max-width: 520px;
 }
 
-.educator-copy ul {
-  display: grid;
-  gap: 14px;
-  margin: 28px 0;
-  padding: 0;
+.highlight-list {
   list-style: none;
+  padding: 0;
+  margin: 0 0 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.educator-copy li {
+.highlight-list li {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #43536d;
+  font-size: 14px;
   font-weight: 650;
+  color: var(--text-main);
 }
 
-.educator-copy li svg {
-  color: var(--landing-green);
+.check-icon {
+  color: #22c55e;
+  flex-shrink: 0;
 }
 
-.text-link {
-  color: var(--landing-blue-dark);
-}
-
-.text-link:hover {
+/* Action Buttons */
+.action-row {
+  display: flex;
+  align-items: center;
   gap: 12px;
 }
 
-.closing-section {
-  padding: 20px 0 100px;
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 20px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  cursor: pointer;
 }
 
-.closing-card {
-  position: relative;
+.btn-primary {
+  background: var(--brand-blue);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(40, 127, 223, 0.25);
+}
+
+.btn-primary:hover {
+  background: var(--brand-blue-dark);
+  transform: translateY(-2px);
+}
+
+.btn-black {
+  background: var(--ink);
+  color: #ffffff;
+  border-color: var(--ink);
+}
+
+.btn-black:not(:disabled):hover {
+  background: #000000;
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background: #ffffff;
+  border-color: #d6e4f3;
+  color: var(--text-main);
+}
+
+.btn-secondary:not(:disabled):hover {
+  background: #f7fbff;
+  transform: translateY(-2px);
+}
+
+.btn-disabled {
+  cursor: not-allowed;
+}
+
+/* Right Side: Showcase Cards */
+.hero-right {
   display: flex;
-  min-height: 260px;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-frame {
+  width: 100%;
+  max-width: 620px;
+  border-radius: 24px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 24px 60px rgba(25, 59, 121, 0.08);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(8px);
+}
+
+.showcase-box {
+  border-radius: 16px;
+  overflow: hidden;
+  background: #fbfdfe;
+  border: 1px solid #e2ecf6;
+}
+
+.showcase-topbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: #edf3fa;
+  border-bottom: 1px solid #e0ebf5;
+}
+
+.showcase-topbar .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.showcase-topbar .dot.red { background: #ff5f56; }
+.showcase-topbar .dot.yellow { background: #ffbd2e; }
+.showcase-topbar .dot.green { background: #27c93f; }
+
+.showcase-title {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-soft);
+}
+
+/* Image Showcase */
+.image-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+}
+
+.image-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-overlay-tag {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(17, 37, 70, 0.85);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 750;
+  backdrop-filter: blur(8px);
+}
+
+/* Eyetracking Showcase Visual */
+.gaze-visual-body {
+  padding: 24px;
+  background: linear-gradient(180deg, #f7faff 0%, #eef5fc 100%);
+  aspect-ratio: 16 / 10;
+  display: flex;
+  align-items: center;
+}
+
+.gaze-reader-preview {
+  width: 100%;
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(25, 59, 121, 0.08);
+  border: 1px solid #d9e6f5;
+}
+
+.reader-header {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 42px;
-  overflow: hidden;
-  padding: 55px 66px;
-  border-radius: 34px;
-  background: var(--landing-ink);
-  box-shadow: 0 24px 55px rgb(25 59 121 / 20%);
+  margin-bottom: 18px;
 }
 
-.closing-card::before,
-.closing-card::after {
-  position: absolute;
+.student-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.mini-avatar {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  content: '';
 }
 
-.closing-card::before {
-  top: -100px;
-  right: 22%;
-  width: 250px;
-  height: 250px;
-  background: rgb(79 114 225 / 24%);
+.gaze-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 750;
+  color: #7f44c4;
+  background: #f3ebfc;
+  padding: 4px 10px;
+  border-radius: 999px;
 }
 
-.closing-card::after {
-  right: -60px;
-  bottom: -130px;
-  width: 280px;
-  height: 280px;
-  background: rgb(89 185 59 / 16%);
-}
-
-.closing-card > * {
+.reader-text-box {
   position: relative;
-  z-index: 1;
+  padding: 20px;
+  background: #f9fbfd;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  border: 1px dashed #cde0f3;
 }
-.closing-card .section-kicker {
-  color: #a9d8ff;
+
+.sample-text {
+  font-size: 22px;
+  font-weight: 800;
+  word-spacing: 12px;
+  margin: 0;
 }
-.closing-card h2 {
-  margin-bottom: 0;
+
+.sample-text .word.read-perfect { color: #16a34a; }
+.sample-text .word.gaze-target { color: #287fdf; text-decoration: underline; }
+.sample-text .word.read-pending { color: #94a3b8; }
+
+.gaze-point-pulse {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.pulse-ring {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid #7f44c4;
+  transform: translate(-50%, -50%);
+  animation: pulse-wave 1.8s infinite ease-out;
+}
+
+.pulse-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #7f44c4;
+  transform: translate(-50%, -50%);
+}
+
+@keyframes pulse-wave {
+  0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+}
+
+.voice-meter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f1f6fc;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.voice-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 750;
+  color: var(--brand-blue-dark);
+}
+
+.sound-wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+}
+
+.sound-wave i {
+  width: 3px;
+  background: var(--brand-blue);
+  border-radius: 999px;
+}
+
+.score-badge {
+  margin-left: auto;
+  font-weight: 800;
+  color: #16a34a;
+}
+
+/* Story Scene Visual */
+.story-visual-body {
+  padding: 24px;
+  background: linear-gradient(180deg, #fffcf5 0%, #fff7e8 100%);
+  aspect-ratio: 16 / 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.story-canvas {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.owl-illustration {
+  height: 140px;
+  filter: drop-shadow(0 10px 15px rgba(217, 119, 6, 0.15));
+}
+
+.story-speech-bubble {
+  background: #ffffff;
+  padding: 16px 20px;
+  border-radius: 16px;
+  border: 1px solid #fce8c3;
+  box-shadow: 0 6px 20px rgba(217, 119, 6, 0.1);
+  text-align: center;
+}
+
+.story-quote {
+  font-size: 16px;
+  font-weight: 800;
+  color: #92400e;
+  margin-bottom: 10px;
+}
+
+.interactive-word-chips {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.word-chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.word-chip.active {
+  background: #f59e0b;
   color: #fff;
 }
 
-.closing-actions {
-  display: grid;
-  justify-items: center;
-  gap: 13px;
-}
-
-.landing-button--light {
-  background: #fff;
-  color: var(--landing-ink);
-  box-shadow: 0 12px 25px rgb(0 0 0 / 14%);
-}
-
-.closing-actions p {
-  margin: 0;
-  color: #b8c9de;
-  font-size: 12px;
-}
-
-.landing-footer {
-  border-top: 1px solid #e7edf2;
+/* Teacher Dashboard Visual */
+.teacher-visual-body {
+  padding: 20px;
   background: #f8fafc;
+  aspect-ratio: 16 / 10;
 }
 
-.landing-footer__inner {
+.teacher-dashboard-preview {
   display: flex;
-  min-height: 116px;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  color: var(--ink);
+}
+
+.dash-sidebar {
+  width: 130px;
+  background: #f1f5f9;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.dash-menu {
+  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  color: #8290a3;
-  font-size: 12px;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
 }
 
-.landing-footer__inner > div {
+.dash-menu.active {
+  background: #ffffff;
+  color: var(--brand-blue-dark);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.dash-content {
+  flex: 1;
+  padding: 14px;
   display: flex;
-  align-items: baseline;
-  gap: 14px;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.landing-footer strong {
-  color: var(--landing-ink);
-  font-size: 19px;
-}
-.landing-footer p {
-  margin: 0;
+.student-info-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-@media (max-width: 1040px) {
-  .landing-nav {
-    display: none;
-  }
+.dash-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.student-info-row strong { font-size: 13px; display: block; }
+.student-info-row small { font-size: 10px; color: #94a3b8; }
+
+.status-tag {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.tag-success { background: #dcfce7; color: #15803d; }
+
+.dash-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.metric-card {
+  background: #f8fafc;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
+}
+.metric-card small { font-size: 10px; color: #64748b; display: block; }
+.metric-card strong { font-size: 14px; color: var(--ink); }
+
+.dash-chart-box {
+  background: #f8fafc;
+  padding: 10px;
+  border-radius: 8px;
+  flex: 1;
+}
+
+.chart-title {
+  font-size: 10px;
+  font-weight: 750;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.chart-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 50px;
+}
+
+.bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.bar-col span {
+  width: 14px;
+  background: #cbd5e1;
+  border-radius: 4px 4px 0 0;
+}
+
+.bar-col.highlight span {
+  background: var(--brand-blue);
+}
+
+.bar-col small { font-size: 9px; color: #94a3b8; }
+
+/* Final CTA Section */
+.final-cta-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 24px;
+}
+
+.cta-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-image: url('/images/cta-bg.png');
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 100%;
+  max-width: 1000px;
+  aspect-ratio: 16 / 9;
+  border-radius: 32px;
+  padding: 60px 40px;
+  box-shadow: 0 24px 60px rgba(25, 59, 121, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.cta-mascot-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.cta-mascot-img {
+  width: 140px;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 24px rgba(255, 140, 180, 0.25));
+  animation: float-mascot 3s ease-in-out infinite;
+}
+
+@keyframes float-mascot {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+.cta-title {
+  font-size: clamp(32px, 3.5vw, 48px);
+  font-weight: 900;
+  color: var(--ink);
+  line-height: 1.3;
+  letter-spacing: -0.04em;
+  margin-bottom: 16px;
+}
+
+.cta-subtitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 40px;
+}
+
+.cta-actions {
+  justify-content: center;
+}
+
+
+/* Responsive Media Queries */
+@media (max-width: 1024px) {
   .hero-grid {
     grid-template-columns: 1fr;
+    gap: 40px;
   }
-  .hero-copy {
-    max-width: 680px;
-  }
-  .hero-visual {
-    width: min(720px, 94%);
-    margin: 10px auto 0;
-  }
-  .journey-grid,
-  .educator-grid {
-    gap: 54px;
-  }
-  .educator-grid {
-    grid-template-columns: 1fr;
-  }
-  .educator-preview {
-    order: 2;
-  }
-  .educator-copy {
-    max-width: 650px;
-  }
-}
-
-@media (max-width: 760px) {
-  .landing-container {
-    width: min(100% - 32px, 1180px);
-  }
-  .landing-header__inner {
-    height: 68px;
-  }
-  .landing-header__cta {
-    min-height: 40px;
-    padding-left: 15px;
-  }
-  .hero-section {
-    padding: 122px 0 75px;
-  }
-  .hero-copy h1 {
-    font-size: clamp(40px, 12vw, 54px);
-  }
-  .hero-description {
-    font-size: 16px;
-  }
-  .hero-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .landing-button {
-    width: 100%;
-  }
-  .hero-note {
-    align-items: flex-start;
-  }
-  .hero-visual {
-    width: 100%;
-    padding: 7px;
-    border-radius: 23px;
-  }
-  .hero-visual img {
-    border-radius: 16px;
-  }
-  .hero-visual__label {
-    top: -14px;
-    left: 18px;
-    min-height: 30px;
-  }
-  .service-section,
-  .journey-section,
-  .educator-section {
-    padding: 82px 0;
-  }
-  .feature-grid,
-  .journey-grid {
-    grid-template-columns: 1fr;
-  }
-  .feature-grid {
-    gap: 16px;
-  }
-  .journey-grid {
-    gap: 38px;
-  }
-  .feature-card {
-    padding: 28px 25px;
-  }
-  .preview-window__body {
-    grid-template-columns: 78px 1fr;
-  }
-  .preview-sidebar {
-    padding-inline: 8px;
-  }
-  .preview-content {
-    padding: 18px 14px;
-  }
-  .preview-metrics {
-    grid-template-columns: 1fr 1fr;
-  }
-  .preview-metrics > span:last-child {
+  .card-tabs {
     display: none;
-  }
-  .closing-section {
-    padding-bottom: 70px;
-  }
-  .closing-card {
-    align-items: flex-start;
-    padding: 42px 28px;
-    flex-direction: column;
-  }
-  .closing-actions {
-    width: 100%;
-    justify-items: stretch;
-  }
-  .landing-footer__inner,
-  .landing-footer__inner > div {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .landing-footer__inner {
-    justify-content: center;
-    padding-block: 28px;
-  }
-}
-
-@media (max-width: 420px) {
-  .landing-brand__mark span {
-    width: 23px;
-    height: 23px;
-    font-size: 12px;
-  }
-  .landing-header__cta svg {
-    display: block;
-  }
-  .landing-header__cta {
-    padding-left: 13px;
-  }
-  .landing-header__cta-icon {
-    width: 31px;
-    height: 31px;
-  }
-  .hero-copy h1 {
-    font-size: 39px;
-  }
-  .hero-visual {
-    margin-top: 0;
-  }
-  .section-heading h2,
-  .journey-copy h2,
-  .educator-copy h2,
-  .closing-card h2 {
-    font-size: 32px;
-  }
-  .educator-preview {
-    margin-inline: -8px;
-    padding: 8px;
-    border-radius: 20px;
-  }
-  .preview-window__body {
-    grid-template-columns: 1fr;
-  }
-  .preview-sidebar {
-    display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .feature-card,
-  .landing-button,
-  .landing-header__cta {
-    transition: none;
   }
 }
 </style>
