@@ -531,7 +531,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
           </Card>
           <Card
             v-else-if="comparisonStatus === 'success' && comparisonResult"
-            class="metric-chart-section overflow-visible"
+            class="metric-chart-section"
           >
             <header class="section-heading metric-chart-heading">
               <div>
@@ -759,8 +759,8 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
 <style scoped>
 .test-history { gap: 20px; container-type: inline-size; }
 .test-comparison-workspace { display: grid; align-items: stretch; gap: 20px; grid-template-columns: minmax(270px, 0.72fr) minmax(560px, 1.7fr); }
-.test-browser { display: flex; min-width: 0; flex-direction: column; gap: 0; padding: 20px; border-radius: var(--radius-lg); }
-.test-groups { display: grid; gap: 20px; margin-top: 16px; }
+.test-browser { display: flex; min-width: 0; height: 500px; flex-direction: column; gap: 0; padding: 20px; border-radius: var(--radius-lg); }
+.test-groups { display: grid; min-height: 0; flex: 1; align-content: start; gap: 20px; margin-top: 16px; padding-right: 4px; overflow-y: auto; }
 .test-group h3 { margin: 0 0 10px; color: var(--slate-600); font-size: 13px; font-weight: 700; }
 .test-list { display: grid; gap: 8px; }
 .test-row { display: grid; width: 100%; min-height: 64px; padding: 8px 12px; grid-template-columns: 38px minmax(90px, 1fr) auto 18px; justify-content: stretch; border: 1px solid var(--slate-200); border-radius: 14px; background: transparent; color: var(--slate-700); text-align: left; }
@@ -784,6 +784,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
 .comparison-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 12px; font-weight: 700; }
 .comparison-chip button { width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 17px; }
 .state-card, .metric-chart-section, .question-section { min-width: 0; padding: 20px; border-radius: var(--radius-lg); }
+.metric-chart-section { height: 500px; overflow-y: auto; }
 .state-card { display: grid; justify-items: start; gap: 10px; }
 .state-card--error { border-color: color-mix(in oklch, var(--danger-600) 25%, var(--border)); }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
@@ -818,6 +819,8 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
 .inline-empty { padding: 24px; border: 1px dashed var(--slate-300); border-radius: var(--radius-sm); color: var(--slate-500); text-align: center; }
 @container (max-width: 1050px) {
   .test-comparison-workspace { grid-template-columns: 1fr; }
+  .test-browser, .metric-chart-section { height: auto; }
+  .test-groups { max-height: none; padding-right: 0; overflow-y: visible; }
 }
 @media (max-width: 760px) {
   .selection-field { min-width: 100%; }
