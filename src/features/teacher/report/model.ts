@@ -1,4 +1,21 @@
 export type ReportSeriesStatus = 'AVAILABLE' | 'NO_DATA' | 'FAILED'
+export type ReportAnalysisStatus = 'AVAILABLE' | 'INSUFFICIENT_DATA' | 'NO_DATA'
+export type ReportMetricType = 'ACCURACY' | 'READING_SPEED' | 'PRONUNCIATION_SCORE'
+export type ReportChangeDirection = 'INCREASED' | 'DECREASED' | 'UNCHANGED'
+
+export interface ReportMetricChange {
+  readonly metric: ReportMetricType
+  readonly first: number
+  readonly latest: number
+  readonly delta: number
+  readonly direction: ReportChangeDirection
+}
+
+export interface ReportAutomaticAnalysis {
+  readonly status: ReportAnalysisStatus
+  readonly metricChanges: readonly ReportMetricChange[]
+  readonly descriptions: readonly string[]
+}
 
 export interface GrowthHistoryPoint {
   readonly date: string
@@ -61,6 +78,8 @@ export interface ReportGazeTrend {
 }
 
 export interface ReportSnapshot {
+  readonly snapshotVersion: string | null
+  readonly calculationVersion: string | null
   readonly learningDays: number
   readonly totalTrainingTimeMinutes: number
   readonly completedTrainingCount: number
@@ -68,6 +87,8 @@ export interface ReportSnapshot {
   readonly averageReadingSpeed: number | null
   readonly readingSpeedUnit: string | null
   readonly growthHistory: readonly GrowthHistoryPoint[]
+  readonly growthComparisonStatus: ReportAnalysisStatus | null
+  readonly automaticAnalysis: ReportAutomaticAnalysis | null
   readonly areaAchievements: readonly AreaAchievement[]
   readonly frequentlyIncorrectWords: readonly IncorrectWord[]
   readonly improvedPatterns: readonly string[]

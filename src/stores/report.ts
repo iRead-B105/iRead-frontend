@@ -22,6 +22,11 @@ function errorMessage(error: unknown, fallback: string): string {
   return (
     mapCommonError(error, {
       overrides: {
+        REPORT_INSUFFICIENT_LEARNING_DAYS: {
+          message: '선택한 기간에 완료 학습일이 1일 이상 필요합니다.',
+          action: 'edit-input',
+          retryable: false,
+        },
         REPORT_DATA_NOT_FOUND: {
           message: '선택한 기간에 완료된 학습 기록이 없습니다.',
           action: 'edit-input',

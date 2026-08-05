@@ -35,7 +35,7 @@ const invalid = computed(
     Boolean(props.periodErrors.startDate) ||
     Boolean(props.periodErrors.endDate) ||
     props.historyStatus !== 'success' ||
-    props.learningDayCount < 2,
+    props.learningDayCount < 1,
 )
 
 const reportSections = [
@@ -80,8 +80,8 @@ const reportSections = [
         <p v-if="periodErrors.startDate || periodErrors.endDate" class="field-error">
           {{ periodErrors.startDate ?? periodErrors.endDate }}
         </p>
-        <p v-else-if="historyStatus === 'success' && learningDayCount < 2" class="field-error">
-          보고서를 생성하려면 서로 다른 완료 학습일이 2일 이상 필요합니다.
+        <p v-else-if="historyStatus === 'success' && learningDayCount < 1" class="field-error">
+          보고서를 생성하려면 완료 학습일이 1일 이상 필요합니다.
         </p>
       </div>
 

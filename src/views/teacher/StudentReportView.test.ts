@@ -163,11 +163,39 @@ describe('StudentReportView', () => {
     const generateButton = buttonWithText(wrapper, '보고서 생성')
 
     expect(generateButton?.attributes('disabled')).toBeDefined()
-    expect(wrapper.text()).toContain('서로 다른 완료 학습일이 2일 이상 필요합니다.')
+    expect(wrapper.text()).toContain('완료 학습일이 1일 이상 필요합니다.')
     expect(create).not.toHaveBeenCalled()
     expect(store.startDate).toBe('2026-07-01')
     expect(store.endDate).toBe('2026-07-28')
     expect(store.selectedReport).toBeNull()
+  })
+
+  it('완료 학습일이 하루인 기간에도 보고서를 생성한다', async () => {
+    const repository = new TestReportRepository({
+      delayMs: 0,
+      now: () => new Date('2026-07-28T10:00:00+09:00'),
+      completedLearningDatesByStudent: { 1: ['2026-07-05'] },
+    })
+    const create = vi.spyOn(repository, 'create')
+    const { wrapper, pinia } = await mountReport('/teacher/students/1/report', repository)
+    const store = useReportStore(pinia)
+    store.startDate = '2026-07-05'
+    store.endDate = '2026-07-05'
+    await flushPromises()
+
+    const generateButton = buttonWithText(wrapper, '보고서 생성')
+    expect(generateButton?.attributes('disabled')).toBeUndefined()
+
+    await generateButton?.trigger('click')
+    await flushPromises()
+
+    expect(create).toHaveBeenCalledWith({
+      studentId: 1,
+      startDate: '2026-07-05',
+      endDate: '2026-07-05',
+    })
+    expect(store.selectedReport?.snapshot.learningDays).toBeGreaterThanOrEqual(1)
+    expect(wrapper.text()).toContain('김하늘 학습 보고서')
   })
 
   it('생성 버튼 중복 제출을 막고 POST 후 상세을 표시한다', async () => {

@@ -129,7 +129,14 @@ describe('Report API target contract', () => {
 
   it('Backend 저장 스냅샷에 gazeTrend가 없어도 상세 보고서를 연다', async () => {
     const detail = reportFixtures[0]!
-    const { gazeTrend: _gazeTrend, ...storedSnapshot } = detail.snapshot
+    const {
+      gazeTrend: _gazeTrend,
+      snapshotVersion: _snapshotVersion,
+      calculationVersion: _calculationVersion,
+      growthComparisonStatus: _growthComparisonStatus,
+      automaticAnalysis: _automaticAnalysis,
+      ...storedSnapshot
+    } = detail.snapshot
     const request = vi.fn().mockResolvedValue({
       ...detail,
       snapshot: {
@@ -141,6 +148,10 @@ describe('Report API target contract', () => {
 
     const result = await reportApi.get(detail.reportId)
 
+    expect(result.snapshot.snapshotVersion).toBeNull()
+    expect(result.snapshot.calculationVersion).toBeNull()
+    expect(result.snapshot.growthComparisonStatus).toBeNull()
+    expect(result.snapshot.automaticAnalysis).toBeNull()
     expect(result.snapshot.gazeTrend).toEqual({
       generatedAt: detail.createdAt,
       training: {
@@ -160,6 +171,21 @@ describe('Report API target contract', () => {
         failedSessionCount: 0,
       },
     })
+  })
+
+  it('teacher-report-v2의 계산 계약이 다르면 상세 변환을 거부한다', async () => {
+    const detail = reportFixtures[0]!
+    const reportApi = createReportApi(vi.fn().mockResolvedValue({
+      ...detail,
+      snapshot: {
+        ...detail.snapshot,
+        calculationVersion: 'legacy-report-v1',
+      },
+    }))
+
+    await expect(reportApi.get(detail.reportId)).rejects.toThrow(
+      '[보고서 API] 신규 snapshot 계산 계약이 일치하지 않습니다.',
+    )
   })
 })
 
@@ -188,7 +214,12 @@ describe('TestReportRepository', () => {
         startDate: '2026-07-01',
         endDate: '2026-07-28',
       }),
-    ).rejects.toMatchObject({ code: 'REPORT_DATA_NOT_FOUND' })
+    ).rejects.toMatchObject({
+      code: 'REPORT_INSUFFICIENT_LEARNING_DAYS',
+      responseBody: {
+        error: { details: { requiredDays: 1, actualDays: 0 } },
+      },
+    })
     await expect(
       repository.create({
         studentId: 1,

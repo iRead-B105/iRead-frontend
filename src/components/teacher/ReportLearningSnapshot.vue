@@ -44,6 +44,23 @@ const metricDefinitions = computed<readonly GrowthMetricDefinition[]>(() => [
 ])
 
 const alignedLearningMetrics = computed(() => hasAlignedReportLearningMetrics(props.snapshot))
+const growthStatusMessage = computed(() => {
+  if (props.snapshot.growthComparisonStatus === 'INSUFFICIENT_DATA') {
+    return '현재 값은 표시하지만 변화를 비교할 기록이 부족합니다.'
+  }
+  if (props.snapshot.growthComparisonStatus === 'NO_DATA') {
+    return '선택 기간에 표시할 정확도·읽기 속도·발음 기록이 없습니다.'
+  }
+  return null
+})
+const automaticAnalysisDescriptions = computed(
+  () => props.snapshot.automaticAnalysis?.descriptions ?? [],
+)
+const hasPatternAnalysis = computed(
+  () =>
+    props.snapshot.improvedPatterns.length > 0 ||
+    props.snapshot.persistentDifficultyPatterns.length > 0,
+)
 
 const growthCards = computed(() =>
   metricDefinitions.value.map((definition) => {
@@ -126,10 +143,9 @@ const performanceItems = computed(() => [
       <h2 id="performance-summary-title">핵심 성과 요약</h2>
     </header>
     <div v-if="!alignedLearningMetrics" class="metric-pending" role="status">
-      <strong>정확도·읽기 속도 계산 기준 연동 예정</strong>
+      <strong>이전 계산 기준으로 생성된 보고서입니다</strong>
       <p>
-        학습 현황과 같은 단어별 점수 평균 및 분당 정답 단어 수 기준이 확인되기 전에는 이전 기준 값을
-        표시하지 않습니다.
+        신규 보고서와 계산 단위가 달라 정확도·읽기 속도 핵심 성과를 같은 기준으로 비교할 수 없습니다.
       </p>
     </div>
     <dl v-else class="summary-grid summary-grid--performance">
@@ -145,24 +161,29 @@ const performanceItems = computed(() => [
       <h2 id="growth-history-title">기간별 성장 추이</h2>
     </header>
     <div v-if="!alignedLearningMetrics" class="metric-pending" role="status">
-      <strong>성장 그래프 데이터 연동 예정</strong>
-      <p>통일된 계산 결과가 제공되면 정확도·읽기 속도·발음 점수를 각각 표시합니다.</p>
+      <strong>이전 계산 기준의 성장 값입니다</strong>
+      <p>신규 보고서를 생성하면 학습 현황과 같은 계산 기준의 일별 성장 값을 확인할 수 있습니다.</p>
     </div>
-    <div v-else class="growth-grid">
-      <article v-for="metric in growthCards" :key="metric.key" class="growth-card">
-        <header>
-          <h3>{{ metric.title }}</h3>
-          <span>{{ metric.pointCount }}일</span>
-        </header>
-        <p v-if="metric.pointCount === 0" class="empty-state">표시할 기록이 없습니다.</p>
-        <ChartPanel
-          v-else
-          :option="metric.option"
-          height="220px"
-          :aria-label="`보고서 기간별 ${metric.title} 추이`"
-          :summary="metric.summary"
-        />
-      </article>
+    <div v-else>
+      <p v-if="growthStatusMessage" class="comparison-note" role="status">
+        {{ growthStatusMessage }}
+      </p>
+      <div class="growth-grid">
+        <article v-for="metric in growthCards" :key="metric.key" class="growth-card">
+          <header>
+            <h3>{{ metric.title }}</h3>
+            <span>{{ metric.pointCount }}일</span>
+          </header>
+          <p v-if="metric.pointCount === 0" class="empty-state">표시할 기록이 없습니다.</p>
+          <ChartPanel
+            v-else
+            :option="metric.option"
+            height="220px"
+            :aria-label="`보고서 기간별 ${metric.title} 추이`"
+            :summary="metric.summary"
+          />
+        </article>
+      </div>
     </div>
   </section>
 
@@ -171,27 +192,36 @@ const performanceItems = computed(() => [
       <h2 id="automatic-analysis-title">자동 분석</h2>
     </header>
     <div v-if="!alignedLearningMetrics" class="metric-pending" role="status">
-      <strong>규칙 기반 자동 분석 연동 예정</strong>
-      <p>
-        Backend 계산이 준비되면 향상 항목과 지속 관찰 항목을 보고서 생성 시점 기준으로 표시합니다.
-      </p>
+      <strong>이전 계산 기준에는 자동 분석이 없습니다</strong>
+      <p>신규 보고서를 생성하면 생성 시점에 저장된 기간 변화 분석을 확인할 수 있습니다.</p>
     </div>
     <div v-else class="analysis-grid">
-      <article>
-        <h3>향상 항목</h3>
-        <ul v-if="snapshot.improvedPatterns.length">
-          <li v-for="pattern in snapshot.improvedPatterns" :key="pattern">{{ pattern }}</li>
-        </ul>
-        <p v-else class="analysis-empty">비교할 향상 기록이 부족합니다.</p>
-      </article>
-      <article>
-        <h3>지속 관찰 항목</h3>
-        <ul v-if="snapshot.persistentDifficultyPatterns.length">
-          <li v-for="pattern in snapshot.persistentDifficultyPatterns" :key="pattern">
-            {{ pattern }}
+      <article class="analysis-grid__summary">
+        <h3>기간 변화 분석</h3>
+        <ul v-if="automaticAnalysisDescriptions.length">
+          <li v-for="description in automaticAnalysisDescriptions" :key="description">
+            {{ description }}
           </li>
         </ul>
-        <p v-else class="analysis-empty">지속적으로 확인된 어려움이 없습니다.</p>
+        <p v-else class="analysis-empty">저장된 자동 분석 설명이 없습니다.</p>
+      </article>
+      <article v-if="hasPatternAnalysis">
+        <h3>영역별 분석</h3>
+        <ul>
+          <li v-for="pattern in snapshot.improvedPatterns" :key="`improved:${pattern}`">
+            향상: {{ pattern }}
+          </li>
+          <li
+            v-for="pattern in snapshot.persistentDifficultyPatterns"
+            :key="`difficulty:${pattern}`"
+          >
+            지속 관찰: {{ pattern }}
+          </li>
+        </ul>
+      </article>
+      <article v-else>
+        <h3>영역별 분석</h3>
+        <p class="analysis-empty">영역별 향상·지속 관찰 판정 기준은 아직 제공되지 않습니다.</p>
       </article>
     </div>
   </section>
@@ -334,6 +364,14 @@ dd {
   font-size: 12px;
   line-height: 1.6;
 }
+.comparison-note {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
 .growth-grid,
 .analysis-grid {
   display: grid;
@@ -345,6 +383,9 @@ dd {
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+}
+.analysis-grid__summary {
+  grid-column: 1 / -1;
 }
 .growth-card > header {
   display: flex;
