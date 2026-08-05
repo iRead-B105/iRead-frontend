@@ -1,23 +1,13 @@
 <script setup lang="ts">
 // 교수자 화면을 좌측 사이드바와 우측 메인 영역으로 나누는 공통 레이아웃입니다.
-import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterView } from 'vue-router'
+import SaveToast from '@/components/common/SaveToast.vue'
 import TeacherSidebar from '@/components/teacher/TeacherSidebar.vue'
-import { Button } from '@/components/ui/button'
 import { useRealtimeFreshnessStore } from '@/stores/realtimeFreshness'
 
 const realtimeFreshnessStore = useRealtimeFreshnessStore()
-const { warningVisible, lastSuccessfulAt, retrying } = storeToRefs(realtimeFreshnessStore)
-const lastSuccessfulLabel = computed(() =>
-  lastSuccessfulAt.value === null
-    ? null
-    : new Intl.DateTimeFormat('ko-KR', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }).format(lastSuccessfulAt.value),
-)
+const { warningVisible } = storeToRefs(realtimeFreshnessStore)
 </script>
 
 <template>
@@ -26,33 +16,7 @@ const lastSuccessfulLabel = computed(() =>
     <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
     <TeacherSidebar />
     <main id="main-content" class="teacher-content" tabindex="-1">
-      <section
-        v-if="warningVisible"
-        class="freshness-warning"
-        role="status"
-        aria-live="polite"
-        aria-label="데이터 최신성 안내"
-      >
-        <div>
-          <strong>연결이 불안정하여 최신 정보가 아닐 수 있습니다.</strong>
-          <small>
-            {{
-              lastSuccessfulLabel
-                ? `마지막 갱신 ${lastSuccessfulLabel}`
-                : '마지막 갱신 시각을 확인할 수 없습니다.'
-            }}
-          </small>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          :disabled="retrying"
-          @click="realtimeFreshnessStore.requestRetry()"
-        >
-          {{ retrying ? '다시 시도 중' : '다시 시도' }}
-        </Button>
-      </section>
+      <SaveToast :visible="warningVisible" message="연결이 불안정합니다." />
       <RouterView />
     </main>
   </div>
@@ -76,33 +40,6 @@ const lastSuccessfulLabel = computed(() =>
   min-width: 0;
   padding: 28px 36px 48px;
   background: var(--content-background);
-}
-
-.freshness-warning {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 20px;
-  padding: 14px 16px;
-  border: 1px solid color-mix(in oklch, var(--warning-500) 38%, var(--border));
-  border-radius: var(--radius-md);
-  background: color-mix(in oklch, var(--warning-500) 9%, var(--white));
-  color: var(--foreground);
-}
-
-.freshness-warning > div {
-  display: grid;
-  gap: 4px;
-}
-
-.freshness-warning strong {
-  font-size: 14px;
-}
-
-.freshness-warning small {
-  color: var(--muted-foreground);
-  font-size: 12px;
 }
 
 .skip-link {
@@ -139,9 +76,5 @@ const lastSuccessfulLabel = computed(() =>
     padding: 18px 14px 32px;
   }
 
-  .freshness-warning {
-    align-items: stretch;
-    flex-direction: column;
-  }
 }
 </style>

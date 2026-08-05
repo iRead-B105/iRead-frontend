@@ -91,11 +91,7 @@ const readingSpeedRecords = computed(
   () => studentStore.readingSpeedRecordsById[studentId.value] ?? null,
 )
 const selectedTrend = ref<'accuracy' | 'reading-speed'>('accuracy')
-const recentLearningEvents = computed(() =>
-  [...learningEvents.value]
-    .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
-    .slice(0, 4),
-)
+const recentLearningEvents = computed(() => learningEvents.value.slice(0, 4))
 const eventTypeLabels: Readonly<Record<StudentLearningEventType, string>> = {
   TEST: '읽기 검사',
   TRAINING: '훈련',
@@ -411,7 +407,32 @@ watch(studentId, loadOverview, { immediate: true })
       <PageHeader title="학습 현황" />
 
       <div class="learning-analysis">
-        <Card class="trend-panel" :aria-labelledby="`${selectedTrend}-tab`">
+        <aside class="recent-panel" aria-label="최근 학습 기록">
+          <StudentLearningEvents
+            :events="recentLearningEvents"
+            :selected-event-id="selectedEventId"
+            :selected-event-type="selectedEventType"
+            :pending-event-id="pendingEventId"
+            :pending-event-type="pendingEventType"
+            :detail="selectedEventDetail"
+            :list-status="learningEventsStatus"
+            :list-error="learningEventsError"
+            :detail-status="selectedEventDetailStatus"
+            :detail-error="selectedEventDetailError"
+            @select="selectLearningEvent"
+            @retry-list="studentStore.loadLearningEvents(detail.studentId, 4)"
+            @retry-detail="retryLearningEvent"
+            @open-history="openLearningEventHistory"
+          />
+          <RouterLink
+            class="history-link"
+            :to="{ name: 'student-training-history', params: { id: detail.studentId } }"
+          >
+            전체 훈련 이력 보기
+          </RouterLink>
+        </aside>
+
+        <Card class="trend-panel overflow-visible" :aria-labelledby="`${selectedTrend}-tab`">
           <header class="trend-heading">
             <div class="trend-tabs" role="tablist" aria-label="학습 변화 지표">
               <div
@@ -480,6 +501,7 @@ watch(studentId, loadOverview, { immediate: true })
               :key="`${selectedTrend}:${selectedTrend === 'accuracy'
                 ? accuracyChartPoints.length
                 : readingSpeedChartPoints.length}`"
+              :data-test="selectedTrend === 'accuracy' ? 'accuracy-chart' : 'reading-speed-chart'"
               :points="selectedTrendPoints"
               :unit="selectedTrend === 'accuracy' ? '%' : ' 단어/분'"
               :color="selectedTrend === 'accuracy' ? '#2563eb' : '#16a34a'"
@@ -489,30 +511,6 @@ watch(studentId, loadOverview, { immediate: true })
           </div>
         </Card>
 
-        <aside class="recent-panel" aria-label="최근 학습 기록">
-          <StudentLearningEvents
-            :events="recentLearningEvents"
-            :selected-event-id="selectedEventId"
-            :selected-event-type="selectedEventType"
-            :pending-event-id="pendingEventId"
-            :pending-event-type="pendingEventType"
-            :detail="selectedEventDetail"
-            :list-status="learningEventsStatus"
-            :list-error="learningEventsError"
-            :detail-status="selectedEventDetailStatus"
-            :detail-error="selectedEventDetailError"
-            @select="selectLearningEvent"
-            @retry-list="studentStore.loadLearningEvents(detail.studentId, 4)"
-            @retry-detail="retryLearningEvent"
-            @open-history="openLearningEventHistory"
-          />
-          <RouterLink
-            class="history-link"
-            :to="{ name: 'student-training-history', params: { id: detail.studentId } }"
-          >
-            전체 학습 이력 보기
-          </RouterLink>
-        </aside>
       </div>
 
       <StudentCommunicationPanel
@@ -584,7 +582,7 @@ watch(studentId, loadOverview, { immediate: true })
   display: grid;
   align-items: stretch;
   gap: 24px;
-  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.75fr);
+  grid-template-columns: minmax(320px, 0.75fr) minmax(0, 1.45fr);
 }
 
 .trend-panel {
@@ -593,6 +591,7 @@ watch(studentId, loadOverview, { immediate: true })
   gap: 0;
   padding: 20px;
   border-radius: var(--radius-lg);
+  overflow: visible !important;
 }
 
 .trend-heading {
@@ -664,7 +663,9 @@ watch(studentId, loadOverview, { immediate: true })
 }
 
 .trend-content {
+  position: relative;
   min-height: 250px;
+  overflow: visible;
 }
 
 .recent-panel {

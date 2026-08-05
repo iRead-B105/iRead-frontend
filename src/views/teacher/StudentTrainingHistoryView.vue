@@ -1,10 +1,16 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
+import {
+  BarChart3Icon,
+  CalendarDaysIcon,
+  ChevronRightIcon,
+  Clock3Icon,
+  InfoIcon,
+} from '@lucide/vue'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
-import HistoryToolbar from '@/components/teacher/HistoryToolbar.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -30,7 +36,6 @@ const {
   period,
   curriculumLogs,
   selectedCurriculumId,
-  selectedCurriculumLog,
   trainingLog,
   selectedHistoryTrainingId,
   historyTrainingDetail,
@@ -46,6 +51,8 @@ const {
   historyGazeError,
 } = storeToRefs(trainingStore)
 const curriculumLogsErrorKind = computed(() => asyncStateKind(curriculumLogsUiError.value))
+const CURRICULUM_PAGE_SIZE = 5
+const curriculumPage = ref(1)
 
 function parseStudentId(value: unknown): number | null {
   const normalized = Array.isArray(value) ? value[0] : value
@@ -80,6 +87,30 @@ const historyGazeAggregate = computed<GazeAnalysisState | null>(() => {
     },
   }
 })
+const curriculumPageCount = computed(() =>
+  Math.max(1, Math.ceil(curriculumLogs.value.length / CURRICULUM_PAGE_SIZE)),
+)
+const paginatedCurriculumLogs = computed(() => {
+  const start = (curriculumPage.value - 1) * CURRICULUM_PAGE_SIZE
+  return curriculumLogs.value.slice(start, start + CURRICULUM_PAGE_SIZE)
+})
+const curriculumGroups = computed(() => {
+  const groups = new Map<string, { label: string; items: CurriculumLog[] }>()
+
+  paginatedCurriculumLogs.value.forEach((curriculum) => {
+    const match = /^(\d{4})-(\d{2})/.exec(curriculum.date)
+    const key = match ? `${match[1]}-${match[2]}` : 'unknown'
+    const label = match ? `${match[1]}년 ${Number(match[2])}월` : '날짜 미확인'
+    const group = groups.get(key) ?? { label, items: [] }
+    group.items.push(curriculum)
+    groups.set(key, group)
+  })
+
+  return [...groups.entries()].map(([key, group]) => ({ key, ...group }))
+})
+watch(curriculumPageCount, (pageCount) => {
+  if (curriculumPage.value > pageCount) curriculumPage.value = pageCount
+})
 watch(
   [studentId, requestedTrainingId],
   async ([id, trainingId]) => {
@@ -104,6 +135,7 @@ async function changePeriod(event: Event): Promise<void> {
   if (studentId.value === null) return
   const value = (event.target as HTMLSelectElement).value
   if (value !== '30d' && value !== '3m') return
+  curriculumPage.value = 1
   await trainingStore.setHistoryPeriod(studentId.value, value as TrainingPeriod)
 }
 
@@ -212,23 +244,6 @@ function formatQuestionScore(score: number | null): string | null {
     />
 
     <template v-else>
-      <Card class="toolbar-card">
-        <HistoryToolbar>
-          <div class="period-field">
-            <Label for="training-period">조회 기간</Label>
-            <select
-              id="training-period"
-              :value="period"
-              :disabled="curriculumLogsStatus === 'loading'"
-              @change="changePeriod"
-            >
-              <option value="30d">최근 30일</option>
-              <option value="3m">최근 3개월</option>
-            </select>
-          </div>
-        </HistoryToolbar>
-      </Card>
-
       <Card
         v-if="curriculumLogsStatus === 'success' && curriculumLogs.length === 0"
         class="history-empty-card"
@@ -241,12 +256,22 @@ function formatQuestionScore(score: number | null): string | null {
         />
       </Card>
 
-      <div v-else class="history-grid">
-        <Card class="history-selection-card" data-test="history-selection-card">
-          <section class="history-selection-section curriculum-section">
-            <header class="section-heading">
-              <div>
-                <h2>완료 커리큘럼</h2>
+      <div v-else class="history-workspace">
+        <div class="history-summary-grid">
+          <Card class="curriculum-browser" data-test="history-selection-card">
+            <header class="section-heading curriculum-browser__heading">
+              <h2>완료한 커리큘럼</h2>
+              <div class="period-field">
+                <Label for="training-period">조회 기간</Label>
+                <select
+                  id="training-period"
+                  :value="period"
+                  :disabled="curriculumLogsStatus === 'loading'"
+                  @change="changePeriod"
+                >
+                  <option value="30d">최근 30일</option>
+                  <option value="3m">최근 3개월</option>
+                </select>
               </div>
             </header>
 
@@ -265,7 +290,7 @@ function formatQuestionScore(score: number | null): string | null {
               compact
               @retry="trainingStore.retryHistory()"
             />
-            <div v-else class="curriculum-list">
+            <div v-else class="curriculum-groups">
               <AsyncStatePanel
                 v-if="curriculumLogsStatus === 'error'"
                 :kind="curriculumLogsErrorKind"
@@ -281,81 +306,111 @@ function formatQuestionScore(score: number | null): string | null {
                 message="최신 이력을 확인하는 동안 이전 이력을 표시합니다."
                 compact
               />
-              <Button
-                v-for="curriculum in curriculumLogs"
-                :key="curriculum.curriculumId"
-                variant="ghost"
-                type="button"
-                class="curriculum-row"
-                :class="{ active: curriculum.curriculumId === selectedCurriculumId }"
-                :aria-pressed="curriculum.curriculumId === selectedCurriculumId"
-                @click="selectCurriculum(curriculum)"
+              <section v-for="group in curriculumGroups" :key="group.key" class="curriculum-group">
+                <h3>{{ group.label }}</h3>
+                <div class="curriculum-list">
+                  <Button
+                    v-for="curriculum in group.items"
+                    :key="curriculum.curriculumId"
+                    variant="ghost"
+                    type="button"
+                    class="curriculum-row"
+                    :class="{ active: curriculum.curriculumId === selectedCurriculumId }"
+                    :aria-pressed="curriculum.curriculumId === selectedCurriculumId"
+                    @click="selectCurriculum(curriculum)"
+                  >
+                    <span class="curriculum-row__icon"><CalendarDaysIcon aria-hidden="true" /></span>
+                    <strong>{{ formatDate(curriculum.date) }}</strong>
+                    <span class="curriculum-row__accuracy">
+                      <small>평균 정확도</small>
+                      <b>{{ formatAccuracy(curriculum.achievement) }}</b>
+                    </span>
+                    <ChevronRightIcon class="curriculum-row__chevron" aria-hidden="true" />
+                  </Button>
+                </div>
+              </section>
+              <nav
+                v-if="curriculumPageCount > 1"
+                class="curriculum-pagination"
+                aria-label="완료 커리큘럼 페이지"
               >
-                <span>
-                  <strong>{{ formatDate(curriculum.date) }}</strong>
-                  <small>{{ curriculum.trainings.length }}개 훈련</small>
-                </span>
-                <b>{{ formatAccuracy(curriculum.achievement) }}</b>
-              </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  :disabled="curriculumPage === 1"
+                  @click="curriculumPage -= 1"
+                >
+                  이전
+                </Button>
+                <span>{{ curriculumPage }} / {{ curriculumPageCount }}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  :disabled="curriculumPage === curriculumPageCount"
+                  @click="curriculumPage += 1"
+                >
+                  다음
+                </Button>
+              </nav>
             </div>
-          </section>
+          </Card>
 
-          <section class="history-selection-section training-section">
-            <header class="section-heading">
-              <div>
-                <h2>커리큘럼별 훈련</h2>
-                <p>
-                  {{
-                    selectedCurriculumLog
-                      ? `${formatDate(selectedCurriculumLog.date)} 완료`
-                      : '커리큘럼을 선택해 주세요.'
-                  }}
-                </p>
+          <Card class="curriculum-overview">
+            <section class="curriculum-trainings">
+              <h3>학습 목록</h3>
+              <AsyncStatePanel
+                v-if="trainingLogStatus === 'loading'"
+                kind="loading"
+                message="학습 목록을 불러오는 중입니다."
+                compact
+              />
+              <AsyncStatePanel
+                v-else-if="trainingLogStatus === 'error'"
+                kind="error"
+                title="학습 목록을 불러오지 못했습니다"
+                :message="trainingLogError ?? '잠시 후 다시 시도해 주세요.'"
+                retry-label="다시 불러오기"
+                compact
+                @retry="retrySelectedCurriculum"
+              />
+              <AsyncStatePanel
+                v-else-if="!trainingLog?.trainings.length"
+                kind="empty"
+                message="선택한 커리큘럼에 표시할 훈련이 없습니다."
+                compact
+              />
+              <div v-else class="training-list">
+                <Button
+                  v-for="(training, index) in trainingLog.trainings"
+                  :key="training.trainingId"
+                  variant="ghost"
+                  type="button"
+                  class="training-row"
+                  :class="{ active: training.trainingId === selectedHistoryTrainingId }"
+                  :aria-pressed="training.trainingId === selectedHistoryTrainingId"
+                  @click="selectTraining(training)"
+                >
+                  <span class="sequence">{{ index + 1 }}</span>
+                  <span class="training-name">
+                    <strong>{{ training.trainingName }}</strong>
+                    <small>
+                      <Clock3Icon aria-hidden="true" />
+                      {{ formatDateTime(training.finishedAt ?? training.startedAt) }}
+                    </small>
+                  </span>
+                  <span class="training-accuracy__icon"><BarChart3Icon aria-hidden="true" /></span>
+                  <b>{{ formatAccuracy(training.accuracy) }}</b>
+                </Button>
               </div>
-            </header>
-
-            <AsyncStatePanel
-              v-if="trainingLogStatus === 'loading'"
-              kind="loading"
-              message="훈련 목록을 불러오는 중입니다."
-              compact
-            />
-            <AsyncStatePanel
-              v-else-if="trainingLogStatus === 'error'"
-              kind="error"
-              title="훈련 목록을 불러오지 못했습니다"
-              :message="trainingLogError ?? '잠시 후 다시 시도해 주세요.'"
-              retry-label="다시 불러오기"
-              compact
-              @retry="retrySelectedCurriculum"
-            />
-            <AsyncStatePanel
-              v-else-if="!trainingLog?.trainings.length"
-              kind="empty"
-              message="선택한 커리큘럼에 표시할 훈련이 없습니다."
-              compact
-            />
-            <div v-else class="training-list">
-              <Button
-                v-for="(training, index) in trainingLog.trainings"
-                :key="training.trainingId"
-                variant="ghost"
-                type="button"
-                class="training-row"
-                :class="{ active: training.trainingId === selectedHistoryTrainingId }"
-                :aria-pressed="training.trainingId === selectedHistoryTrainingId"
-                @click="selectTraining(training)"
-              >
-                <span class="sequence">{{ index + 1 }}</span>
-                <span class="training-name">
-                  <strong>{{ training.trainingName }}</strong>
-                  <small>{{ formatDateTime(training.finishedAt ?? training.startedAt) }}</small>
-                </span>
-                <b>{{ formatAccuracy(training.accuracy) }}</b>
-              </Button>
-            </div>
-          </section>
-        </Card>
+              <p v-if="trainingLog?.trainings.length" class="curriculum-complete-note">
+                <InfoIcon aria-hidden="true" />
+                모든 훈련을 완료했습니다. 훈련을 선택하면 상세 학습 결과를 확인할 수 있습니다.
+              </p>
+            </section>
+          </Card>
+        </div>
 
         <Card class="detail-card">
           <header class="detail-heading">
@@ -490,41 +545,45 @@ function formatQuestionScore(score: number | null): string | null {
   container-type: inline-size;
 }
 
-.toolbar-card {
-  gap: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.toolbar-card :deep(.history-toolbar) {
-  min-height: 76px;
-  padding: 12px 0;
-  border-bottom: 0;
-}
-
 .period-field {
-  display: grid;
-  width: min(100%, 180px);
-  gap: 6px;
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 10px;
+  background: var(--slate-50);
+}
+
+.period-field label {
+  color: var(--slate-600);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .period-field select {
-  min-height: 40px;
-  padding: 0 36px 0 12px;
+  width: 120px;
+  min-height: 34px;
+  padding: 0 28px 0 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--card);
   color: var(--slate-800);
-  font: inherit;
+  font-size: 11px;
 }
 
-.history-grid {
+.history-workspace {
   display: grid;
-  align-items: stretch;
   gap: 20px;
-  grid-template-columns: minmax(560px, 1.6fr) minmax(360px, 1fr);
+}
+
+.history-summary-grid {
+  display: grid;
+  align-items: start;
+  gap: 20px;
+  grid-template-columns: minmax(270px, 0.72fr) minmax(520px, 1.7fr);
 }
 
 .history-empty-card {
@@ -532,37 +591,28 @@ function formatQuestionScore(score: number | null): string | null {
   padding: 24px;
 }
 
-.history-selection-card,
-.statistics-card,
+.curriculum-browser,
+.curriculum-overview,
 .detail-card {
   min-width: 0;
   gap: 0;
   border-radius: var(--radius-lg);
 }
 
-.history-selection-card {
-  display: grid;
-  overflow: hidden;
-  padding: 0;
-  grid-template-columns: minmax(220px, 0.85fr) minmax(300px, 1.15fr);
-}
-
-.history-selection-section {
-  min-width: 0;
-  padding: 20px;
-}
-
-.history-selection-section + .history-selection-section {
-  border-inline-start: 1px solid var(--border);
-}
-
-.statistics-card,
+.curriculum-browser,
+.curriculum-overview,
 .detail-card {
   padding: 20px;
 }
 
-.detail-card {
-  grid-column: 1 / -1;
+.curriculum-browser {
+  display: flex;
+  flex-direction: column;
+  align-content: start;
+}
+
+.curriculum-overview {
+  align-content: start;
 }
 
 .section-heading,
@@ -579,77 +629,237 @@ function formatQuestionScore(score: number | null): string | null {
   font-size: 17px;
 }
 
-.section-heading p,
+.curriculum-browser__heading {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .detail-heading p {
   margin: 5px 0 0;
   color: var(--slate-500);
   font-size: 12px;
 }
 
-.curriculum-list,
-.training-list {
+.curriculum-groups {
   display: grid;
-  gap: 6px;
+  flex: 1;
+  align-content: start;
+  gap: 20px;
   margin-top: 16px;
 }
 
-.curriculum-row,
-.training-row {
+.curriculum-group h3 {
+  margin: 0 0 10px;
+  color: var(--slate-600);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.curriculum-list,
+.training-list {
+  display: grid;
+  gap: 8px;
+}
+
+.curriculum-row {
+  display: grid;
   width: 100%;
-  min-height: 58px;
-  justify-content: initial;
+  min-height: 64px;
+  padding: 8px 12px;
+  grid-template-columns: 38px minmax(90px, 1fr) auto 18px;
+  justify-content: stretch;
   border: 1px solid var(--slate-200);
+  border-radius: 14px;
   background: transparent;
   color: var(--slate-700);
   text-align: left;
 }
 
-.curriculum-row {
-  justify-content: space-between;
-}
-
-.curriculum-row > span,
-.training-name {
+.curriculum-row__icon,
+.training-accuracy__icon {
   display: grid;
-  min-width: 0;
-  gap: 3px;
-  overflow-wrap: anywhere;
+  border-radius: 50%;
+  background: var(--slate-100);
+  color: var(--slate-600);
+  place-items: center;
 }
 
-.curriculum-row small,
-.training-row small {
+.curriculum-row__icon {
+  width: 34px;
+  height: 34px;
+}
+
+.curriculum-row__icon svg,
+.curriculum-row__chevron {
+  width: 17px;
+  height: 17px;
+}
+
+.curriculum-row strong {
+  font-size: 14px;
+}
+
+.curriculum-row__accuracy small {
+  display: block;
   color: var(--slate-500);
-  font-size: 11px;
+  font-size: 9px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
-.curriculum-row b,
-.training-row > b {
-  margin-left: auto;
+.curriculum-row__accuracy {
+  text-align: right;
+}
+
+.curriculum-row__accuracy b {
+  display: block;
+  margin-top: 2px;
+  color: var(--primary-600);
   font-size: 12px;
+}
+
+.curriculum-row__chevron {
+  color: var(--slate-400);
 }
 
 .curriculum-row.active,
 .training-row.active {
-  border-color: color-mix(in oklch, var(--primary-600) 38%, var(--border));
+  border-color: color-mix(in oklch, var(--primary-600) 58%, var(--border));
   background: var(--active-selection-background);
   color: var(--active-selection-foreground);
 }
 
+.curriculum-row.active .curriculum-row__icon,
+.training-row.active .sequence {
+  background: var(--primary-600);
+  color: white;
+}
+
+.curriculum-row.active .curriculum-row__chevron {
+  color: var(--primary-600);
+}
+
+.curriculum-trainings {
+  margin-top: 0;
+}
+
+.curriculum-trainings > h3 {
+  margin: 0 0 12px;
+  color: var(--slate-800);
+  font-size: 14px;
+}
+
+.curriculum-trainings .training-list {
+  padding-left: 16px;
+}
+
 .training-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
-  gap: 10px;
+  position: relative;
+  width: 100%;
+  min-height: 66px;
+  padding: 8px 14px 8px 0;
+  grid-template-columns: 48px minmax(0, 1fr) 34px auto;
+  justify-content: stretch;
+  gap: 12px;
+  border: 1px solid var(--slate-200);
+  border-radius: 12px;
+  background: white;
+  color: var(--slate-700);
+  text-align: left;
 }
 
 .sequence {
   display: grid;
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
+  margin-left: -16px;
   border-radius: 50%;
-  background: var(--slate-100);
+  background: var(--primary-600);
+  color: white;
+  font-size: 12px;
+  place-items: center;
+}
+
+.training-name {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.training-name strong {
+  color: var(--slate-800);
+  font-size: 13px;
+}
+
+.training-name small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--slate-500);
+  font-size: 11px;
+}
+
+.training-name small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.training-accuracy__icon {
+  width: 30px;
+  height: 30px;
+  color: var(--primary-600);
+}
+
+.training-accuracy__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.training-row > b {
+  min-width: 64px;
+  color: var(--primary-600);
+  font-size: 17px;
+  text-align: right;
+}
+
+.curriculum-complete-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklch, var(--primary-600) 18%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--active-selection-background) 48%, white);
   color: var(--slate-600);
   font-size: 11px;
-  place-items: center;
+}
+
+.curriculum-complete-note svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: var(--primary-600);
+}
+
+.curriculum-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.curriculum-pagination span {
+  min-width: 38px;
+  color: var(--slate-500);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .section-state {
@@ -909,41 +1119,20 @@ dd {
 }
 
 @container (max-width: 1050px) {
-  .history-grid {
+  .history-summary-grid {
     grid-template-columns: 1fr;
-  }
-
-  .statistics-card {
-    grid-column: auto;
   }
 }
 @container (max-width: 720px) {
-  .history-grid,
+  .history-summary-grid,
   .detail-metrics,
   .accuracy-comparison dl,
   .result-summary {
     grid-template-columns: 1fr;
   }
 
-  .statistics-card,
-  .detail-card {
-    grid-column: auto;
-  }
-
-  .history-selection-card {
-    grid-template-columns: 1fr;
-  }
-
-  .history-selection-section {
-    padding: 16px;
-  }
-
-  .history-selection-section + .history-selection-section {
-    border-block-start: 1px solid var(--border);
-    border-inline-start: 0;
-  }
-
-  .statistics-card,
+  .curriculum-browser,
+  .curriculum-overview,
   .detail-card {
     padding: 16px;
   }
@@ -959,6 +1148,28 @@ dd {
 
   .period-field {
     width: 100%;
+  }
+
+  .curriculum-row {
+    grid-template-columns: 38px minmax(0, 1fr) 18px;
+  }
+
+  .curriculum-row small {
+    display: none;
+  }
+
+  .training-row {
+    padding-right: 10px;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+  }
+
+  .training-accuracy__icon {
+    display: none;
+  }
+
+  .training-row > b {
+    min-width: 56px;
+    font-size: 14px;
   }
 
   .download-actions :deep([data-slot='button']) {
