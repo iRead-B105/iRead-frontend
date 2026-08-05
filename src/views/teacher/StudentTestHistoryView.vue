@@ -799,19 +799,20 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
 .selection-field label { color: var(--slate-500); font-size: 10px; font-weight: 700; }
 .selection-field select { min-height: 36px; padding: 0 34px 0 12px; border: 1px solid var(--slate-300); border-radius: var(--radius-sm); background: var(--white); color: var(--slate-800); font: inherit; font-size: 12px; }
 .metric-chart-heading { align-items: flex-end; }
-.comparison-chips { display: flex; min-width: 0; align-items: center; gap: 6px; overflow-x: auto; }
+.comparison-chips { display: flex; min-width: 0; min-height: 32px; align-items: center; align-self: start; gap: 6px; padding-block: 1px; overflow-x: auto; overflow-y: hidden; }
 .comparison-chip { display: inline-flex; min-height: 30px; flex: 0 1 auto; align-items: center; gap: 6px; padding: 3px 5px 3px 10px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 12px; font-weight: 700; line-height: 1; white-space: nowrap; }
 .comparison-chip button { width: 20px; height: 20px; flex: 0 0 20px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; }
 .state-card, .metric-chart-section, .question-section { min-width: 0; padding: 20px; border-radius: var(--radius-lg); }
-.metric-chart-section { height: 500px; overflow-y: auto; }
+.metric-chart-section { height: 500px; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.metric-chart-section::-webkit-scrollbar { display: none; }
 .state-card { display: grid; justify-items: start; gap: 10px; }
 .state-card--error { border-color: color-mix(in oklch, var(--danger-600) 25%, var(--border)); }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .section-heading h2 { margin: 0; color: var(--slate-900); font-size: 17px; }
 .section-heading p { margin: 5px 0 0; color: var(--slate-500); font-size: 12px; }
 .metric-chart-section, .question-section { display: grid; gap: 14px; }
-.metric-tabs { display: flex; gap: 6px; overflow-x: auto; }
-.metric-tab { min-height: 38px; padding: 0 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); color: var(--slate-600); font: inherit; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.metric-tabs { display: flex; min-height: 32px; flex: 0 0 32px; align-items: center; gap: 6px; margin-top: 4px; overflow-x: auto; }
+.metric-tab { height: 30px; flex: 0 0 auto; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); color: var(--slate-600); font: inherit; font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; cursor: pointer; }
 .metric-tab.active { border-color: var(--primary-300); background: var(--active-selection-background); color: var(--active-selection-foreground); }
 .status-pill { padding: 6px 9px; border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 11px; font-weight: 700; }
 .warning { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px 8px 14px; border: 1px solid var(--warning-500); border-radius: var(--radius-sm); color: var(--slate-700); font-size: 12px; }
