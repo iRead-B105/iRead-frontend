@@ -51,6 +51,8 @@ interface TestQuestionResultDto {
 interface TestDetailDto extends TestListItemDto {
   readonly areaScores?: readonly TestAreaScoreDto[] | null
   readonly solvingTimeSeconds?: number | null
+  readonly gazeDepartureCount?: number | null
+  readonly pronunciationScore?: number | null
   readonly questions?: readonly TestQuestionResultDto[] | null
 }
 
@@ -142,12 +144,21 @@ function mapDetail(dto: TestDetailDto): TestDetail {
         left.questionNo - right.questionNo,
     )
     .map(mapQuestion)
+  const questionSolvingTime = sumMeasured(
+    questions.map((question) => question.solvingTimeSeconds),
+  )
+  const questionGazeDepartureCount = sumMeasured(
+    questions.map((question) => question.gazeDepartureCount),
+  )
+  const questionPronunciationScore = averageMeasured(
+    questions.map((question) => question.pronunciationScore),
+  )
   return {
     ...mapListItem(dto),
     areaScores: (dto.areaScores ?? []).map(mapAreaScore),
-    solvingTimeSeconds: dto.solvingTimeSeconds ?? null,
-    gazeDepartureCount: sumMeasured(questions.map((question) => question.gazeDepartureCount)),
-    pronunciationScore: averageMeasured(questions.map((question) => question.pronunciationScore)),
+    solvingTimeSeconds: dto.solvingTimeSeconds ?? questionSolvingTime,
+    gazeDepartureCount: dto.gazeDepartureCount ?? questionGazeDepartureCount,
+    pronunciationScore: dto.pronunciationScore ?? questionPronunciationScore,
     questions,
   }
 }

@@ -217,7 +217,8 @@ function isInRange(date: string): boolean {
 <style scoped>
 .report-calendar {
   display: grid;
-  gap: 10px;
+  width: 100%;
+  gap: 12px;
 }
 
 .report-calendar__header {
@@ -238,7 +239,7 @@ function isInRange(date: string): boolean {
 }
 
 .report-calendar__weekdays span {
-  padding: 4px 0;
+  padding: 6px 0;
   color: var(--muted-foreground);
   font-size: 10px;
   text-align: center;
@@ -248,7 +249,7 @@ function isInRange(date: string): boolean {
   position: relative;
   display: grid;
   min-width: 0;
-  min-height: 38px;
+  min-height: 48px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;

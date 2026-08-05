@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { CheckCircle2 } from '@lucide/vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
-// visible은 표시 여부를 부모가 결정하고, message가 없으면 아래 기본 문구를 사용합니다.
 withDefaults(
   defineProps<{
     visible: boolean
@@ -12,79 +10,94 @@ withDefaults(
   }>(),
   {
     message: '변경 사항이 저장되었습니다.',
-    showIcon: true,
+    showIcon: false,
     inline: false,
   },
 )
 </script>
 
 <template>
-  <!-- Transition은 요소가 생기고 사라질 때 아래 enter/leave CSS 애니메이션을 적용합니다. -->
   <Transition name="save-toast">
-    <!-- v-if가 false면 HTML 자체를 제거합니다. role=status는 보조 기술에도 알림을 전달합니다. -->
     <Alert
       v-if="visible"
-      class="save-toast"
+      class="save-toast !w-auto"
       :class="{ 'save-toast--inline': inline }"
       role="status"
       aria-live="polite"
     >
-      <CheckCircle2 v-if="showIcon" class="save-toast__icon" :size="20" aria-hidden="true" />
-      <AlertDescription>{{ message }}</AlertDescription>
+      <AlertDescription class="save-toast__desc">{{ message }}</AlertDescription>
     </Alert>
   </Transition>
 </template>
 
 <style scoped>
 .save-toast {
-  /* position:absolute와 top/right로 부모 영역의 오른쪽 위에 떠 있는 알림을 만듭니다. */
-  position: absolute;
-  z-index: 2;
-  top: 14px;
-  right: 20px;
-  display: flex;
-  min-height: 46px;
+  position: fixed;
+  z-index: 9999;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  width: auto;
+  min-width: 200px;
+  max-width: 360px;
+  min-height: 40px;
   align-items: center;
-  gap: 9px;
-  padding: 11px 16px;
-  border: 1px solid color-mix(in oklch, var(--secondary) 55%, white);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
-  background: color-mix(in oklch, var(--secondary) 18%, white);
-  color: var(--secondary-foreground);
+  justify-content: center;
+  padding: 9px 20px;
+  border: 1px solid #334155;
+  border-radius: 9999px;
+  box-shadow: 0 12px 28px -5px rgba(15, 23, 42, 0.3), 0 4px 6px -2px rgba(15, 23, 42, 0.15);
+  background: #0f172a;
+  color: #ffffff;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.save-toast__icon {
-  color: var(--teal-500);
+.save-toast__desc {
+  margin: 0;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .save-toast--inline {
   position: static;
-  min-height: 36px;
-  padding: 7px 12px;
-  border-radius: 7px;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
   box-shadow: none;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 12px;
+}
+
+.save-toast--inline .save-toast__desc {
+  color: #166534;
   font-size: 12px;
 }
 
 .save-toast-enter-active,
 .save-toast-leave-active {
-  /* 나타남/사라짐 과정의 투명도와 위치 변화를 0.18초 동안 부드럽게 처리합니다. */
   transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+    opacity 240ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 240ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .save-toast-enter-from,
 .save-toast-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translate(-50%, 12px) scale(0.95);
 }
 
 @media print {
-  /* 종이 또는 PDF로 인쇄할 때 순간 알림은 의미가 없으므로 숨깁니다. */
   .save-toast {
     display: none;
   }

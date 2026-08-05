@@ -181,7 +181,7 @@ function refreshEditedPage(): void {
             <input id="story-to" v-model="filterTo" type="date" />
           </div>
           <div class="story-filter-field story-filter-field--template">
-            <Label for="story-template">원본 이야기 종류</Label>
+            <Label for="story-template">이야기 종류</Label>
             <select id="story-template" v-model="filterTemplateId">
               <option value="">전체</option>
               <option
@@ -214,7 +214,6 @@ function refreshEditedPage(): void {
             <div>
               <h2 id="story-selector-title">이야기 선택</h2>
             </div>
-            <strong>{{ totalElements }}개</strong>
           </div>
 
           <AsyncStatePanel
@@ -258,14 +257,11 @@ function refreshEditedPage(): void {
               :tabindex="selectedStoryId === story.storyId ? 0 : -1"
               @click="selectStory(story)"
             >
-              <strong>{{ story.title }}</strong>
-              <small v-if="story.chapterTitle" class="story-title-tab__chapter">{{ story.chapterTitle }}</small>
               <time :datetime="story.activityAt">
                 {{ formatStoryActivityAt(story.activityAt) }}
               </time>
-              <span class="story-title-tab__progress">
-                {{ story.readLineCount }}/{{ story.totalLineCount }}문장
-              </span>
+              <strong>{{ story.title }}</strong>
+              <small v-if="story.chapterTitle" class="story-title-tab__chapter">{{ story.chapterTitle }}</small>
             </button>
           </div>
 
@@ -553,14 +549,10 @@ function refreshEditedPage(): void {
   white-space: nowrap;
 }
 
-.story-title-tab time,
-.story-title-tab__progress {
+.story-title-tab time {
   color: var(--slate-500);
   font-size: 11px;
-}
-
-.story-title-tab__progress {
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .story-pagination {

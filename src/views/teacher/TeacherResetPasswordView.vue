@@ -199,7 +199,7 @@ async function confirmReset(): Promise<void> {
                 required
                 maxlength="50"
                 autocomplete="email"
-                placeholder="example@iread.co.kr"
+                placeholder="이메일 주소 입력"
                 :aria-invalid="errorField === 'email'"
                 :aria-describedby="errorField === 'email' ? 'reset-password-error' : undefined"
               />

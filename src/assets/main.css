@@ -128,13 +128,18 @@ input[type='checkbox'] {
 
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
 [tabindex]:focus-visible {
   /* 키보드로 이동했을 때 현재 초점 위치를 뚜렷하게 보여 주는 접근성 스타일입니다. */
   outline: 3px solid var(--primary-700);
   outline-offset: 3px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--primary-600);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary-600) 16%, transparent);
 }
 
 main,
@@ -197,8 +202,11 @@ th {
 }
 
 .page-stack {
-  /* 페이지 안의 큰 섹션을 세로 Grid로 쌓고 일정한 24px 간격을 줍니다. */
+  /* 페이지 안의 큰 섹션을 세로 Grid로 쌓고 일정한 24px 간격을 주며 최대 1200px 중앙 정렬합니다. */
   display: grid;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
   gap: 24px;
 }
 
