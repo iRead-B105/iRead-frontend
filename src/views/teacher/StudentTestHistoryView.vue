@@ -259,6 +259,10 @@ const metricCharts = computed(() =>
       series: chartScopes.map((scope, index) => {
         const isLine = scope.trackCode === null
         const gradient = scopeGradients[scope.trackCode ?? 'null']
+        const labelOffset: [number, number] = [
+          (index - (chartScopes.length - 1) / 2) * 7,
+          index % 2 === 0 ? 0 : -14,
+        ]
         return {
           name: scope.label,
           type: isLine ? 'line' : 'bar',
@@ -278,8 +282,10 @@ const metricCharts = computed(() =>
           label: {
             show: true,
             position: 'top',
+            distance: 8,
+            offset: labelOffset,
             color: '#334155',
-            fontSize: 11,
+            fontSize: 10,
             fontWeight: 600,
             formatter: (params) => {
               const value = (params as { readonly value?: unknown }).value
@@ -391,6 +397,10 @@ function testDate(test: TestListItem | TestDetail): string {
 
 function testOptionLabel(test: TestListItem): string {
   return `${testDate(test)} · 실력 도전 #${test.testCurriculumId}`
+}
+
+function testChipLabel(test: TestListItem): string {
+  return `${testDate(test)} - 실력 도전`
 }
 
 function seriesLabel(detail: TestDetail, index: number): string {
@@ -603,10 +613,10 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
                 :key="test.testCurriculumId"
                 class="comparison-chip"
               >
-                {{ testOptionLabel(test) }}
+                {{ testChipLabel(test) }}
                 <button
                   type="button"
-                  :aria-label="`${testOptionLabel(test)} 비교 해제`"
+                  :aria-label="`${testChipLabel(test)} 비교 해제`"
                   @click="removeComparison(test.testCurriculumId)"
                 >
                   ×
@@ -789,9 +799,9 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
 .selection-field label { color: var(--slate-500); font-size: 10px; font-weight: 700; }
 .selection-field select { min-height: 36px; padding: 0 34px 0 12px; border: 1px solid var(--slate-300); border-radius: var(--radius-sm); background: var(--white); color: var(--slate-800); font: inherit; font-size: 12px; }
 .metric-chart-heading { align-items: flex-end; }
-.comparison-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.comparison-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 12px; font-weight: 700; }
-.comparison-chip button { width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 17px; }
+.comparison-chips { display: flex; min-width: 0; align-items: center; gap: 6px; overflow-x: auto; }
+.comparison-chip { display: inline-flex; min-height: 30px; flex: 0 1 auto; align-items: center; gap: 6px; padding: 3px 5px 3px 10px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 12px; font-weight: 700; line-height: 1; white-space: nowrap; }
+.comparison-chip button { width: 20px; height: 20px; flex: 0 0 20px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; }
 .state-card, .metric-chart-section, .question-section { min-width: 0; padding: 20px; border-radius: var(--radius-lg); }
 .metric-chart-section { height: 500px; overflow-y: auto; }
 .state-card { display: grid; justify-items: start; gap: 10px; }
