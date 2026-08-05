@@ -37,6 +37,8 @@ export interface LessonMaterialFieldDefinition {
   readonly kind: LessonMaterialFieldKind
   readonly help?: string
   readonly readonly?: boolean
+  /** 읽기 전용 필드의 표시값 변환 (저장 값은 그대로 두고 화면 표기만 바꾼다) */
+  readonly format?: (value: unknown) => string
   readonly options?: readonly {
     readonly value: string
     readonly label: string
@@ -186,12 +188,39 @@ function definition(
   }
 }
 
+// 발음 평가 시 백엔드가 자음을 ㅡ 붙인 소리로 바꿔 평가한다(ㅁ→므).
+// 교사 화면 표기용으로 같은 규칙을 복제한다.
+const CONSONANT_PRONUNCIATION_WITH_EU: Readonly<Record<string, string>> = {
+  ㄱ: '그', ㄲ: '끄', ㄴ: '느', ㄷ: '드', ㄸ: '뜨', ㄹ: '르', ㅁ: '므',
+  ㅂ: '브', ㅃ: '쁘', ㅅ: '스', ㅆ: '쓰', ㅇ: '으', ㅈ: '즈', ㅉ: '쯔',
+  ㅊ: '츠', ㅋ: '크', ㅌ: '트', ㅍ: '프', ㅎ: '흐',
+}
+
+export function consonantPronunciationWithEu(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  return CONSONANT_PRONUNCIATION_WITH_EU[value.trim()] ?? value
+}
+
 const traceFields = [
   text('target', '화면 표시 글자'),
-  text('soundText', 'TTS·발음 평가 텍스트'),
+  text('soundText', 'TTS 안내 문구', '아동에게 들려줄 안내예요. 예: "ㅁ를 따라 써요"'),
   readonlyText('traceAssetKey', '따라쓰기 에셋 키', '획순 에셋은 서버가 관리합니다.'),
 ] as const
-const traceAnswer = [text('target', '허용 발음 텍스트')] as const
+const traceAnswer = [
+  {
+    ...readonlyText('target', '허용 발음 텍스트', '화면 표시 글자에 맞춰 자동으로 반영됩니다.'),
+  },
+] as const
+const consonantTraceAnswer = [
+  {
+    ...readonlyText(
+      'target',
+      '허용 발음 텍스트',
+      '자음은 ㅡ를 붙인 소리로 발음을 평가합니다(예: ㅁ→므). 화면 표시 글자에 맞춰 자동으로 반영됩니다.',
+    ),
+    format: consonantPronunciationWithEu,
+  },
+] as const
 const audioChoiceFields = [
   text('audioText', '들려줄 텍스트'),
   choiceList('choices', '글자 선택지'),
@@ -231,7 +260,7 @@ const DEFINITION_INPUTS: Readonly<Record<LessonQuestionType, DefinitionInput>> =
     category: 'PHONICS',
     editorCode: 'E01',
     contentFields: traceFields,
-    answerFields: traceAnswer,
+    answerFields: consonantTraceAnswer,
   },
   SYLLABLE_TRACE: {
     category: 'PHONICS',
@@ -785,6 +814,31 @@ function addRequired(
   }
 }
 
+// 호환 자모 범위: 자음 U+3131(ㄱ)~U+314E(ㅎ), 모음 U+314F(ㅏ)~U+3163(ㅣ)
+const HANGUL_CONSONANT_JAMO = /^[ㄱ-ㅎ]$/
+const HANGUL_VOWEL_JAMO = /^[ㅏ-ㅣ]$/
+const HANGUL_SYLLABLE = /^[가-힣]$/
+
+function traceTargetIssue(
+  questionType: string,
+  target: string,
+): string | null {
+  if (questionType === 'CONSONANT_TRACE' && !HANGUL_CONSONANT_JAMO.test(target)) {
+    return HANGUL_VOWEL_JAMO.test(target)
+      ? '자음 따라보기에는 모음을 넣을 수 없습니다. 자음(ㄱ~ㅎ) 한 글자를 입력해 주세요.'
+      : '자음(ㄱ~ㅎ) 한 글자를 입력해 주세요.'
+  }
+  if (questionType === 'VOWEL_TRACE' && !HANGUL_VOWEL_JAMO.test(target)) {
+    return HANGUL_CONSONANT_JAMO.test(target)
+      ? '모음 따라보기에는 자음을 넣을 수 없습니다. 모음(ㅏ~ㅣ) 한 글자를 입력해 주세요.'
+      : '모음(ㅏ~ㅣ) 한 글자를 입력해 주세요.'
+  }
+  if (questionType === 'SYLLABLE_TRACE' && !HANGUL_SYLLABLE.test(target)) {
+    return '글자 따라보기에는 완성된 글자(가~힣) 한 글자를 입력해 주세요.'
+  }
+  return null
+}
+
 function validateChoice(
   material: EditableLessonMaterialItem,
   issues: LessonMaterialValidationIssue[],
@@ -924,18 +978,20 @@ export function validateLessonMaterialItem(
   }
 
   switch (definition.editorCode) {
-    case 'E01':
-      if (
-        nonBlank(material.content.target) &&
-        nonBlank(material.content.soundText) &&
-        material.content.target !== material.content.soundText
-      ) {
-        issues.push({
-          path: 'content.soundText',
-          message: '화면 표시 글자와 TTS·발음 평가 텍스트가 일치하지 않습니다.',
-        })
+    case 'E01': {
+      // soundText는 TTS 안내 문구라 표시 글자와 달라도 된다(예: "ㅁ를 따라 써요").
+      // 자음 따라보기에 모음, 모음 따라보기에 자음이 들어가는 실수를 저장 전에 막는다
+      if (nonBlank(material.content.target)) {
+        const targetIssue = traceTargetIssue(
+          material.questionType,
+          material.content.target.trim(),
+        )
+        if (targetIssue) {
+          issues.push({ path: 'content.target', message: targetIssue })
+        }
       }
       break
+    }
     case 'E02':
     case 'E03':
     case 'E04':

@@ -198,7 +198,11 @@ function updateJson(
         <label :for="fieldId(section, field.key)">{{ field.label }}</label>
 
         <div v-if="field.readonly" :id="fieldId(section, field.key)" class="readonly-field">
-          <span>{{ textValue(valueFor(section, field.key)) || '서버 값 없음' }}</span>
+          <span>{{
+            (field.format
+              ? field.format(valueFor(section, field.key))
+              : textValue(valueFor(section, field.key))) || '서버 값 없음'
+          }}</span>
           <small>{{
             field.help ?? 'Backend 또는 미디어 정책이 관리하는 읽기 전용 값입니다.'
           }}</small>

@@ -100,6 +100,62 @@ describe('lesson material editor registry', () => {
 })
 
 describe('lesson material type validation', () => {
+  it('자음 따라보기에 모음을 넣으면 저장 전 검증에서 막는다', () => {
+    const current = material('CONSONANT_TRACE')
+    const invalid = {
+      ...current,
+      content: { ...current.content, target: 'ㅏ', soundText: 'ㅏ' },
+      answer: { target: 'ㅏ' },
+    }
+
+    const issues = validateLessonMaterialItem(invalid)
+    expect(issues.map((issue) => issue.path)).toContain('content.target')
+    expect(issues.some((issue) => issue.message.includes('모음을 넣을 수 없습니다'))).toBe(true)
+  })
+
+  it('모음 따라보기에 자음을 넣으면 저장 전 검증에서 막는다', () => {
+    const current = material('VOWEL_TRACE')
+    const invalid = {
+      ...current,
+      content: { ...current.content, target: 'ㄱ', soundText: 'ㄱ' },
+      answer: { target: 'ㄱ' },
+    }
+
+    const issues = validateLessonMaterialItem(invalid)
+    expect(issues.map((issue) => issue.path)).toContain('content.target')
+    expect(issues.some((issue) => issue.message.includes('자음을 넣을 수 없습니다'))).toBe(true)
+  })
+
+  it('글자 따라보기에 자모나 두 글자를 넣으면 저장 전 검증에서 막는다', () => {
+    const current = material('SYLLABLE_TRACE')
+    for (const target of ['ㄱ', 'ㅏ', '가나']) {
+      const invalid = {
+        ...current,
+        content: { ...current.content, target, soundText: target },
+        answer: { target },
+      }
+      expect(validateLessonMaterialItem(invalid).map((issue) => issue.path)).toContain(
+        'content.target',
+      )
+    }
+  })
+
+  it('따라보기 유형에 맞는 글자는 검증을 통과한다', () => {
+    for (const [questionType, target] of [
+      ['CONSONANT_TRACE', 'ㄲ'],
+      ['VOWEL_TRACE', 'ㅟ'],
+      ['SYLLABLE_TRACE', '값'],
+    ] as const) {
+      const current = material(questionType)
+      const valid = {
+        ...current,
+        content: { ...current.content, target, soundText: target },
+        answer: { target },
+      }
+      expect(validateLessonMaterialItem(valid)).toEqual([])
+    }
+  })
+
   it('선택지 삭제 후 범위를 벗어난 정답과 중복 선택지를 찾는다', () => {
     const current = material('CONSONANT_SOUND_CHOICE')
     const invalid = {
