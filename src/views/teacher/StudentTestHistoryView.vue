@@ -3,10 +3,10 @@ import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import type { EChartsOption } from 'echarts'
+import { CalendarDaysIcon, ChevronRightIcon } from '@lucide/vue'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import ChartPanel from '@/components/common/ChartPanel.vue'
 import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
-import HistoryToolbar from '@/components/teacher/HistoryToolbar.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -65,6 +65,28 @@ function parseStudentId(value: unknown): number | null {
 const studentId = computed(() => parseStudentId(route.params.id))
 const invalidStudentId = computed(() => studentId.value === null)
 const selectedMetricKey = ref<TestMetricKey>('overallScore')
+const TEST_PAGE_SIZE = 5
+const testPage = ref(1)
+const testPageCount = computed(() => Math.max(1, Math.ceil(tests.value.length / TEST_PAGE_SIZE)))
+const paginatedTests = computed(() => {
+  const start = (testPage.value - 1) * TEST_PAGE_SIZE
+  return tests.value.slice(start, start + TEST_PAGE_SIZE)
+})
+const testGroups = computed(() => {
+  const groups = new Map<string, { label: string; items: TestListItem[] }>()
+
+  paginatedTests.value.forEach((test) => {
+    const date = test.completedAt ?? test.createdAt
+    const match = /^(\d{4})-(\d{2})/.exec(date)
+    const key = match ? `${match[1]}-${match[2]}` : 'unknown'
+    const label = match ? `${match[1]}년 ${Number(match[2])}월` : '날짜 미확인'
+    const group = groups.get(key) ?? { label, items: [] }
+    group.items.push(test)
+    groups.set(key, group)
+  })
+
+  return [...groups.entries()].map(([key, group]) => ({ key, ...group }))
+})
 const displayedDetails = computed<TestDetail[]>(() => {
   if (!comparisonResult.value) return []
   return [comparisonResult.value.currentTest, ...comparisonResult.value.comparisonTests]
@@ -116,8 +138,8 @@ const metricDefinitions: readonly MetricDefinition[] = [
   { key: 'pronunciationScore', label: '발음 점수', unit: '점' },
 ]
 const chartScopes = [
-  { trackCode: null, label: '전체', color: chartColors.blue },
   { trackCode: 'phonological', label: '음운 인식', color: chartColors.green },
+  { trackCode: null, label: '전체', color: chartColors.blue },
   { trackCode: 'short-text', label: '짧은 글', color: chartColors.amber },
   { trackCode: 'fluency', label: '유창성', color: chartColors.red },
 ] as const
@@ -165,6 +187,13 @@ function formatChartMetric(value: unknown, metric: MetricDefinition): string {
     : `${numericValue}${metric.unit}`
 }
 
+const scopeGradients = {
+  null: { start: '#3b82f6', end: '#1d4ed8' },
+  phonological: { start: '#22c55e', end: '#15803d' },
+  'short-text': { start: '#f59e0b', end: '#b45309' },
+  fluency: { start: '#ef4444', end: '#b91c1c' },
+} as const
+
 const metricCharts = computed(() =>
   metricDefinitions.map((metric) => {
     const average = averageTestMetric(trendDetails.value, metric.key)
@@ -176,56 +205,106 @@ const metricCharts = computed(() =>
       animationEasingUpdate: 'cubicOut',
       tooltip: {
         trigger: 'axis',
+        backgroundColor: '#ffffff',
+        borderColor: '#e2e8f0',
+        borderWidth: 1,
+        borderRadius: 10,
+        padding: [10, 14],
+        extraCssText: 'box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.15);',
+        textStyle: { color: '#0f172a', fontSize: 12 },
         valueFormatter: (value) => formatChartMetric(value, metric),
       },
       legend: {
         top: 0,
+        icon: 'circle',
+        itemGap: 16,
+        textStyle: { color: '#475569', fontSize: 12, fontWeight: 500 },
         data: chartScopes.map((scope) => scope.label),
       },
-      grid: { left: 52, right: 18, top: 48, bottom: 48 },
+      grid: { left: 56, right: 24, top: 56, bottom: 44, containLabel: true },
       xAxis: {
         type: 'category',
         data: displayedDetails.value.map((detail, index) => seriesLabel(detail, index)),
-        axisLabel: { interval: 0, fontSize: 11 },
+        axisLine: { lineStyle: { color: '#cbd5e1' } },
+        axisLabel: { interval: 0, fontSize: 12, color: '#334155', fontWeight: 600 },
       },
       yAxis: {
         type: 'value',
         min: 0,
         max: metric.key === 'overallScore' || metric.key === 'pronunciationScore' ? 100 : undefined,
-        axisLabel: { formatter: `{value}${metric.unit}` },
+        splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
+        axisLabel: { color: '#64748b', fontSize: 11, formatter: `{value}${metric.unit}` },
       },
-      series: chartScopes.map((scope, index) => ({
-        name: scope.label,
-        type: 'bar',
-        barMinHeight: 2,
-        data: displayedDetails.value.map((detail) =>
-          chartMetricValue(scopedMetricValue(detail, metric.key, scope.trackCode), metric.key),
-        ),
-        label: {
-          show: true,
-          position: 'top',
-          formatter: (params) => {
-            const value = (params as { readonly value?: unknown }).value
-            return value === null || value === undefined ? '' : formatChartMetric(value, metric)
+      series: chartScopes.map((scope, index) => {
+        const isLine = scope.trackCode === null
+        const gradient = scopeGradients[scope.trackCode ?? 'null']
+        return {
+          name: scope.label,
+          type: isLine ? 'line' : 'bar',
+          smooth: isLine,
+          symbol: 'circle',
+          symbolSize: isLine ? 8 : undefined,
+          barMinHeight: isLine ? undefined : 2,
+          barMaxWidth: isLine ? undefined : 28,
+          barGap: '20%',
+          data: displayedDetails.value.map((detail) =>
+            chartMetricValue(scopedMetricValue(detail, metric.key, scope.trackCode), metric.key),
+          ),
+          emphasis: {
+            focus: 'series',
+            itemStyle: { shadowBlur: 10, shadowColor: 'rgba(15, 23, 42, 0.18)' },
           },
-        },
-        itemStyle: {
-          color: scope.color,
-          borderRadius: [5, 5, 0, 0],
-        },
-        markLine:
-          index !== 0 || chartAverage === null
-            ? undefined
+          label: {
+            show: true,
+            position: 'top',
+            color: '#334155',
+            fontSize: 11,
+            fontWeight: 600,
+            formatter: (params) => {
+              const value = (params as { readonly value?: unknown }).value
+              return value === null || value === undefined ? '' : formatChartMetric(value, metric)
+            },
+          },
+          lineStyle: isLine ? { color: scope.color, width: 3 } : undefined,
+          itemStyle: isLine
+            ? { color: scope.color }
             : {
-                symbol: 'none',
-                label: {
-                  formatter: formatChartMetric(chartAverage, metric),
-                  position: 'insideEndTop',
+                color: {
+                  type: 'linear',
+                  x: 0,
+                  y: 0,
+                  x2: 0,
+                  y2: 1,
+                  colorStops: [
+                    { offset: 0, color: gradient.start },
+                    { offset: 1, color: gradient.end },
+                  ],
                 },
-                lineStyle: { color: chartColors.ink, width: 1.5, type: 'dashed' },
-                data: [{ name: '전체 평균', yAxis: chartAverage }],
+                borderRadius: [6, 6, 0, 0],
               },
-      })),
+          markLine:
+            index !== 0 || chartAverage === null
+              ? undefined
+              : {
+                  symbol: 'none',
+                  label: {
+                    formatter: (params: { readonly value?: unknown }) =>
+                      `전체 평균: ${formatChartMetric(params.value, metric)}`,
+                    position: 'insideEndTop',
+                    backgroundColor: '#f8fafc',
+                    borderColor: '#cbd5e1',
+                    borderWidth: 1,
+                    borderRadius: 6,
+                    padding: [4, 8],
+                    color: '#334155',
+                    fontSize: 11,
+                    fontWeight: 700,
+                  },
+                  lineStyle: { color: '#64748b', width: 1.5, type: 'dashed' },
+                  data: [{ name: '전체 평균', yAxis: chartAverage }],
+                },
+        }
+      }),
     }
     return { ...metric, average, option }
   }),
@@ -233,6 +312,9 @@ const metricCharts = computed(() =>
 const selectedMetricChart = computed(
   () => metricCharts.value.find((metric) => metric.key === selectedMetricKey.value) ?? null,
 )
+watch(testPageCount, (pageCount) => {
+  if (testPage.value > pageCount) testPage.value = pageCount
+})
 
 watch(
   studentId,
@@ -259,10 +341,15 @@ watch(
   { immediate: true },
 )
 
-async function changeCurrentTest(event: Event): Promise<void> {
+async function selectCurrentTest(test: TestListItem): Promise<void> {
   if (studentId.value === null) return
-  const id = (event.target as HTMLSelectElement).value
-  if (id) await testStore.selectCurrentTest(studentId.value, id)
+  await testStore.selectCurrentTest(studentId.value, test.testCurriculumId)
+}
+
+async function onCurrentTestSelectChange(event: Event): Promise<void> {
+  const select = event.target as HTMLSelectElement
+  if (studentId.value === null || !select.value) return
+  await testStore.selectCurrentTest(studentId.value, select.value)
 }
 
 async function addComparison(event: Event): Promise<void> {
@@ -373,85 +460,127 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
           @retry="testStore.retryList()"
         />
 
-        <Card class="toolbar-card">
-          <HistoryToolbar>
-            <div class="selection-field">
-              <Label for="current-test">기준 검사</Label>
-              <select
-                id="current-test"
-                :value="currentTestCurriculumId ?? ''"
-                :disabled="comparisonStatus === 'loading'"
-                @change="changeCurrentTest"
-              >
-                <option
-                  v-for="test in tests"
-                  :key="test.testCurriculumId"
-                  :value="test.testCurriculumId"
-                >
-                  {{ testOptionLabel(test) }}
-                </option>
-              </select>
-            </div>
-            <div class="selection-field">
-              <Label for="comparison-test">비교 검사 추가</Label>
-              <select
-                id="comparison-test"
-                value=""
-                :disabled="!canAddComparison"
-                @change="addComparison"
-              >
-                <option value="" disabled>
-                  {{
-                    comparisonTestCurriculumIds.length >= 2
-                      ? '최대 두 건을 선택했습니다'
-                      : '검사를 선택해 주세요'
-                  }}
-                </option>
-                <option
-                  v-for="test in availableComparisonTests"
-                  :key="test.testCurriculumId"
-                  :value="test.testCurriculumId"
-                >
-                  {{ testOptionLabel(test) }}
-                </option>
-              </select>
-            </div>
-          </HistoryToolbar>
-        </Card>
-
-        <div v-if="comparisonTestCurriculumIds.length" class="comparison-chips">
-          <span
-            v-for="test in testStore.comparisonTests"
-            :key="test.testCurriculumId"
-            class="comparison-chip"
-          >
-            {{ testOptionLabel(test) }}
-            <button
-              type="button"
-              :aria-label="`${testOptionLabel(test)} 비교 해제`"
-              @click="removeComparison(test.testCurriculumId)"
+        <div class="test-comparison-workspace">
+          <Card class="test-browser">
+            <header class="section-heading"><h2>완료한 검사</h2></header>
+            <select
+              id="current-test"
+              class="sr-only"
+              :value="currentTestCurriculumId ?? ''"
+              @change="onCurrentTestSelectChange"
             >
-              ×
-            </button>
-          </span>
-        </div>
+              <option v-for="test in tests" :key="test.testCurriculumId" :value="test.testCurriculumId">
+                {{ test.testCurriculumId }}
+              </option>
+            </select>
+            <div class="test-groups">
+              <section v-for="group in testGroups" :key="group.key" class="test-group">
+                <h3>{{ group.label }}</h3>
+                <div class="test-list">
+                  <Button
+                    v-for="test in group.items"
+                    :key="test.testCurriculumId"
+                    variant="ghost"
+                    type="button"
+                    class="test-row"
+                    :class="{ active: test.testCurriculumId === currentTestCurriculumId }"
+                    :aria-pressed="test.testCurriculumId === currentTestCurriculumId"
+                    :disabled="comparisonStatus === 'loading'"
+                    @click="selectCurrentTest(test)"
+                  >
+                    <span class="test-row__icon"><CalendarDaysIcon aria-hidden="true" /></span>
+                    <strong>{{ testDate(test) }}</strong>
+                    <span class="test-row__score">
+                      <small>전체 점수</small>
+                      <b>{{ formatMetric(test.overallScore, '점') }}</b>
+                    </span>
+                    <ChevronRightIcon class="test-row__chevron" aria-hidden="true" />
+                  </Button>
+                </div>
+              </section>
+            </div>
+            <nav class="test-pagination" aria-label="완료 검사 페이지">
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                :disabled="testPage === 1"
+                @click="testPage -= 1"
+              >
+                이전
+              </Button>
+              <span>{{ testPage }} / {{ testPageCount }}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                :disabled="testPage === testPageCount"
+                @click="testPage += 1"
+              >
+                다음
+              </Button>
+            </nav>
+          </Card>
 
-        <Card v-if="comparisonStatus === 'loading'" class="state-card" aria-live="polite">
-          <strong>선택한 검사 결과를 불러오는 중입니다.</strong>
-        </Card>
-        <Card v-else-if="comparisonStatus === 'error'" class="state-card state-card--error">
-          <strong>{{ comparisonError }}</strong>
-          <Button type="button" @click="testStore.retryComparison()">다시 시도</Button>
-        </Card>
-
-        <template v-else-if="comparisonStatus === 'success' && comparisonResult">
-          <Card class="metric-chart-section">
-            <header class="section-heading">
+          <Card v-if="comparisonStatus === 'loading'" class="state-card" aria-live="polite">
+            <strong>선택한 검사 결과를 불러오는 중입니다.</strong>
+          </Card>
+          <Card v-else-if="comparisonStatus === 'error'" class="state-card state-card--error">
+            <strong>{{ comparisonError }}</strong>
+            <Button type="button" @click="testStore.retryComparison()">다시 시도</Button>
+          </Card>
+          <Card
+            v-else-if="comparisonStatus === 'success' && comparisonResult"
+            class="metric-chart-section overflow-visible"
+          >
+            <header class="section-heading metric-chart-heading">
               <div>
                 <h2>검사 지표 비교</h2>
+                <small v-if="currentDetail" class="test-heading-subtitle">{{ testOptionLabel(currentDetail) }} · 영역별 점수</small>
               </div>
-              <span v-if="trendStatus === 'loading'" class="status-pill">전체 평균 계산 중</span>
+              <div class="selection-field">
+                <Label for="comparison-test">비교 검사 추가</Label>
+                <select
+                  id="comparison-test"
+                  value=""
+                  :disabled="!canAddComparison"
+                  @change="addComparison"
+                >
+                  <option value="" disabled>
+                    {{
+                      comparisonTestCurriculumIds.length >= 2
+                        ? '최대 두 건을 선택했습니다'
+                        : '검사를 선택해 주세요'
+                    }}
+                  </option>
+                  <option
+                    v-for="test in availableComparisonTests"
+                    :key="test.testCurriculumId"
+                    :value="test.testCurriculumId"
+                  >
+                    {{ testOptionLabel(test) }}
+                  </option>
+                </select>
+              </div>
             </header>
+            <div v-if="comparisonTestCurriculumIds.length" class="comparison-chips">
+              <span class="status-pill">비교 {{ comparisonTestCurriculumIds.length }}/2건</span>
+              <span
+                v-for="test in testStore.comparisonTests"
+                :key="test.testCurriculumId"
+                class="comparison-chip"
+              >
+                {{ testOptionLabel(test) }}
+                <button
+                  type="button"
+                  :aria-label="`${testOptionLabel(test)} 비교 해제`"
+                  @click="removeComparison(test.testCurriculumId)"
+                >
+                  ×
+                </button>
+              </span>
+            </div>
+            <span v-if="trendStatus === 'loading'" class="status-pill">전체 평균 계산 중</span>
             <div v-if="trendError" class="warning" role="status">
               <span>{{ trendError }}</span>
               <Button variant="outline" type="button" @click="testStore.retryTrend()">
@@ -474,6 +603,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
             </div>
             <ChartPanel
               v-if="selectedMetricChart"
+              data-test="metric-chart"
               :option="selectedMetricChart.option"
               animated
               height="320px"
@@ -485,22 +615,36 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
                     selectedMetricChart,
                   )}`"
             />
-          </Card>
-
-          <Card class="area-section">
-            <header class="section-heading">
-              <div><h2>영역별 점수</h2></div>
-              <strong>{{ formatMetric(currentDetail?.overallScore ?? null, '점') }}</strong>
-            </header>
-            <div class="area-grid">
-              <article v-for="area in currentDetail?.areaScores ?? []" :key="area.trackCode">
-                <span>{{ area.title }}</span>
-                <strong>{{ formatMetric(area.score, '점') }}</strong>
-                <small>{{ area.completedQuestions }}/{{ area.totalQuestions }}문항 완료</small>
+            <div class="displayed-details-cards">
+              <article
+                v-for="(detail, index) in displayedDetails"
+                :key="detail.testCurriculumId"
+                class="detail-card"
+              >
+                <header class="detail-card__header">
+                  <span class="detail-card__tag">{{ index === 0 ? '기준' : `비교 ${index}` }}</span>
+                  <strong>{{ testDate(detail) }}</strong>
+                </header>
+                <div class="detail-card__metrics">
+                  <div
+                    v-for="metric in metricDefinitions"
+                    :key="metric.key"
+                    class="detail-card__metric"
+                    :data-metric-key="metric.key"
+                    :class="{ highlighted: selectedMetricKey === metric.key }"
+                  >
+                    <span class="detail-card__label">{{ metric.label }}</span>
+                    <strong class="detail-card__val">
+                      {{ formatChartMetric(chartMetricValue(testMetricValue(detail, metric.key), metric.key), metric) }}
+                    </strong>
+                  </div>
+                </div>
               </article>
             </div>
           </Card>
+        </div>
 
+        <template v-if="comparisonStatus === 'success' && comparisonResult">
           <Card class="question-section">
             <header class="section-heading">
               <div>
@@ -614,34 +758,47 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
 
 <style scoped>
 .test-history { gap: 20px; container-type: inline-size; }
-.toolbar-card { padding: 0; border: 0; background: transparent; box-shadow: none; }
-.selection-field { display: grid; min-width: 240px; gap: 6px; }
-.selection-field label { color: var(--slate-600); font-size: 12px; font-weight: 700; }
-.selection-field select { min-height: 40px; padding: 0 34px 0 12px; border: 1px solid var(--slate-300); border-radius: var(--radius-sm); background: var(--white); color: var(--slate-800); font: inherit; font-size: 13px; }
+.test-comparison-workspace { display: grid; align-items: stretch; gap: 20px; grid-template-columns: minmax(270px, 0.72fr) minmax(560px, 1.7fr); }
+.test-browser { display: flex; min-width: 0; flex-direction: column; gap: 0; padding: 20px; border-radius: var(--radius-lg); }
+.test-groups { display: grid; gap: 20px; margin-top: 16px; }
+.test-group h3 { margin: 0 0 10px; color: var(--slate-600); font-size: 13px; font-weight: 700; }
+.test-list { display: grid; gap: 8px; }
+.test-row { display: grid; width: 100%; min-height: 64px; padding: 8px 12px; grid-template-columns: 38px minmax(90px, 1fr) auto 18px; justify-content: stretch; border: 1px solid var(--slate-200); border-radius: 14px; background: transparent; color: var(--slate-700); text-align: left; }
+.test-row__icon { display: grid; width: 34px; height: 34px; border-radius: 50%; background: var(--slate-100); color: var(--slate-600); place-items: center; }
+.test-row__icon svg, .test-row__chevron { width: 17px; height: 17px; }
+.test-row strong { font-size: 14px; }
+.test-row__score { text-align: right; }
+.test-row__score small { display: block; color: var(--slate-500); font-size: 9px; line-height: 1.2; white-space: nowrap; }
+.test-row__score b { display: block; margin-top: 2px; color: var(--primary-600); font-size: 12px; }
+.test-row__chevron { color: var(--slate-400); }
+.test-row.active { border-color: color-mix(in oklch, var(--primary-600) 58%, var(--border)); background: var(--active-selection-background); color: var(--active-selection-foreground); }
+.test-row.active .test-row__icon { background: var(--primary-600); color: white; }
+.test-row.active .test-row__chevron { color: var(--primary-600); }
+.test-pagination { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: auto; padding-top: 16px; }
+.test-pagination span { min-width: 38px; color: var(--slate-500); font-size: 11px; font-weight: 700; text-align: center; }
+.selection-field { display: grid; min-width: 240px; gap: 4px; }
+.selection-field label { color: var(--slate-500); font-size: 10px; font-weight: 700; }
+.selection-field select { min-height: 36px; padding: 0 34px 0 12px; border: 1px solid var(--slate-300); border-radius: var(--radius-sm); background: var(--white); color: var(--slate-800); font: inherit; font-size: 12px; }
+.metric-chart-heading { align-items: flex-end; }
 .comparison-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .comparison-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 12px; font-weight: 700; }
 .comparison-chip button { width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 17px; }
-.state-card, .metric-chart-section, .area-section, .question-section { padding: 20px; border-radius: var(--radius-lg); }
+.state-card, .metric-chart-section, .question-section { min-width: 0; padding: 20px; border-radius: var(--radius-lg); }
 .state-card { display: grid; justify-items: start; gap: 10px; }
 .state-card--error { border-color: color-mix(in oklch, var(--danger-600) 25%, var(--border)); }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .section-heading h2 { margin: 0; color: var(--slate-900); font-size: 17px; }
 .section-heading p { margin: 5px 0 0; color: var(--slate-500); font-size: 12px; }
-.metric-chart-section, .area-section, .question-section { display: grid; gap: 14px; }
+.metric-chart-section, .question-section { display: grid; gap: 14px; }
 .metric-tabs { display: flex; gap: 6px; overflow-x: auto; }
 .metric-tab { min-height: 38px; padding: 0 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); color: var(--slate-600); font: inherit; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .metric-tab.active { border-color: var(--primary-300); background: var(--active-selection-background); color: var(--active-selection-foreground); }
 .status-pill { padding: 6px 9px; border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 11px; font-weight: 700; }
 .warning { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px 8px 14px; border: 1px solid var(--warning-500); border-radius: var(--radius-sm); color: var(--slate-700); font-size: 12px; }
-.area-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-.area-grid article { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: color-mix(in oklch, var(--muted) 28%, transparent); }
 .question-list dl { display: grid; gap: 8px; margin: 0; }
 .question-list dl div { padding: 8px; border-radius: var(--radius-sm); }
 dt { color: var(--slate-500); font-size: 11px; }
 dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
-.area-grid article { display: grid; gap: 6px; }
-.area-grid article strong { font-size: 22px; }
-.area-grid article small { color: var(--slate-500); }
 .question-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .question-list li { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); }
 .question-list li.is-gaze-selected { border-color: var(--primary-300); background: var(--primary-50); }
@@ -659,12 +816,19 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
 .is-incorrect { color: var(--danger-600); font-weight: 800; }
 .is-ungraded { color: var(--slate-500); font-weight: 800; }
 .inline-empty { padding: 24px; border: 1px dashed var(--slate-300); border-radius: var(--radius-sm); color: var(--slate-500); text-align: center; }
+@container (max-width: 1050px) {
+  .test-comparison-workspace { grid-template-columns: 1fr; }
+}
 @media (max-width: 760px) {
   .selection-field { min-width: 100%; }
   .section-heading { align-items: flex-start; flex-direction: column; }
   .question-list dl { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 480px) {
+  .test-browser, .metric-chart-section, .question-section { padding: 16px; }
+  .test-row { grid-template-columns: 38px minmax(0, 1fr) auto 18px; }
+  .test-row__score small { display: none; }
+  .metric-chart-heading { align-items: stretch; }
   .question-list dl { grid-template-columns: 1fr; }
 }
 </style>
