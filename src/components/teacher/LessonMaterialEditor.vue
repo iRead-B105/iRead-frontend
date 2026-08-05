@@ -57,8 +57,10 @@ const props = withDefaults(
     lessonMaterialError: string | null
     lessonMaterialSaveError: string | null
     materialGenerationError: string | null
+    // 검사 추천 커리큘럼은 교안을 수정하면 재검수 전까지 아동에게 숨겨진다.
+    reviewRequiredAfterSave?: boolean
   }>(),
-  { open: true },
+  { open: true, reviewRequiredAfterSave: false },
 )
 
 const emit = defineEmits<{
@@ -689,7 +691,9 @@ function confirmReloadLatest(): void {
               class="save-success"
               role="status"
             >
-              교안이 저장되었습니다.
+              {{ reviewRequiredAfterSave
+                ? '교안이 저장되었습니다. 수정된 커리큘럼은 재검수가 필요합니다 — 커리큘럼 관리에서 "최종 검수 완료"를 눌러야 아동에게 표시됩니다.'
+                : '교안이 저장되었습니다.' }}
             </p>
             <p v-else>
               {{

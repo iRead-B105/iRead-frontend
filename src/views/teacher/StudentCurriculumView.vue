@@ -1013,6 +1013,7 @@ function deletionMessage(): string {
       :lesson-material-error="lessonMaterialError"
       :lesson-material-save-error="lessonMaterialSaveError"
       :material-generation-error="materialGenerationError"
+      :review-required-after-save="savedCurriculum?.sourceTestCurriculumId != null"
       @close="closeMaterialEditor"
       @regenerate="regenerateMaterial"
       @retry="retryResources"
