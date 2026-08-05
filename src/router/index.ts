@@ -28,8 +28,13 @@ const router = createRouter({
   // Vite의 배포 기본 경로를 기준으로 브라우저의 앞/뒤 이동 기록을 관리합니다.
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    // 사이트 첫 주소에서는 교수자 로그인을 먼저 안내합니다.
-    { path: '/', redirect: '/login' },
+    // 사이트 첫 주소에서는 아이리드 서비스와 앱을 소개합니다.
+    {
+      path: '/',
+      name: 'landing',
+      component: () => import('@/views/LandingView.vue'),
+      meta: { title: '아이마다 다른 읽기의 속도' },
+    },
     {
       path: '/login',
       name: 'teacher-login',
@@ -129,8 +134,8 @@ const router = createRouter({
         },
       ],
     },
-    // 위 규칙에 없는 주소는 로그인 화면으로 보냅니다.
-    { path: '/:pathMatch(.*)*', redirect: '/login' },
+    // 위 규칙에 없는 주소는 서비스 소개 화면으로 보냅니다.
+    { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 

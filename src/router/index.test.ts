@@ -6,7 +6,7 @@ import type { TeacherProfile } from '@/features/teacher/auth'
 import { useSessionStore } from '@/stores/session'
 
 const routes: RouteRecordRaw[] = [
-  { path: '/', redirect: '/login' },
+  { path: '/', name: 'landing', component: { template: '<div />' } },
   { path: '/login', name: 'teacher-login', component: { template: '<div />' } },
   { path: '/signup', name: 'teacher-signup', component: { template: '<div />' } },
   {
@@ -63,6 +63,17 @@ describe('authentication route guard', () => {
     await router.push('/login')
 
     expect(router.currentRoute.value.name).toBe('teacher-login')
+    expect(session.restoreSession).not.toHaveBeenCalled()
+  })
+
+  it('랜딩 페이지에서는 세션 복원을 요청하지 않는다', async () => {
+    const router = createTestRouter()
+    const session = useSessionStore()
+    session.restoreSession = vi.fn().mockResolvedValue(false)
+
+    await router.push('/')
+
+    expect(router.currentRoute.value.name).toBe('landing')
     expect(session.restoreSession).not.toHaveBeenCalled()
   })
 
@@ -154,5 +165,14 @@ describe('teacher story history route', () => {
     expect(resolved.name).toBe('student-story-history')
     expect(resolved.params.id).toBe('7')
     expect(resolved.meta.title).toBe('이야기 이력')
+  })
+})
+
+describe('landing route', () => {
+  it('사이트 첫 주소를 서비스 소개 화면으로 연결한다', () => {
+    const resolved = router.resolve('/')
+
+    expect(resolved.name).toBe('landing')
+    expect(resolved.meta.title).toBe('아이마다 다른 읽기의 속도')
   })
 })
