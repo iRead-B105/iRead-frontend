@@ -234,7 +234,12 @@ function updateJson(
           :value="textValue(valueFor(section, field.key))"
           @change="update(section, field, ($event.target as HTMLSelectElement).value)"
         >
-          <option v-for="option in field.options" :key="option.value" :value="option.value">
+          <option
+            v-for="option in field.options"
+            :key="option.value"
+            :value="option.value"
+            :disabled="option.disabled"
+          >
             {{ option.label }}
           </option>
         </select>
@@ -242,8 +247,6 @@ function updateJson(
         <ImageWordCandidatePicker
           v-else-if="isImageWordField(field)"
           :choices="listValue(valueFor(section, field.key))"
-          :disabled="disabled"
-          @update="update(section, field, $event)"
         />
 
         <div

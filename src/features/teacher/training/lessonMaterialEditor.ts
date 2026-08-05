@@ -40,6 +40,7 @@ export interface LessonMaterialFieldDefinition {
   readonly options?: readonly {
     readonly value: string
     readonly label: string
+    readonly disabled?: boolean
   }[]
 }
 
@@ -279,8 +280,13 @@ const DEFINITION_INPUTS: Readonly<Record<LessonQuestionType, DefinitionInput>> =
         kind: 'select',
         options: [
           { value: 'WORD', label: '낱말' },
-          { value: 'IMAGE_WORD', label: '이미지–낱말 후보' },
+          {
+            value: 'IMAGE_WORD',
+            label: '이미지–낱말 후보 (준비 중)',
+            disabled: true,
+          },
         ],
+        help: '이미지–낱말 후보 API 연동 준비 중으로, 새로 선택할 수 없습니다.',
       },
       choiceList(
         'choices',

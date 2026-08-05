@@ -170,4 +170,30 @@ describe('lesson material type validation', () => {
       message: '이미지–낱말 선택지는 이미지 식별자·URL·낱말 후보 묶음으로 선택해 주세요.',
     })
   })
+
+  it('IMAGE_WORD 선택지 방식은 API 연동 전까지 새로 선택할 수 없다', () => {
+    const definition = getLessonMaterialEditorDefinition('SAME_INITIAL_WORD_CHOICE')
+    const choiceTypeField = definition?.contentFields.find((field) => field.key === 'choiceType')
+    const options = choiceTypeField?.options ?? []
+
+    expect(options.find((option) => option.value === 'WORD')?.disabled).toBeFalsy()
+    expect(options.find((option) => option.value === 'IMAGE_WORD')?.disabled).toBe(true)
+  })
+
+  it('이미 저장된 유효한 IMAGE_WORD 자료는 검증을 통과해 값이 보존된다', () => {
+    const current = material('SAME_INITIAL_WORD_CHOICE')
+    const saved = {
+      ...current,
+      content: {
+        ...current.content,
+        choiceType: 'IMAGE_WORD',
+        choices: [
+          { imageId: 1, imageUrl: '/watermelon.png', text: '수박' },
+          { imageId: 2, imageUrl: '/train.png', text: '기차' },
+        ],
+      },
+    }
+
+    expect(validateLessonMaterialItem(saved)).toEqual([])
+  })
 })
