@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ChevronDownIcon, LoaderCircleIcon } from '@lucide/vue'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   formatStudentDateTime,
@@ -49,7 +48,6 @@ const emit = defineEmits<{
   select: [event: StudentLearningEvent]
   retryList: []
   retryDetail: [event: StudentLearningEvent]
-  addToMemo: [event: StudentLearningEventDetail]
   openHistory: [eventType: Exclude<StudentLearningEventType, 'GAZE'>]
 }>()
 
@@ -64,25 +62,8 @@ function isPendingEvent(event: StudentLearningEvent): boolean {
 function eventResultLabel(event: StudentLearningEvent): string {
   if (event.accuracy !== null) return `${event.accuracy}%`
   if (event.eventType === 'STORY') return '이야기 학습'
-  if (event.eventType === 'GAZE') return '시선 분석'
+  if (event.eventType === 'GAZE') return `주의 신호 ${event.attentionReasons.length}개`
   return '점수 미측정'
-}
-
-function detailResultLabel(event: StudentLearningEventDetail): string {
-  if (event.accuracy !== null) return `${event.accuracy}%`
-  if (event.eventType === 'STORY') return '이야기 학습'
-  if (event.eventType === 'GAZE') return '시선 분석'
-  return '미측정'
-}
-
-function detailResultTerm(eventType: StudentLearningEventType): string {
-  if (eventType === 'TEST') return '검사 점수'
-  if (eventType === 'TRAINING') return '읽기 정확도'
-  return '기록 유형'
-}
-
-function detailStatusLabel(eventType: StudentLearningEventType): string {
-  return eventType === 'STORY' ? '읽기 기록 완료' : '시선 분석 기록'
 }
 
 function hasRecommendation(event: StudentLearningEventDetail): boolean {
@@ -97,6 +78,14 @@ function hasRecommendation(event: StudentLearningEventDetail): boolean {
 function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>): string {
   return `${studentLearningEventTypeLabels[eventType]} 상세 이력 보기`
 }
+
+function recommendationAmountLabel(event: StudentLearningEventDetail): string {
+  const amounts = [
+    event.recommendedMinutes === null ? null : `${event.recommendedMinutes}분`,
+    event.recommendedRepeatCount === null ? null : `${event.recommendedRepeatCount}회 반복`,
+  ].filter((value): value is string => value !== null)
+  return amounts.length > 0 ? amounts.join(' · ') : '권장량 없음'
+}
 </script>
 
 <template>
@@ -104,7 +93,6 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
     <header class="learning-events__heading">
       <div>
         <h2 id="recent-learning-title">최근 학습 기록</h2>
-        <p>기록을 선택하면 학습 결과와 확인할 내용, 다음 학습 제안을 한 번에 볼 수 있습니다.</p>
       </div>
       <Button
         v-if="listStatus === 'error'"
@@ -151,7 +139,6 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
           </span>
           <span class="learning-event__result">
             <span>
-              <Badge v-if="event.attentionRequired" variant="secondary">확인 필요</Badge>
               <b>{{ eventResultLabel(event) }}</b>
             </span>
             <LoaderCircleIcon
@@ -194,37 +181,6 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
             class="event-detail"
             aria-live="polite"
           >
-            <header class="event-detail__heading">
-              <div>
-                <span>선택 기록 상세</span>
-                <h3>{{ studentLearningEventTypeLabels[detail.eventType] }}</h3>
-              </div>
-              <Badge variant="secondary">{{ detailResultLabel(detail) }}</Badge>
-            </header>
-
-            <dl class="event-summary-grid">
-              <div>
-                <dt>학습 종류</dt>
-                <dd>{{ studentLearningEventTypeLabels[detail.eventType] }}</dd>
-              </div>
-              <div>
-                <dt>기록 시각</dt>
-                <dd>{{ formatStudentDateTime(detail.occurredAt) }}</dd>
-              </div>
-              <div>
-                <dt>{{ detailResultTerm(detail.eventType) }}</dt>
-                <dd>{{ detailResultLabel(detail) }}</dd>
-              </div>
-              <div v-if="detail.eventType === 'TRAINING' || detail.eventType === 'TEST'">
-                <dt>재시도</dt>
-                <dd>{{ detail.retryCount }}회</dd>
-              </div>
-              <div v-else>
-                <dt>기록 상태</dt>
-                <dd>{{ detailStatusLabel(detail.eventType) }}</dd>
-              </div>
-            </dl>
-
             <div class="event-insight-grid">
               <section class="event-insight">
                 <span>학습 결과</span>
@@ -254,22 +210,28 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
                 <span>다음 학습 제안</span>
                 <strong>{{ detail.recommendedCurriculumUnitName ?? '추천 단원 정보 없음' }}</strong>
                 <p>{{ detail.recommendationReason ?? '추천 이유가 제공되지 않았습니다.' }}</p>
+                <dl>
+                  <div>
+                    <dt>권장 학습량</dt>
+                    <dd>{{ recommendationAmountLabel(detail) }}</dd>
+                  </div>
+                  <div>
+                    <dt>추천 단원</dt>
+                    <dd>{{ detail.recommendedCurriculumUnitName ?? '정보 없음' }}</dd>
+                  </div>
+                </dl>
               </section>
               <p v-else class="recommendation-empty">다음 학습으로 제안된 훈련이 없습니다.</p>
             </div>
 
-            <div class="event-detail__actions">
+            <div v-if="detail.eventType !== 'GAZE'" class="event-detail__actions">
               <Button
-                v-if="detail.eventType !== 'GAZE'"
                 variant="outline"
                 size="sm"
                 type="button"
                 @click="emit('openHistory', detail.eventType)"
               >
                 {{ historyButtonLabel(detail.eventType) }}
-              </Button>
-              <Button variant="outline" size="sm" type="button" @click="emit('addToMemo', detail)">
-                학습 기록에 추가
               </Button>
             </div>
           </article>
@@ -319,17 +281,15 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
 .learning-event-item {
   display: grid;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--card);
-  transition:
-    border-color 140ms ease,
-    box-shadow 140ms ease;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-md, 10px);
+  background: var(--card, #ffffff);
+  transition: all 0.18s ease;
 }
 
 .learning-event-item.is-expanded {
-  border-color: color-mix(in oklch, var(--primary-600) 32%, var(--border));
-  box-shadow: 0 5px 16px rgb(15 23 42 / 5%);
+  border-color: #93c5fd;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.08);
 }
 
 .learning-event {
@@ -338,18 +298,22 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
   min-height: 66px;
   align-items: center;
   gap: 14px;
-  padding: 11px 12px;
+  padding: 12px 14px;
   border: 0;
   border-radius: 0;
-  background: var(--card);
+  background: var(--card, #ffffff);
   color: inherit;
   grid-template-columns: minmax(0, 1fr) auto;
   text-align: left;
+  transition: all 0.18s ease;
 }
 
-.learning-event:hover,
+.learning-event:hover {
+  background: var(--slate-50, #f8fafc);
+}
+
 .learning-event.is-selected {
-  background: var(--interactive-hover-background);
+  background: #f0f6ff;
 }
 
 .learning-event__copy,
@@ -434,7 +398,7 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
   min-height: 0;
   align-items: start;
   border-top: 1px solid var(--border);
-  background: var(--slate-50);
+  background: #ffffff;
 }
 
 .event-detail-shell .detail-placeholder {
@@ -447,32 +411,7 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
   display: grid;
   gap: 16px;
   padding: 18px;
-  background: var(--slate-50);
-}
-
-.event-detail__heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-.event-detail__heading div {
-  display: grid;
-  gap: 3px;
-}
-
-.event-detail__heading span {
-  color: var(--slate-500);
-  font-size: 11px;
-}
-
-.event-detail__heading h3 {
-  margin: 0;
-  color: var(--slate-900);
-  font-size: 15px;
+  background: #ffffff;
 }
 
 .recommendation > span {
@@ -480,33 +419,38 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
   font-size: 11px;
 }
 
-.event-summary-grid,
 .recommendation dl {
   display: grid;
   margin: 0;
   gap: 10px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.event-summary-grid > div,
+.recommendation dl {
+  margin-top: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .recommendation dl > div {
   display: grid;
-  gap: 4px;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--card, #ffffff);
 }
 
-.event-summary-grid dt,
 .recommendation dt {
   color: var(--slate-500);
   font-size: 11px;
   font-weight: 600;
 }
 
-.event-summary-grid dd,
 .recommendation dd {
   margin: 0;
-  color: var(--slate-700);
-  font-size: 12px;
-  line-height: 1.55;
+  color: var(--slate-900);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
@@ -548,29 +492,51 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
 .attention-reasons {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px 14px;
-  margin: 0;
-  padding-left: 16px;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.problem-segments li {
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: #fff7ed;
+  border: 1px solid #ffedd5;
+  color: #c2410c;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.attention-reasons li {
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: #fef2f2;
+  border: 1px solid #fee2e2;
+  color: #b91c1c;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .recommendation {
   display: grid;
-  gap: 8px;
-  padding: 14px;
-  border: 1px solid color-mix(in oklch, var(--primary-600) 22%, var(--border));
-  border-radius: var(--radius-md);
-  background: var(--card);
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid #c7d2fe;
+  border-radius: var(--radius-md, 8px);
+  background: linear-gradient(135deg, #f5f3ff 0%, #eff6ff 100%);
 }
 
 .recommendation strong {
-  color: var(--slate-900);
+  color: #1e1b4b;
   font-size: 14px;
+  font-weight: 700;
 }
 
 .recommendation p,
 .recommendation-empty {
   margin: 0;
-  color: var(--slate-600);
+  color: #475569;
   font-size: 12px;
   line-height: 1.55;
 }
@@ -620,7 +586,6 @@ function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>
     justify-items: start;
   }
 
-  .event-summary-grid,
   .recommendation dl,
   .event-insight-grid {
     grid-template-columns: 1fr;

@@ -106,21 +106,69 @@ const questionContractWarning = computed(() => {
 interface MetricDefinition {
   readonly key: TestMetricKey
   readonly label: string
-  readonly unit: '점' | '초' | '회'
+  readonly unit: '점' | '분' | '회'
 }
 
 const metricDefinitions: readonly MetricDefinition[] = [
   { key: 'overallScore', label: '전체 점수', unit: '점' },
-  { key: 'solvingTimeSeconds', label: '문제 풀이 시간', unit: '초' },
+  { key: 'solvingTimeSeconds', label: '문제 풀이 시간', unit: '분' },
   { key: 'gazeDepartureCount', label: '시선 이탈 횟수', unit: '회' },
   { key: 'pronunciationScore', label: '발음 점수', unit: '점' },
 ]
-const chartPalette = [chartColors.blue, chartColors.green, chartColors.amber] as const
+const chartScopes = [
+  { trackCode: null, label: '전체', color: chartColors.blue },
+  { trackCode: 'phonological', label: '음운 인식', color: chartColors.green },
+  { trackCode: 'short-text', label: '짧은 글', color: chartColors.amber },
+  { trackCode: 'fluency', label: '유창성', color: chartColors.red },
+] as const
+
+function measuredValues(values: readonly (number | null)[]): number[] {
+  return values.filter((value): value is number => value !== null && Number.isFinite(value))
+}
+
+function scopedMetricValue(
+  detail: TestDetail,
+  metric: TestMetricKey,
+  trackCode: string | null,
+): number | null {
+  if (trackCode === null) return testMetricValue(detail, metric)
+  if (metric === 'overallScore') {
+    return detail.areaScores.find((area) => area.trackCode === trackCode)?.score ?? null
+  }
+
+  const questions = detail.questions.filter((question) => question.trackCode === trackCode)
+  if (metric === 'solvingTimeSeconds') {
+    const values = measuredValues(questions.map((question) => question.solvingTimeSeconds))
+    return values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0)
+  }
+  if (metric === 'gazeDepartureCount') {
+    const values = measuredValues(questions.map((question) => question.gazeDepartureCount))
+    return values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0)
+  }
+
+  const values = measuredValues(questions.map((question) => question.pronunciationScore))
+  if (values.length === 0) return null
+  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10
+}
+
+function chartMetricValue(value: number | null, metric: TestMetricKey): number | null {
+  if (value === null || metric !== 'solvingTimeSeconds') return value
+  return Math.round((value / 60) * 100) / 100
+}
+
+function formatChartMetric(value: unknown, metric: MetricDefinition): string {
+  if (value === null || value === undefined) return '-'
+  const numericValue = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numericValue)) return '-'
+  return metric.key === 'solvingTimeSeconds'
+    ? formatTestSeconds(Math.round(numericValue * 60))
+    : `${numericValue}${metric.unit}`
+}
 
 const metricCharts = computed(() =>
   metricDefinitions.map((metric) => {
-    const values = displayedDetails.value.map((detail) => testMetricValue(detail, metric.key))
     const average = averageTestMetric(trendDetails.value, metric.key)
+    const chartAverage = chartMetricValue(average.value, metric.key)
     const option: EChartsOption = {
       animationDuration: 520,
       animationDurationUpdate: 240,
@@ -128,9 +176,13 @@ const metricCharts = computed(() =>
       animationEasingUpdate: 'cubicOut',
       tooltip: {
         trigger: 'axis',
-        valueFormatter: (value) => (value == null ? '-' : `${value}${metric.unit}`),
+        valueFormatter: (value) => formatChartMetric(value, metric),
       },
-      grid: { left: 44, right: 18, top: 36, bottom: 48 },
+      legend: {
+        top: 0,
+        data: chartScopes.map((scope) => scope.label),
+      },
+      grid: { left: 52, right: 18, top: 48, bottom: 48 },
       xAxis: {
         type: 'category',
         data: displayedDetails.value.map((detail, index) => seriesLabel(detail, index)),
@@ -142,45 +194,38 @@ const metricCharts = computed(() =>
         max: metric.key === 'overallScore' || metric.key === 'pronunciationScore' ? 100 : undefined,
         axisLabel: { formatter: `{value}${metric.unit}` },
       },
-      series: [
-        {
-          name: metric.label,
-          type: 'bar',
-          data: values.map((value, index) => ({
-            value,
-            itemStyle: {
-              color: chartPalette[index] ?? chartColors.muted,
-              borderRadius: [5, 5, 0, 0],
-            },
-          })),
-          markLine:
-            average.value === null
-              ? undefined
-              : {
-                  symbol: 'none',
-                  label: { formatter: `${average.value}${metric.unit}`, position: 'insideEndTop' },
-                  lineStyle: { color: chartColors.amber, width: 2, type: 'dashed' },
-                  data: [{ name: '전체 평균', yAxis: average.value }],
-                },
-        },
-        {
-          name: `${metric.label} 연결선`,
-          type: 'line',
-          data: values,
-          smooth: 0.2,
-          symbol: 'circle',
-          symbolSize: 8,
-          silent: true,
-          tooltip: { show: false },
-          lineStyle: { color: chartColors.ink, width: 3 },
-          itemStyle: {
-            color: chartColors.white,
-            borderColor: chartColors.ink,
-            borderWidth: 2,
+      series: chartScopes.map((scope, index) => ({
+        name: scope.label,
+        type: 'bar',
+        barMinHeight: 2,
+        data: displayedDetails.value.map((detail) =>
+          chartMetricValue(scopedMetricValue(detail, metric.key, scope.trackCode), metric.key),
+        ),
+        label: {
+          show: true,
+          position: 'top',
+          formatter: (params) => {
+            const value = (params as { readonly value?: unknown }).value
+            return value === null || value === undefined ? '' : formatChartMetric(value, metric)
           },
-          z: 3,
         },
-      ],
+        itemStyle: {
+          color: scope.color,
+          borderRadius: [5, 5, 0, 0],
+        },
+        markLine:
+          index !== 0 || chartAverage === null
+            ? undefined
+            : {
+                symbol: 'none',
+                label: {
+                  formatter: formatChartMetric(chartAverage, metric),
+                  position: 'insideEndTop',
+                },
+                lineStyle: { color: chartColors.ink, width: 1.5, type: 'dashed' },
+                data: [{ name: '전체 평균', yAxis: chartAverage }],
+              },
+      })),
     }
     return { ...metric, average, option }
   }),
@@ -371,9 +416,6 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
                 </option>
               </select>
             </div>
-            <template #status>
-              완료 검사 {{ tests.length }}건 · 비교 {{ comparisonTestCurriculumIds.length }}/2건
-            </template>
           </HistoryToolbar>
         </Card>
 
@@ -434,56 +476,15 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
               v-if="selectedMetricChart"
               :option="selectedMetricChart.option"
               animated
-              height="280px"
+              height="320px"
               :aria-label="`${selectedMetricChart.label} 검사 커리큘럼 비교 차트`"
-              :summary="`${selectedMetricChart.label} 전체 평균 ${selectedMetricChart.average.value ?? '측정값 없음'}`"
+              :summary="`${selectedMetricChart.label} 전체 평균 ${selectedMetricChart.average.value === null
+                ? '측정값 없음'
+                : formatChartMetric(
+                    chartMetricValue(selectedMetricChart.average.value, selectedMetricChart.key),
+                    selectedMetricChart,
+                  )}`"
             />
-          </Card>
-
-          <Card class="metric-section">
-            <header class="section-heading"><h2>검사별 주요 기록</h2></header>
-            <div class="detail-cards">
-              <article
-                v-for="(detail, index) in displayedDetails"
-                :key="detail.testCurriculumId"
-                class="detail-card"
-              >
-                <header>
-                  <span>{{ index === 0 ? '기준 검사' : `비교 검사 ${index}` }}</span>
-                  <strong>{{ testDate(detail) }}</strong>
-                </header>
-                <dl>
-                  <div
-                    data-metric-key="overallScore"
-                    :class="{ highlighted: selectedMetricKey === 'overallScore' }"
-                  >
-                    <dt>전체 점수</dt>
-                    <dd>{{ formatMetric(detail.overallScore, '점') }}</dd>
-                  </div>
-                  <div
-                    data-metric-key="solvingTimeSeconds"
-                    :class="{ highlighted: selectedMetricKey === 'solvingTimeSeconds' }"
-                  >
-                    <dt>문제 풀이 시간</dt>
-                    <dd>{{ formatTestSeconds(detail.solvingTimeSeconds) }}</dd>
-                  </div>
-                  <div
-                    data-metric-key="gazeDepartureCount"
-                    :class="{ highlighted: selectedMetricKey === 'gazeDepartureCount' }"
-                  >
-                    <dt>시선 이탈 횟수</dt>
-                    <dd>{{ formatMetric(detail.gazeDepartureCount, '회') }}</dd>
-                  </div>
-                  <div
-                    data-metric-key="pronunciationScore"
-                    :class="{ highlighted: selectedMetricKey === 'pronunciationScore' }"
-                  >
-                    <dt>발음 점수</dt>
-                    <dd>{{ formatMetric(detail.pronunciationScore, '점') }}</dd>
-                  </div>
-                </dl>
-              </article>
-            </div>
           </Card>
 
           <Card class="area-section">
@@ -620,25 +621,22 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
 .comparison-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .comparison-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 12px; font-weight: 700; }
 .comparison-chip button { width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 17px; }
-.state-card, .metric-chart-section, .metric-section, .area-section, .question-section { padding: 20px; border-radius: var(--radius-lg); }
+.state-card, .metric-chart-section, .area-section, .question-section { padding: 20px; border-radius: var(--radius-lg); }
 .state-card { display: grid; justify-items: start; gap: 10px; }
 .state-card--error { border-color: color-mix(in oklch, var(--danger-600) 25%, var(--border)); }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .section-heading h2 { margin: 0; color: var(--slate-900); font-size: 17px; }
 .section-heading p { margin: 5px 0 0; color: var(--slate-500); font-size: 12px; }
-.metric-chart-section, .metric-section, .area-section, .question-section { display: grid; gap: 14px; }
+.metric-chart-section, .area-section, .question-section { display: grid; gap: 14px; }
 .metric-tabs { display: flex; gap: 6px; overflow-x: auto; }
 .metric-tab { min-height: 38px; padding: 0 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); color: var(--slate-600); font: inherit; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .metric-tab.active { border-color: var(--primary-300); background: var(--active-selection-background); color: var(--active-selection-foreground); }
 .status-pill { padding: 6px 9px; border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 11px; font-weight: 700; }
 .warning { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px 8px 14px; border: 1px solid var(--warning-500); border-radius: var(--radius-sm); color: var(--slate-700); font-size: 12px; }
-.detail-cards, .area-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-.detail-card, .area-grid article { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: color-mix(in oklch, var(--muted) 28%, transparent); }
-.detail-card header { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 12px; font-size: 12px; }
-.detail-card dl, .question-list dl { display: grid; gap: 8px; margin: 0; }
-.detail-card dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.detail-card dl div, .question-list dl div { padding: 8px; border-radius: var(--radius-sm); }
-.detail-card dl div.highlighted { background: var(--active-selection-background); }
+.area-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.area-grid article { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: color-mix(in oklch, var(--muted) 28%, transparent); }
+.question-list dl { display: grid; gap: 8px; margin: 0; }
+.question-list dl div { padding: 8px; border-radius: var(--radius-sm); }
 dt { color: var(--slate-500); font-size: 11px; }
 dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
 .area-grid article { display: grid; gap: 6px; }
@@ -667,6 +665,6 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
   .question-list dl { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 480px) {
-  .detail-card dl, .question-list dl { grid-template-columns: 1fr; }
+  .question-list dl { grid-template-columns: 1fr; }
 }
 </style>

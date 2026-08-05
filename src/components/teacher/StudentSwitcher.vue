@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Search, Settings2, Check } from '@lucide/vue'
+import { Search, Settings2, Check, Users } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { StudentNavigationItem } from '@/features/teacher/student'
@@ -9,7 +9,7 @@ import { useStudentStore } from '@/stores/students'
 import { resolveImageUrl } from '@/lib/image'
 
 const props = defineProps<{
-  currentStudent: StudentNavigationItem
+  currentStudent: StudentNavigationItem | null
 }>()
 
 const emit = defineEmits<{
@@ -37,8 +37,10 @@ const remainingStudents = computed(() =>
 )
 
 watch(
-  () => props.currentStudent.studentId,
-  () => studentStore.rememberStudent(props.currentStudent),
+  () => props.currentStudent?.studentId,
+  () => {
+    if (props.currentStudent) studentStore.rememberStudent(props.currentStudent)
+  },
   { immediate: true },
 )
 watch(keyword, (value) => {
@@ -80,7 +82,6 @@ function toggle(): void {
 }
 
 function selectStudent(student: StudentNavigationItem): void {
-  if (student.studentId === props.currentStudent.studentId) return
   studentStore.rememberStudent(student)
   close(false)
   emit('select', student)
@@ -147,20 +148,23 @@ onBeforeUnmount(() => {
       :aria-expanded="isOpen"
       aria-haspopup="dialog"
       aria-controls="student-switcher-popover"
-      aria-label="학습자 변경"
+      :aria-label="currentStudent ? '학습자 변경' : '아동 목록에서 학습자 선택'"
       @click="toggle"
     >
       <img
-        v-if="currentStudent.imageUrl"
+        v-if="currentStudent?.imageUrl"
         :src="resolveImageUrl(currentStudent.imageUrl) || ''"
         :alt="currentStudent.name"
       />
-      <span v-else class="student-avatar" aria-hidden="true">
+      <span v-else-if="currentStudent" class="student-avatar" aria-hidden="true">
         {{ studentInitial(currentStudent.name) }}
       </span>
+      <span v-else class="student-avatar is-placeholder" aria-hidden="true">
+        <Users />
+      </span>
       <span class="student-switcher__identity">
-        <strong>{{ currentStudent.name }}</strong>
-        <small>{{ currentStudent.school }}</small>
+        <strong>{{ currentStudent?.name ?? '아동을 선택해 주세요' }}</strong>
+        <small>{{ currentStudent?.school ?? '목록에서 학습자 선택' }}</small>
       </span>
       <span aria-hidden="true" class="trigger-icon">⌄</span>
     </Button>
@@ -178,7 +182,7 @@ onBeforeUnmount(() => {
       @keydown="handlePopoverKeydown"
     >
       <header>
-        <strong id="student-switcher-title">학습자 변경</strong>
+        <strong id="student-switcher-title">{{ currentStudent ? '학습자 변경' : '학습자 선택' }}</strong>
         <Badge variant="secondary" class="student-count-badge" aria-live="polite">
           {{ navigationItems.length }}명 표시 중
         </Badge>
@@ -206,8 +210,8 @@ onBeforeUnmount(() => {
           class="student-option"
           variant="ghost"
           type="button"
-          :data-selected="student.studentId === currentStudent.studentId"
-          :aria-current="student.studentId === currentStudent.studentId ? 'true' : undefined"
+          :data-selected="student.studentId === currentStudent?.studentId"
+          :aria-current="student.studentId === currentStudent?.studentId ? 'true' : undefined"
           @click="selectStudent(student)"
         >
           <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
@@ -218,7 +222,7 @@ onBeforeUnmount(() => {
             ><strong>{{ student.name }}</strong
             ><small>{{ student.school ?? '학교 미입력' }}</small></span
           >
-          <span v-if="student.studentId === currentStudent.studentId" class="selected-indicator" aria-label="현재 학습자">
+          <span v-if="student.studentId === currentStudent?.studentId" class="selected-indicator" aria-label="현재 학습자">
             <Check class="w-4 h-4" />
           </span>
         </Button>
@@ -230,8 +234,8 @@ onBeforeUnmount(() => {
           class="student-option"
           variant="ghost"
           type="button"
-          :data-selected="student.studentId === currentStudent.studentId"
-          :aria-current="student.studentId === currentStudent.studentId ? 'true' : undefined"
+          :data-selected="student.studentId === currentStudent?.studentId"
+          :aria-current="student.studentId === currentStudent?.studentId ? 'true' : undefined"
           @click="selectStudent(student)"
         >
           <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
@@ -242,7 +246,7 @@ onBeforeUnmount(() => {
             ><strong>{{ student.name }}</strong
             ><small>{{ student.school ?? '학교 미입력' }}</small></span
           >
-          <span v-if="student.studentId === currentStudent.studentId" class="selected-indicator" aria-label="현재 학습자">
+          <span v-if="student.studentId === currentStudent?.studentId" class="selected-indicator" aria-label="현재 학습자">
             <Check class="w-4 h-4" />
           </span>
         </Button>
@@ -295,12 +299,12 @@ onBeforeUnmount(() => {
 .student-switcher__trigger {
   display: grid;
   width: 100%;
-  min-height: 58px;
+  min-height: 60px;
   align-items: center;
-  gap: 9px;
-  padding: 8px 9px;
+  gap: 10px;
+  padding: 8px 10px;
   border: 1px solid var(--slate-200);
-  grid-template-columns: 38px minmax(0, 1fr) 16px;
+  grid-template-columns: 42px minmax(0, 1fr) 16px;
 }
 .student-switcher__trigger:hover {
   background: var(--interactive-hover-background);
@@ -312,8 +316,8 @@ onBeforeUnmount(() => {
 }
 .student-switcher__trigger img,
 .student-avatar {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
 }
 .student-switcher__trigger img,
@@ -324,9 +328,17 @@ onBeforeUnmount(() => {
   display: grid;
   background: var(--primary-50);
   color: var(--primary-700);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
   place-items: center;
+}
+.student-avatar.is-placeholder {
+  background: var(--slate-100);
+  color: var(--slate-500);
+}
+.student-avatar.is-placeholder svg {
+  width: 19px;
+  height: 19px;
 }
 .student-switcher__identity,
 .student-option > span:nth-child(2) {
@@ -457,7 +469,7 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: var(--radius-lg);
   background: transparent;
-  grid-template-columns: 36px minmax(0, 1fr) 20px;
+  grid-template-columns: 40px minmax(0, 1fr) 20px;
   transition: all 0.2s ease;
 }
 .student-option[data-selected='true'] {
@@ -476,8 +488,8 @@ onBeforeUnmount(() => {
   background: var(--primary-100);
 }
 .student-option img {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }

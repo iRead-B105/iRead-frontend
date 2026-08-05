@@ -304,6 +304,7 @@ export function formatTrainingQuestionContent(value: TrainingQuestionValue): str
     'audioText',
     'targetAudioText',
     'title',
+    'tokens',
   ])
   if (primary) parts.push(primary)
 
@@ -395,6 +396,13 @@ export function trainingQuestionTypeLabel(question: TrainingHistoryQuestionResul
   const responseLabel = question.responseType
     ? (responseTypeLabels[question.responseType] ?? question.responseType.replaceAll('_', ' '))
     : '응답 유형 없음'
-  const questionType = question.questionType?.replaceAll('_', ' ') ?? '문항 유형 없음'
+  const questionTypeLabels: Readonly<Record<string, string>> = {
+    SENTENCE_READING: '문장 읽기',
+    WORD_READING: '낱말 읽기',
+    FREE_RESPONSE: '자유 응답',
+  }
+  const questionType = question.questionType
+    ? (questionTypeLabels[question.questionType] ?? question.questionType.replaceAll('_', ' '))
+    : '문항 유형 없음'
   return `${questionType} · ${responseLabel}`
 }

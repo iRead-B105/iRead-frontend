@@ -16,11 +16,17 @@ const props = withDefaults(
     status: GazeAnalysisRequestStatus
     error?: string | null
     compact?: boolean
+    showStatus?: boolean
+    showAggregateChart?: boolean
+    showDisclaimer?: boolean
   }>(),
   {
     title: '시선 분석',
     error: null,
     compact: false,
+    showStatus: true,
+    showAggregateChart: true,
+    showDisclaimer: true,
   },
 )
 
@@ -51,6 +57,7 @@ const metrics = computed(() => {
   ]
 })
 
+
 interface AggregateBar {
   readonly label: string
   readonly value: number | null
@@ -79,36 +86,19 @@ const aggregateGroups = computed(() => {
     {
       title: '체류 시간',
       items: aggregateBars([
-        {
-          label: '총 체류',
-          value: analysis.totalVisitedDurationMs,
-          displayValue: formatGazeDuration(analysis.totalVisitedDurationMs),
-        },
-        {
-          label: '평균 체류',
-          value: analysis.avgVisitedDurationMs,
-          displayValue: formatGazeAverage(analysis.avgVisitedDurationMs),
-        },
+        { label: '총 체류', value: analysis.totalVisitedDurationMs, displayValue: formatGazeDuration(analysis.totalVisitedDurationMs) },
+        { label: '평균 체류', value: analysis.avgVisitedDurationMs, displayValue: formatGazeAverage(analysis.avgVisitedDurationMs) },
       ]),
     },
     {
       title: '체류 행동',
       items: aggregateBars([
-        {
-          label: '총 체류',
-          value: analysis.totalVisitedCount,
-          displayValue: formatGazeCount(analysis.totalVisitedCount),
-        },
-        {
-          label: '되돌아보기',
-          value: analysis.reverseReadCount,
-          displayValue: formatGazeCount(analysis.reverseReadCount),
-        },
+        { label: '총 체류', value: analysis.totalVisitedCount, displayValue: formatGazeCount(analysis.totalVisitedCount) },
+        { label: '되돌아보기', value: analysis.reverseReadCount, displayValue: formatGazeCount(analysis.reverseReadCount) },
       ]),
     },
   ]
 })
-
 const replay = computed(() =>
   props.state?.status === 'AVAILABLE' ? props.state.analysis.replay ?? null : null,
 )
@@ -210,7 +200,10 @@ const movementSteps = computed(() => {
         <span>시선트래킹</span>
         <h2>{{ title }}</h2>
       </div>
-      <strong v-if="status === 'success' && state?.status === 'AVAILABLE'" class="analysis-status">
+      <strong
+        v-if="showStatus && status === 'success' && state?.status === 'AVAILABLE'"
+        class="analysis-status"
+      >
         분석 완료
       </strong>
     </header>
@@ -239,8 +232,7 @@ const movementSteps = computed(() => {
           <dd>{{ metric.value }}</dd>
         </div>
       </dl>
-
-      <section class="aggregate-chart" aria-label="실제 시선 집계 지표 비교 그래프">
+      <section v-if="showAggregateChart" class="aggregate-chart" aria-label="실제 시선 집계 지표 비교 그래프">
         <h3>집계 지표 비교</h3>
         <div class="aggregate-chart__groups">
           <article v-for="group in aggregateGroups" :key="group.title">
@@ -257,7 +249,6 @@ const movementSteps = computed(() => {
           </article>
         </div>
       </section>
-
       <section v-if="heatmapWords.length > 0" class="gaze-replay" aria-label="단어별 시선 히트맵">
         <header>
           <h3>단어별 시선 머무름</h3>
@@ -293,8 +284,7 @@ const movementSteps = computed(() => {
     </div>
 
     <p v-else class="analysis-state">표시할 시선 분석 결과가 없습니다.</p>
-
-    <p class="gaze-disclaimer">
+    <p v-if="showDisclaimer" class="gaze-disclaimer">
       시선 지표는 학습 과정 참고용이며 의학적 진단 결과가 아닙니다.
     </p>
   </section>

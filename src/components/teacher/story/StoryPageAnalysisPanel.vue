@@ -107,6 +107,10 @@ const regressionWords = computed(() => pageWordMetrics.value.filter((word) => wo
 const totalSkippedWordCount = computed(() =>
   props.analysis?.wordMetrics.filter((word) => word.skipped).length ?? 0,
 )
+const analysisUnavailable = computed(() =>
+  props.storyStatus === 'NOT_COLLECTED'
+  || (props.requestStatus === 'success' && props.analysis === null),
+)
 const replayDataLabel = computed(() =>
   pageMovementSteps.value.length > 0
     ? `${pageMovementSteps.value.length}개 판정 이벤트`
@@ -204,14 +208,7 @@ onBeforeUnmount(stopReplay)
 <template>
   <aside class="story-page-analysis" aria-label="페이지 시선 분석">
     <AsyncStatePanel
-      v-if="storyStatus === 'NOT_COLLECTED'"
-      kind="empty"
-      title="시선 분석 데이터가 없어요"
-      message="이 이야기에서 수집된 시선 기록이 없습니다."
-      compact
-    />
-    <AsyncStatePanel
-      v-else-if="storyStatus === 'RUNNING'"
+      v-if="storyStatus === 'RUNNING'"
       kind="loading"
       title="시선 분석을 준비하고 있어요"
       message="분석이 완료되면 페이지별 결과를 확인할 수 있습니다."
@@ -249,19 +246,16 @@ onBeforeUnmount(stopReplay)
       compact
       @retry="$emit('retry')"
     />
-    <AsyncStatePanel
-      v-else-if="requestStatus === 'success' && analysis === null"
-      kind="empty"
-      title="분석 결과가 아직 준비되지 않았어요"
-      message="최신 상태를 확인한 뒤 다시 시도해 주세요."
-      compact
-    />
-    <template v-else-if="analysis">
-      <div v-if="metric === null" class="story-page-analysis__notice" role="status">
+    <template v-else>
+      <div v-if="analysisUnavailable" class="story-page-analysis__notice is-empty" role="status">
+        <strong>시선 분석 데이터가 없어요</strong>
+        <p>이 이야기에서 수집된 시선 기록이 없습니다.</p>
+      </div>
+      <div v-if="analysis && metric === null" class="story-page-analysis__notice" role="status">
         <strong>이 페이지의 집계 기록이 없어요</strong>
         <p>다른 페이지의 기존 분석 결과는 그대로 유지합니다.</p>
       </div>
-      <div v-if="pageWordMetrics.length === 0" class="story-page-analysis__notice" role="status">
+      <div v-if="analysis && pageWordMetrics.length === 0" class="story-page-analysis__notice" role="status">
         <strong>단어별 시선 기록이 없습니다</strong>
         <p>페이지 집계값을 단어별 값으로 추정하지 않습니다.</p>
       </div>
@@ -273,7 +267,7 @@ onBeforeUnmount(stopReplay)
         <header class="story-page-section-heading">
           <div>
             <h4>읽기 리플레이</h4>
-            <p>{{ analysis.analysisMeta.calculationVersion }}</p>
+            <p>{{ analysis?.analysisMeta.calculationVersion ?? '분석 데이터 없음' }}</p>
           </div>
           <span>{{ replayDataLabel }}</span>
         </header>
@@ -325,7 +319,9 @@ onBeforeUnmount(stopReplay)
           <h4 id="story-page-dwell-title">체류 상세</h4>
           <span>{{ dwellWords.length }}개 단어</span>
         </header>
-        <p v-if="dwellWords.length === 0" class="story-page-details__empty">페이지별 기대 시간을 초과해 체류한 단어가 없습니다.</p>
+        <p v-if="dwellWords.length === 0" class="story-page-details__empty">
+          {{ analysisUnavailable ? '표시할 체류 데이터가 없습니다.' : '페이지별 기대 시간을 초과해 체류한 단어가 없습니다.' }}
+        </p>
         <ol v-else>
           <li v-for="word in dwellWords" :key="`${word.storyLineId}:${word.tokenIndex}:dwell`">
             <strong>{{ tokenLabel(word, word.tokenIndex) }}</strong>
@@ -340,7 +336,9 @@ onBeforeUnmount(stopReplay)
           <h4 id="story-page-skipped-title">건너뜀 단어</h4>
           <span>{{ skippedWords.length }}개 단어</span>
         </header>
-        <p v-if="skippedWords.length === 0" class="story-page-details__empty">최종적으로 건너뛴 단어가 없습니다.</p>
+        <p v-if="skippedWords.length === 0" class="story-page-details__empty">
+          {{ analysisUnavailable ? '표시할 건너뜀 데이터가 없습니다.' : '최종적으로 건너뛴 단어가 없습니다.' }}
+        </p>
         <ol v-else>
           <li v-for="word in skippedWords" :key="`${word.storyLineId}:${word.tokenIndex}:skip`">
             <strong>{{ tokenLabel(word, word.tokenIndex) }}</strong>
@@ -354,7 +352,9 @@ onBeforeUnmount(stopReplay)
           <h4 id="story-page-regression-title">되돌아보기 단어</h4>
           <span>{{ regressionWords.length }}개 단어</span>
         </header>
-        <p v-if="regressionWords.length === 0" class="story-page-details__empty">이 페이지에서 되돌아본 기록이 없습니다.</p>
+        <p v-if="regressionWords.length === 0" class="story-page-details__empty">
+          {{ analysisUnavailable ? '표시할 되돌아보기 데이터가 없습니다.' : '이 페이지에서 되돌아본 기록이 없습니다.' }}
+        </p>
         <ol v-else>
           <li v-for="word in regressionWords" :key="`${word.storyLineId}:${word.tokenIndex}:regression`">
             <strong>{{ tokenLabel(word, word.tokenIndex) }}</strong>
@@ -366,10 +366,10 @@ onBeforeUnmount(stopReplay)
       <section class="story-overall-summary" aria-labelledby="story-overall-summary-title">
         <h4 id="story-overall-summary-title">이야기 전체 요약</h4>
         <dl>
-          <div><dt>전체 체류 시간</dt><dd>{{ formatGazeDuration(analysis.totalVisitedDurationMs) }}</dd></div>
-          <div><dt>전체 체류 횟수</dt><dd>{{ analysis.totalVisitedCount }}회</dd></div>
-          <div><dt>되돌아본 횟수</dt><dd>{{ analysis.reverseReadCount }}회</dd></div>
-          <div><dt>건너뛴 단어 수</dt><dd>{{ totalSkippedWordCount }}개</dd></div>
+          <div><dt>전체 체류 시간</dt><dd>{{ analysis ? formatGazeDuration(analysis.totalVisitedDurationMs) : '데이터 없음' }}</dd></div>
+          <div><dt>전체 체류 횟수</dt><dd>{{ analysis ? analysis.totalVisitedCount + '회' : '데이터 없음' }}</dd></div>
+          <div><dt>되돌아본 횟수</dt><dd>{{ analysis ? analysis.reverseReadCount + '회' : '데이터 없음' }}</dd></div>
+          <div><dt>건너뛴 단어 수</dt><dd>{{ analysis ? totalSkippedWordCount + '개' : '데이터 없음' }}</dd></div>
         </dl>
       </section>
     </template>

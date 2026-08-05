@@ -2,31 +2,25 @@
 import { computed, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
-import type { EChartsOption } from 'echarts'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
-import ChartPanel from '@/components/common/ChartPanel.vue'
 import GazeAnalysisPanel from '@/components/teacher/GazeAnalysisPanel.vue'
 import HistoryToolbar from '@/components/teacher/HistoryToolbar.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { chartColors } from '@/features/teacher/chartTheme'
 import { asyncStateKind } from '@/features/teacher/error'
 import {
   formatTrainingDuration,
   formatTrainingQuestionAnswer,
   formatTrainingQuestionContent,
   trainingQuestionTypeLabel,
-  trainingStatusLabel,
   type CurriculumLog,
   type CurriculumTrainingLogItem,
-  type TrainingExportFormat,
   type TrainingPeriod,
   type TrainingHistoryQuestionResult,
 } from '@/features/teacher/training'
 import type { GazeAnalysisState } from '@/features/teacher/gaze'
-import { saveDownload } from '@/lib/api'
 import { useTrainingStore } from '@/stores/training'
 
 const route = useRoute()
@@ -38,23 +32,18 @@ const {
   selectedCurriculumId,
   selectedCurriculumLog,
   trainingLog,
-  statistics,
   selectedHistoryTrainingId,
   historyTrainingDetail,
   historyGazeAnalysis,
   curriculumLogsStatus,
   trainingLogStatus,
-  statisticsStatus,
   historyDetailStatus,
   historyGazeStatus,
-  exportingFormat,
   curriculumLogsError,
   curriculumLogsUiError,
   trainingLogError,
-  statisticsError,
   historyDetailError,
   historyGazeError,
-  exportError,
 } = storeToRefs(trainingStore)
 const curriculumLogsErrorKind = computed(() => asyncStateKind(curriculumLogsUiError.value))
 
@@ -89,57 +78,6 @@ const historyGazeAggregate = computed<GazeAnalysisState | null>(() => {
       ...state.analysis,
       replay: null,
     },
-  }
-})
-const selectedAccuracyComparison = computed(
-  () =>
-    statistics.value?.accuracyComparisons.find(
-      (comparison) => comparison.trainingId === selectedHistoryTrainingId.value,
-    ) ?? null,
-)
-const accuracyComparisonChart = computed(() => {
-  const currentAccuracy = selectedAccuracyComparison.value?.accuracy ?? null
-  const previousAccuracy = selectedAccuracyComparison.value?.previousAccuracy ?? null
-  const previousHasData = previousAccuracy !== null
-  const currentHasData = currentAccuracy !== null
-  const option: EChartsOption = {
-    tooltip: { show: false },
-    grid: { left: 42, right: 16, top: 34, bottom: 34 },
-    xAxis: {
-      type: 'category',
-      data: ['이전 훈련', '현재 훈련'],
-      axisLabel: { interval: 0 },
-    },
-    yAxis: {
-      type: 'value',
-      min: 0,
-      max: 100,
-      axisLabel: { formatter: '{value}%' },
-    },
-    series: [
-      {
-        name: '정확도',
-        type: 'bar',
-        barMaxWidth: 54,
-        label: { show: true, position: 'top' },
-        data: [
-          {
-            value: previousAccuracy ?? 0,
-            itemStyle: { color: previousHasData ? chartColors.muted : chartColors.grid },
-            label: { formatter: previousHasData ? `${previousAccuracy}%` : '데이터 없음' },
-          },
-          {
-            value: currentAccuracy ?? 0,
-            itemStyle: { color: currentHasData ? chartColors.blue : chartColors.grid },
-            label: { formatter: currentHasData ? `${currentAccuracy}%` : '데이터 없음' },
-          },
-        ],
-      },
-    ],
-  }
-  return {
-    option,
-    summary: `이전 훈련 정확도 ${formatAccuracy(previousAccuracy)}, 현재 훈련 정확도 ${formatAccuracy(currentAccuracy)}`,
   }
 })
 watch(
@@ -189,13 +127,6 @@ async function retryDetail(): Promise<void> {
   await trainingStore.loadHistoryTrainingDetail(studentId.value, selectedHistoryTrainingId.value)
 }
 
-async function downloadTraining(format: TrainingExportFormat): Promise<void> {
-  if (studentId.value === null || selectedHistoryTrainingId.value === null) return
-  const trainingId = selectedHistoryTrainingId.value
-  const result = await trainingStore.exportSelectedTraining(studentId.value, format)
-  if (!result) return
-  saveDownload(result, `training-${trainingId}.${format.toLowerCase()}`)
-}
 
 function formatDate(value: string | null): string {
   if (!value) return '-'
@@ -239,15 +170,15 @@ function questionStatusClass(question: TrainingHistoryQuestionResult): string {
 }
 
 function selectedAnswerDetail(question: TrainingHistoryQuestionResult): string {
+  if (question.responseType === 'AUDIO') {
+    return hasSubmittedAnswer(question) ? '음성 응답 완료' : '미제출'
+  }
   const formatted = formatTrainingQuestionAnswer(
     question.selectedAnswer,
     question.responseType,
     question.question,
   )
   if (formatted) return formatted
-  if (question.responseType === 'AUDIO' && hasSubmittedAnswer(question)) {
-    return '음성 응답 완료 · 전사 데이터 없음'
-  }
   return hasSubmittedAnswer(question) ? '응답 데이터 없음' : '미제출'
 }
 
@@ -269,13 +200,13 @@ function formatQuestionScore(score: number | null): string | null {
 
 <template>
   <div class="training-history page-stack">
-    <PageHeader title="훈련 이력" />
+    <PageHeader title="학습 이력" />
 
     <AsyncStatePanel
       v-if="invalidStudentId"
       kind="not-found"
       title="올바른 학습자를 선택해 주세요."
-      message="훈련 이력을 조회하려면 학습자 목록에서 대상을 다시 선택해야 합니다."
+      message="학습 이력을 조회하려면 학습자 목록에서 대상을 다시 선택해야 합니다."
       action-label="학습자 목록으로 이동"
       @action="router.push({ name: 'teacher-students' })"
     />
@@ -295,7 +226,6 @@ function formatQuestionScore(score: number | null): string | null {
               <option value="3m">최근 3개월</option>
             </select>
           </div>
-          <template #status> 완료 커리큘럼 {{ curriculumLogs.length }}건 </template>
         </HistoryToolbar>
       </Card>
 
@@ -306,7 +236,7 @@ function formatQuestionScore(score: number | null): string | null {
       >
         <AsyncStatePanel
           kind="empty"
-          title="완료된 훈련 이력이 없습니다"
+          title="완료된 학습 이력이 없습니다"
           message="선택한 기간에 완료된 커리큘럼과 훈련이 없습니다."
         />
       </Card>
@@ -427,58 +357,12 @@ function formatQuestionScore(score: number | null): string | null {
           </section>
         </Card>
 
-        <Card class="statistics-card accuracy-card">
-          <header class="section-heading">
-            <div>
-              <h2>선택 훈련 정확도 비교</h2>
-            </div>
-          </header>
-          <AsyncStatePanel
-            v-if="statisticsStatus === 'loading'"
-            kind="loading"
-            message="통계를 불러오는 중입니다."
-            compact
-          />
-          <AsyncStatePanel
-            v-else-if="statisticsStatus === 'error'"
-            kind="error"
-            title="훈련 통계를 불러오지 못했습니다"
-            :message="statisticsError ?? '잠시 후 다시 시도해 주세요.'"
-            retry-label="다시 불러오기"
-            compact
-            @retry="retrySelectedCurriculum"
-          />
-          <section v-else class="accuracy-comparison" aria-label="선택 훈련 정확도 비교">
-            <ChartPanel
-              :option="accuracyComparisonChart.option"
-              height="220px"
-              aria-label="현재 훈련과 이전 훈련 정확도 막대그래프"
-              :summary="accuracyComparisonChart.summary"
-            />
-            <dl>
-              <div>
-                <dt>현재 정확도</dt>
-                <dd>{{ formatAccuracy(selectedAccuracyComparison?.accuracy ?? null) }}</dd>
-              </div>
-              <div>
-                <dt>이전 정확도</dt>
-                <dd>{{ formatAccuracy(selectedAccuracyComparison?.previousAccuracy ?? null) }}</dd>
-              </div>
-              <div>
-                <dt>이전 훈련일</dt>
-                <dd>{{ formatDate(selectedAccuracyComparison?.previousTrainingDate ?? null) }}</dd>
-              </div>
-            </dl>
-          </section>
-        </Card>
-
         <Card class="detail-card">
           <header class="detail-heading">
             <div>
               <span>선택 훈련 상세</span>
               <template v-if="historyDetailStatus === 'success' && historyTrainingDetail">
                 <h2>{{ historyTrainingDetail.name }}</h2>
-                <p>{{ trainingStatusLabel(historyTrainingDetail.status) }}</p>
               </template>
               <template v-else>
                 <h2>{{ selectedHistoryTraining?.trainingName ?? '훈련을 선택해 주세요.' }}</h2>
@@ -486,9 +370,6 @@ function formatQuestionScore(score: number | null): string | null {
                 <p v-else-if="historyDetailStatus === 'error'">상세 조회를 완료하지 못했습니다.</p>
               </template>
             </div>
-            <strong v-if="historyDetailStatus === 'success' && historyTrainingDetail">
-              {{ formatAccuracy(historyTrainingDetail.accuracy) }}
-            </strong>
           </header>
 
           <div class="detail-content-shell" :aria-busy="historyDetailStatus === 'loading'">
@@ -545,24 +426,6 @@ function formatQuestionScore(score: number | null): string | null {
                   <h3 id="question-results-title">문항 결과</h3>
                   <span>{{ detailQuestions.length }}건</span>
                 </header>
-                <dl v-if="detailQuestions.length > 0" class="result-summary">
-                  <div>
-                    <dt>전체</dt>
-                    <dd>{{ questionSummary.total }}건</dd>
-                  </div>
-                  <div>
-                    <dt>정답</dt>
-                    <dd>{{ questionSummary.correct }}건</dd>
-                  </div>
-                  <div>
-                    <dt>오답</dt>
-                    <dd>{{ questionSummary.incorrect }}건</dd>
-                  </div>
-                  <div>
-                    <dt>미제출·미채점</dt>
-                    <dd>{{ questionSummary.ungraded }}건</dd>
-                  </div>
-                </dl>
                 <p v-if="detailQuestions.length === 0" class="section-state">
                   저장된 문항 결과가 없습니다.
                 </p>
@@ -600,26 +463,6 @@ function formatQuestionScore(score: number | null): string | null {
                   </div>
                 </template>
               </section>
-
-              <p v-if="exportError" class="export-error" role="alert">{{ exportError }}</p>
-              <div class="download-actions">
-                <Button
-                  variant="outline"
-                  type="button"
-                  :disabled="exportingFormat !== null"
-                  @click="downloadTraining('CSV')"
-                >
-                  {{ exportingFormat === 'CSV' ? 'CSV 준비 중…' : 'CSV 저장' }}
-                </Button>
-                <Button
-                  variant="outline"
-                  type="button"
-                  :disabled="exportingFormat !== null"
-                  @click="downloadTraining('JSON')"
-                >
-                  {{ exportingFormat === 'JSON' ? 'JSON 준비 중…' : 'JSON 저장' }}
-                </Button>
-              </div>
             </template>
           </div>
 
@@ -629,6 +472,9 @@ function formatQuestionScore(score: number | null): string | null {
               :state="historyGazeAggregate"
               :status="historyGazeStatus"
               :error="historyGazeError"
+              :show-status="false"
+              :show-aggregate-chart="false"
+              :show-disclaimer="false"
               @retry="trainingStore.retryHistoryGaze()"
             />
           </div>
