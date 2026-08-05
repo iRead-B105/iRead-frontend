@@ -91,12 +91,15 @@ describe('StudentDashboard', () => {
     expect(wrapper.find('.page-heading .student-create-button').exists()).toBe(false)
   })
 
-  it('행을 선택하면 학습 현황으로 이동한다', async () => {
+  it('행을 선택하면 아동을 즉시 선택하고 학습 현황으로 이동한다', async () => {
     const { router, wrapper } = await mountDashboard()
+    const studentStore = useStudentStore()
 
     await wrapper.get('.student-row').trigger('click')
     await flushPromises()
 
+    expect(studentStore.selectedStudentId).toBe(7)
+    expect(studentStore.navigationItemsById[7]?.name).toBe('김하늘')
     expect(router.currentRoute.value.name).toBe('student-overview')
     expect(router.currentRoute.value.params.id).toBe('7')
   })

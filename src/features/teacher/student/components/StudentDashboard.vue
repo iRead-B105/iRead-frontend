@@ -26,6 +26,7 @@ import {
   formatLearningDate,
   formatLearningMinutes,
   formatWeeklyParticipation,
+  toStudentNavigationItem,
   type StudentListItem,
 } from '@/features/teacher/student'
 import { asyncStateKind } from '@/features/teacher/error'
@@ -107,6 +108,7 @@ function goToPage(page: number): void {
 }
 
 function openStudent(student: StudentListItem): void {
+  studentStore.rememberStudent(toStudentNavigationItem(student))
   void router.push({ name: 'student-overview', params: { id: student.studentId } })
 }
 
