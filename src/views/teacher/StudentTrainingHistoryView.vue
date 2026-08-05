@@ -51,7 +51,7 @@ const {
   historyGazeError,
 } = storeToRefs(trainingStore)
 const curriculumLogsErrorKind = computed(() => asyncStateKind(curriculumLogsUiError.value))
-const CURRICULUM_PAGE_SIZE = 5
+const CURRICULUM_PAGE_SIZE = 4
 const curriculumPage = ref(1)
 
 function parseStudentId(value: unknown): number | null {
@@ -652,12 +652,10 @@ function formatQuestionScore(score: number | null): string | null {
 .curriculum-groups {
   display: grid;
   flex: 1;
-  min-height: 0;
   align-content: start;
   gap: 20px;
   margin-top: 16px;
-  padding-right: 4px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .curriculum-group h3 {
@@ -1144,8 +1142,7 @@ dd {
 
   .curriculum-groups {
     max-height: none;
-    padding-right: 0;
-    overflow-y: visible;
+    overflow: visible;
   }
 }
 @container (max-width: 720px) {

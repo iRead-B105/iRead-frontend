@@ -615,32 +615,6 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
                     selectedMetricChart,
                   )}`"
             />
-            <div class="displayed-details-cards">
-              <article
-                v-for="(detail, index) in displayedDetails"
-                :key="detail.testCurriculumId"
-                class="detail-card"
-              >
-                <header class="detail-card__header">
-                  <span class="detail-card__tag">{{ index === 0 ? '기준' : `비교 ${index}` }}</span>
-                  <strong>{{ testDate(detail) }}</strong>
-                </header>
-                <div class="detail-card__metrics">
-                  <div
-                    v-for="metric in metricDefinitions"
-                    :key="metric.key"
-                    class="detail-card__metric"
-                    :data-metric-key="metric.key"
-                    :class="{ highlighted: selectedMetricKey === metric.key }"
-                  >
-                    <span class="detail-card__label">{{ metric.label }}</span>
-                    <strong class="detail-card__val">
-                      {{ formatChartMetric(chartMetricValue(testMetricValue(detail, metric.key), metric.key), metric) }}
-                    </strong>
-                  </div>
-                </div>
-              </article>
-            </div>
           </Card>
         </div>
 
