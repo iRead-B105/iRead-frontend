@@ -581,7 +581,7 @@ function formatQuestionScore(score: number | null): string | null {
 
 .history-summary-grid {
   display: grid;
-  align-items: start;
+  align-items: stretch;
   gap: 20px;
   grid-template-columns: minmax(270px, 0.72fr) minmax(520px, 1.7fr);
 }
@@ -600,6 +600,11 @@ function formatQuestionScore(score: number | null): string | null {
 }
 
 .curriculum-browser,
+.curriculum-overview {
+  height: 100%;
+}
+
+.curriculum-browser,
 .curriculum-overview,
 .detail-card {
   padding: 20px;
@@ -612,6 +617,8 @@ function formatQuestionScore(score: number | null): string | null {
 }
 
 .curriculum-overview {
+  display: flex;
+  flex-direction: column;
   align-content: start;
 }
 
@@ -741,6 +748,9 @@ function formatQuestionScore(score: number | null): string | null {
 }
 
 .curriculum-trainings {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   margin-top: 0;
 }
 
@@ -829,7 +839,7 @@ function formatQuestionScore(score: number | null): string | null {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 16px 0 0;
+  margin: auto 0 0;
   padding: 10px 12px;
   border: 1px solid color-mix(in oklch, var(--primary-600) 18%, var(--border));
   border-radius: 10px;
