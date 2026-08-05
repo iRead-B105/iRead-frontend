@@ -1,5 +1,7 @@
 import type {
   GazeMetricChange,
+  GrowthHistoryPoint,
+  ReportAutomaticAnalysis,
   ReportDetail,
   ReportGazePoint,
   ReportGazeSeries,
@@ -149,6 +151,8 @@ export const refreshedReportGazeTrendFixture: ReportGazeTrend = {
 }
 
 export const reportSnapshotFixture: ReportSnapshot = {
+  snapshotVersion: 'teacher-report-v2',
+  calculationVersion: 'reading-metrics-v1',
   learningDays: 12,
   totalTrainingTimeMinutes: 485,
   completedTrainingCount: 18,
@@ -175,6 +179,32 @@ export const reportSnapshotFixture: ReportSnapshot = {
       pronunciationScore: 82,
     },
   ],
+  growthComparisonStatus: 'AVAILABLE',
+  automaticAnalysis: {
+    status: 'AVAILABLE',
+    metricChanges: [
+      { metric: 'ACCURACY', first: 72, latest: 86, delta: 14, direction: 'INCREASED' },
+      {
+        metric: 'READING_SPEED',
+        first: 61,
+        latest: 74,
+        delta: 13,
+        direction: 'INCREASED',
+      },
+      {
+        metric: 'PRONUNCIATION_SCORE',
+        first: 70,
+        latest: 82,
+        delta: 12,
+        direction: 'INCREASED',
+      },
+    ],
+    descriptions: [
+      '읽기 정확도가 72.00에서 86.00로 증가했습니다.',
+      '읽기 속도가 61.00에서 74.00로 증가했습니다.',
+      '발음 점수가 70.00에서 82.00로 증가했습니다.',
+    ],
+  },
   areaAchievements: [
     { area: '음운 인식', achievement: 86 },
     { area: '파닉스', achievement: 82 },
@@ -197,8 +227,8 @@ export const reportSnapshotFixture: ReportSnapshot = {
       incorrectRate: 33.33,
     },
   ],
-  improvedPatterns: ['받침이 있는 두 음절 낱말 읽기'],
-  persistentDifficultyPatterns: ['긴 문장에서 조사와 어미를 이어 읽기'],
+  improvedPatterns: [],
+  persistentDifficultyPatterns: [],
   gazeTrend: reportGazeTrendFixture,
 }
 
@@ -224,10 +254,14 @@ export const reportFixtures: readonly ReportDetail[] = [
       learningDays: 6,
       totalTrainingTimeMinutes: 210,
       completedTrainingCount: 8,
+      snapshotVersion: null,
+      calculationVersion: null,
       averageAccuracy: null,
       averageReadingSpeed: null,
-      readingSpeedUnit: null,
+      readingSpeedUnit: 'CPM',
       growthHistory: [],
+      growthComparisonStatus: null,
+      automaticAnalysis: null,
       areaAchievements: [],
       frequentlyIncorrectWords: [],
       improvedPatterns: [],
@@ -277,9 +311,60 @@ export function createMockReportSnapshot(
   const growthHistory = reportSnapshotFixture.growthHistory.filter(
     (point) => point.date >= startDate && point.date <= endDate,
   )
+  const automaticAnalysis = buildAutomaticAnalysis(growthHistory)
   return {
     ...reportSnapshotFixture,
     growthHistory,
+    growthComparisonStatus: automaticAnalysis.status,
+    automaticAnalysis,
     gazeTrend: reportGazeTrendFixture,
   }
+}
+
+function buildAutomaticAnalysis(
+  growthHistory: readonly GrowthHistoryPoint[],
+): ReportAutomaticAnalysis {
+  const definitions = [
+    ['ACCURACY', 'accuracy', '읽기 정확도'],
+    ['READING_SPEED', 'readingSpeed', '읽기 속도'],
+    ['PRONUNCIATION_SCORE', 'pronunciationScore', '발음 점수'],
+  ] as const
+  const metricChanges = definitions.flatMap(([metric, key]) => {
+    const values = growthHistory
+      .map((point) => point[key])
+      .filter((value): value is number => value !== null)
+    const first = values[0]
+    const latest = values.at(-1)
+    if (first === undefined || latest === undefined || values.length < 2) return []
+    const delta = Number((latest - first).toFixed(2))
+    return [{
+      metric,
+      first,
+      latest,
+      delta,
+      direction: delta > 0 ? 'INCREASED' : delta < 0 ? 'DECREASED' : 'UNCHANGED',
+    } as const]
+  })
+  const hasMetric = growthHistory.some((point) =>
+    point.accuracy !== null || point.readingSpeed !== null || point.pronunciationScore !== null,
+  )
+  const status = metricChanges.length > 0
+    ? 'AVAILABLE'
+    : hasMetric
+      ? 'INSUFFICIENT_DATA'
+      : 'NO_DATA'
+  const descriptions = status === 'AVAILABLE'
+    ? metricChanges.map((change) => {
+        const label = definitions.find(([metric]) => metric === change.metric)?.[2] ?? change.metric
+        const direction = change.direction === 'INCREASED'
+          ? '증가'
+          : change.direction === 'DECREASED'
+            ? '감소'
+            : '유지'
+        return `${label}가 ${change.first.toFixed(2)}에서 ${change.latest.toFixed(2)}로 ${direction}했습니다.`
+      })
+    : status === 'INSUFFICIENT_DATA'
+      ? ['비교할 기록이 부족합니다.']
+      : ['분석할 학습 기록이 없습니다.']
+  return { status, metricChanges, descriptions }
 }

@@ -4,6 +4,7 @@ import type {
   CreateReportResult,
   RefreshReportGazeResult,
   ReportDetail,
+  ReportAutomaticAnalysis,
   ReportGazePoint,
   ReportGazeSeries,
   ReportGazeTrend,
@@ -26,7 +27,18 @@ interface ReportListItemDto {
 type ReportGazePointDto = ReportGazePoint
 type ReportGazeSeriesDto = ReportGazeSeries
 type ReportGazeTrendDto = ReportGazeTrend
-interface ReportSnapshotDto extends Omit<ReportSnapshot, 'gazeTrend'> {
+interface ReportSnapshotDto extends Omit<
+  ReportSnapshot,
+  | 'snapshotVersion'
+  | 'calculationVersion'
+  | 'growthComparisonStatus'
+  | 'automaticAnalysis'
+  | 'gazeTrend'
+> {
+  readonly snapshotVersion?: string | null
+  readonly calculationVersion?: string | null
+  readonly growthComparisonStatus?: ReportSnapshot['growthComparisonStatus']
+  readonly automaticAnalysis?: ReportAutomaticAnalysis | null
   /**
    * Reports saved before gaze-trend aggregation can contain only the legacy
    * single gazeAnalysis, so the new field remains nullable on reads.
@@ -110,12 +122,39 @@ function mapSnapshot(dto: ReportSnapshotDto, generatedAt: string): ReportSnapsho
     gazeTrend,
     ...snapshot
   } = dto
+  const snapshotVersion = dto.snapshotVersion ?? null
+  const calculationVersion = dto.calculationVersion ?? null
+  const growthComparisonStatus = dto.growthComparisonStatus ?? null
+  const automaticAnalysis = dto.automaticAnalysis ?? null
+  if (snapshotVersion !== null && snapshotVersion !== 'teacher-report-v2') {
+    throw new TypeError('[보고서 API] 지원하지 않는 snapshot 버전입니다.')
+  }
+  if (
+    snapshotVersion === 'teacher-report-v2' &&
+    (calculationVersion !== 'reading-metrics-v1' ||
+      dto.readingSpeedUnit !== 'CORRECT_WORDS_PER_MINUTE' ||
+      growthComparisonStatus === null ||
+      automaticAnalysis === null ||
+      automaticAnalysis.status !== growthComparisonStatus)
+  ) {
+    throw new TypeError('[보고서 API] 신규 snapshot 계산 계약이 일치하지 않습니다.')
+  }
 
   return {
     ...snapshot,
+    snapshotVersion,
+    calculationVersion,
     growthHistory: [...dto.growthHistory]
       .sort((left, right) => left.date.localeCompare(right.date))
       .map((point) => ({ ...point })),
+    growthComparisonStatus,
+    automaticAnalysis: automaticAnalysis
+      ? {
+          ...automaticAnalysis,
+          metricChanges: automaticAnalysis.metricChanges.map((change) => ({ ...change })),
+          descriptions: [...automaticAnalysis.descriptions],
+        }
+      : null,
     areaAchievements: dto.areaAchievements.map((item) => ({ ...item })),
     frequentlyIncorrectWords: dto.frequentlyIncorrectWords.map((word) => ({ ...word })),
     improvedPatterns: [...dto.improvedPatterns],

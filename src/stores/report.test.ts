@@ -110,6 +110,29 @@ describe('Report store', () => {
     expect(store.reports[0]?.reportId).toBe(created.reportId)
   })
 
+  it('완료 학습일이 없다는 서버 오류를 1일 기준 안내로 변환한다', async () => {
+    const store = useReportStore()
+    store.setRepository(
+      repository({
+        listByStudent: vi.fn().mockResolvedValue([]),
+        create: vi.fn().mockRejectedValue(
+          new ApiError({
+            status: 400,
+            code: 'REPORT_INSUFFICIENT_LEARNING_DAYS',
+            message: 'At least one distinct completed training day is required.',
+          }),
+        ),
+      }),
+    )
+    await store.loadForStudent(1)
+    store.startDate = '2026-07-01'
+    store.endDate = '2026-07-01'
+
+    await expect(store.createReport(1)).resolves.toBe(false)
+
+    expect(store.createError).toBe('선택한 기간에 완료 학습일이 1일 이상 필요합니다.')
+  })
+
   it('POST 성공 후 상세 GET 실패 시 reportId와 기간 입력을 유지한다', async () => {
     const store = useReportStore()
     store.setRepository(

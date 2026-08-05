@@ -1,11 +1,20 @@
 import type { GazeMetricChange, ReportSnapshot } from './model'
 
 export const ALIGNED_REPORT_READING_SPEED_UNIT = 'CORRECT_WORDS_PER_MINUTE'
+export const ALIGNED_REPORT_SNAPSHOT_VERSION = 'teacher-report-v2'
+export const ALIGNED_REPORT_CALCULATION_VERSION = 'reading-metrics-v1'
 
 export function hasAlignedReportLearningMetrics(
-  snapshot: Pick<ReportSnapshot, 'readingSpeedUnit'>,
+  snapshot: Pick<
+    ReportSnapshot,
+    'snapshotVersion' | 'calculationVersion' | 'readingSpeedUnit'
+  >,
 ): boolean {
-  return snapshot.readingSpeedUnit === ALIGNED_REPORT_READING_SPEED_UNIT
+  return (
+    snapshot.snapshotVersion === ALIGNED_REPORT_SNAPSHOT_VERSION &&
+    snapshot.calculationVersion === ALIGNED_REPORT_CALCULATION_VERSION &&
+    snapshot.readingSpeedUnit === ALIGNED_REPORT_READING_SPEED_UNIT
+  )
 }
 
 export function formatReportDate(value: string): string {

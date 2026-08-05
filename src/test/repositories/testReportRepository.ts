@@ -139,14 +139,23 @@ export class TestReportRepository implements ReportRepository {
       })
     }
 
-    const hasCompletedLearning = (this.completedLearningDatesByStudent[input.studentId] ?? []).some(
-      (date) => date >= input.startDate && date <= input.endDate,
-    )
-    if (!hasCompletedLearning) {
+    const learningDayCount = new Set(
+      (this.completedLearningDatesByStudent[input.studentId] ?? []).filter(
+        (date) => date >= input.startDate && date <= input.endDate,
+      ),
+    ).size
+    if (learningDayCount < 1) {
       throw new ApiError({
         status: 400,
-        code: 'REPORT_DATA_NOT_FOUND',
-        message: '선택한 기간에 완료된 학습 기록이 없습니다.',
+        code: 'REPORT_INSUFFICIENT_LEARNING_DAYS',
+        message: 'At least one distinct completed training day is required.',
+        responseBody: {
+          error: {
+            code: 'REPORT_INSUFFICIENT_LEARNING_DAYS',
+            message: 'At least one distinct completed training day is required.',
+            details: { requiredDays: 1, actualDays: learningDayCount },
+          },
+        },
       })
     }
 
