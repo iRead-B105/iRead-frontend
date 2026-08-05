@@ -1,0 +1,5 @@
+export * from './testReportRepository'
+export * from './testStoryRepository'
+export * from './testStudentRepository'
+export * from './testTestRepository'
+export * from './testTrainingRepository'

@@ -1,0 +1,686 @@
+import { computed, ref, shallowRef } from 'vue'
+import { defineStore } from 'pinia'
+import {
+  testRepository,
+  type TestComparison,
+  type TestDetail,
+  type TestListItem,
+  type TestQuestionResult,
+  type TestRepository,
+  type TestRequestStatus,
+} from '@/features/teacher/test'
+import { mapCommonError, type UiError } from '@/features/teacher/error'
+import type { GazeAnalysisRequestStatus, GazeAnalysisState } from '@/features/teacher/gaze'
+import { isAbortError, isApiError } from '@/lib/api'
+
+function testErrorMessage(error: unknown, fallback: string): string {
+  if (!isApiError(error)) return fallback
+  if (error.status === 400) return '검사 선택 조건이 올바르지 않습니다.'
+  if (error.status === 403) return '이 학습자의 검사 기록을 볼 권한이 없습니다.'
+  if (error.status === 404) return '요청한 실력 도전 검사 기록을 찾을 수 없습니다.'
+  if (error.status === 409) return '검사 결과가 변경되었습니다. 최신 내용을 다시 불러와 주세요.'
+  return mapCommonError(error)?.message ?? fallback
+}
+
+function gazeErrorMessage(error: unknown): string {
+  if (!isApiError(error)) return '시선 분석 결과를 불러오지 못했습니다.'
+  if (error.status === 403) return '이 학습자의 시선 분석을 볼 권한이 없습니다.'
+  return mapCommonError(error)?.message ?? '시선 분석 결과를 불러오지 못했습니다.'
+}
+
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index])
+}
+
+function sameValue<T>(left: T, right: T): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+type QuestionGazeAvailability = GazeAnalysisState['status'] | 'ERROR'
+
+export const useTestStore = defineStore('test', () => {
+  const repository = shallowRef<TestRepository>(testRepository)
+  const studentId = ref<number | null>(null)
+  const tests = ref<readonly TestListItem[]>([])
+  const currentTestCurriculumId = ref<string | null>(null)
+  const comparisonTestCurriculumIds = ref<readonly string[]>([])
+  const comparisonResult = ref<TestComparison | null>(null)
+  const trendDetails = ref<readonly TestDetail[]>([])
+  const listStatus = ref<TestRequestStatus>('idle')
+  const comparisonStatus = ref<TestRequestStatus>('idle')
+  const trendStatus = ref<TestRequestStatus>('idle')
+  const listError = ref<string | null>(null)
+  const listUiError = ref<UiError | null>(null)
+  const comparisonError = ref<string | null>(null)
+  const trendError = ref<string | null>(null)
+  const trendFailedCount = ref(0)
+  const selectedQuestionTestId = ref<string | null>(null)
+  const selectedQuestionNo = ref<number | null>(null)
+  const questionGazeAnalysis = ref<GazeAnalysisState | null>(null)
+  const questionGazeStatus = ref<GazeAnalysisRequestStatus>('idle')
+  const questionGazeError = ref<string | null>(null)
+  const questionGazeAvailability = ref<Readonly<Record<string, QuestionGazeAvailability>>>({})
+  const questionGazeByKey = ref<Readonly<Record<string, GazeAnalysisState>>>({})
+  const questionGazeAvailabilityStatus = ref<GazeAnalysisRequestStatus>('idle')
+  const questionGazeAvailabilityFailedCount = ref(0)
+
+  let listGeneration = 0
+  let comparisonGeneration = 0
+  let trendGeneration = 0
+  let questionGazeGeneration = 0
+  let questionGazeAvailabilityGeneration = 0
+  let listController: AbortController | null = null
+  let comparisonController: AbortController | null = null
+  let trendController: AbortController | null = null
+  let questionGazeController: AbortController | null = null
+  let questionGazeAvailabilityController: AbortController | null = null
+  const detailCache = new Map<string, TestDetail>()
+
+  const currentTest = computed(
+    () =>
+      tests.value.find((test) => test.testCurriculumId === currentTestCurriculumId.value) ?? null,
+  )
+  const comparisonTests = computed(() =>
+    comparisonTestCurriculumIds.value.flatMap((id) => {
+      const test = tests.value.find((item) => item.testCurriculumId === id)
+      return test ? [test] : []
+    }),
+  )
+  const availableComparisonTests = computed(() =>
+    tests.value.filter(
+      (test) =>
+        test.testCurriculumId !== currentTestCurriculumId.value &&
+        !comparisonTestCurriculumIds.value.includes(test.testCurriculumId),
+    ),
+  )
+  const canAddComparison = computed(
+    () =>
+      comparisonTestCurriculumIds.value.length < 2 &&
+      availableComparisonTests.value.length > 0 &&
+      comparisonStatus.value !== 'loading',
+  )
+
+  function cacheKey(currentStudentId: number, testCurriculumId: string): string {
+    return `${currentStudentId}:${testCurriculumId}`
+  }
+
+  function questionKey(testId: string, questionNo: number): string {
+    return `${testId}:${questionNo}`
+  }
+
+  function cacheDetails(currentStudentId: number, details: readonly TestDetail[]): void {
+    for (const detail of details) {
+      detailCache.set(cacheKey(currentStudentId, detail.testCurriculumId), detail)
+    }
+  }
+
+  function abortRequests(includeQuestionGaze = true): void {
+    listController?.abort()
+    comparisonController?.abort()
+    trendController?.abort()
+    if (includeQuestionGaze) questionGazeController?.abort()
+    if (includeQuestionGaze) questionGazeAvailabilityController?.abort()
+    listController = null
+    comparisonController = null
+    trendController = null
+    if (includeQuestionGaze) questionGazeController = null
+    if (includeQuestionGaze) questionGazeAvailabilityController = null
+  }
+
+  function clearState(nextStudentId: number | null): void {
+    studentId.value = nextStudentId
+    tests.value = []
+    currentTestCurriculumId.value = null
+    comparisonTestCurriculumIds.value = []
+    comparisonResult.value = null
+    trendDetails.value = []
+    listStatus.value = nextStudentId === null ? 'idle' : 'loading'
+    comparisonStatus.value = 'idle'
+    trendStatus.value = 'idle'
+    listError.value = null
+    listUiError.value = null
+    comparisonError.value = null
+    trendError.value = null
+    trendFailedCount.value = 0
+    selectedQuestionTestId.value = null
+    selectedQuestionNo.value = null
+    questionGazeAnalysis.value = null
+    questionGazeStatus.value = 'idle'
+    questionGazeError.value = null
+    questionGazeAvailability.value = {}
+    questionGazeByKey.value = {}
+    questionGazeAvailabilityStatus.value = 'idle'
+    questionGazeAvailabilityFailedCount.value = 0
+    detailCache.clear()
+  }
+
+  function setRepository(nextRepository: TestRepository): void {
+    repository.value = nextRepository
+    reset()
+  }
+
+  async function requestForStudent(nextStudentId: number, background: boolean): Promise<boolean> {
+    const isRefresh = studentId.value === nextStudentId
+    abortRequests(!isRefresh)
+    const generation = ++listGeneration
+    comparisonGeneration += 1
+    trendGeneration += 1
+    if (isRefresh) {
+      if (!background && tests.value.length === 0) listStatus.value = 'loading'
+      listError.value = null
+      listUiError.value = null
+    } else {
+      clearState(nextStudentId)
+    }
+    const controller = new AbortController()
+    listController = controller
+    try {
+      const items = await repository.value.getTests(nextStudentId, {
+        signal: controller.signal,
+      })
+      if (generation !== listGeneration || studentId.value !== nextStudentId) return false
+      const nextTests = [...items]
+      if (!sameValue(tests.value, nextTests)) tests.value = nextTests
+      listStatus.value = 'success'
+      const retainedCurrentId = currentTestCurriculumId.value
+      currentTestCurriculumId.value = items.some(
+        (item) => item.testCurriculumId === retainedCurrentId,
+      )
+        ? retainedCurrentId
+        : (items[0]?.testCurriculumId ?? null)
+      comparisonTestCurriculumIds.value = comparisonTestCurriculumIds.value.filter((id) =>
+        items.some((item) => item.testCurriculumId === id && id !== currentTestCurriculumId.value),
+      )
+      if (currentTestCurriculumId.value !== null) {
+        const [comparisonSucceeded, trendSucceeded] = await Promise.all([
+          loadComparison(nextStudentId, background),
+          loadTrend(nextStudentId, background),
+        ])
+        return comparisonSucceeded && trendSucceeded
+      }
+      comparisonTestCurriculumIds.value = []
+      comparisonResult.value = null
+      trendDetails.value = []
+      comparisonStatus.value = 'idle'
+      trendStatus.value = 'idle'
+      return true
+    } catch (error) {
+      if (isAbortError(error) || generation !== listGeneration) return false
+      if (!background) listStatus.value = 'error'
+      listUiError.value = mapCommonError(error)
+      listError.value = testErrorMessage(error, '완료된 실력 도전 검사 목록을 불러오지 못했습니다.')
+      return false
+    } finally {
+      if (listController === controller) listController = null
+    }
+  }
+
+  async function loadForStudent(nextStudentId: number): Promise<void> {
+    await requestForStudent(nextStudentId, false)
+  }
+
+  function refreshForStudent(nextStudentId: number): Promise<boolean> {
+    const background = studentId.value === nextStudentId && listStatus.value === 'success'
+    return requestForStudent(nextStudentId, background)
+  }
+
+  async function retryList(): Promise<void> {
+    if (studentId.value === null || listStatus.value === 'loading') return
+    const currentStudentId = studentId.value
+    const previousTests = tests.value
+    const previousCurrentId = currentTestCurriculumId.value
+    listStatus.value = 'loading'
+    listError.value = null
+    listUiError.value = null
+    const controller = new AbortController()
+    listController?.abort()
+    listController = controller
+    const generation = ++listGeneration
+    try {
+      const items = await repository.value.getTests(currentStudentId, {
+        signal: controller.signal,
+      })
+      if (generation !== listGeneration || studentId.value !== currentStudentId) return
+      tests.value = [...items]
+      listStatus.value = 'success'
+      if (items.length === 0) {
+        currentTestCurriculumId.value = null
+        comparisonTestCurriculumIds.value = []
+        comparisonResult.value = null
+        trendDetails.value = []
+        comparisonStatus.value = 'idle'
+        trendStatus.value = 'idle'
+        return
+      }
+      const nextCurrentId = items.some((item) => item.testCurriculumId === previousCurrentId)
+        ? previousCurrentId!
+        : items[0]!.testCurriculumId
+      currentTestCurriculumId.value = nextCurrentId
+      comparisonTestCurriculumIds.value = comparisonTestCurriculumIds.value.filter((id) =>
+        items.some((item) => item.testCurriculumId === id && id !== nextCurrentId),
+      )
+      await Promise.all([loadComparison(currentStudentId), loadTrend(currentStudentId)])
+    } catch (error) {
+      if (isAbortError(error) || generation !== listGeneration) return
+      tests.value = previousTests
+      listStatus.value = 'error'
+      listUiError.value = mapCommonError(error)
+      listError.value = testErrorMessage(error, '최신 검사 목록을 불러오지 못했습니다.')
+    } finally {
+      if (listController === controller) listController = null
+    }
+  }
+
+  async function selectCurrentTest(
+    currentStudentId: number,
+    nextTestCurriculumId: string,
+  ): Promise<boolean> {
+    if (
+      studentId.value !== currentStudentId ||
+      !tests.value.some((test) => test.testCurriculumId === nextTestCurriculumId)
+    ) {
+      return false
+    }
+    comparisonResult.value = null
+    comparisonStatus.value = 'loading'
+    comparisonError.value = null
+    clearQuestionGaze()
+    currentTestCurriculumId.value = nextTestCurriculumId
+    comparisonTestCurriculumIds.value = comparisonTestCurriculumIds.value.filter(
+      (id) => id !== nextTestCurriculumId,
+    )
+    return loadComparison(currentStudentId)
+  }
+
+  async function addComparisonTest(
+    currentStudentId: number,
+    testCurriculumId: string,
+  ): Promise<boolean> {
+    if (
+      !canAddComparison.value ||
+      !availableComparisonTests.value.some((test) => test.testCurriculumId === testCurriculumId)
+    ) {
+      return false
+    }
+    comparisonTestCurriculumIds.value = [...comparisonTestCurriculumIds.value, testCurriculumId]
+    comparisonResult.value = null
+    comparisonStatus.value = 'loading'
+    comparisonError.value = null
+    return loadComparison(currentStudentId)
+  }
+
+  async function removeComparisonTest(
+    currentStudentId: number,
+    testCurriculumId: string,
+  ): Promise<boolean> {
+    const next = comparisonTestCurriculumIds.value.filter((id) => id !== testCurriculumId)
+    if (sameIds(next, comparisonTestCurriculumIds.value)) return false
+    comparisonTestCurriculumIds.value = next
+    comparisonResult.value = null
+    comparisonStatus.value = 'loading'
+    comparisonError.value = null
+    return loadComparison(currentStudentId)
+  }
+
+  async function retryComparison(): Promise<void> {
+    if (studentId.value !== null) await loadComparison(studentId.value)
+  }
+
+  async function loadComparison(currentStudentId: number, background = false): Promise<boolean> {
+    const currentId = currentTestCurriculumId.value
+    if (studentId.value !== currentStudentId || currentId === null) return false
+    comparisonController?.abort()
+    const controller = new AbortController()
+    comparisonController = controller
+    const generation = ++comparisonGeneration
+    if (comparisonResult.value === null) comparisonStatus.value = 'loading'
+    comparisonError.value = null
+    try {
+      const result = await repository.value.compareTests(
+        currentStudentId,
+        currentId,
+        comparisonTestCurriculumIds.value,
+        { signal: controller.signal },
+      )
+      if (
+        generation !== comparisonGeneration ||
+        studentId.value !== currentStudentId ||
+        currentTestCurriculumId.value !== currentId
+      ) {
+        return false
+      }
+      if (!sameValue(comparisonResult.value, result)) comparisonResult.value = result
+      cacheDetails(currentStudentId, [result.currentTest, ...result.comparisonTests])
+      comparisonStatus.value = 'success'
+      return true
+    } catch (error) {
+      if (isAbortError(error) || generation !== comparisonGeneration) return false
+      if (!background) {
+        comparisonResult.value = null
+        comparisonStatus.value = 'error'
+      }
+      comparisonError.value = testErrorMessage(error, '검사 상세 결과를 불러오지 못했습니다.')
+      return false
+    } finally {
+      if (comparisonController === controller) comparisonController = null
+    }
+  }
+
+  async function loadTrend(currentStudentId: number, background = false): Promise<boolean> {
+    if (studentId.value !== currentStudentId) return false
+    trendController?.abort()
+    const controller = new AbortController()
+    trendController = controller
+    const generation = ++trendGeneration
+    const requestedTests = [...tests.value]
+    if (trendDetails.value.length === 0) trendStatus.value = 'loading'
+    trendError.value = null
+    trendFailedCount.value = 0
+    const results = await Promise.allSettled(
+      requestedTests.map((test) => {
+        const cached = detailCache.get(cacheKey(currentStudentId, test.testCurriculumId))
+        return cached
+          ? Promise.resolve(cached)
+          : repository.value.getTest(currentStudentId, test.testCurriculumId, {
+              signal: controller.signal,
+            })
+      }),
+    )
+    if (generation !== trendGeneration || studentId.value !== currentStudentId) return false
+    const details = results.flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    )
+    const failures = results.length - details.length
+    cacheDetails(currentStudentId, details)
+    const nextTrendDetails = details.sort((left, right) =>
+      left.createdAt.localeCompare(right.createdAt),
+    )
+    if (background && failures > 0) {
+      trendFailedCount.value = failures
+      trendError.value = '검사 지표 평균을 갱신할 상세 결과를 불러오지 못했습니다.'
+      if (trendController === controller) trendController = null
+      return false
+    }
+    if (!sameValue(trendDetails.value, nextTrendDetails)) trendDetails.value = nextTrendDetails
+    trendFailedCount.value = failures
+    trendStatus.value = details.length > 0 ? 'success' : failures > 0 ? 'error' : 'success'
+    trendError.value =
+      failures > 0
+        ? details.length > 0
+          ? `일부 검사 상세 ${failures}건을 불러오지 못해 성공한 결과만 평균에 반영했습니다.`
+          : '검사 지표 평균을 계산할 상세 결과를 불러오지 못했습니다.'
+        : null
+    if (trendController === controller) trendController = null
+    return failures === 0
+  }
+
+  async function retryTrend(): Promise<void> {
+    if (studentId.value !== null) await loadTrend(studentId.value)
+  }
+
+  function clearQuestionGaze(): void {
+    questionGazeController?.abort()
+    questionGazeAvailabilityController?.abort()
+    questionGazeController = null
+    questionGazeAvailabilityController = null
+    questionGazeGeneration += 1
+    questionGazeAvailabilityGeneration += 1
+    selectedQuestionTestId.value = null
+    selectedQuestionNo.value = null
+    questionGazeAnalysis.value = null
+    questionGazeStatus.value = 'idle'
+    questionGazeError.value = null
+    questionGazeAvailability.value = {}
+    questionGazeByKey.value = {}
+    questionGazeAvailabilityStatus.value = 'idle'
+    questionGazeAvailabilityFailedCount.value = 0
+  }
+
+  async function loadQuestionGazeAvailability(
+    currentStudentId: number,
+    questions: readonly Pick<TestQuestionResult, 'testId' | 'questionNo'>[],
+  ): Promise<boolean> {
+    const currentKeys = new Set(
+      comparisonResult.value?.currentTest.questions.map((question) =>
+        questionKey(question.testId, question.questionNo),
+      ) ?? [],
+    )
+    const uniqueQuestions = [
+      ...new Map(
+        questions.map((question) => [
+          questionKey(question.testId, question.questionNo),
+          question,
+        ]),
+      ).values(),
+    ]
+    const requestedKeys = uniqueQuestions.map((question) =>
+      questionKey(question.testId, question.questionNo),
+    )
+    if (
+      studentId.value !== currentStudentId ||
+      uniqueQuestions.length === 0 ||
+      requestedKeys.some((key) => !currentKeys.has(key))
+    ) {
+      return false
+    }
+    const previousKeys = Object.keys(questionGazeAvailability.value)
+    if (
+      questionGazeAvailabilityStatus.value === 'success' &&
+      sameIds(previousKeys, requestedKeys)
+    ) {
+      return questionGazeAvailabilityFailedCount.value === 0
+    }
+
+    questionGazeAvailabilityController?.abort()
+    const controller = new AbortController()
+    questionGazeAvailabilityController = controller
+    const generation = ++questionGazeAvailabilityGeneration
+    if (previousKeys.length === 0) questionGazeAvailabilityStatus.value = 'loading'
+    questionGazeAvailabilityFailedCount.value = 0
+    const results = await Promise.allSettled(
+      uniqueQuestions.map((question) =>
+        repository.value.getQuestionGazeAnalysis(
+          currentStudentId,
+          question.testId,
+          question.questionNo,
+          { signal: controller.signal },
+        ),
+      ),
+    )
+    if (
+      generation !== questionGazeAvailabilityGeneration ||
+      studentId.value !== currentStudentId
+    ) {
+      return false
+    }
+    const availability: Record<string, QuestionGazeAvailability> = {}
+    const analyses: Record<string, GazeAnalysisState> = {}
+    let failedCount = 0
+    results.forEach((result, index) => {
+      const key = requestedKeys[index]!
+      if (result.status === 'fulfilled') {
+        availability[key] = result.value.status
+        analyses[key] = result.value
+      } else if (!isAbortError(result.reason)) {
+        availability[key] = 'ERROR'
+        failedCount += 1
+      }
+    })
+    questionGazeAvailability.value = availability
+    questionGazeByKey.value = analyses
+    questionGazeAvailabilityFailedCount.value = failedCount
+    questionGazeAvailabilityStatus.value = failedCount === results.length ? 'error' : 'success'
+    if (questionGazeAvailabilityController === controller) {
+      questionGazeAvailabilityController = null
+    }
+    return failedCount === 0
+  }
+
+  async function loadQuestionGaze(
+    currentStudentId: number,
+    testId: string,
+    questionNo: number,
+    force: boolean,
+  ): Promise<boolean> {
+    const questionExists = comparisonResult.value?.currentTest.questions.some(
+      (question) => question.testId === testId && question.questionNo === questionNo,
+    )
+    if (studentId.value !== currentStudentId || !questionExists) return false
+    if (
+      !force &&
+      selectedQuestionTestId.value === testId &&
+      selectedQuestionNo.value === questionNo &&
+      (questionGazeStatus.value === 'loading' || questionGazeStatus.value === 'success')
+    ) {
+      return questionGazeStatus.value === 'success'
+    }
+
+    questionGazeController?.abort()
+    const controller = new AbortController()
+    questionGazeController = controller
+    const generation = ++questionGazeGeneration
+    if (
+      selectedQuestionTestId.value !== testId ||
+      selectedQuestionNo.value !== questionNo
+    ) {
+      questionGazeAnalysis.value = null
+    }
+    selectedQuestionTestId.value = testId
+    selectedQuestionNo.value = questionNo
+    questionGazeStatus.value = 'loading'
+    questionGazeError.value = null
+    const key = questionKey(testId, questionNo)
+    const cached = questionGazeByKey.value[key]
+    if (!force && cached?.status === 'AVAILABLE') {
+      questionGazeController = null
+      questionGazeAnalysis.value = cached
+      questionGazeStatus.value = 'success'
+      return true
+    }
+    try {
+      const state = await repository.value.getQuestionGazeAnalysis(
+        currentStudentId,
+        testId,
+        questionNo,
+        { signal: controller.signal },
+      )
+      if (
+        generation !== questionGazeGeneration ||
+        studentId.value !== currentStudentId ||
+        selectedQuestionTestId.value !== testId ||
+        selectedQuestionNo.value !== questionNo
+      ) {
+        return false
+      }
+      questionGazeByKey.value = { ...questionGazeByKey.value, [key]: state }
+      questionGazeAvailability.value = {
+        ...questionGazeAvailability.value,
+        [key]: state.status,
+      }
+      questionGazeAvailabilityFailedCount.value = Object.values(
+        questionGazeAvailability.value,
+      ).filter((status) => status === 'ERROR').length
+      questionGazeAvailabilityStatus.value = 'success'
+      questionGazeAnalysis.value = state
+      questionGazeStatus.value = 'success'
+      return true
+    } catch (error) {
+      if (isAbortError(error) || generation !== questionGazeGeneration) return false
+      questionGazeAnalysis.value = null
+      questionGazeStatus.value = 'error'
+      questionGazeError.value = gazeErrorMessage(error)
+      questionGazeAvailability.value = {
+        ...questionGazeAvailability.value,
+        [key]: 'ERROR',
+      }
+      questionGazeAvailabilityFailedCount.value = Object.values(
+        questionGazeAvailability.value,
+      ).filter((status) => status === 'ERROR').length
+      questionGazeAvailabilityStatus.value =
+        questionGazeAvailabilityFailedCount.value ===
+        Object.keys(questionGazeAvailability.value).length
+          ? 'error'
+          : 'success'
+      return false
+    } finally {
+      if (questionGazeController === controller) questionGazeController = null
+    }
+  }
+
+  function selectQuestionGaze(
+    currentStudentId: number,
+    testId: string,
+    questionNo: number,
+  ): Promise<boolean> {
+    return loadQuestionGaze(currentStudentId, testId, questionNo, false)
+  }
+
+  async function retryQuestionGaze(): Promise<void> {
+    if (
+      studentId.value === null ||
+      selectedQuestionTestId.value === null ||
+      selectedQuestionNo.value === null
+    ) {
+      return
+    }
+    await loadQuestionGaze(
+      studentId.value,
+      selectedQuestionTestId.value,
+      selectedQuestionNo.value,
+      true,
+    )
+  }
+
+  function reset(): void {
+    abortRequests()
+    listGeneration += 1
+    comparisonGeneration += 1
+    trendGeneration += 1
+    questionGazeGeneration += 1
+    questionGazeAvailabilityGeneration += 1
+    clearState(null)
+  }
+
+  return {
+    studentId,
+    tests,
+    currentTestCurriculumId,
+    comparisonTestCurriculumIds,
+    comparisonResult,
+    trendDetails,
+    currentTest,
+    comparisonTests,
+    availableComparisonTests,
+    canAddComparison,
+    listStatus,
+    comparisonStatus,
+    trendStatus,
+    listError,
+    listUiError,
+    comparisonError,
+    trendError,
+    trendFailedCount,
+    selectedQuestionTestId,
+    selectedQuestionNo,
+    questionGazeAnalysis,
+    questionGazeStatus,
+    questionGazeError,
+    questionGazeAvailability,
+    questionGazeAvailabilityStatus,
+    questionGazeAvailabilityFailedCount,
+    setRepository,
+    loadForStudent,
+    refreshForStudent,
+    retryList,
+    selectCurrentTest,
+    addComparisonTest,
+    removeComparisonTest,
+    retryComparison,
+    retryTrend,
+    selectQuestionGaze,
+    loadQuestionGazeAvailability,
+    retryQuestionGaze,
+    clearQuestionGaze,
+    reset,
+  }
+})
