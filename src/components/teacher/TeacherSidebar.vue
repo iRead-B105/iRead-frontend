@@ -7,6 +7,7 @@ import type { StudentNavigationItem } from '@/features/teacher/student'
 import { useReportStore } from '@/stores/report'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
+import { resolveImageUrl } from '@/lib/image'
 import SidebarIcon from '@/components/teacher/SidebarIcon.vue'
 import StudentSwitcher from '@/components/teacher/StudentSwitcher.vue'
 
@@ -27,7 +28,7 @@ const currentStudent = computed(
     null,
 )
 const profileImageUrl = computed(
-  () => teacher.value?.profileImageUrl ?? '/images/teacher-profile.png',
+  () => resolveImageUrl(teacher.value?.profileImageUrl) ?? '/images/teacher-profile.png',
 )
 const studentRouteNames = new Set([
   'student-overview',
@@ -94,7 +95,6 @@ onMounted(() => {
         </span>
         <span>
           <strong>아동을 선택해 주세요</strong>
-          <small>아동 목록에서 선택</small>
         </span>
       </Button>
 
@@ -269,6 +269,31 @@ onMounted(() => {
   color: var(--slate-600);
   text-align: left;
   grid-template-columns: 38px minmax(0, 1fr);
+  border: 1.5px dashed var(--slate-300);
+  animation: placeholder-pulse 2.5s infinite ease-in-out;
+  transition: all 0.2s;
+}
+
+.student-profile-placeholder:hover {
+  animation: none;
+  border-color: var(--primary-400);
+  background-color: var(--primary-50);
+  color: var(--primary-700);
+}
+
+@keyframes placeholder-pulse {
+  0% {
+    border-color: var(--slate-300);
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  }
+  50% {
+    border-color: var(--primary-400);
+    box-shadow: 0 0 0 6px var(--primary-50);
+  }
+  100% {
+    border-color: var(--slate-300);
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  }
 }
 
 .student-profile-placeholder__avatar {
@@ -279,6 +304,12 @@ onMounted(() => {
   background: var(--slate-100);
   color: var(--slate-400);
   place-items: center;
+  transition: all 0.2s;
+}
+
+.student-profile-placeholder:hover .student-profile-placeholder__avatar {
+  background: var(--primary-100);
+  color: var(--primary-600);
 }
 
 .student-profile-placeholder > span:last-child {

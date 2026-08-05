@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
+import { Search, RotateCcw, Settings2 } from '@lucide/vue'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import SaveToast from '@/components/common/SaveToast.vue'
 import { Button } from '@/components/ui/button'
@@ -32,6 +33,7 @@ import {
 import { asyncStateKind } from '@/features/teacher/error'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import { useStudentStore } from '@/stores/students'
+import { resolveImageUrl } from '@/lib/image'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,9 +58,14 @@ const recentDays = ref(
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 
 const currentPage = computed(() => studentStore.query.page + 1)
-const pageNumbers = computed(() =>
-  Array.from({ length: totalPages.value }, (_, index) => index + 1),
-)
+const pageNumbers = computed(() => {
+  const current = currentPage.value
+  const total = totalPages.value
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  if (current <= 3) return [1, 2, 3, 4, '...', total]
+  if (current >= total - 2) return [1, '...', total - 3, total - 2, total - 1, total]
+  return [1, '...', current - 1, current, current + 1, '...', total]
+})
 const isInitialLoading = computed(
   () => listStatus.value === 'loading' && students.value.length === 0,
 )
@@ -151,7 +158,7 @@ onBeforeUnmount(() => {
 
     <Card class="filters">
       <label class="search" for="student-search">
-        <span aria-hidden="true">⌕</span>
+        <Search class="search-icon" aria-hidden="true" />
         <span class="sr-only">이름 또는 학교 검색</span>
         <Input
           id="student-search"
@@ -187,6 +194,17 @@ onBeforeUnmount(() => {
         @click="router.push({ name: 'student-create' })"
       >
         ＋ 아동 등록
+      </Button>
+      <Button
+        v-if="hasActiveFilters"
+        variant="ghost"
+        class="clear-filters-button"
+        type="button"
+        aria-label="검색 조건 초기화"
+        @click="clearFilters"
+      >
+        <RotateCcw class="w-4 h-4" style="margin-right: 6px;" />
+        초기화
       </Button>
     </Card>
 
@@ -236,6 +254,7 @@ onBeforeUnmount(() => {
       @retry="studentStore.loadList()"
     />
 
+    <!-- Desktop Table View -->
     <Card
       v-if="
         !isInitialLoading &&
@@ -243,17 +262,17 @@ onBeforeUnmount(() => {
         !isEmptySearch &&
         (listStatus !== 'error' || hasRetainedStudents)
       "
-      class="table-card"
+      class="table-card desktop-view"
     >
       <Table caption="담당 아동 목록">
         <TableHeader>
           <TableRow>
             <TableHead>아동</TableHead>
-            <TableHead>현재 학습</TableHead>
-            <TableHead>최근 학습</TableHead>
-            <TableHead>이번 주 상태</TableHead>
-            <TableHead>누적 학습</TableHead>
-            <TableHead><span class="sr-only">정보 수정</span></TableHead>
+            <TableHead class="text-center">현재 학습</TableHead>
+            <TableHead class="text-center">최근 학습</TableHead>
+            <TableHead class="text-center">이번 주 상태</TableHead>
+            <TableHead class="text-center">누적 학습</TableHead>
+            <TableHead class="text-center"><span class="sr-only">정보 수정</span></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -269,7 +288,7 @@ onBeforeUnmount(() => {
           >
             <TableCell>
               <div class="student-link">
-                <img v-if="student.imageUrl" :src="student.imageUrl" alt="" />
+                <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
                 <span v-else class="avatar" aria-hidden="true">{{
                   studentInitial(student.name)
                 }}</span>
@@ -282,9 +301,9 @@ onBeforeUnmount(() => {
                 </span>
               </div>
             </TableCell>
-            <TableCell>{{ student.recentTraining ?? '완료 훈련 없음' }}</TableCell>
-            <TableCell>{{ formatLearningDate(student.recentLearningDate) }}</TableCell>
-            <TableCell>
+            <TableCell class="text-center">{{ student.recentTraining ?? '완료 훈련 없음' }}</TableCell>
+            <TableCell class="text-center">{{ formatLearningDate(student.recentLearningDate) }}</TableCell>
+            <TableCell class="text-center">
               {{
                 formatWeeklyParticipation(
                   student.weeklyParticipationRate,
@@ -293,23 +312,95 @@ onBeforeUnmount(() => {
                 )
               }}
             </TableCell>
-            <TableCell>{{ formatLearningMinutes(student.totalLearningMinutes) }}</TableCell>
-            <TableCell>
+            <TableCell class="text-center">{{ formatLearningMinutes(student.totalLearningMinutes) }}</TableCell>
+            <TableCell class="text-center">
               <Button
-                variant="outline"
-                size="sm"
+                variant="ghost"
+                size="icon"
                 type="button"
                 :aria-label="`${student.name} 정보 수정`"
+                title="정보 수정"
                 @click.stop="editStudent(student)"
                 @keydown.stop
               >
-                정보 수정
+                <Settings2 class="w-5 h-5 text-slate-500" />
               </Button>
             </TableCell>
           </TableRow>
         </TableBody>
       </Table>
     </Card>
+
+    <!-- Mobile Card View -->
+    <div
+      v-if="
+        !isInitialLoading &&
+        !isEmptyAccount &&
+        !isEmptySearch &&
+        (listStatus !== 'error' || hasRetainedStudents)
+      "
+      class="mobile-view"
+    >
+      <Card
+        v-for="student in students"
+        :key="student.studentId"
+        class="student-mobile-card"
+        tabindex="0"
+        :aria-label="`${student.name} 학습 현황으로 이동`"
+        @click="openStudent(student)"
+        @keydown.enter="openStudent(student)"
+        @keydown.space.prevent="openStudent(student)"
+      >
+        <div class="mobile-card-header">
+          <div class="student-link">
+            <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
+            <span v-else class="avatar" aria-hidden="true">{{
+              studentInitial(student.name)
+            }}</span>
+            <span class="student-identity">
+              <strong>{{ student.name }}</strong>
+              <small>
+                {{ student.school ?? '학교 미입력' }} ·
+                {{ student.age === null ? '나이 미입력' : `만 ${student.age}세` }}
+              </small>
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="mobile-edit-btn"
+            type="button"
+            :aria-label="`${student.name} 정보 수정`"
+            @click.stop="editStudent(student)"
+            @keydown.stop
+          >
+            <Settings2 class="w-5 h-5 text-slate-500" />
+          </Button>
+        </div>
+        <div class="mobile-card-body">
+          <div class="stat-item">
+            <span class="stat-label">현재 학습</span>
+            <span class="stat-value">{{ student.recentTraining ?? '완료 훈련 없음' }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">최근 학습</span>
+            <span class="stat-value">{{ formatLearningDate(student.recentLearningDate) }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">이번 주 상태</span>
+            <span class="stat-value">
+              {{
+                formatWeeklyParticipation(
+                  student.weeklyParticipationRate,
+                  student.weeklyCompletedCount,
+                  student.weeklyScheduledCount,
+                )
+              }}
+            </span>
+          </div>
+        </div>
+      </Card>
+    </div>
 
     <nav v-if="totalPages > 1" class="pagination" aria-label="아동 목록 페이지 이동">
       <Button
@@ -322,15 +413,15 @@ onBeforeUnmount(() => {
         이전
       </Button>
       <Button
-        v-for="page in pageNumbers"
-        :key="page"
+        v-for="(page, idx) in pageNumbers"
+        :key="idx"
         type="button"
         size="sm"
-        :variant="currentPage === page ? 'default' : 'outline'"
-        :disabled="listStatus === 'loading'"
+        :variant="currentPage === page ? 'default' : (page === '...' ? 'ghost' : 'outline')"
+        :disabled="listStatus === 'loading' || page === '...'"
         :aria-current="currentPage === page ? 'page' : undefined"
-        :aria-label="`${page}페이지${currentPage === page ? ', 현재 페이지' : ''}`"
-        @click="goToPage(page)"
+        :aria-label="page === '...' ? '생략됨' : `${page}페이지${currentPage === page ? ', 현재 페이지' : ''}`"
+        @click="page !== '...' && goToPage(Number(page))"
       >
         {{ page }}
       </Button>
@@ -379,21 +470,23 @@ onBeforeUnmount(() => {
   display: grid;
   min-width: 0;
   align-items: center;
-  grid-template-columns: minmax(260px, 1fr) 150px 150px auto;
-  gap: 10px;
+  grid-template-columns: minmax(200px, 1fr) 130px 130px auto auto;
+  gap: 12px;
   padding: 14px;
-}
-.student-create-button {
-  justify-self: end;
 }
 .search {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.search > span {
+.search-icon {
+  width: 20px;
+  height: 20px;
   color: var(--slate-400);
-  font-size: 20px;
+}
+.clear-filters-button {
+  justify-self: end;
+  color: var(--slate-500);
 }
 .state-card {
   display: grid;
@@ -409,8 +502,20 @@ onBeforeUnmount(() => {
   overflow-x: auto;
   padding: 0;
 }
+.table-card :deep(th:first-child),
+.table-card :deep(td:first-child) {
+  padding-left: 20px;
+}
+.table-card :deep(th:last-child),
+.table-card :deep(td:last-child) {
+  padding-right: 20px;
+}
 .student-row {
   cursor: pointer;
+  transition: background-color 0.2s;
+}
+.student-row:hover {
+  background-color: var(--slate-50);
 }
 .student-row:focus-visible {
   outline: 3px solid color-mix(in oklch, var(--ring) 48%, transparent);
@@ -418,17 +523,30 @@ onBeforeUnmount(() => {
 }
 .student-link {
   display: flex;
-  min-width: 190px;
+  min-width: 150px;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
+  overflow: hidden;
 }
 .student-identity {
   display: grid;
   justify-items: start;
   gap: 2px;
+  overflow: hidden;
+  width: 100%;
+}
+.student-identity strong {
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .student-identity small {
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--slate-500);
   font-size: 11px;
   font-weight: 500;
@@ -465,6 +583,49 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   border: 0;
 }
+.mobile-view {
+  display: none;
+}
+.student-mobile-card {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.student-mobile-card:hover {
+  background-color: var(--slate-50);
+}
+.student-mobile-card:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--ring) 48%, transparent);
+  outline-offset: -3px;
+}
+.mobile-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.mobile-edit-btn {
+  margin-left: auto;
+}
+.mobile-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+}
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+}
+.stat-label {
+  color: var(--slate-500);
+}
+.stat-value {
+  font-weight: 500;
+}
+
 @media (max-width: 760px) {
   .page-heading {
     align-items: stretch;
@@ -473,10 +634,7 @@ onBeforeUnmount(() => {
   }
   .filters {
     grid-template-columns: 1fr 1fr;
-  }
-
-  .filters {
-    padding: 12px;
+    padding: 16px;
   }
 
   .search {
@@ -485,10 +643,25 @@ onBeforeUnmount(() => {
 
   .student-create-button {
     grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .clear-filters-button {
+    grid-column: 1 / -1;
+    justify-self: end;
   }
 }
 
 @media (max-width: 480px) {
+  .desktop-view {
+    display: none;
+  }
+  .mobile-view {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
   .page-heading h1 {
     font-size: 22px;
   }
@@ -502,13 +675,16 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .search,
-  .student-create-button {
+  .search {
     grid-column: auto;
   }
 
   .student-create-button {
     width: 100%;
+  }
+
+  .clear-filters-button {
+    justify-self: center;
   }
 
   .pagination :deep([data-slot='button']) {

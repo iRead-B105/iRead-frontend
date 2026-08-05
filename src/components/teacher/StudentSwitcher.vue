@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { Search, Settings2, Check } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { StudentNavigationItem } from '@/features/teacher/student'
 import { useStudentStore } from '@/stores/students'
+import { resolveImageUrl } from '@/lib/image'
 
 const props = defineProps<{
   currentStudent: StudentNavigationItem
@@ -150,7 +152,7 @@ onBeforeUnmount(() => {
     >
       <img
         v-if="currentStudent.imageUrl"
-        :src="currentStudent.imageUrl"
+        :src="resolveImageUrl(currentStudent.imageUrl) || ''"
         :alt="currentStudent.name"
       />
       <span v-else class="student-avatar" aria-hidden="true">
@@ -160,12 +162,13 @@ onBeforeUnmount(() => {
         <strong>{{ currentStudent.name }}</strong>
         <small>{{ currentStudent.school }}</small>
       </span>
-      <span aria-hidden="true">⌄</span>
+      <span aria-hidden="true" class="trigger-icon">⌄</span>
     </Button>
 
-    <section
-      v-if="isOpen"
-      id="student-switcher-popover"
+    <Transition name="popover-fade">
+      <section
+        v-if="isOpen"
+        id="student-switcher-popover"
       ref="popover"
       class="student-switcher__popover"
       role="dialog"
@@ -176,21 +179,24 @@ onBeforeUnmount(() => {
     >
       <header>
         <strong id="student-switcher-title">학습자 변경</strong>
-        <span id="student-switcher-count" aria-live="polite">
+        <Badge variant="secondary" class="student-count-badge" aria-live="polite">
           {{ navigationItems.length }}명 표시 중
-        </span>
+        </Badge>
       </header>
 
-      <label class="student-switcher__search" for="student-switcher-search">
-        <span aria-hidden="true">⌕</span>
-        <span class="sr-only">이름 또는 학교 검색</span>
-        <Input
-          id="student-switcher-search"
-          v-model="keyword"
-          type="search"
-          placeholder="이름 또는 학교 검색"
-        />
-      </label>
+      <div class="student-switcher__search-wrapper">
+        <label class="student-switcher__search" for="student-switcher-search">
+          <Search class="search-icon" aria-hidden="true" />
+          <span class="sr-only">이름 또는 학교 검색</span>
+          <Input
+            id="student-switcher-search"
+            v-model="keyword"
+            type="search"
+            class="search-input"
+            placeholder="이름 또는 학교 검색"
+          />
+        </label>
+      </div>
 
       <div class="student-switcher__list">
         <p v-if="!keyword && recentStudents.length" class="section-label">최근 본 학습자</p>
@@ -204,7 +210,7 @@ onBeforeUnmount(() => {
           :aria-current="student.studentId === currentStudent.studentId ? 'true' : undefined"
           @click="selectStudent(student)"
         >
-          <img v-if="student.imageUrl" :src="student.imageUrl" alt="" />
+          <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
           <span v-else class="student-avatar" aria-hidden="true">{{
             studentInitial(student.name)
           }}</span>
@@ -212,9 +218,9 @@ onBeforeUnmount(() => {
             ><strong>{{ student.name }}</strong
             ><small>{{ student.school ?? '학교 미입력' }}</small></span
           >
-          <span v-if="student.studentId === currentStudent.studentId" aria-label="현재 학습자"
-            >✓</span
-          >
+          <span v-if="student.studentId === currentStudent.studentId" class="selected-indicator" aria-label="현재 학습자">
+            <Check class="w-4 h-4" />
+          </span>
         </Button>
 
         <p class="section-label">{{ keyword ? '검색 결과' : '전체 학습자' }}</p>
@@ -228,7 +234,7 @@ onBeforeUnmount(() => {
           :aria-current="student.studentId === currentStudent.studentId ? 'true' : undefined"
           @click="selectStudent(student)"
         >
-          <img v-if="student.imageUrl" :src="student.imageUrl" alt="" />
+          <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
           <span v-else class="student-avatar" aria-hidden="true">{{
             studentInitial(student.name)
           }}</span>
@@ -236,9 +242,9 @@ onBeforeUnmount(() => {
             ><strong>{{ student.name }}</strong
             ><small>{{ student.school ?? '학교 미입력' }}</small></span
           >
-          <span v-if="student.studentId === currentStudent.studentId" aria-label="현재 학습자"
-            >✓</span
-          >
+          <span v-if="student.studentId === currentStudent.studentId" class="selected-indicator" aria-label="현재 학습자">
+            <Check class="w-4 h-4" />
+          </span>
         </Button>
 
         <p v-if="navigationStatus === 'loading'" class="state-copy" role="status">
@@ -272,9 +278,11 @@ onBeforeUnmount(() => {
       </div>
 
       <Button variant="ghost" class="manage" type="button" @click="manageStudents">
+        <Settings2 class="w-4 h-4 mr-2" />
         전체 학습자 목록에서 관리
       </Button>
     </section>
+    </Transition>
   </div>
 </template>
 
@@ -337,95 +345,181 @@ onBeforeUnmount(() => {
 .student-option small {
   overflow: hidden;
   color: var(--slate-500);
-  font-size: 10px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.trigger-icon {
+  color: var(--slate-400);
+  font-size: 18px;
+  margin-top: -6px;
 }
 .student-switcher__popover {
   position: absolute;
   z-index: 50;
   top: 0;
   left: calc(100% + 14px);
-  width: 300px;
+  width: 320px;
   overflow: hidden;
   border: 1px solid var(--slate-200);
-  border-radius: var(--radius-md);
-  background: var(--popover);
-  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 40px -10px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06);
+  transform-origin: top left;
+}
+.popover-fade-enter-active,
+.popover-fade-leave-active {
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.popover-fade-enter-from,
+.popover-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.96) translateX(-4px);
 }
 .student-switcher__popover header {
   display: flex;
-  min-height: 48px;
+  min-height: 54px;
   align-items: center;
   justify-content: space-between;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--slate-200);
+  padding: 0 18px;
+  background: var(--popover);
+  border-bottom: 1px solid var(--slate-100);
 }
-.student-switcher__popover header span,
-.section-label,
-.state-copy {
-  color: var(--slate-500);
-  font-size: 10px;
+.student-switcher__popover header strong {
+  font-size: 15px;
+  color: var(--slate-900);
+}
+.student-count-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+.student-switcher__search-wrapper {
+  padding: 12px 14px 4px;
 }
 .student-switcher__search {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin: 12px;
+}
+.search-icon {
+  position: absolute;
+  left: 12px;
+  width: 18px;
+  height: 18px;
+  color: var(--slate-400);
+  pointer-events: none;
+}
+.search-input {
+  padding-left: 36px;
+  border-radius: var(--radius-full);
+  background: var(--slate-50);
+  border: 1px solid transparent;
+  transition: all 0.2s;
+  height: 38px;
+}
+.search-input:focus-visible {
+  background: var(--background);
+  border-color: var(--primary-400);
+  box-shadow: 0 0 0 3px var(--primary-50);
 }
 .student-switcher__list {
-  max-height: 330px;
-  padding: 0 8px 10px;
+  max-height: 340px;
+  padding: 4px 14px 14px;
   overflow-y: auto;
 }
+.student-switcher__list::-webkit-scrollbar {
+  width: 6px;
+}
+.student-switcher__list::-webkit-scrollbar-thumb {
+  background: var(--slate-200);
+  border-radius: 4px;
+}
+.student-switcher__list::-webkit-scrollbar-thumb:hover {
+  background: var(--slate-300);
+}
 .section-label {
-  margin: 8px;
-  font-weight: 800;
+  margin: 14px 6px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--slate-400);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 .student-option {
   display: grid;
   width: 100%;
-  min-height: 50px;
-  gap: 9px;
+  min-height: 56px;
+  gap: 12px;
   margin-top: 4px;
-  border: 1px solid var(--slate-200);
-  border-radius: var(--radius-sm);
-  background: var(--card);
-  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  grid-template-columns: 36px minmax(0, 1fr) 20px;
+  transition: all 0.2s ease;
 }
 .student-option[data-selected='true'] {
-  background: var(--active-selection-background);
-  color: var(--active-selection-foreground);
+  background: var(--primary-50);
+  color: var(--primary-900);
+}
+.student-option[data-selected='true'] .student-avatar {
+  background: var(--primary-100);
+  color: var(--primary-700);
 }
 .student-option:hover {
-  background: var(--interactive-hover-background);
-  color: var(--sidebar-accent-foreground);
+  background: var(--slate-100);
+  transform: translateX(2px);
+}
+.student-option[data-selected='true']:hover {
+  background: var(--primary-100);
 }
 .student-option img {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.selected-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-600);
 }
 .state-copy {
   display: grid;
   justify-items: center;
   gap: 8px;
-  margin: 20px 8px;
+  margin: 30px 8px;
   text-align: center;
+  color: var(--slate-500);
+  font-size: 13px;
 }
 .state-copy p {
   margin: 0;
 }
 .load-more {
   width: 100%;
-  margin-top: 8px;
+  margin-top: 12px;
+  border-radius: var(--radius-lg);
 }
 .manage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  min-height: 42px;
-  border-top: 1px solid var(--slate-200);
+  min-height: 48px;
+  background: var(--slate-50);
+  border-top: 1px solid var(--slate-100);
   border-radius: 0;
-  color: var(--primary-700);
+  color: var(--slate-600);
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.manage:hover {
+  background: var(--slate-100);
+  color: var(--slate-900);
 }
 @media (max-width: 900px) {
   .student-switcher__popover {

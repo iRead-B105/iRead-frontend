@@ -3,6 +3,7 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { buttonVariants } from '@/components/ui/button'
 import { validateProfileImage } from '@/features/teacher/profileImageValidation'
 import { cn } from '@/lib/utils'
+import { resolveImageUrl } from '@/lib/image'
 
 const props = withDefaults(
   defineProps<{
@@ -29,13 +30,13 @@ const emit = defineEmits<{
   error: [message: string | null]
 }>()
 
-const previewUrl = ref(props.imageUrl)
+const previewUrl = ref(resolveImageUrl(props.imageUrl))
 let temporaryUrl = ''
 
 watch(
   () => props.imageUrl,
   (value) => {
-    if (!temporaryUrl) previewUrl.value = value
+    if (!temporaryUrl) previewUrl.value = resolveImageUrl(value)
   },
 )
 
@@ -44,7 +45,7 @@ watch(
   () => {
     if (temporaryUrl) URL.revokeObjectURL(temporaryUrl)
     temporaryUrl = ''
-    previewUrl.value = props.imageUrl
+    previewUrl.value = resolveImageUrl(props.imageUrl)
   },
 )
 

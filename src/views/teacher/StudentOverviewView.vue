@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { AlertCircle, BookOpen, Clock3, UserRound } from '@lucide/vue'
+import { AlertCircle } from '@lucide/vue'
 import type { EChartsOption } from 'echarts'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import ChartPanel from '@/components/common/ChartPanel.vue'
@@ -8,18 +8,15 @@ import PageHeader from '@/components/teacher/PageHeader.vue'
 import StudentCommunicationPanel from '@/components/teacher/StudentCommunicationPanel.vue'
 import StudentLearningEvents from '@/components/teacher/StudentLearningEvents.vue'
 import StudentMetricRecords from '@/components/teacher/StudentMetricRecords.vue'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
+
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import {
   appendSummaryToTeacherMemo,
   formatLearningEventMemoSummary,
-  formatStudentDateTime,
   normalizeTeacherMemo,
   validateTeacherMemo,
-  type StudentAttentionReason,
   type StudentLearningEventDetail,
   type StudentLearningEvent,
   type StudentLearningEventType,
@@ -27,12 +24,6 @@ import {
 import { isApiError } from '@/lib/api'
 import { useStudentStore } from '@/stores/students'
 
-const attentionReasonLabels: Readonly<Record<StudentAttentionReason, string>> = {
-  LOW_ACCURACY: '정확도 저하',
-  GAZE_ANALYSIS_FAILED: '시선 분석 확인',
-  INACTIVE: '학습 공백',
-  NO_HISTORY: '학습 기록 없음',
-}
 
 const route = useRoute()
 const router = useRouter()
@@ -40,15 +31,11 @@ const studentStore = useStudentStore()
 const studentId = computed(() => Number(route.params.id))
 const validStudentId = computed(() => Number.isInteger(studentId.value) && studentId.value > 0)
 const detail = computed(() => studentStore.detailsById[studentId.value])
-const learningSummary = computed(() => studentStore.learningSummaryById[studentId.value])
 const detailStatus = computed(() => studentStore.detailStatusById[studentId.value] ?? 'idle')
 const detailErrorStatus = computed(
   () => studentStore.detailErrorStatusById[studentId.value] ?? null,
 )
-const learningSummaryStatus = computed(
-  () => studentStore.learningSummaryStatusById[studentId.value] ?? 'idle',
-)
-const learningSummaryError = computed(() => studentStore.learningSummaryErrorById[studentId.value])
+
 const learningEvents = computed(() => studentStore.learningEventsById[studentId.value] ?? [])
 const learningEventsStatus = computed(
   () => studentStore.learningEventsStatusById[studentId.value] ?? 'idle',
@@ -265,9 +252,6 @@ const selectedTrendAriaLabel = computed(() =>
     ? '제공된 날짜별 읽기 정확도 추이 차트'
     : '최근 30일 날짜별 읽기 속도 추이 차트',
 )
-const visibleAttentionReasons = computed(
-  () => learningSummary.value?.attentionReasons.filter((reason) => reason !== 'NO_HISTORY') ?? [],
-)
 
 const noteDraft = ref('')
 const memoSaving = ref(false)
@@ -328,7 +312,6 @@ async function loadOverview(nextStudentId: number): Promise<void> {
     studentStore.detailsById[nextStudentId] && studentStore.detailStaleById[nextStudentId] !== true
       ? Promise.resolve(studentStore.detailsById[nextStudentId])
       : studentStore.loadDetail(nextStudentId),
-    studentStore.loadLearningSummary(nextStudentId),
     studentStore.loadLearningEvents(nextStudentId, 3),
     studentStore.loadAccuracyTrend(nextStudentId),
     studentStore.loadAccuracyRecords(nextStudentId),
@@ -482,64 +465,7 @@ watch(studentId, loadOverview, { immediate: true })
     <template v-else>
       <PageHeader title="학습 현황" />
 
-      <section class="learning-summary-section" aria-labelledby="learning-summary-title">
-        <header>
-          <div>
-            <h2 id="learning-summary-title">학습 상태 요약</h2>
-          </div>
-          <Button
-            v-if="learningSummaryStatus === 'error'"
-            variant="outline"
-            size="sm"
-            type="button"
-            @click="studentStore.loadLearningSummary(detail.studentId)"
-          >
-            다시 시도
-          </Button>
-        </header>
 
-        <Alert v-if="learningSummaryStatus === 'error'" variant="destructive">
-          <AlertCircle aria-hidden="true" />
-          <AlertTitle>학습 상태를 불러오지 못했습니다.</AlertTitle>
-          <AlertDescription>
-            {{ learningSummaryError ?? '잠시 후 다시 시도해 주세요.' }}
-          </AlertDescription>
-        </Alert>
-
-        <div
-          v-else-if="learningSummaryStatus === 'loading' || !learningSummary"
-          class="summary-loading"
-          aria-live="polite"
-        >
-          학습 상태를 불러오는 중입니다.
-        </div>
-
-        <div v-else class="summary-grid">
-          <Card class="summary-card">
-            <BookOpen :size="20" aria-hidden="true" />
-            <span>현재 단계</span>
-            <strong>{{ learningSummary.currentStage ?? '단계 정보 없음' }}</strong>
-          </Card>
-          <Card class="summary-card">
-            <Clock3 :size="20" aria-hidden="true" />
-            <span>최근 학습</span>
-            <strong>{{ formatStudentDateTime(learningSummary.lastLearningAt) }}</strong>
-          </Card>
-          <Card
-            class="summary-card summary-card--attention"
-            :class="{ 'is-clear': learningSummary.attentionRequiredCount === 0 }"
-          >
-            <UserRound :size="20" aria-hidden="true" />
-            <span>교수자 확인 신호</span>
-            <strong>{{ learningSummary.attentionRequiredCount }}건</strong>
-            <ul v-if="visibleAttentionReasons.length" class="summary-card__reasons">
-              <li v-for="reason in visibleAttentionReasons" :key="reason">
-                <Badge variant="secondary">{{ attentionReasonLabels[reason] }}</Badge>
-              </li>
-            </ul>
-          </Card>
-        </div>
-      </section>
 
       <div class="learning-analysis">
         <Card class="trend-panel" :aria-labelledby="`${selectedTrend}-tab`">
@@ -712,96 +638,6 @@ watch(studentId, loadOverview, { immediate: true })
   animation: spin 0.8s linear infinite;
 }
 
-.learning-summary-section header p {
-  color: var(--slate-500);
-  font-size: 12px;
-}
-
-.learning-summary-section {
-  display: grid;
-  gap: 14px;
-}
-
-.learning-summary-section > header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.learning-summary-section header h2,
-.learning-summary-section header p {
-  margin: 0;
-}
-
-.learning-summary-section header h2 {
-  font-size: 18px;
-}
-
-.learning-summary-section header p {
-  margin-top: 4px;
-}
-
-.summary-grid {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.summary-card {
-  display: grid;
-  min-height: 132px;
-  align-content: center;
-  gap: 6px;
-  padding: 18px 18px 18px 28px;
-}
-
-.summary-card > svg {
-  margin-bottom: 5px;
-  color: var(--primary-600);
-}
-
-.summary-card span {
-  color: var(--slate-500);
-  font-size: 12px;
-}
-
-.summary-card strong {
-  color: var(--slate-900);
-  font-size: 15px;
-  line-height: 1.45;
-}
-
-.summary-card--attention > svg,
-.summary-card--attention strong {
-  color: var(--warning-700, #b45309);
-}
-
-.summary-card--attention.is-clear > svg,
-.summary-card--attention.is-clear strong {
-  color: var(--success-600);
-}
-
-.summary-card__reasons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin: 2px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.summary-card__reasons :deep([data-slot='badge']) {
-  font-size: 10px;
-}
-
-.summary-loading {
-  padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  color: var(--slate-500);
-  font-size: 13px;
-}
 
 .learning-analysis {
   display: grid;
