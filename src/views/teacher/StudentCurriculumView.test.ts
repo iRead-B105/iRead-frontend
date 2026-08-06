@@ -248,19 +248,19 @@ describe('StudentCurriculumView', () => {
   it('성취도 null을 0%가 아니라 대시(—)로 표시한다', async () => {
     const { wrapper } = await mountCurriculum(repository())
 
-    expect(wrapper.text()).toContain('전체 31')
+    expect(wrapper.text()).toContain('전체 28')
     expect(wrapper.text()).toContain('—')
     expect(wrapper.text()).not.toContain('모음 따라 보기0%')
   })
 
-  it('전체와 영역별 탭으로 31개 목록을 원래 순서 그대로 필터링한다', async () => {
+  it('전체와 영역별 탭으로 28개 목록을 원래 순서 그대로 필터링한다', async () => {
     const { wrapper, store } = await mountCurriculum(repository())
 
     const tabs = wrapper.findAll('[role="tab"]')
     expect(tabs[0]?.text()).toContain('전체')
-    expect(tabs[0]?.text()).toContain('31')
+    expect(tabs[0]?.text()).toContain('28')
     expect(tabs[0]?.attributes('aria-selected')).toBe('true')
-    expect(wrapper.findAll('.curriculum-row')).toHaveLength(31)
+    expect(wrapper.findAll('.curriculum-row')).toHaveLength(28)
     expect(store.catalog.map((item) => item.trainingTemplateId)).toEqual(
       trainingCatalogFixture.map((item) => item.trainingTemplateId),
     )
@@ -432,7 +432,7 @@ describe('StudentCurriculumView', () => {
     ).toBe(false)
   })
 
-  it('삭제 확인 후 선택한 훈련을 draft에서 제거한다', async () => {
+  it('삭제 버튼을 두 번 눌러 확인한 뒤 선택한 훈련을 draft에서 제거한다', async () => {
     const { wrapper, store } = await mountCurriculum(repository())
     const target = store.draftItems[0]!
 

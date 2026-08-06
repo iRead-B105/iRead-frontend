@@ -256,11 +256,15 @@ function refreshEditedPage(): void {
               :tabindex="selectedStoryId === story.storyId ? 0 : -1"
               @click="selectStory(story)"
             >
+              <strong>{{ story.title }}</strong>
+              <small v-if="story.chapterTitle" class="story-title-tab__chapter">{{ story.chapterTitle }}</small>
               <time :datetime="story.activityAt">
                 {{ formatStoryActivityAt(story.activityAt) }}
               </time>
-              <strong>{{ story.title }}</strong>
-              <small v-if="story.chapterTitle" class="story-title-tab__chapter">{{ story.chapterTitle }}</small>
+              <span class="story-title-tab__progress">
+                {{ story.generationProgress }}% ·
+                {{ story.readLineCount }}/{{ story.totalLineCount }}페이지
+              </span>
             </button>
           </div>
 

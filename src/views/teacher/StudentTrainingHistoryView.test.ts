@@ -35,17 +35,6 @@ async function mountHistory(
     {
       global: {
         plugins: [pinia, router],
-        stubs: {
-          ChartPanel: {
-            props: ['ariaLabel', 'summary', 'option'],
-            computed: {
-              categories() {
-                return this.option.xAxis.data.join(', ')
-              },
-            },
-            template: '<div data-test="chart">{{ ariaLabel }} {{ categories }} {{ summary }}</div>',
-          },
-        },
       },
     },
   )
@@ -67,7 +56,7 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('학습자 목록으로 이동')
   })
 
-  it('최신 커리큘럼의 첫 실제 훈련 상세·정확도 비교·시선 집계를 표시한다', async () => {
+  it('최신 커리큘럼의 평균 정확도·훈련별 정확도·문항 상세·시선 집계를 표시한다', async () => {
     const { wrapper } = await mountHistory(new TestTrainingRepository())
 
     const selectionCard = wrapper.get('[data-test="history-selection-card"]')
@@ -80,6 +69,8 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.find('.question-results > header').exists()).toBe(false)
     expect(wrapper.get('.history-gaze-shell h2').text()).toBe('훈련 시선 분석')
     expect(wrapper.text()).not.toContain('시선트래킹')
+    expect(selectionCard.text()).toContain('평균 정확도')
+    expect(wrapper.get('.curriculum-overview').text()).toContain('훈련 정확도')
 
     expect(wrapper.text()).toContain('2026.07.20')
     expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기')
