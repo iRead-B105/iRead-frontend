@@ -225,7 +225,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
   <form class="student-form page-stack" novalidate @submit.prevent="submitForm">
     <PageHeader :title="title" />
 
-    <SettingsSection title="아동 정보">
+    <SettingsSection title="아동 기본 정보">
       <ProfileImageEditor
         input-id="student-photo"
         label="프로필 사진"
@@ -306,79 +306,71 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
           </p>
         </div>
       </div>
-      <section class="form-subsection" aria-labelledby="guardian-section-title">
-        <div class="form-subsection__heading">
-          <h3 id="guardian-section-title">보호자 정보</h3>
-        </div>
-        <div class="form-grid">
-          <div class="field">
-            <Label for="guardian-name">보호자명 <span aria-hidden="true">*</span></Label>
-            <Input
-              id="guardian-name"
-              v-model="form.guardian"
-              required
-              :maxlength="STUDENT_FIELD_MAX_LENGTH.guardian"
-              :aria-invalid="Boolean(fieldErrors.guardian)"
-              :aria-describedby="fieldErrors.guardian ? 'guardian-name-error' : undefined"
-              placeholder="보호자 이름"
-            />
-            <p v-if="fieldErrors.guardian" id="guardian-name-error" class="field-error">
-              {{ fieldErrors.guardian }}
-            </p>
-          </div>
-          <div class="field">
-            <Label for="guardian-contact">보호자 연락처 <span aria-hidden="true">*</span></Label>
-            <Input
-              id="guardian-contact"
-              v-model="form.guardianContact"
-              required
-              :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianContact"
-              :aria-invalid="Boolean(fieldErrors.guardianContact)"
-              :aria-describedby="fieldErrors.guardianContact ? 'guardian-contact-error' : undefined"
-              inputmode="tel"
-              placeholder="010-0000-0000"
-            />
-            <p v-if="fieldErrors.guardianContact" id="guardian-contact-error" class="field-error">
-              {{ fieldErrors.guardianContact }}
-            </p>
-          </div>
-          <div class="field">
-            <Label for="guardian-email">보호자 이메일</Label>
-            <Input
-              id="guardian-email"
-              v-model="form.guardianEmail"
-              :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianEmail"
-              :aria-invalid="Boolean(fieldErrors.guardianEmail)"
-              :aria-describedby="fieldErrors.guardianEmail ? 'guardian-email-error' : undefined"
-              type="email"
-              placeholder="example@email.com"
-            />
-            <p v-if="fieldErrors.guardianEmail" id="guardian-email-error" class="field-error">
-              {{ fieldErrors.guardianEmail }}
-            </p>
-          </div>
-          <div class="field form-grid__wide">
-            <Label for="student-address">주소</Label>
-            <Input
-              id="student-address"
-              v-model="form.address"
-              :maxlength="STUDENT_FIELD_MAX_LENGTH.address"
-              :aria-invalid="Boolean(fieldErrors.address)"
-              :aria-describedby="fieldErrors.address ? 'student-address-error' : undefined"
-              placeholder="주소를 입력하세요"
-            />
-            <p v-if="fieldErrors.address" id="student-address-error" class="field-error">
-              {{ fieldErrors.address }}
-            </p>
-          </div>
-        </div>
-      </section>
+    </SettingsSection>
 
-      <section v-if="mode === 'edit'" class="danger-zone" aria-label="아동 삭제">
-        <Button variant="outline" size="sm" type="button" @click="openDeleteDialog">
-          아동 영구 삭제
-        </Button>
-      </section>
+    <SettingsSection title="보호자 및 연락처 정보">
+      <div class="form-grid">
+        <div class="field">
+          <Label for="guardian-name">보호자명 <span aria-hidden="true">*</span></Label>
+          <Input
+            id="guardian-name"
+            v-model="form.guardian"
+            required
+            :maxlength="STUDENT_FIELD_MAX_LENGTH.guardian"
+            :aria-invalid="Boolean(fieldErrors.guardian)"
+            :aria-describedby="fieldErrors.guardian ? 'guardian-name-error' : undefined"
+            placeholder="보호자 이름"
+          />
+          <p v-if="fieldErrors.guardian" id="guardian-name-error" class="field-error">
+            {{ fieldErrors.guardian }}
+          </p>
+        </div>
+        <div class="field">
+          <Label for="guardian-contact">보호자 연락처 <span aria-hidden="true">*</span></Label>
+          <Input
+            id="guardian-contact"
+            v-model="form.guardianContact"
+            required
+            :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianContact"
+            :aria-invalid="Boolean(fieldErrors.guardianContact)"
+            :aria-describedby="fieldErrors.guardianContact ? 'guardian-contact-error' : undefined"
+            inputmode="tel"
+            placeholder="010-0000-0000"
+          />
+          <p v-if="fieldErrors.guardianContact" id="guardian-contact-error" class="field-error">
+            {{ fieldErrors.guardianContact }}
+          </p>
+        </div>
+        <div class="field">
+          <Label for="guardian-email">보호자 이메일</Label>
+          <Input
+            id="guardian-email"
+            v-model="form.guardianEmail"
+            :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianEmail"
+            :aria-invalid="Boolean(fieldErrors.guardianEmail)"
+            :aria-describedby="fieldErrors.guardianEmail ? 'guardian-email-error' : undefined"
+            type="email"
+            placeholder="example@email.com"
+          />
+          <p v-if="fieldErrors.guardianEmail" id="guardian-email-error" class="field-error">
+            {{ fieldErrors.guardianEmail }}
+          </p>
+        </div>
+        <div class="field form-grid__wide">
+          <Label for="student-address">주소</Label>
+          <Input
+            id="student-address"
+            v-model="form.address"
+            :maxlength="STUDENT_FIELD_MAX_LENGTH.address"
+            :aria-invalid="Boolean(fieldErrors.address)"
+            :aria-describedby="fieldErrors.address ? 'student-address-error' : undefined"
+            placeholder="주소를 입력하세요"
+          />
+          <p v-if="fieldErrors.address" id="student-address-error" class="field-error">
+            {{ fieldErrors.address }}
+          </p>
+        </div>
+      </div>
     </SettingsSection>
 
     <div class="student-form__footer">
@@ -392,8 +384,23 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
         "
         @cancel="router.push({ name: 'teacher-students' })"
       />
-
     </div>
+
+    <section v-if="mode === 'edit'" class="danger-zone" aria-label="위험 구역">
+      <div class="danger-zone__info">
+        <h3>아동 계정 삭제</h3>
+        <p>아동 정보와 연결된 모든 학습 및 검사 기록이 영구 삭제되며, 이 작업은 복구할 수 없습니다.</p>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        type="button"
+        class="danger-zone__btn"
+        @click="openDeleteDialog"
+      >
+        아동 영구 삭제
+      </Button>
+    </section>
 
     <AlertDialog :open="deleteDialogOpen" @update:open="handleDeleteDialogOpen">
       <AlertDialogContent class="delete-dialog">
@@ -437,31 +444,37 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
 .student-form {
   width: 100%;
   min-width: 0;
-  max-width: 1080px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
 .form-grid {
   display: grid;
   max-width: none;
-  gap: 18px 24px;
+  gap: 20px 24px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .form-grid .field {
   display: grid;
   max-width: none;
-  gap: 7px;
+  gap: 6px;
+}
+
+.form-grid .field label {
+  color: var(--slate-700, #334155);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .section-fields {
-  padding-top: 18px;
+  padding-top: 20px;
   border-top: 1px solid var(--border);
 }
 
 .form-subsection {
-  margin-top: 24px;
-  padding-top: 22px;
+  margin-top: 28px;
+  padding-top: 24px;
   border-top: 1px solid var(--border);
 }
 
@@ -475,14 +488,15 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
 }
 
 .form-subsection__heading h3 {
-  color: var(--slate-900);
-  font-size: 15px;
+  color: var(--slate-900, #0f172a);
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .form-subsection__heading p {
   margin-top: 4px;
-  color: var(--slate-500);
-  font-size: 12px;
+  color: var(--slate-500, #64748b);
+  font-size: 13px;
 }
 
 .form-grid__wide {
@@ -499,7 +513,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
 .student-form__footer {
   display: grid;
   gap: 16px;
-  padding-top: 2px;
+  padding-top: 8px;
 }
 
 .danger-zone {
@@ -507,31 +521,40 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  margin-top: 24px;
-  padding: 22px 0 0;
-  border-top: 1px solid var(--border);
+  margin-top: 36px;
+  padding: 20px 24px;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-lg, 12px);
+  background: #fff5f5;
 }
 
 .danger-zone h3 {
   margin: 0;
-  color: var(--slate-700);
-  font-size: 13px;
+  color: #991b1b;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .danger-zone p {
-  margin: 3px 0 0;
-  color: var(--slate-500);
+  margin: 4px 0 0;
+  color: #991b1b;
   font-size: 12px;
-  overflow-wrap: anywhere;
+  opacity: 0.85;
 }
 
-.danger-zone :deep([data-slot='button']) {
-  border-color: color-mix(in oklch, var(--destructive) 32%, var(--border));
-  color: var(--destructive);
+.danger-zone__btn {
+  border-color: #fca5a5 !important;
+  background: #ffffff !important;
+  color: #dc2626 !important;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
 }
 
-.danger-zone :deep([data-slot='button']:hover) {
-  background: color-mix(in oklch, var(--destructive) 8%, var(--background));
+.danger-zone__btn:hover {
+  background: #fee2e2 !important;
+  border-color: #f87171 !important;
+  color: #b91c1c !important;
 }
 
 .delete-dialog {

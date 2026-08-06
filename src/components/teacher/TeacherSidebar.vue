@@ -77,26 +77,10 @@ onMounted(() => {
 
     <div class="sidebar-panel">
       <StudentSwitcher
-        v-if="currentStudent"
         :current-student="currentStudent"
         @select="selectStudent"
         @manage="router.push('/teacher/students')"
       />
-      <Button
-        v-else
-        class="student-profile-placeholder"
-        variant="outline"
-        type="button"
-        aria-label="아동 목록에서 학습자 선택"
-        @click="router.push('/teacher/students')"
-      >
-        <span class="student-profile-placeholder__avatar" aria-hidden="true">
-          <SidebarIcon name="users" />
-        </span>
-        <span>
-          <strong>아동을 선택해 주세요</strong>
-        </span>
-      </Button>
 
       <nav class="sidebar-nav" aria-label="교수자 아동 관리 메뉴">
         <RouterLink to="/teacher/students">
@@ -118,7 +102,7 @@ onMounted(() => {
             :to="{ name: 'student-training-history', params: { id: currentStudent.studentId } }"
           >
             <span class="sidebar-nav__icon"><SidebarIcon name="chart" /></span
-            ><strong>훈련 이력</strong>
+            ><strong>학습 이력</strong>
           </RouterLink>
           <RouterLink
             :to="{ name: 'student-test-history', params: { id: currentStudent.studentId } }"
@@ -155,7 +139,7 @@ onMounted(() => {
           </span>
           <span class="sidebar-nav__item sidebar-nav__item--disabled" aria-disabled="true">
             <span class="sidebar-nav__icon"><SidebarIcon name="chart" /></span>
-            <strong>훈련 이력</strong>
+            <strong>학습 이력</strong>
           </span>
           <span class="sidebar-nav__item sidebar-nav__item--disabled" aria-disabled="true">
             <span class="sidebar-nav__icon"><SidebarIcon name="clipboard" /></span>
@@ -223,7 +207,7 @@ onMounted(() => {
   top: 0;
   display: flex;
   height: 100vh;
-  min-width: 224px;
+  min-width: 240px;
   max-width: 100%;
   align-self: start;
   flex-direction: column;

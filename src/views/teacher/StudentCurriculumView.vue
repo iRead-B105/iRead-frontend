@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { Check, Trash2 } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { Sparkles, X } from '@lucide/vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
@@ -69,7 +70,7 @@ const dragTargetKey = ref<string | null>(null)
 const recommendationList = ref<HTMLElement | null>(null)
 const selectedCatalogUnit = ref('all')
 const materialEditorOpen = ref(false)
-const draftPendingDeletion = ref<CurriculumDraftItem | null>(null)
+const draftPendingDeletionKey = ref<string | null>(null)
 const reviewConfirmOpen = ref(false)
 const reorderAnnouncement = ref('')
 const aiRecommendationStatus = ref<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -78,6 +79,12 @@ const aiRecommendation = ref<AiCurriculumRecommendation | null>(null)
 const aiRecommendationDetailsOpen = ref(false)
 const aiRecommendationAppliedTemplateIds = ref<readonly number[] | null>(null)
 const { visible: saved, show: showSaved } = useTemporaryNotice()
+const toastMessage = ref('커리큘럼 변경 사항이 저장되었습니다.')
+
+function triggerToast(msg: string = '커리큘럼 변경 사항이 저장되었습니다.'): void {
+  toastMessage.value = msg
+  showSaved()
+}
 
 interface AiCurriculumRecommendation {
   readonly recommendationProvider: string
@@ -191,21 +198,10 @@ const isCurrentDraftAiRecommendation = computed(() => {
 const canSave = computed(
   () =>
     hasChanges.value &&
-    draftTrainingIds.value.length === CURRICULUM_TRAINING_COUNT &&
     canEditCurriculum.value &&
     curriculumStatus.value === 'success' &&
     !isSavingCurriculum.value,
 )
-const curriculumSizeGuidance = computed(() => {
-  const difference = CURRICULUM_TRAINING_COUNT - draftTrainingIds.value.length
-  if (difference > 0) {
-    return `저장하려면 훈련을 ${difference}개 더 추가해 총 ${CURRICULUM_TRAINING_COUNT}개로 구성해야 합니다.`
-  }
-  if (difference < 0) {
-    return `저장하려면 훈련을 ${Math.abs(difference)}개 삭제해 총 ${CURRICULUM_TRAINING_COUNT}개로 구성해야 합니다.`
-  }
-  return null
-})
 const showCurriculumFeedback = computed(
   () =>
     curriculumStatus.value === 'error' ||
@@ -213,7 +209,6 @@ const showCurriculumFeedback = computed(
     curriculumSynchronizationStatus.value === 'refreshing' ||
     curriculumSaveConflict.value ||
     Boolean(curriculumError.value) ||
-    (hasChanges.value && Boolean(curriculumSizeGuidance.value)) ||
     Boolean(savedCurriculum.value && !canEditCurriculum.value),
 )
 const selectedAttemptLabel = computed(() => {
@@ -240,18 +235,18 @@ const selectedCatalogTabId = computed(
 )
 const visibleCatalogRows = computed(() =>
   catalog.value
-    .map((item, catalogIndex) => ({ item, catalogIndex }))
     .filter(
-      ({ item }) =>
+      (item) =>
         selectedCatalogUnit.value === 'all' || item.unitName === selectedCatalogUnit.value,
-    ),
+    )
+    .map((item, rowIndex) => ({ item, rowIndex })),
 )
 
 watch(
   [studentId, requestedCurriculumId],
   async ([id, curriculumId]) => {
     materialEditorOpen.value = false
-    draftPendingDeletion.value = null
+    draftPendingDeletionKey.value = null
     selectedCatalogUnit.value = 'all'
     aiRecommendationStatus.value = 'idle'
     aiRecommendationError.value = null
@@ -271,7 +266,7 @@ watch(
 watch(curriculumSynchronizationStatus, (status) => {
   if (status === 'synced') return
   materialEditorOpen.value = false
-  draftPendingDeletion.value = null
+  draftPendingDeletionKey.value = null
   cancelPointerDragging()
 })
 
@@ -461,23 +456,26 @@ async function openMaterialEditor(item: CurriculumDraftItem): Promise<void> {
 
 async function requestDraftDeletion(item: CurriculumDraftItem): Promise<void> {
   if (!canEditCurriculum.value) return
+  if (draftPendingDeletionKey.value === item.key) {
+    trainingStore.removeDraftItem(item.key)
+    draftPendingDeletionKey.value = null
+    trainingStore.setLessonMaterialEditingState(null)
+    materialEditorOpen.value = false
+    return
+  }
   if (studentId.value !== null && item.trainingId !== null) {
     await selectDraftItem(item)
   }
-  draftPendingDeletion.value = item
-}
-
-function confirmDraftDeletion(): void {
-  if (!draftPendingDeletion.value) return
-  trainingStore.removeDraftItem(draftPendingDeletion.value.key)
-  draftPendingDeletion.value = null
-  trainingStore.setLessonMaterialEditingState(null)
-  materialEditorOpen.value = false
+  draftPendingDeletionKey.value = item.key
 }
 
 async function saveChanges(): Promise<void> {
+  if (draftTrainingIds.value.length !== CURRICULUM_TRAINING_COUNT) {
+    triggerToast(`커리큘럼은 ${CURRICULUM_TRAINING_COUNT}개의 훈련으로 구성해야 합니다.`)
+    return
+  }
   if (await trainingStore.saveCurriculum()) {
-    showSaved()
+    triggerToast('커리큘럼 변경 사항이 저장되었습니다.')
   }
 }
 
@@ -510,6 +508,7 @@ async function loadAiRecommendation(options: { confirmReplacement?: boolean } = 
       (item) => item.trainingTemplateId,
     )
     aiRecommendationStatus.value = 'success'
+    triggerToast('커리큘럼이 생성되었습니다.')
   } catch (error) {
     aiRecommendation.value = null
     aiRecommendationAppliedTemplateIds.value = null
@@ -564,7 +563,7 @@ async function saveLessonMaterial(
   request: Parameters<typeof trainingStore.saveSelectedLessonMaterial>[0],
 ): Promise<void> {
   if (await trainingStore.saveSelectedLessonMaterial(request)) {
-    showSaved()
+    triggerToast('교안 내용이 저장되었습니다.')
   }
 }
 
@@ -619,10 +618,9 @@ async function reloadLatestLessonMaterial(): Promise<void> {
   }
 }
 
-function deletionMessage(): string {
-  const item = draftPendingDeletion.value
-  if (!item) return ''
-  return `${attemptLabel(item)}을(를) 다음 회차에서 제거합니다.`
+function addTraining(templateId: number): void {
+  trainingStore.selectTemplate(templateId)
+  trainingStore.addSelectedTemplate()
 }
 </script>
 
@@ -630,7 +628,7 @@ function deletionMessage(): string {
   <div class="curriculum page-stack">
     <PageHeader title="커리큘럼 관리">
       <template #actions>
-        <SaveToast :visible="saved" inline message="커리큘럼 변경 사항이 저장되었습니다." />
+        <SaveToast :visible="saved" :message="toastMessage" />
       </template>
     </PageHeader>
 
@@ -690,7 +688,6 @@ function deletionMessage(): string {
             <div>
               <h2>전체 훈련 목록</h2>
             </div>
-            <span>{{ catalog.length }}개 훈련</span>
           </header>
 
           <div
@@ -730,91 +727,51 @@ function deletionMessage(): string {
             :aria-labelledby="`catalog-tab-${selectedCatalogTabId}`"
           >
             <div class="curriculum-table__head">
-              <span>순서</span><span>영역</span><span>훈련명</span><span>진행률</span>
+              <span>순서</span><span>훈련명</span><span>진행률</span><span></span>
             </div>
-            <Button
-              v-for="{ item, catalogIndex } in visibleCatalogRows"
+            <div
+              v-for="{ item, rowIndex } in visibleCatalogRows"
               :key="item.trainingTemplateId"
               class="curriculum-row"
               :class="{ active: item.trainingTemplateId === selectedTemplateId }"
-              type="button"
+              tabindex="0"
+              role="button"
               :aria-pressed="item.trainingTemplateId === selectedTemplateId"
               @click="trainingStore.selectTemplate(item.trainingTemplateId)"
+              @keydown.enter="trainingStore.selectTemplate(item.trainingTemplateId)"
+              @keydown.space.prevent="trainingStore.selectTemplate(item.trainingTemplateId)"
             >
-              <b>{{ catalogIndex + 1 }}</b>
-              <span class="unit-label">{{ item.unitName }}</span>
-              <strong>{{ item.trainingName }}</strong>
-              <span class="achievement">
-                <b>
-                  {{
-                    item.studentAchievementRate === null ? '—' : `${item.studentAchievementRate}%`
-                  }}
-                </b>
-                <small>{{ achievementLabel(item.studentAchievementRate) }}</small>
+              <b>{{ rowIndex + 1 }}</b>
+              <span class="training-info">
+                <span v-if="selectedCatalogUnit === 'ALL'" class="unit-badge">{{ item.unitName }}</span>
+                <strong>{{ item.trainingName }}</strong>
               </span>
-            </Button>
+              <span class="achievement">
+                <b>{{ item.studentAchievementRate === null ? '—' : `${item.studentAchievementRate}%` }}</b>
+              </span>
+              <span class="curriculum-row__action">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  class="add-training-btn"
+                  :disabled="!canEditCurriculum || isSavingCurriculum"
+                  @click.stop="addTraining(item.trainingTemplateId)"
+                >
+                  학습 추가
+                </Button>
+              </span>
+            </div>
           </div>
         </Card>
 
         <Card class="curriculum-panel">
-          <section class="selected-training">
-            <header class="section-heading">
-              <h2>선택한 훈련</h2>
-            </header>
-            <template v-if="selectedTemplate">
-              <div class="selected-training__identity">
-                <strong>{{ selectedTemplate.trainingName }}</strong>
-                <span>{{ selectedTemplate.unitName }} · {{ selectedTemplate.sequence }}단계</span>
-              </div>
-              <dl>
-                <div>
-                  <dt>현재 진행률</dt>
-                  <dd>
-                    {{
-                      selectedTemplate.studentAchievementRate === null
-                        ? '미수행(평가 기록 없음)'
-                        : `${selectedTemplate.studentAchievementRate}%`
-                    }}
-                  </dd>
-                </div>
-                <div>
-                  <dt>학습 판단</dt>
-                  <dd>{{ achievementLabel(selectedTemplate.studentAchievementRate) }}</dd>
-                </div>
-                <div>
-                  <dt>다음 회차 포함</dt>
-                  <dd>
-                    {{
-                      draftItems.filter(
-                        (item) => item.trainingTemplateId === selectedTemplate?.trainingTemplateId,
-                      ).length
-                    }}회
-                  </dd>
-                </div>
-              </dl>
-              <div class="selected-training__actions">
-                <Button
-                  variant="outline"
-                  type="button"
-                  :disabled="!canEditCurriculum || isSavingCurriculum"
-                  @click="trainingStore.addSelectedTemplate"
-                >
-                  다음 회차에 1회 추가
-                </Button>
-              </div>
-            </template>
-            <p v-else class="section-state">전체 훈련 목록에서 훈련을 선택해 주세요.</p>
-          </section>
 
           <section class="next-session">
             <header class="section-heading next-session__heading">
               <div>
                 <h2>다음 회차 순서</h2>
                 <p v-if="curriculumStatus === 'loading'">커리큘럼을 불러오는 중입니다.</p>
-                <p v-else-if="savedCurriculum">
-                  {{ draftItems.length }}회 시행 · {{ trainingStatusLabel(savedCurriculum.status) }}
-                </p>
-                <p v-else>저장된 다음 회차가 없습니다. 훈련을 추가해 새로 구성하세요.</p>
               </div>
               <div class="next-session__actions">
                 <Button
@@ -943,7 +900,6 @@ function deletionMessage(): string {
                 </Button>
               </footer>
             </div>
-
             <div v-if="showCurriculumFeedback" class="curriculum-feedback" aria-live="polite">
               <div
                 v-if="curriculumStatus === 'error'"
@@ -1018,13 +974,6 @@ function deletionMessage(): string {
                 {{ curriculumError }}
               </p>
               <p
-                v-else-if="hasChanges && curriculumSizeGuidance"
-                class="feedback-message is-guidance"
-                role="status"
-              >
-                {{ curriculumSizeGuidance }}
-              </p>
-              <p
                 v-else-if="savedCurriculum && !canEditCurriculum"
                 class="feedback-message"
                 role="status"
@@ -1069,11 +1018,10 @@ function deletionMessage(): string {
                   :aria-pressed="selectedDraftItemKey === item.key"
                   @click="handleDraftItemClick(item, $event)"
                 >
-                  <small>{{ templateFor(item)?.unitName }} · {{ attemptNumber(item) }}회차</small>
+                  <small>{{ templateFor(item)?.unitName }}</small>
                   <strong>{{ templateFor(item)?.trainingName }}</strong>
                 </button>
                 <div class="recommendation-actions">
-                  <span v-if="item.trainingId === null" class="unsaved-label">저장 전</span>
                   <Button
                     class="material-edit-button"
                     variant="outline"
@@ -1091,14 +1039,18 @@ function deletionMessage(): string {
                   <Button
                     v-if="canEditCurriculum"
                     class="remove-button"
+                    :class="{ 'is-confirming': draftPendingDeletionKey === item.key }"
                     variant="ghost"
                     size="icon-sm"
                     type="button"
-                    :aria-label="`${templateFor(item)?.trainingName ?? '훈련'} 삭제`"
+                    :aria-label="draftPendingDeletionKey === item.key ? '삭제 확인, 한 번 더 누르면 삭제' : '훈련 삭제'"
+                    :title="draftPendingDeletionKey === item.key ? '한 번 더 누르면 삭제됩니다' : '삭제'"
                     :disabled="!canEditCurriculum || isSavingCurriculum"
                     @click.stop="requestDraftDeletion(item)"
+                    @keydown.esc="draftPendingDeletionKey = null"
                   >
-                    ×
+                    <Check v-if="draftPendingDeletionKey === item.key" :size="16" aria-hidden="true" />
+                    <Trash2 v-else :size="16" aria-hidden="true" />
                   </Button>
                 </div>
               </article>
@@ -1130,14 +1082,6 @@ function deletionMessage(): string {
       </div>
     </template>
 
-    <ConfirmDialog
-      :open="Boolean(draftPendingDeletion)"
-      title="다음 회차에서 훈련을 삭제할까요?"
-      :message="deletionMessage()"
-      confirm-label="훈련 삭제"
-      @cancel="draftPendingDeletion = null"
-      @confirm="confirmDraftDeletion"
-    />
 
     <ConfirmDialog
       :open="reviewConfirmOpen"
@@ -1349,7 +1293,7 @@ function deletionMessage(): string {
   display: grid;
   align-items: center;
   gap: 12px;
-  grid-template-columns: 46px 120px minmax(0, 1fr) 94px;
+  grid-template-columns: 46px minmax(0, 1fr) 72px 92px;
 }
 .curriculum-table__head {
   position: sticky;
@@ -1366,13 +1310,14 @@ function deletionMessage(): string {
 .curriculum-row {
   position: relative;
   width: 100%;
-  min-height: 58px;
-  padding: 10px 14px;
+  min-height: 52px;
+  padding: 8px 14px;
   border: 0;
   border-bottom: 1px solid var(--slate-200);
   background: transparent;
   color: var(--slate-700);
   text-align: left;
+  cursor: pointer;
 }
 .curriculum-row::before {
   position: absolute;
@@ -1393,64 +1338,49 @@ function deletionMessage(): string {
 .curriculum-row.active::before {
   background: var(--primary-600);
 }
-.unit-label {
-  color: var(--slate-500);
+.training-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+.unit-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--slate-100, #f1f5f9);
+  color: var(--slate-600, #475569);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .achievement {
-  display: grid;
-  justify-items: end;
-  gap: 1px;
-}
-.achievement small {
-  color: var(--slate-500);
-  font-size: 11px;
-}
-.selected-training {
-  padding-bottom: 10px;
-}
-.selected-training__identity {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-top: 14px;
-}
-.selected-training__identity strong {
-  color: var(--slate-900);
-  font-size: 15px;
-}
-.selected-training__identity span {
-  color: var(--slate-500);
-  font-size: 11px;
-}
-.selected-training dl {
-  display: grid;
-  gap: 8px;
-  margin: 17px 0 14px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.selected-training dl > div {
-  padding: 12px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: color-mix(in oklch, var(--muted) 35%, transparent);
-  text-align: center;
-}
-.selected-training dt {
-  color: var(--slate-500);
-  font-size: 12px;
-}
-.selected-training dd {
-  margin: 4px 0 0;
-  color: var(--slate-900);
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--slate-800, #1e293b);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
+}
+.curriculum-row__action {
+  display: flex;
+  justify-content: flex-end;
+}
+.curriculum-row .add-training-btn {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+.curriculum-row:hover .add-training-btn,
+.curriculum-row:focus-within .add-training-btn,
+.curriculum-row.active .add-training-btn {
+  opacity: 1;
+  visibility: visible;
 }
 .next-session {
-  margin-top: 14px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
+  margin-top: 0;
 }
 .next-session__actions {
   display: flex;
@@ -1676,10 +1606,6 @@ function deletionMessage(): string {
 .feedback-message.is-error strong {
   color: var(--danger-600);
 }
-.feedback-message.is-guidance {
-  color: var(--primary-800);
-  font-weight: 700;
-}
 .recommendation-list {
   position: relative;
   display: grid;
@@ -1694,14 +1620,20 @@ function deletionMessage(): string {
   gap: 8px;
   padding: 10px 11px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: color-mix(in oklch, var(--muted) 25%, transparent);
+  border-radius: 10px;
+  background: var(--white);
   grid-template-columns: 20px 22px minmax(0, 1fr) auto;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
   transition: 150ms ease;
 }
+.recommendation-list article.editable:hover {
+  border-color: var(--slate-300);
+  box-shadow: 0 5px 14px rgb(15 23 42 / 8%);
+}
 .recommendation-list article.selected {
-  border-color: var(--primary-300);
+  border-color: var(--primary-400);
   background: var(--active-selection-background);
+  box-shadow: 0 5px 14px rgb(15 23 42 / 7%);
 }
 .recommendation-list article.editable {
   cursor: grab;
@@ -1710,9 +1642,11 @@ function deletionMessage(): string {
   cursor: grab;
 }
 .recommendation-list article.dragging {
-  z-index: 2;
-  opacity: 0.78;
-  box-shadow: var(--shadow-card);
+  z-index: 3;
+  opacity: 1;
+  border-color: var(--primary-400);
+  background: var(--white);
+  box-shadow: 0 14px 30px rgb(15 23 42 / 18%);
   cursor: grabbing;
   transition: none;
 }
@@ -1736,8 +1670,16 @@ function deletionMessage(): string {
   touch-action: none;
 }
 .recommendation-order {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--slate-100);
   color: var(--slate-500);
   font-size: 12px;
+  font-weight: 800;
 }
 .recommendation-copy small,
 .recommendation-copy strong {
@@ -1778,6 +1720,10 @@ function deletionMessage(): string {
   font-size: 18px;
 }
 .remove-button:hover {
+  color: var(--danger-600);
+}
+.remove-button.is-confirming {
+  background: color-mix(in oklch, var(--danger-600) 12%, transparent);
   color: var(--danger-600);
 }
 .draft-actions {

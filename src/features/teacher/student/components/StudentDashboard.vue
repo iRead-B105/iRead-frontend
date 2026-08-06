@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="student-dashboard">
+  <section class="student-dashboard page-stack">
     <header class="page-heading">
       <div>
         <h1>아동 목록</h1>
@@ -441,7 +441,10 @@ onBeforeUnmount(() => {
 <style scoped>
 .student-dashboard {
   display: grid;
+  width: 100%;
   min-width: 0;
+  max-width: 1200px;
+  margin: 0 auto;
   gap: 20px;
 }
 .page-heading {
@@ -504,11 +507,11 @@ onBeforeUnmount(() => {
 }
 .table-card :deep(th:first-child),
 .table-card :deep(td:first-child) {
-  padding-left: 20px;
+  padding-left: 24px;
 }
 .table-card :deep(th:last-child),
 .table-card :deep(td:last-child) {
-  padding-right: 20px;
+  padding-right: 24px;
 }
 .student-row {
   cursor: pointer;

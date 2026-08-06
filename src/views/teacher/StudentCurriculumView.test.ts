@@ -217,7 +217,7 @@ describe('StudentCurriculumView', () => {
 
     expect(wrapper.text()).toContain('저장된 다음 회차가 없습니다.')
     for (let index = 0; index < 5; index += 1) {
-      await buttonWithText(wrapper, '다음 회차에 1회 추가')?.trigger('click')
+      await buttonWithText(wrapper, '학습 추가')?.trigger('click')
       await flushPromises()
     }
     await buttonWithText(wrapper, '커리큘럼 생성')?.trigger('click')
@@ -257,11 +257,11 @@ describe('StudentCurriculumView', () => {
     expect(wrapper.findComponent(LessonMaterialEditor).exists()).toBe(false)
   })
 
-  it('성취도 null을 0%가 아니라 미수행 평가 기록 없음으로 표시한다', async () => {
+  it('성취도 null을 0%가 아니라 대시(—)로 표시한다', async () => {
     const { wrapper } = await mountCurriculum(repository())
 
     expect(wrapper.text()).toContain('31개 훈련')
-    expect(wrapper.text()).toContain('미수행(평가 기록 없음)')
+    expect(wrapper.text()).toContain('—')
     expect(wrapper.text()).not.toContain('모음 따라 보기0%')
   })
 
@@ -282,10 +282,13 @@ describe('StudentCurriculumView', () => {
 
     const filteredRows = wrapper.findAll('.curriculum-row')
     expect(filteredRows).toHaveLength(4)
-    expect(filteredRows.map((row) => row.find('.unit-label').text())).toEqual(
-      Array.from({ length: 4 }, () => '글자 만들기'),
-    )
-    expect(filteredRows.map((row) => row.find('b').text())).toEqual(['13', '14', '15', '16'])
+    expect(filteredRows.map((row) => row.find('.unit-badge').exists())).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ])
+    expect(filteredRows.map((row) => row.find('b').text())).toEqual(['1', '2', '3', '4'])
     expect(wrapper.get('[role="tabpanel"]').attributes('aria-labelledby')).toBe(
       wrapper.find('[role="tab"][aria-selected="true"]').attributes('id'),
     )

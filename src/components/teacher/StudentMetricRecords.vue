@@ -150,7 +150,7 @@ function formatDuration(milliseconds: number): string {
             query: { trainingId: selectedRecord.sourceId },
           }"
         >
-          상세 훈련 이력 보기
+          상세 학습 이력 보기
         </RouterLink>
       </article>
     </template>

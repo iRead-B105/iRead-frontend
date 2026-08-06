@@ -9,7 +9,6 @@ import ReportPreview from '@/components/teacher/ReportPreview.vue'
 import ReportSetupPanel from '@/components/teacher/ReportSetupPanel.vue'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import {
   formatReportDate,
   formatReportDateTime,
@@ -59,7 +58,10 @@ const { detailsById, navigationItemsById, detailStatusById, detailErrorById } =
   storeToRefs(studentStore)
 const { teacher } = storeToRefs(sessionStore)
 
-const reportQuery = ref('')
+const reportFromDraft = ref('')
+const reportToDraft = ref('')
+const reportFromFilter = ref('')
+const reportToFilter = ref('')
 const REPORTS_PER_PAGE = 6
 const reportPage = ref(0)
 const today = localDateString()
@@ -116,11 +118,12 @@ const learningDayCount = computed(
     ).size,
 )
 const filteredReports = computed(() => {
-  const query = reportQuery.value.trim().toLowerCase()
-  if (!query) return reports.value
-  return reports.value.filter((report) =>
-    `${report.createdAt} ${report.startDate} ${report.endDate}`.toLowerCase().includes(query),
-  )
+  if (!reportFromFilter.value && !reportToFilter.value) return reports.value
+  return reports.value.filter((report) => {
+    const beginsBeforeRangeEnds = !reportToFilter.value || report.startDate <= reportToFilter.value
+    const endsAfterRangeBegins = !reportFromFilter.value || report.endDate >= reportFromFilter.value
+    return beginsBeforeRangeEnds && endsAfterRangeBegins
+  })
 })
 const totalReportPages = computed(() => Math.ceil(filteredReports.value.length / REPORTS_PER_PAGE))
 const paginatedReports = computed(() => {
@@ -128,7 +131,7 @@ const paginatedReports = computed(() => {
   return filteredReports.value.slice(start, start + REPORTS_PER_PAGE)
 })
 
-watch(reportQuery, () => {
+watch([reportFromFilter, reportToFilter], () => {
   reportPage.value = 0
 })
 
@@ -139,7 +142,10 @@ watch(totalReportPages, (total) => {
 watch(
   studentId,
   async (id) => {
-    reportQuery.value = ''
+    reportFromDraft.value = ''
+    reportToDraft.value = ''
+    reportFromFilter.value = ''
+    reportToFilter.value = ''
     reportPage.value = 0
     completedTrainingsById.value = {}
     loadedHistoryRanges.clear()
@@ -163,6 +169,25 @@ watch(
 function changeReportPage(page: number): void {
   if (page < 0 || page >= totalReportPages.value) return
   reportPage.value = page
+}
+
+function applyReportPeriodFilter(): void {
+  if (reportFromDraft.value && reportToDraft.value && reportFromDraft.value > reportToDraft.value) {
+    reportFromFilter.value = reportToDraft.value
+    reportToFilter.value = reportFromDraft.value
+    reportFromDraft.value = reportFromFilter.value
+    reportToDraft.value = reportToFilter.value
+    return
+  }
+  reportFromFilter.value = reportFromDraft.value
+  reportToFilter.value = reportToDraft.value
+}
+
+function resetReportPeriodFilter(): void {
+  reportFromDraft.value = ''
+  reportToDraft.value = ''
+  reportFromFilter.value = ''
+  reportToFilter.value = ''
 }
 
 watch(
@@ -331,16 +356,28 @@ async function retryStudent(): Promise<void> {
             <div>
               <CardTitle id="saved-reports-title">저장된 보고서</CardTitle>
             </div>
-            <strong>{{ reports.length }}개</strong>
           </CardHeader>
-          <div class="saved-reports__filter">
-            <Input
-              v-model="reportQuery"
-              type="search"
-              aria-label="저장된 보고서 검색"
-              placeholder="생성일 또는 보고서 기간 검색"
-            />
-          </div>
+          <form class="saved-reports__filter" @submit.prevent="applyReportPeriodFilter">
+            <label>
+              <span>From</span>
+              <input v-model="reportFromDraft" type="date" aria-label="보고서 기간 시작일" />
+            </label>
+            <span aria-hidden="true">–</span>
+            <label>
+              <span>To</span>
+              <input v-model="reportToDraft" type="date" aria-label="보고서 기간 종료일" />
+            </label>
+            <Button size="sm" type="submit">조회</Button>
+            <Button
+              v-if="reportFromFilter || reportToFilter"
+              size="sm"
+              variant="ghost"
+              type="button"
+              @click="resetReportPeriodFilter"
+            >
+              초기화
+            </Button>
+          </form>
           <CardContent class="saved-reports__content">
             <AsyncStatePanel
               v-if="listStatus === 'loading' && reports.length === 0"
@@ -405,11 +442,7 @@ async function retryStudent(): Promise<void> {
                     </Button>
                   </li>
                 </ul>
-                <nav
-                  v-if="totalReportPages > 1"
-                  class="saved-reports__pagination"
-                  aria-label="저장된 보고서 페이지"
-                >
+                <nav class="saved-reports__pagination" aria-label="저장된 보고서 페이지">
                   <Button
                     type="button"
                     variant="outline"
@@ -500,10 +533,42 @@ async function retryStudent(): Promise<void> {
   font-size: 11px;
 }
 .saved-reports__filter {
+  display: flex;
+  align-items: end;
+  gap: 6px;
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
 }
+.saved-reports__filter label {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+.saved-reports__filter label > span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 650;
+}
+.saved-reports__filter > span {
+  padding-bottom: 9px;
+  color: var(--muted-foreground);
+}
+.saved-reports__filter input {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 10px;
+}
 .saved-reports__content {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   overflow-y: auto;
   padding: 8px 10px 10px;
@@ -526,13 +591,17 @@ async function retryStudent(): Promise<void> {
   text-align: left;
 }
 .saved-reports__pagination {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: auto;
   padding: 12px 4px 4px;
   border-top: 1px solid var(--border);
+  background: var(--card);
 }
 .saved-reports__pagination span {
   min-width: 48px;
