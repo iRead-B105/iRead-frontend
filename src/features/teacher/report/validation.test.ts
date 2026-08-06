@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   normalizeTeacherMemo,
   parsePositiveReportId,
+  validateOptionalReportPeriod,
   validateReportPeriod,
   validateTeacherMemo,
 } from './validation'
@@ -38,5 +39,16 @@ describe('report validation', () => {
     expect(normalizeTeacherMemo(' \n ')).toBeNull()
     expect(validateTeacherMemo('가'.repeat(2_000))).toBeNull()
     expect(validateTeacherMemo('가'.repeat(2_001))).toContain('2,000자')
+    expect(validateTeacherMemo('의견\n두 번째 줄')).toBeNull()
+    expect(validateTeacherMemo('의견\u0000')).toContain('제어 문자')
+  })
+
+  it('목록 필터는 빈 경계를 허용하되 날짜 형식·순서·미래 날짜를 거부한다', () => {
+    expect(validateOptionalReportPeriod('', '', '2026-07-28')).toEqual({})
+    expect(validateOptionalReportPeriod('2026-07-20', '', '2026-07-28')).toEqual({})
+    expect(validateOptionalReportPeriod('2026-07-29', '', '2026-07-28')).toHaveProperty('startDate')
+    expect(validateOptionalReportPeriod('2026-07-20', '2026-07-19', '2026-07-28')).toHaveProperty(
+      'endDate',
+    )
   })
 })

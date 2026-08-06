@@ -14,6 +14,7 @@ import {
   formatReportDateTime,
   localDateString,
   parsePositiveReportId,
+  validateOptionalReportPeriod,
   validateReportPeriod,
   type ReportListItem,
 } from '@/features/teacher/report'
@@ -89,6 +90,9 @@ const studentLoadError = computed(() =>
   studentId.value === null ? null : (detailErrorById.value[studentId.value] ?? null),
 )
 const periodErrors = computed(() => validateReportPeriod(startDate.value, endDate.value, today))
+const reportFilterErrors = computed(() =>
+  validateOptionalReportPeriod(reportFromDraft.value, reportToDraft.value, today),
+)
 const completedDateCounts = computed<Record<string, number>>(() => {
   const counts: Record<string, number> = {}
   for (const training of Object.values(completedTrainingsById.value)) {
@@ -101,9 +105,7 @@ const completedDateCounts = computed<Record<string, number>>(() => {
 const selectedCompletedTrainings = computed(() =>
   Object.values(completedTrainingsById.value).filter((training) => {
     const finishedDate = training.finishedAt?.slice(0, 10)
-    return Boolean(
-      finishedDate && finishedDate >= startDate.value && finishedDate <= endDate.value,
-    )
+    return Boolean(finishedDate && finishedDate >= startDate.value && finishedDate <= endDate.value)
   }),
 )
 const completedTrainingCount = computed(() => selectedCompletedTrainings.value.length)
@@ -170,13 +172,7 @@ function changeReportPage(page: number): void {
 }
 
 function applyReportPeriodFilter(): void {
-  if (reportFromDraft.value && reportToDraft.value && reportFromDraft.value > reportToDraft.value) {
-    reportFromFilter.value = reportToDraft.value
-    reportToFilter.value = reportFromDraft.value
-    reportFromDraft.value = reportFromFilter.value
-    reportToDraft.value = reportToFilter.value
-    return
-  }
+  if (reportFilterErrors.value.startDate || reportFilterErrors.value.endDate) return
   reportFromFilter.value = reportFromDraft.value
   reportToFilter.value = reportToDraft.value
 }
@@ -260,11 +256,7 @@ function loadVisibleHistoryRange(range: StudentTrainingHistoryDateRange): void {
 
 function retrySelectedHistory(): void {
   if (studentId.value === null || !startDate.value || !endDate.value) return
-  void loadCompletedTrainingRange(
-    { from: startDate.value, to: endDate.value },
-    true,
-    true,
-  )
+  void loadCompletedTrainingRange({ from: startDate.value, to: endDate.value }, true, true)
 }
 
 async function generateReport(): Promise<void> {
@@ -355,14 +347,31 @@ async function retryStudent(): Promise<void> {
           <form class="saved-reports__filter" @submit.prevent="applyReportPeriodFilter">
             <label>
               <span>From</span>
-              <input v-model="reportFromDraft" type="date" aria-label="보고서 기간 시작일" />
+              <input
+                v-model="reportFromDraft"
+                type="date"
+                :max="today"
+                aria-label="보고서 기간 시작일"
+                :aria-invalid="Boolean(reportFilterErrors.startDate)"
+              />
             </label>
             <span aria-hidden="true">–</span>
             <label>
               <span>To</span>
-              <input v-model="reportToDraft" type="date" aria-label="보고서 기간 종료일" />
+              <input
+                v-model="reportToDraft"
+                type="date"
+                :max="today"
+                aria-label="보고서 기간 종료일"
+                :aria-invalid="Boolean(reportFilterErrors.endDate)"
+              />
             </label>
-            <Button size="sm" type="submit">조회</Button>
+            <Button
+              size="sm"
+              type="submit"
+              :disabled="Boolean(reportFilterErrors.startDate || reportFilterErrors.endDate)"
+              >조회</Button
+            >
             <Button
               v-if="reportFromFilter || reportToFilter"
               size="sm"
@@ -372,6 +381,13 @@ async function retryStudent(): Promise<void> {
             >
               초기화
             </Button>
+            <p
+              v-if="reportFilterErrors.startDate || reportFilterErrors.endDate"
+              class="saved-reports__filter-error"
+              role="alert"
+            >
+              {{ reportFilterErrors.startDate ?? reportFilterErrors.endDate }}
+            </p>
           </form>
           <CardContent class="saved-reports__content">
             <AsyncStatePanel

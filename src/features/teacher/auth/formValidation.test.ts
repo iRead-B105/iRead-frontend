@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { validateEmail, validateResetPasswordForm, validateSignUpForm } from './formValidation'
+import {
+  validateEmail,
+  validateResetPasswordForm,
+  validateSignUpFields,
+  validateSignUpForm,
+} from './formValidation'
 
 describe('authentication form validation', () => {
   it('회원가입 입력을 trim하고 API 계약 필드만 반환한다', () => {
@@ -61,5 +66,23 @@ describe('authentication form validation', () => {
 
   it('이메일 길이 제한을 적용한다', () => {
     expect(validateEmail(`${'a'.repeat(40)}@example.com`)).toMatchObject({ ok: false })
+  })
+
+  it('모든 회원가입 필드의 오류를 한 번에 반환하고 제어문자·이름 숫자를 거부한다', () => {
+    expect(
+      validateSignUpFields({
+        email: 'invalid',
+        password: 'password\n',
+        passwordConfirm: '',
+        name: '교수자1',
+        organization: '기관\u0000',
+      }),
+    ).toEqual({
+      email: expect.any(String),
+      password: expect.any(String),
+      passwordConfirm: expect.any(String),
+      name: expect.any(String),
+      organization: expect.any(String),
+    })
   })
 })

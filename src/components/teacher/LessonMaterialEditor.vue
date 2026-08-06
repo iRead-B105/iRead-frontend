@@ -439,6 +439,7 @@ function confirmReloadLatest(): void {
                   :material="selectedDraft"
                   :disabled="!canEditMaterial"
                   :field-errors="selectedServerErrors"
+                  :validation-issues="selectedIssues"
                   @update-field="updateField"
                   @editor-error="editorInputError = $event"
                 />
