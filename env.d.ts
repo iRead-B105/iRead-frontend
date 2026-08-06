@@ -3,6 +3,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_CHILD_APP_DOWNLOAD_URL?: string
+  readonly VITE_EYE_TRACKER_DRIVER_URL?: string
 }
 
 interface ImportMeta {
