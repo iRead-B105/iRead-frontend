@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import SaveToast from '@/components/common/SaveToast.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -22,6 +23,22 @@ const errorField = ref('')
 const submitting = ref(false)
 const showPassword = ref(false)
 const errorSummary = ref<HTMLElement | null>(null)
+
+const toastVisible = ref(false)
+const toastMessage = ref('')
+let toastTimer: number | null = null
+
+function triggerToast(msg: string): void {
+  if (toastTimer !== null) {
+    window.clearTimeout(toastTimer)
+  }
+  toastMessage.value = msg
+  toastVisible.value = true
+  toastTimer = window.setTimeout(() => {
+    toastVisible.value = false
+    toastTimer = null
+  }, 3000)
+}
 
 const resetToken = computed(() => {
   const value = route.query.token
@@ -46,6 +63,7 @@ async function requestResetLink(): Promise<void> {
   if (!validation.ok) {
     errorMessage.value = validation.message
     errorField.value = validation.field
+    triggerToast(validation.message)
     await focusError(validation.field)
     return
   }
@@ -57,7 +75,9 @@ async function requestResetLink(): Promise<void> {
     await authRepositories.auth.requestPasswordReset({ email: validation.value })
     requestAccepted.value = true
   } catch (error) {
-    errorMessage.value = getResetPasswordErrorMessage(error)
+    const errorMsg = getResetPasswordErrorMessage(error)
+    errorMessage.value = errorMsg
+    triggerToast(errorMsg)
     await focusError()
   } finally {
     submitting.value = false
@@ -74,6 +94,7 @@ async function confirmReset(): Promise<void> {
   if (!validation.ok) {
     errorMessage.value = validation.message
     errorField.value = validation.field
+    triggerToast(validation.message)
     await focusError(validation.field)
     return
   }
@@ -89,7 +110,9 @@ async function confirmReset(): Promise<void> {
       query: { passwordReset: 'success' },
     })
   } catch (error) {
-    errorMessage.value = getResetPasswordErrorMessage(error)
+    const errorMsg = getResetPasswordErrorMessage(error)
+    errorMessage.value = errorMsg
+    triggerToast(errorMsg)
     await focusError()
   } finally {
     submitting.value = false
@@ -221,6 +244,8 @@ async function confirmReset(): Promise<void> {
         </template>
       </div>
     </section>
+
+    <SaveToast :visible="toastVisible" :message="toastMessage" />
   </main>
 </template>
 

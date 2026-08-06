@@ -6,14 +6,11 @@ import MaterialPreviewHost from '@/components/teacher/lesson-material/MaterialPr
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import {
   LESSON_MATERIAL_MAX_COUNT,
   LESSON_MATERIAL_MIN_COUNT,
   editableItem,
   getLessonMaterialEditorDefinition,
-  lessonMaterialCategoryLabel,
-  trainingStatusLabel,
   validateLessonMaterialItem,
   type CurriculumTraining,
   type EditableLessonMaterialItem,
@@ -41,7 +38,6 @@ const props = withDefaults(
   defineProps<{
     open?: boolean
     training: CurriculumTraining
-    attemptLabel: string
     detail: TrainingDetail | null
     lessonMaterial: LessonMaterialDocument | null
     detailStatus: TrainingRequestStatus
@@ -94,10 +90,6 @@ const canGenerate = computed(
   () => props.requiresRegeneration && props.detailStatus === 'success' && !isGenerating.value,
 )
 const selectedDraft = computed(() => draftMaterials.value[selectedMaterialIndex.value] ?? null)
-const selectedPolicy = computed(() => selectedDraft.value)
-const selectedDefinition = computed(() =>
-  selectedDraft.value ? getLessonMaterialEditorDefinition(selectedDraft.value.questionType) : null,
-)
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -219,13 +211,6 @@ function errorsForPath(path: string): readonly LessonMaterialFieldError[] {
 const selectedServerErrors = computed(() =>
   errorsForPath(materialPath(selectedMaterialIndex.value)),
 )
-
-function updatePresentation(key: keyof LessonMaterialPresentation, value: string): void {
-  const material = selectedDraft.value
-  if (!material || !canEditMaterial.value) return
-  material.presentation = { ...material.presentation, [key]: value }
-  emit('fieldEdited', materialPath(selectedMaterialIndex.value, 'presentation', key))
-}
 
 function updateField(section: 'content' | 'answer', key: string, value: unknown): void {
   const material = selectedDraft.value
@@ -362,21 +347,15 @@ function confirmReloadLatest(): void {
       class="material-dialog !max-w-none !gap-0 !overflow-hidden !bg-transparent !p-0 !ring-0"
       :show-close-button="false"
       @escape-key-down.prevent="requestClose"
-      @pointer-down-outside.prevent
+      @pointer-down-outside="requestClose"
     >
       <div class="material-editor">
         <header class="editor-header">
           <div>
-            <span>{{ attemptLabel }} · {{ training.unitName }}</span>
             <DialogTitle as-child>
               <h2>{{ training.trainingName }}</h2>
             </DialogTitle>
-            <DialogDescription class="sr-only">
-              교안 자료의 내용과 정답 기준을 수정하고 아동 화면을 미리 확인합니다.
-            </DialogDescription>
-          </div>
-          <div class="editor-header__actions">
-            <Badge variant="secondary">{{ trainingStatusLabel(training.status) }}</Badge>
+            <DialogDescription class="sr-only">교안 편집</DialogDescription>
           </div>
         </header>
 
@@ -401,7 +380,7 @@ function confirmReloadLatest(): void {
           <section class="edit-panel" aria-labelledby="material-edit-title">
             <header class="section-header">
               <div>
-                <p>{{ canEditMaterial ? '편집 가능' : '읽기 전용' }}</p>
+                <p v-if="!canEditMaterial">읽기 전용</p>
                 <h3 id="material-edit-title">학습 자료</h3>
               </div>
             </header>
@@ -456,159 +435,6 @@ function confirmReloadLatest(): void {
               </div>
 
               <div v-if="selectedDraft" class="material-form">
-                <div class="policy-row">
-                  <div>
-                    <small>학습 분류</small>
-                    <strong>
-                      {{
-                        selectedDefinition
-                          ? lessonMaterialCategoryLabel(selectedDefinition.category)
-                          : '확인 중'
-                      }}
-                    </strong>
-                  </div>
-                  <div>
-                    <small>행동 방식</small>
-                    <strong>
-                      {{
-                        selectedDefinition
-                          ? `${selectedDefinition.editorCode} ${selectedDefinition.editorLabel}`
-                          : selectedDraft.questionType
-                      }}
-                    </strong>
-                  </div>
-                  <div>
-                    <small>응답 방식</small>
-                    <strong>{{ selectedPolicy?.responseType ?? '확인 중' }}</strong>
-                  </div>
-                  <div>
-                    <small>필수 입력</small>
-                    <strong>{{ selectedPolicy?.requiredInputs.join(', ') || '없음' }}</strong>
-                  </div>
-                </div>
-
-                <fieldset :disabled="!canEditMaterial">
-                  <legend>화면 표시</legend>
-                  <label>
-                    활동 이름
-                    <Input
-                      :model-value="selectedDraft.presentation.activityName"
-                      :aria-invalid="
-                        errorsForPath(
-                          materialPath(selectedMaterialIndex, 'presentation', 'activityName'),
-                        ).length > 0
-                      "
-                      @update:model-value="updatePresentation('activityName', String($event))"
-                    />
-                    <small
-                      v-for="error in errorsForPath(
-                        materialPath(selectedMaterialIndex, 'presentation', 'activityName'),
-                      )"
-                      :key="`${error.path}-${error.reason}`"
-                      class="field-error"
-                      role="alert"
-                    >
-                      {{ error.message }}
-                    </small>
-                  </label>
-                  <label class="wide-field">
-                    활동 지시문
-                    <textarea
-                      :value="selectedDraft.presentation.instruction"
-                      :aria-invalid="
-                        errorsForPath(
-                          materialPath(selectedMaterialIndex, 'presentation', 'instruction'),
-                        ).length > 0
-                      "
-                      rows="2"
-                      @input="
-                        updatePresentation(
-                          'instruction',
-                          ($event.target as HTMLTextAreaElement).value,
-                        )
-                      "
-                    />
-                    <small
-                      v-for="error in errorsForPath(
-                        materialPath(selectedMaterialIndex, 'presentation', 'instruction'),
-                      )"
-                      :key="`${error.path}-${error.reason}`"
-                      class="field-error"
-                      role="alert"
-                    >
-                      {{ error.message }}
-                    </small>
-                  </label>
-                  <label class="wide-field">
-                    힌트
-                    <textarea
-                      :value="selectedDraft.presentation.hint"
-                      :aria-invalid="
-                        errorsForPath(materialPath(selectedMaterialIndex, 'presentation', 'hint'))
-                          .length > 0
-                      "
-                      rows="2"
-                      @input="
-                        updatePresentation('hint', ($event.target as HTMLTextAreaElement).value)
-                      "
-                    />
-                    <small
-                      v-for="error in errorsForPath(
-                        materialPath(selectedMaterialIndex, 'presentation', 'hint'),
-                      )"
-                      :key="`${error.path}-${error.reason}`"
-                      class="field-error"
-                      role="alert"
-                    >
-                      {{ error.message }}
-                    </small>
-                  </label>
-                  <label>
-                    정답 피드백
-                    <Input
-                      :model-value="selectedDraft.presentation.correctFeedback"
-                      :aria-invalid="
-                        errorsForPath(
-                          materialPath(selectedMaterialIndex, 'presentation', 'correctFeedback'),
-                        ).length > 0
-                      "
-                      @update:model-value="updatePresentation('correctFeedback', String($event))"
-                    />
-                    <small
-                      v-for="error in errorsForPath(
-                        materialPath(selectedMaterialIndex, 'presentation', 'correctFeedback'),
-                      )"
-                      :key="`${error.path}-${error.reason}`"
-                      class="field-error"
-                      role="alert"
-                    >
-                      {{ error.message }}
-                    </small>
-                  </label>
-                  <label>
-                    재시도 피드백
-                    <Input
-                      :model-value="selectedDraft.presentation.retryFeedback"
-                      :aria-invalid="
-                        errorsForPath(
-                          materialPath(selectedMaterialIndex, 'presentation', 'retryFeedback'),
-                        ).length > 0
-                      "
-                      @update:model-value="updatePresentation('retryFeedback', String($event))"
-                    />
-                    <small
-                      v-for="error in errorsForPath(
-                        materialPath(selectedMaterialIndex, 'presentation', 'retryFeedback'),
-                      )"
-                      :key="`${error.path}-${error.reason}`"
-                      class="field-error"
-                      role="alert"
-                    >
-                      {{ error.message }}
-                    </small>
-                  </label>
-                </fieldset>
-
                 <MaterialEditorHost
                   :material="selectedDraft"
                   :disabled="!canEditMaterial"
@@ -642,7 +468,6 @@ function confirmReloadLatest(): void {
           <section class="preview-panel" aria-labelledby="preview-title">
             <header class="section-header">
               <div>
-                <p>동일 데이터 미리보기</p>
                 <h3 id="preview-title">아동 화면</h3>
               </div>
               <Badge v-if="requiresRegeneration" variant="destructive">재생성 필요</Badge>
@@ -667,19 +492,13 @@ function confirmReloadLatest(): void {
               </Button>
             </div>
 
-            <div class="preview-device">
-              <div class="preview-device__top">
-                <span>iRead 학습</span>
-                <small>{{ selectedDraft?.questionType ?? '자료 없음' }}</small>
-              </div>
-              <MaterialPreviewHost
-                v-if="selectedDraft"
-                class="preview-content"
-                :material="selectedDraft"
-                :unit-name="training.unitName"
-              />
-              <div v-else class="preview-empty">표시할 교안 자료가 없습니다.</div>
-            </div>
+            <MaterialPreviewHost
+              v-if="selectedDraft"
+              class="preview-content"
+              :material="selectedDraft"
+              :unit-name="training.unitName"
+            />
+            <div v-else class="preview-empty">표시할 교안 자료가 없습니다.</div>
           </section>
         </div>
 
@@ -696,9 +515,11 @@ function confirmReloadLatest(): void {
               class="save-success"
               role="status"
             >
-              {{ reviewRequiredAfterSave
-                ? '교안이 저장되었습니다. 수정된 커리큘럼은 재검수가 필요합니다 — 커리큘럼 관리에서 "최종 검수 완료"를 눌러야 아동에게 표시됩니다.'
-                : '교안이 저장되었습니다.' }}
+              {{
+                reviewRequiredAfterSave
+                  ? '교안이 저장되었습니다. 수정된 커리큘럼은 재검수가 필요합니다 — 커리큘럼 관리에서 "최종 검수 완료"를 눌러야 아동에게 표시됩니다.'
+                  : '교안이 저장되었습니다.'
+              }}
             </p>
             <p v-else>
               {{
@@ -730,7 +551,8 @@ function confirmReloadLatest(): void {
     :open="closePending"
     title="수정 내용을 취소할까요?"
     message="저장하지 않은 교안 수정 내용이 사라집니다."
-    confirm-label="수정 취소"
+    confirm-label="예"
+    cancel-label="아니오"
     @cancel="closePending = false"
     @confirm="confirmClose"
   />
@@ -738,7 +560,8 @@ function confirmReloadLatest(): void {
     :open="reloadPending"
     title="최신 교안을 불러올까요?"
     message="저장하지 않은 교안 수정 내용이 사라지고 서버의 최신 교안으로 교체됩니다."
-    confirm-label="최신 교안 불러오기"
+    confirm-label="예"
+    cancel-label="아니오"
     @cancel="reloadPending = false"
     @confirm="confirmReloadLatest"
   />
@@ -765,8 +588,7 @@ function confirmReloadLatest(): void {
 .editor-header,
 .editor-footer,
 .section-header,
-.material-toolbar,
-.editor-header__actions {
+.material-toolbar {
   display: flex;
   align-items: center;
 }
@@ -806,12 +628,10 @@ function confirmReloadLatest(): void {
   border-top: 1px solid var(--border);
   background: var(--white);
 }
-.editor-footer > div:last-child,
-.editor-header__actions {
+.editor-footer > div:last-child {
   display: flex;
   gap: 8px;
 }
-.editor-header span,
 .section-header p {
   margin: 0 0 3px;
   color: var(--slate-500);
@@ -906,30 +726,6 @@ function confirmReloadLatest(): void {
   display: grid;
   gap: 14px;
   margin-top: 16px;
-}
-.policy-row {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(4, 1fr);
-}
-.policy-row > div {
-  display: grid;
-  gap: 4px;
-  padding: 10px;
-  border-radius: 8px;
-  background: var(--slate-50);
-}
-.policy-row small,
-.policy-row strong {
-  overflow-wrap: anywhere;
-}
-.policy-row small {
-  color: var(--slate-500);
-  font-size: 10px;
-}
-.policy-row strong {
-  color: var(--slate-800);
-  font-size: 11px;
 }
 fieldset {
   display: grid;
@@ -1075,24 +871,9 @@ textarea:focus {
   border-color: #fecaca;
   background: #fef2f2;
 }
-.preview-device {
-  min-height: 480px;
-  margin-top: 18px;
-  overflow: hidden;
-  border: 7px solid var(--slate-800);
-  border-radius: 22px;
-  background: var(--slate-50);
-}
-.preview-device__top {
-  display: flex;
-  justify-content: space-between;
-  padding: 9px 12px;
-  background: var(--slate-800);
-  color: var(--white);
-  font-size: 10px;
-}
 .preview-content {
-  padding: 28px 22px;
+  width: 100%;
+  margin-top: 18px;
 }
 .preview-content > small {
   color: var(--primary-700);
@@ -1193,7 +974,6 @@ dd {
     align-items: stretch;
     flex-direction: column;
   }
-  .policy-row,
   fieldset {
     grid-template-columns: 1fr;
   }

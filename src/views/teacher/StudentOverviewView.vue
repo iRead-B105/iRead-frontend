@@ -506,7 +506,7 @@ watch(studentId, loadOverview, { immediate: true })
               :unit="selectedTrend === 'accuracy' ? '%' : ' 단어/분'"
               :color="selectedTrend === 'accuracy' ? '#2563eb' : '#16a34a'"
               :max-value="selectedTrend === 'accuracy' ? 100 : undefined"
-              :ariaLabel="selectedTrendAriaLabel"
+              :label="selectedTrendAriaLabel"
             />
           </div>
         </Card>

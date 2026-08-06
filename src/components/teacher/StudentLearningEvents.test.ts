@@ -72,7 +72,8 @@ describe('StudentLearningEvents', () => {
     expect(expandedItem.text()).toContain('최근 6주 정확도가 가장 낮은 영역입니다.')
     expect(expandedItem.text()).not.toContain('권장 시간')
     expect(expandedItem.text()).not.toContain('권장 반복')
-    expect(expandedItem.text()).not.toContain('10분')
+    expect(expandedItem.text()).toContain('권장 학습량')
+    expect(expandedItem.text()).toContain('10분 · 2회 반복')
     expect(expandedItem.text()).toContain('받침 ㄹ 발음')
     expect(wrapper.findAll('.event-detail')).toHaveLength(1)
 
