@@ -62,13 +62,22 @@ function parseStudentId(value: unknown): number | null {
 const studentId = computed(() => parseStudentId(route.params.id))
 const requestedTrainingId = computed(() => parseStudentId(route.query.trainingId))
 const invalidStudentId = computed(() => studentId.value === null)
-const selectedHistoryTraining = computed(
-  () =>
-    trainingLog.value?.trainings.find(
-      (training) => training.trainingId === selectedHistoryTrainingId.value,
-    ) ?? null,
+const displayedHistoryTraining = ref<CurriculumTrainingLogItem | null>(null)
+watch(
+  [historyTrainingDetail, trainingLog],
+  ([detail, log]) => {
+    if (!detail) {
+      if (selectedHistoryTrainingId.value === null) displayedHistoryTraining.value = null
+      return
+    }
+    const matchingTraining = log?.trainings.find(
+      (training) => training.trainingId === detail.trainingId,
+    )
+    if (matchingTraining) displayedHistoryTraining.value = matchingTraining
+  },
+  { immediate: true },
 )
-const detailQuestions = computed(() => selectedHistoryTraining.value?.questions ?? [])
+const detailQuestions = computed(() => displayedHistoryTraining.value?.questions ?? [])
 const questionSummary = computed(() => ({
   total: detailQuestions.value.length,
   correct: detailQuestions.value.filter((question) => question.correct === true).length,
@@ -360,13 +369,13 @@ function formatQuestionScore(score: number | null): string | null {
             <section class="curriculum-trainings">
               <h2>학습 목록</h2>
               <AsyncStatePanel
-                v-if="trainingLogStatus === 'loading'"
+                v-if="trainingLogStatus === 'loading' && !trainingLog"
                 kind="loading"
                 message="학습 목록을 불러오는 중입니다."
                 compact
               />
               <AsyncStatePanel
-                v-else-if="trainingLogStatus === 'error'"
+                v-else-if="trainingLogStatus === 'error' && !trainingLog"
                 kind="error"
                 title="학습 목록을 불러오지 못했습니다"
                 :message="trainingLogError ?? '잠시 후 다시 시도해 주세요.'"
@@ -374,38 +383,57 @@ function formatQuestionScore(score: number | null): string | null {
                 compact
                 @retry="retrySelectedCurriculum"
               />
-              <AsyncStatePanel
-                v-else-if="!trainingLog?.trainings.length"
-                kind="empty"
-                message="선택한 커리큘럼에 표시할 훈련이 없습니다."
-                compact
-              />
-              <div v-else class="training-list">
-                <Button
-                  v-for="(training, index) in trainingLog.trainings"
-                  :key="training.trainingId"
-                  variant="ghost"
-                  type="button"
-                  class="training-row"
-                  :class="{ active: training.trainingId === selectedHistoryTrainingId }"
-                  :aria-pressed="training.trainingId === selectedHistoryTrainingId"
-                  @click="selectTraining(training)"
+              <template v-else>
+                <p
+                  v-if="trainingLogStatus === 'loading'"
+                  class="section-state"
+                  role="status"
                 >
-                  <span class="sequence">{{ index + 1 }}</span>
-                  <span class="training-name">
-                    <strong>{{ training.trainingName }}</strong>
-                    <small>
-                      <Clock3Icon aria-hidden="true" />
-                      {{ formatDateTime(training.finishedAt ?? training.startedAt) }}
-                    </small>
-                  </span>
-                  <span class="training-accuracy__icon"><BarChart3Icon aria-hidden="true" /></span>
-                  <span class="training-row__accuracy">
-                    <small>훈련 정확도</small>
-                    <b>{{ formatAccuracy(training.accuracy) }}</b>
-                  </span>
-                </Button>
-              </div>
+                  학습 목록을 갱신하는 중입니다.
+                </p>
+                <p
+                  v-else-if="trainingLogStatus === 'error'"
+                  class="section-state section-state--error"
+                  role="alert"
+                >
+                  {{ trainingLogError ?? '학습 목록을 갱신하지 못했습니다.' }}
+                  <Button variant="outline" size="sm" type="button" @click="retrySelectedCurriculum">
+                    다시 불러오기
+                  </Button>
+                </p>
+                <AsyncStatePanel
+                  v-if="!trainingLog?.trainings.length"
+                  kind="empty"
+                  message="선택한 커리큘럼에 표시할 훈련이 없습니다."
+                  compact
+                />
+                <div v-else class="training-list" :aria-busy="trainingLogStatus === 'loading'">
+                  <Button
+                    v-for="(training, index) in trainingLog.trainings"
+                    :key="training.trainingId"
+                    variant="ghost"
+                    type="button"
+                    class="training-row"
+                    :class="{ active: training.trainingId === selectedHistoryTrainingId }"
+                    :aria-pressed="training.trainingId === selectedHistoryTrainingId"
+                    @click="selectTraining(training)"
+                  >
+                    <span class="sequence">{{ index + 1 }}</span>
+                    <span class="training-name">
+                      <strong>{{ training.trainingName }}</strong>
+                      <small>
+                        <Clock3Icon aria-hidden="true" />
+                        {{ formatDateTime(training.finishedAt ?? training.startedAt) }}
+                      </small>
+                    </span>
+                    <span class="training-accuracy__icon"><BarChart3Icon aria-hidden="true" /></span>
+                    <span class="training-row__accuracy">
+                      <small>훈련 정확도</small>
+                      <b>{{ formatAccuracy(training.accuracy) }}</b>
+                    </span>
+                  </Button>
+                </div>
+              </template>
               <p v-if="trainingLog?.trainings.length" class="curriculum-complete-note">
                 <InfoIcon aria-hidden="true" />
                 훈련을 선택하면 상세 학습 결과를 확인할 수 있습니다.
@@ -418,11 +446,13 @@ function formatQuestionScore(score: number | null): string | null {
           <header class="detail-heading">
             <div>
               <h2>선택 훈련 상세</h2>
-              <template v-if="historyDetailStatus === 'success' && historyTrainingDetail">
+              <template v-if="historyTrainingDetail">
                 <h3>{{ historyTrainingDetail.name }}</h3>
+                <p v-if="historyDetailStatus === 'loading'">새 훈련 상세를 불러오는 중입니다.</p>
+                <p v-else-if="historyDetailStatus === 'error'">상세 조회를 완료하지 못했습니다.</p>
               </template>
               <template v-else>
-                <h3>{{ selectedHistoryTraining?.trainingName ?? '훈련을 선택해 주세요.' }}</h3>
+                <h3>훈련을 선택해 주세요.</h3>
                 <p v-if="historyDetailStatus === 'loading'">새 훈련 상세를 불러오는 중입니다.</p>
                 <p v-else-if="historyDetailStatus === 'error'">상세 조회를 완료하지 못했습니다.</p>
               </template>
@@ -431,13 +461,13 @@ function formatQuestionScore(score: number | null): string | null {
 
           <div class="detail-content-shell" :aria-busy="historyDetailStatus === 'loading'">
             <AsyncStatePanel
-              v-if="historyDetailStatus === 'loading'"
+              v-if="historyDetailStatus === 'loading' && !historyTrainingDetail"
               kind="loading"
               message="훈련 상세를 불러오는 중입니다."
               compact
             />
             <AsyncStatePanel
-              v-else-if="historyDetailStatus === 'error'"
+              v-else-if="historyDetailStatus === 'error' && !historyTrainingDetail"
               kind="error"
               title="훈련 상세를 불러오지 못했습니다"
               :message="historyDetailError ?? '잠시 후 다시 시도해 주세요.'"
@@ -446,12 +476,12 @@ function formatQuestionScore(score: number | null): string | null {
               @retry="retryDetail"
             />
             <AsyncStatePanel
-              v-else-if="!historyTrainingDetail"
+              v-if="!historyTrainingDetail && historyDetailStatus === 'idle'"
               kind="empty"
               message="상세를 확인할 훈련을 선택해 주세요."
               compact
             />
-            <template v-else>
+            <template v-if="historyTrainingDetail">
               <dl class="detail-metrics">
                 <div>
                   <dt>시작 시각</dt>

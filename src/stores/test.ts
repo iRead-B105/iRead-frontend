@@ -281,7 +281,6 @@ export const useTestStore = defineStore('test', () => {
     ) {
       return false
     }
-    comparisonResult.value = null
     comparisonStatus.value = 'loading'
     comparisonError.value = null
     clearQuestionGaze()
@@ -289,7 +288,7 @@ export const useTestStore = defineStore('test', () => {
     comparisonTestCurriculumIds.value = comparisonTestCurriculumIds.value.filter(
       (id) => id !== nextTestCurriculumId,
     )
-    return loadComparison(currentStudentId)
+    return loadComparison(currentStudentId, true)
   }
 
   async function addComparisonTest(
