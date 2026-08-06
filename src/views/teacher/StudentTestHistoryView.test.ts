@@ -86,15 +86,15 @@ describe('StudentTestHistoryView', () => {
     )
     const { wrapper } = await mountHistory(repository)
     const chart = wrapper.get('[data-test="metric-chart"]').element
-    const question = wrapper.get('.question-list > li').element
+    const questionRow = wrapper.get('.question-table tbody tr').element
 
     const change = wrapper.get<HTMLSelectElement>('#comparison-test').setValue('1008')
     await flushPromises()
 
     expect(wrapper.get('[data-test="metric-chart"]').element).toBe(chart)
     expect(wrapper.find('[data-test="metric-chart-loading"]').exists()).toBe(true)
-    expect(wrapper.findAll('.question-list > li')).toHaveLength(9)
-    expect(wrapper.get('.question-list > li').element).toBe(question)
+    expect(wrapper.findAll('.question-table tbody tr')).toHaveLength(3)
+    expect(wrapper.get('.question-table tbody tr').element).toBe(questionRow)
 
     pending.resolve(await compareTests(1, '1011', ['1008']))
     await change
@@ -117,7 +117,7 @@ describe('StudentTestHistoryView', () => {
     const metricCard = wrapper.get('.metric-chart-section').element
     const chart = wrapper.get('[data-test="metric-chart"]').element
     const questionCard = wrapper.get('.question-section').element
-    const firstQuestion = wrapper.get('.question-list > li').element
+    const firstQuestion = wrapper.get('.question-table tbody tr').element
 
     const selection = wrapper.get<HTMLSelectElement>('#current-test').setValue('1008')
     await flushPromises()
@@ -126,7 +126,7 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.get('.metric-chart-section').element).toBe(metricCard)
     expect(wrapper.get('[data-test="metric-chart"]').element).toBe(chart)
     expect(wrapper.get('.question-section').element).toBe(questionCard)
-    expect(wrapper.get('.question-list > li').element).toBe(firstQuestion)
+    expect(wrapper.get('.question-table tbody tr').element).toBe(firstQuestion)
     expect(wrapper.find('[data-test="metric-chart-loading"]').exists()).toBe(true)
 
     pending.resolve(await compareTests(1, '1008', []))
@@ -136,7 +136,7 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.get('.metric-chart-section').element).toBe(metricCard)
     expect(wrapper.get('[data-test="metric-chart"]').element).toBe(chart)
     expect(wrapper.get('.question-section').element).toBe(questionCard)
-    expect(wrapper.get('.question-list > li').element).toBe(firstQuestion)
+    expect(wrapper.get('.question-table tbody tr').element).toBe(firstQuestion)
     expect(wrapper.text()).toContain('실력 도전 #1008')
   })
 
@@ -152,22 +152,28 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('올바른 학습자를 선택해 주세요.')
   })
 
-  it('검사 커리큘럼 한 건에 3개 영역과 실제 9문항 제출 결과를 표시한다', async () => {
+  it('검사 커리큘럼 한 건에 3개 영역 탭과 선택 탭별 3개 문항 결과를 표시한다', async () => {
     const { wrapper, store } = await mountHistory(new TestTestRepository())
 
     expect(store.currentTestCurriculumId).toBe('1011')
     expect(wrapper.text()).toContain('실력 도전 #1011')
     expect(wrapper.text()).toContain('영역별 점수')
+    expect(wrapper.findAll('.question-track-tab')).toHaveLength(3)
     expect(wrapper.text()).toContain('음운 인식')
     expect(wrapper.text()).toContain('짧은 글')
     expect(wrapper.text()).toContain('유창성')
-    expect(wrapper.findAll('.question-list > li')).toHaveLength(9)
+    expect(wrapper.findAll('.question-table tbody tr')).toHaveLength(3)
     expect(wrapper.text()).toContain('제출 답안')
     expect(wrapper.text()).toContain('발음 점수')
     expect(wrapper.text()).toContain('해당 없음')
     expect(wrapper.text()).not.toContain('추천 훈련 커리큘럼')
     expect(wrapper.text()).not.toContain('추천 교안 검수하기')
     expect(wrapper.text()).toContain('9문항 확인')
+
+    // Switch to short-text tab
+    await wrapper.findAll('.question-track-tab')[1]!.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('.question-table tbody tr')).toHaveLength(3)
   })
 
   it('testId와 questionNo로 문항별 시선 분석을 조회한다', async () => {
@@ -175,23 +181,20 @@ describe('StudentTestHistoryView', () => {
     const getQuestionGazeAnalysis = vi.spyOn(repository, 'getQuestionGazeAnalysis')
     const { wrapper } = await mountHistory(repository)
 
-    expect(getQuestionGazeAnalysis).toHaveBeenCalledTimes(9)
     expect(getQuestionGazeAnalysis).toHaveBeenCalledWith(
       1,
       '10111',
       2,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
-    expect(wrapper.findAll('.question-list button')).toHaveLength(3)
-    expect(wrapper.text()).toContain('이 검사 구간의 시선 분석 보기')
-    expect(wrapper.text()).not.toContain('문항 1 시선 분석')
-
-    await wrapper.get('.question-list button').trigger('click')
-    await flushPromises()
-
+    expect(wrapper.findAll('.question-table tbody tr')).toHaveLength(3)
     expect(wrapper.text()).toContain('문항 1 시선 분석')
     expect(wrapper.text()).toContain('총 시선 체류 시간')
-    expect(wrapper.text()).toContain('단어별 시선 머무름')
+
+    await wrapper.findAll('.question-table tbody tr')[1]!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('문항 2 시선 분석')
   })
 
   it('같은 testId로 묶인 세 문항을 questionNo로 각각 선택한다', async () => {
@@ -215,16 +218,13 @@ describe('StudentTestHistoryView', () => {
     })
     const { wrapper } = await mountHistory(repository)
 
-    expect(wrapper.findAll('.question-list button')).toHaveLength(3)
-    expect(wrapper.findAll('.question-list > li').at(0)?.find('button').exists()).toBe(true)
-    expect(wrapper.findAll('.question-list > li').at(1)?.find('button').exists()).toBe(true)
-    expect(wrapper.findAll('.question-list > li').at(2)?.find('button').exists()).toBe(true)
+    expect(wrapper.findAll('.question-table tbody tr')).toHaveLength(3)
 
-    await wrapper.findAll('.question-list button')[1]!.trigger('click')
+    await wrapper.findAll('.question-table tbody tr')[1]!.trigger('click')
     await flushPromises()
 
-    expect(wrapper.findAll('.question-list > li.is-gaze-selected')).toHaveLength(1)
-    expect(wrapper.findAll('.question-list > li').at(1)?.classes()).toContain('is-gaze-selected')
+    expect(wrapper.findAll('.question-table tbody tr.is-gaze-selected')).toHaveLength(1)
+    expect(wrapper.findAll('.question-table tbody tr').at(1)?.classes()).toContain('is-gaze-selected')
   })
 
   it('문항 원본이 null이면 원본 없음 상태를 명시한다', async () => {
@@ -249,13 +249,13 @@ describe('StudentTestHistoryView', () => {
   it('전체 점수·풀이 시간·시선 이탈·발음 점수를 검사 단위로 비교한다', async () => {
     const { wrapper } = await mountHistory(new TestTestRepository())
 
-    expect(wrapper.findAll('[role="tab"]')).toHaveLength(4)
+    expect(wrapper.findAll('.metric-tab')).toHaveLength(4)
     expect(wrapper.text()).toContain('전체 점수')
     expect(wrapper.text()).toContain('문제 풀이 시간')
     expect(wrapper.text()).toContain('시선 이탈 횟수')
     expect(wrapper.text()).toContain('발음 점수')
     expect(wrapper.findAll('[data-test="metric-chart"]')).toHaveLength(1)
-    expect(wrapper.get('[data-test="metric-chart"]').text()).toContain('bar, line')
+    expect(wrapper.get('[data-test="metric-chart"]').text()).toContain('bar, bar, bar, bar')
     expect(wrapper.get('[data-test="metric-chart"]').text()).toContain('true')
     await wrapper.get<HTMLSelectElement>('#comparison-test').setValue('1008')
     await flushPromises()
@@ -288,6 +288,6 @@ describe('StudentTestHistoryView', () => {
     const { wrapper } = await mountHistory(new TestTestRepository({ forbiddenStudentIds: [1] }))
 
     expect(wrapper.text()).toContain('이 학습자의 검사 기록을 볼 권한이 없습니다.')
-    expect(wrapper.find('.question-list').exists()).toBe(false)
+    expect(wrapper.find('.question-table').exists()).toBe(false)
   })
 })

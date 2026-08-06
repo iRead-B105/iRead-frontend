@@ -12,10 +12,10 @@ describe('실력 도전 검사 지표 계산', () => {
     })
   })
 
-  it('문항별 시선 이탈 합계와 음성 문항 발음 평균을 비교 지표로 사용한다', () => {
+  it('문항별 시선 이탈 평균과 음성 문항 발음 평균을 비교 지표로 사용한다', () => {
     const detail = testDetailFixtures[0]!
 
-    expect(testMetricValue(detail, 'gazeDepartureCount')).toBe(7)
+    expect(testMetricValue(detail, 'gazeDepartureCount')).toBe(0.8)
     expect(testMetricValue(detail, 'pronunciationScore')).toBe(84.7)
   })
 
