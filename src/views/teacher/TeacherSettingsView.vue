@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, shallowRef } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
+import SaveToast from '@/components/common/SaveToast.vue'
 import FormActions from '@/components/teacher/FormActions.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import ProfileImageEditor from '@/components/teacher/ProfileImageEditor.vue'
@@ -31,6 +32,7 @@ import { useSessionStore } from '@/stores/session'
 
 const sessionStore = useSessionStore()
 const { visible: saved, show: showSaved } = useTemporaryNotice()
+const { visible: saveErrorVisible, show: showSaveError } = useTemporaryNotice()
 const repository = authRepositories.teacher
 
 const loading = ref(true)
@@ -38,6 +40,10 @@ const saving = ref(false)
 const loadError = ref('')
 const saveError = ref('')
 const savedMessage = ref('프로필 변경 사항이 저장되었습니다.')
+
+watch(saveError, (msg) => {
+  if (msg) showSaveError()
+})
 const serverProfile = shallowRef<TeacherProfile | null>(null)
 const selectedImage = shallowRef<File | null>(null)
 const previewVersion = ref(0)
@@ -267,7 +273,7 @@ onMounted(loadProfile)
         </div>
       </SettingsSection>
 
-      <p v-if="saveError" class="settings-error" role="alert">{{ saveError }}</p>
+      <SaveToast :visible="saveErrorVisible" :message="saveError" tone="error" />
 
       <FormActions
         :saved="saved"

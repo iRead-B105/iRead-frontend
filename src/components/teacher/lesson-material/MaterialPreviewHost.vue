@@ -92,7 +92,7 @@ const usesVoice = computed(() =>
 .learner-activity-preview {
   display: grid;
   min-height: 420px;
-  align-content: start;
+  align-content: center;
   gap: 16px;
   padding: 22px;
   border: 1px solid #eadfce;

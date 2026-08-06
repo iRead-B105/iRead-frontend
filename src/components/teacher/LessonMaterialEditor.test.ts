@@ -110,7 +110,7 @@ describe('LessonMaterialEditor', () => {
     await audioText.setValue('수정한 소리')
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === '교안 저장')
+      .find((button) => button.text() === '저장')
       ?.trigger('click')
 
     const request = wrapper.emitted('save')?.[0]?.[0] as SaveLessonMaterialRequest | undefined
@@ -134,7 +134,7 @@ describe('LessonMaterialEditor', () => {
     expect(
       wrapper
         .findAll('button')
-        .find((button) => button.text() === '교안 저장')
+        .find((button) => button.text() === '저장')
         ?.attributes('disabled'),
     ).toBeDefined()
   })
@@ -189,7 +189,7 @@ describe('LessonMaterialEditor', () => {
     await materialItems[1]?.trigger('drop', { dataTransfer })
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === '교안 저장')
+      .find((button) => button.text() === '저장')
       ?.trigger('click')
 
     const request = wrapper.emitted('save')?.[0]?.[0] as SaveLessonMaterialRequest | undefined
@@ -222,7 +222,7 @@ describe('LessonMaterialEditor', () => {
     expect(
       wrapper
         .findAll('button')
-        .find((button) => button.text() === '교안 저장')
+        .find((button) => button.text() === '저장')
         ?.attributes('disabled'),
     ).toBeDefined()
 

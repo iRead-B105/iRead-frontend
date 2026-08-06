@@ -334,13 +334,13 @@ function updateJson(
             </Button>
           </div>
           <Button
+            v-if="
+              field.maxItems === undefined ||
+              listValue(valueFor(section, field.key)).length < field.maxItems
+            "
             variant="outline"
             size="sm"
             type="button"
-            :disabled="
-              field.maxItems !== undefined &&
-              listValue(valueFor(section, field.key)).length >= field.maxItems
-            "
             @click="addListItem(section, field)"
           >
             + 항목 추가

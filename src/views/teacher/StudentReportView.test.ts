@@ -128,7 +128,7 @@ describe('StudentReportView', () => {
     expect(wrapper.text()).toContain('훈련 시선 추이')
     expect(wrapper.text()).toContain('검사 시선 추이')
     expect(wrapper.text()).toContain('교수자 의견')
-    expect(wrapper.text()).toContain('완료된 학습 데이터를 기준으로 생성된 보고서입니다.')
+    expect(wrapper.text()).not.toContain('완료된 학습 데이터를 기준으로 생성된 보고서입니다.')
     expect(wrapper.find('[aria-label="교수자 의견"]').exists()).toBe(true)
     expect((wrapper.get('[aria-label="교수자 의견"]').element as HTMLTextAreaElement).value).toBe(
       useReportStore(pinia).teacherMemoDraft,
@@ -148,7 +148,7 @@ describe('StudentReportView', () => {
     await textarea.setValue('새로 작성한 교수자 의견')
 
     expect(useReportStore(pinia).teacherMemoDraft).toBe('새로 작성한 교수자 의견')
-    expect(buttonWithText(wrapper, '의견 저장')?.attributes('disabled')).toBeUndefined()
+    expect(buttonWithText(wrapper, '저장')?.attributes('disabled')).toBeUndefined()
   })
 
   it('보고서 필터의 역전·미래 기간과 의견 제어문자를 즉시 거부한다', async () => {
@@ -165,7 +165,7 @@ describe('StudentReportView', () => {
     await flushPromises()
     await wrapper.get('[aria-label="교수자 의견"]').setValue('의견\u0000')
     expect(wrapper.text()).toContain('제어 문자')
-    expect(buttonWithText(wrapper, '의견 저장')?.attributes('disabled')).toBeDefined()
+    expect(buttonWithText(wrapper, '저장')?.attributes('disabled')).toBeDefined()
   })
 
   it('완료 학습이 없는 기간은 입력을 유지하고 빈 보고서를 만들지 않는다', async () => {

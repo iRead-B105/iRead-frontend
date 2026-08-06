@@ -1,19 +1,31 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     visible: boolean
     message?: string
     showIcon?: boolean
     inline?: boolean
+    tone?: 'success' | 'error' | 'warning' | 'info'
   }>(),
   {
     message: '변경 사항이 저장되었습니다.',
     showIcon: false,
     inline: false,
+    tone: undefined,
   },
 )
+
+const resolvedTone = computed(() => {
+  if (props.tone) return props.tone
+  const msg = props.message ?? ''
+  if (/실패|오류|에러|없습니다|못했습니다|거부|제약|잘못된/.test(msg)) {
+    return 'error'
+  }
+  return 'success'
+})
 </script>
 
 <template>
@@ -21,8 +33,11 @@ withDefaults(
     <Alert
       v-if="visible"
       class="save-toast !w-auto"
-      :class="{ 'save-toast--inline': inline }"
-      role="status"
+      :class="[
+        `save-toast--${resolvedTone}`,
+        { 'save-toast--inline': inline }
+      ]"
+      :role="resolvedTone === 'error' ? 'alert' : 'status'"
       aria-live="polite"
     >
       <AlertDescription class="save-toast__desc">{{ message }}</AlertDescription>
@@ -40,7 +55,7 @@ withDefaults(
   display: inline-flex;
   width: auto;
   min-width: 200px;
-  max-width: 360px;
+  max-width: 420px;
   min-height: 40px;
   align-items: center;
   justify-content: center;
@@ -55,12 +70,22 @@ withDefaults(
   white-space: nowrap;
 }
 
+.save-toast--error {
+  border-color: #f87171;
+  background: #450a0a;
+  color: #fef2f2;
+}
+
 .save-toast__desc {
   margin: 0;
   color: #ffffff;
   font-size: 13px;
   font-weight: 600;
   text-align: center;
+}
+
+.save-toast--error .save-toast__desc {
+  color: #fef2f2;
 }
 
 .save-toast--inline {
@@ -84,6 +109,16 @@ withDefaults(
   font-size: 12px;
 }
 
+.save-toast--inline.save-toast--error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.save-toast--inline.save-toast--error .save-toast__desc {
+  color: #991b1b;
+}
+
 .save-toast-enter-active,
 .save-toast-leave-active {
   transition:
@@ -103,3 +138,4 @@ withDefaults(
   }
 }
 </style>
+
