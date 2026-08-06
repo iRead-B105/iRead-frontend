@@ -250,7 +250,6 @@ const metricCharts = computed(() =>
         axisLabel: { color: '#64748b', fontSize: 11, formatter: `{value}${metric.unit}` },
       },
       series: chartScopes.map((scope, index) => {
-        const isLine = false
         const gradient = scopeGradients[scope.trackCode ?? 'null']
         const labelOffset: [number, number] = [
           (index - (chartScopes.length - 1) / 2) * 7,
@@ -457,10 +456,6 @@ function formatPronunciationMetric(question: TestQuestionResult): string {
 
 function questionKey(question: TestQuestionResult): string {
   return `${question.testId}:${question.questionNo}`
-}
-
-function hasGazeButton(question: TestQuestionResult): boolean {
-  return gazeButtonQuestionKeys.value.has(questionKey(question))
 }
 
 function isSelectedQuestion(question: TestQuestionResult): boolean {
@@ -699,6 +694,7 @@ const activeTrackQuestions = computed(() => {
             </div>
             <ChartPanel
               v-if="selectedMetricChart"
+              :key="selectedMetricChart.key"
               data-test="metric-chart"
               :option="selectedMetricChart.option"
               animated

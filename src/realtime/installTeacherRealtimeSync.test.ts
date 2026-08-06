@@ -247,7 +247,7 @@ describe('installTeacherRealtimeSync', () => {
       students.learningSummaryStatusById[2001] = 'success'
       return null
     })
-    vi.spyOn(students, 'loadLearningEvents').mockImplementation(async () => {
+    const loadLearningEvents = vi.spyOn(students, 'loadLearningEvents').mockImplementation(async () => {
       students.learningEventsStatusById[2001] = 'success'
       return []
     })
@@ -287,6 +287,7 @@ describe('installTeacherRealtimeSync', () => {
     })
 
     expect(loadAccuracyTrend).toHaveBeenCalledWith(2001)
+    expect(loadLearningEvents).toHaveBeenCalledWith(2001, 4)
     expect(loadAccuracyRecords).toHaveBeenCalledWith(2001)
     expect(loadReadingSpeedTrend).toHaveBeenCalledWith(2001)
     expect(loadReadingSpeedRecords).toHaveBeenCalledWith(2001)

@@ -53,6 +53,7 @@ async function mountHistory(
               ariaLabel: String,
               option: Object,
               animated: Boolean,
+              summary: String,
             },
             computed: {
               seriesNames() {
@@ -63,7 +64,7 @@ async function mountHistory(
               },
             },
             template:
-              '<div data-test="metric-chart">{{ ariaLabel }} {{ seriesNames }} {{ seriesTypes }} {{ animated }}</div>',
+              '<div data-test="metric-chart">{{ ariaLabel }} {{ summary }} {{ seriesNames }} {{ seriesTypes }} {{ animated }}</div>',
           },
         },
       },
@@ -261,6 +262,31 @@ describe('StudentTestHistoryView', () => {
     await flushPromises()
     expect(wrapper.findAll('.comparison-chip')).toHaveLength(1)
     expect(wrapper.text()).toContain('비교 1/2건')
+  })
+
+  it('비교 지표를 바꾸면 차트를 새로 만들고 선택한 지표의 평균만 표시한다', async () => {
+    const { wrapper } = await mountHistory(new TestTestRepository())
+    const previousChart = wrapper.get('[data-test="metric-chart"]').element
+    const previousSummary = wrapper.get('[data-test="metric-chart"]').text()
+
+    await wrapper.findAll('.metric-tab')[1]!.trigger('click')
+
+    const currentChart = wrapper.get('[data-test="metric-chart"]')
+    expect(currentChart.element).not.toBe(previousChart)
+    expect(currentChart.text()).toContain('문제 풀이 시간 전체 평균')
+    expect(currentChart.text()).not.toBe(previousSummary)
+    expect(currentChart.text()).not.toContain('전체 점수 전체 평균')
+  })
+
+  it('문항 시선 데이터가 없으면 오류 대신 placeholder를 표시한다', async () => {
+    const { wrapper } = await mountHistory(
+      new TestTestRepository({ gazeByQuestionKey: {} }),
+    )
+
+    expect(wrapper.get('[data-test="gaze-no-data-placeholder"]').text()).toContain(
+      '시선 분석 데이터가 기록되지 않았습니다.',
+    )
+    expect(wrapper.find('.analysis-state--error').exists()).toBe(false)
   })
 
   it('실제 0점·0초·0회를 측정값 없음과 구분한다', async () => {

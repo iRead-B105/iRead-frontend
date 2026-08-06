@@ -147,7 +147,7 @@ describe('StudentTrainingHistoryView', () => {
     await rows.find((row) => row.text().includes('비슷한 소리 고르기'))?.trigger('click')
     await flushPromises()
     expect(store.historyGazeStatus).toBe('success')
-    expect(wrapper.text()).toContain('시선 분석 데이터가 없습니다.')
+    expect(wrapper.text()).toContain('시선 분석 데이터가 기록되지 않았습니다.')
     expect(wrapper.find('[data-test="chart"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('미제출')
     expect(wrapper.text()).toContain('채점 대상 아님')
