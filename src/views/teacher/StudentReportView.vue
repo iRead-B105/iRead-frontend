@@ -89,9 +89,21 @@ const studentLoadStatus = computed(() =>
 const studentLoadError = computed(() =>
   studentId.value === null ? null : (detailErrorById.value[studentId.value] ?? null),
 )
-const periodErrors = computed(() => validateReportPeriod(startDate.value, endDate.value, today))
+// 데모 치트로 학습일을 넘기면 아동의 학습 날짜가 실제 오늘보다 앞선다. 달력 기준
+// 오늘로 상한을 두면 그날 학습 기록을 보고서에 담을 수 없어 치트와 어긋난다.
+// 실제 학습이 있었던 마지막 날까지 고를 수 있게 한다.
+const latestCompletedDate = computed(() => {
+  const dates = Object.keys(completedDateCounts.value)
+  return dates.length === 0 ? '' : dates.reduce((latest, date) => (date > latest ? date : latest), '')
+})
+const maxSelectableDate = computed(() =>
+  latestCompletedDate.value > today ? latestCompletedDate.value : today,
+)
+const periodErrors = computed(() =>
+  validateReportPeriod(startDate.value, endDate.value, maxSelectableDate.value),
+)
 const reportFilterErrors = computed(() =>
-  validateOptionalReportPeriod(reportFromDraft.value, reportToDraft.value, today),
+  validateOptionalReportPeriod(reportFromDraft.value, reportToDraft.value, maxSelectableDate.value),
 )
 const completedDateCounts = computed<Record<string, number>>(() => {
   const counts: Record<string, number> = {}
@@ -350,7 +362,7 @@ async function retryStudent(): Promise<void> {
               <input
                 v-model="reportFromDraft"
                 type="date"
-                :max="today"
+                :max="maxSelectableDate"
                 aria-label="보고서 기간 시작일"
                 :aria-invalid="Boolean(reportFilterErrors.startDate)"
               />
@@ -361,7 +373,7 @@ async function retryStudent(): Promise<void> {
               <input
                 v-model="reportToDraft"
                 type="date"
-                :max="today"
+                :max="maxSelectableDate"
                 aria-label="보고서 기간 종료일"
                 :aria-invalid="Boolean(reportFilterErrors.endDate)"
               />
@@ -484,7 +496,7 @@ async function retryStudent(): Promise<void> {
         <ReportSetupPanel
           v-model:start-date="startDate"
           v-model:end-date="endDate"
-          :today="today"
+          :today="maxSelectableDate"
           :period-errors="periodErrors"
           :create-error="createError"
           :duplicate-report-id="duplicateReportId"
