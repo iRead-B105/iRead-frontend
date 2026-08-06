@@ -667,7 +667,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
               <Button type="button" @click="testStore.retryComparison()">다시 시도</Button>
             </div>
             <ChartPanel
-              v-else-if="selectedMetricChart"
+              v-if="selectedMetricChart"
               data-test="metric-chart"
               :option="selectedMetricChart.option"
               animated
@@ -720,7 +720,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
             <ol v-else class="question-list">
               <li
                 v-for="question in currentDetail?.questions"
-                :key="questionKey(question)"
+                :key="question.sequenceNo"
                 :class="{ 'is-gaze-selected': isSelectedQuestion(question) }"
               >
                 <header>

@@ -1255,8 +1255,6 @@ export const useTrainingStore = defineStore('training', () => {
     }
     selectedCurriculumId.value = curriculumId
     if (!isBackgroundRefresh) {
-      trainingLog.value = null
-      statistics.value = null
       trainingLogStatus.value = 'loading'
       statisticsStatus.value = 'loading'
       if (loadInitialTraining) {
@@ -1337,8 +1335,6 @@ export const useTrainingStore = defineStore('training', () => {
     if (studentId !== historyStudentId.value) return
     if (!trainingLog.value?.trainings.some((item) => item.trainingId === trainingId)) return
     if (selectedHistoryTrainingId.value !== trainingId) {
-      historyTrainingDetail.value = null
-      historyGazeAnalysis.value = null
       historyDetailStatus.value = 'loading'
       historyGazeStatus.value = 'loading'
     }

@@ -188,6 +188,8 @@ describe('StudentTrainingHistoryView', () => {
   it('커리큘럼 변경에는 상세 카드를 유지하고 새 훈련 선택 시에만 상세를 갱신한다', async () => {
     const { wrapper, store } = await mountHistory(new TestTrainingRepository())
     const detailCard = wrapper.get('.detail-card').element
+    const detailMetrics = wrapper.get('.detail-metrics').element
+    const firstQuestion = wrapper.get('.question-table__row').element
     const zeroCurriculum = wrapper
       .findAll('.curriculum-row')
       .find((row) => row.text().includes('2026.07.05'))
@@ -199,12 +201,17 @@ describe('StudentTrainingHistoryView', () => {
     expect(store.selectedHistoryTrainingId).toBe(901)
     expect(store.historyTrainingDetail?.trainingId).toBe(901)
     expect(wrapper.get('.detail-card').element).toBe(detailCard)
+    expect(wrapper.get('.detail-metrics').element).toBe(detailMetrics)
+    expect(wrapper.get('.question-table__row').element).toBe(firstQuestion)
     expect(zeroCurriculum?.text()).toContain('0%')
 
     await wrapper.findAll('.training-row')[0]?.trigger('click')
     await flushPromises()
 
     expect(store.selectedHistoryTrainingId).toBe(891)
+    expect(wrapper.get('.detail-card').element).toBe(detailCard)
+    expect(wrapper.get('.detail-metrics').element).toBe(detailMetrics)
+    expect(wrapper.get('.question-table__row').element).toBe(firstQuestion)
     expect(wrapper.text()).toContain('오답')
     expect(wrapper.text()).toContain('문항 원본 없음')
   })
