@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { buttonVariants } from '@/components/ui/button'
+import {
+  resolveAuthenticatedProfileImage,
+  type ResolvedProfileImage,
+} from '@/features/teacher/authenticatedProfileImage'
 import { validateProfileImage } from '@/features/teacher/profileImageValidation'
 import { cn } from '@/lib/utils'
-import { resolveImageUrl } from '@/lib/image'
 
 const props = withDefaults(
   defineProps<{
@@ -30,14 +33,34 @@ const emit = defineEmits<{
   error: [message: string | null]
 }>()
 
-const previewUrl = ref(resolveImageUrl(props.imageUrl))
+const previewUrl = ref<string | null>(null)
 let temporaryUrl = ''
+let resolvedImage: ResolvedProfileImage | null = null
+let loadVersion = 0
+
+async function loadStoredImage(imageUrl: string | null | undefined): Promise<void> {
+  const currentLoad = ++loadVersion
+  const nextImage = await resolveAuthenticatedProfileImage(imageUrl).catch(() => ({
+    url: null,
+    revoke: () => undefined,
+  }))
+
+  if (currentLoad !== loadVersion || temporaryUrl) {
+    nextImage.revoke()
+    return
+  }
+
+  resolvedImage?.revoke()
+  resolvedImage = nextImage
+  previewUrl.value = nextImage.url
+}
 
 watch(
   () => props.imageUrl,
   (value) => {
-    if (!temporaryUrl) previewUrl.value = resolveImageUrl(value)
+    if (!temporaryUrl) void loadStoredImage(value)
   },
+  { immediate: true },
 )
 
 watch(
@@ -45,7 +68,7 @@ watch(
   () => {
     if (temporaryUrl) URL.revokeObjectURL(temporaryUrl)
     temporaryUrl = ''
-    previewUrl.value = resolveImageUrl(props.imageUrl)
+    void loadStoredImage(props.imageUrl)
   },
 )
 
@@ -62,6 +85,7 @@ function selectImage(event: Event) {
   }
 
   if (temporaryUrl) URL.revokeObjectURL(temporaryUrl)
+  loadVersion += 1
   temporaryUrl = URL.createObjectURL(file)
   previewUrl.value = temporaryUrl
   emit('error', null)
@@ -70,7 +94,9 @@ function selectImage(event: Event) {
 }
 
 onBeforeUnmount(() => {
+  loadVersion += 1
   if (temporaryUrl) URL.revokeObjectURL(temporaryUrl)
+  resolvedImage?.revoke()
 })
 </script>
 
