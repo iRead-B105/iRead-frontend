@@ -199,12 +199,6 @@ const movementSteps = computed(() => {
       <div>
         <h2>{{ title }}</h2>
       </div>
-      <strong
-        v-if="showStatus && status === 'success' && state?.status === 'AVAILABLE'"
-        class="analysis-status"
-      >
-        분석 완료
-      </strong>
     </header>
 
     <p v-if="status === 'idle' || status === 'loading'" class="analysis-state" aria-live="polite">
@@ -231,27 +225,9 @@ const movementSteps = computed(() => {
           <dd>{{ metric.value }}</dd>
         </div>
       </dl>
-      <section v-if="showAggregateChart" class="aggregate-chart" aria-label="실제 시선 집계 지표 비교 그래프">
-        <h3>집계 지표 비교</h3>
-        <div class="aggregate-chart__groups">
-          <article v-for="group in aggregateGroups" :key="group.title">
-            <strong>{{ group.title }}</strong>
-            <div v-for="item in group.items" :key="item.label" class="aggregate-bar">
-              <div>
-                <span>{{ item.label }}</span>
-                <b>{{ item.displayValue }}</b>
-              </div>
-              <div class="aggregate-bar__track" aria-hidden="true">
-                <span :style="{ width: item.width }"></span>
-              </div>
-            </div>
-          </article>
-        </div>
-      </section>
       <section v-if="heatmapWords.length > 0" class="gaze-replay" aria-label="단어별 시선 히트맵">
         <header>
           <h3>단어별 시선 머무름</h3>
-          <p>진하게 표시된 단어일수록 오래 머문 단어입니다.</p>
         </header>
         <ol class="gaze-word-heatmap">
           <li
@@ -283,9 +259,6 @@ const movementSteps = computed(() => {
     </div>
 
     <p v-else class="analysis-state">표시할 시선 분석 결과가 없습니다.</p>
-    <p v-if="showDisclaimer" class="gaze-disclaimer">
-      시선 지표는 학습 과정 참고용이며 의학적 진단 결과가 아닙니다.
-    </p>
   </section>
 </template>
 

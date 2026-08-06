@@ -174,20 +174,15 @@ function scopedMetricValue(
 ): number | null {
   if (trackCode === null) return testMetricValue(detail, metric)
   if (metric === 'overallScore') {
-    return detail.areaScores.find((area) => area.trackCode === trackCode)?.score ?? null
+    return (
+      detail.areaScores.find((area) => matchesTrackCode(area.trackCode, trackCode))?.score ?? null
+    )
   }
 
-  const questions = detail.questions.filter((question) => question.trackCode === trackCode)
-  if (metric === 'solvingTimeSeconds') {
-    const values = measuredValues(questions.map((question) => question.solvingTimeSeconds))
-    return values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0)
-  }
-  if (metric === 'gazeDepartureCount') {
-    const values = measuredValues(questions.map((question) => question.gazeDepartureCount))
-    return values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0)
-  }
-
-  const values = measuredValues(questions.map((question) => question.pronunciationScore))
+  const questions = detail.questions.filter((question) =>
+    matchesTrackCode(question.trackCode, trackCode),
+  )
+  const values = measuredValues(questions.map((question) => question[metric]))
   if (values.length === 0) return null
   return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10
 }
@@ -255,7 +250,7 @@ const metricCharts = computed(() =>
         axisLabel: { color: '#64748b', fontSize: 11, formatter: `{value}${metric.unit}` },
       },
       series: chartScopes.map((scope, index) => {
-        const isLine = scope.trackCode === null
+        const isLine = false
         const gradient = scopeGradients[scope.trackCode ?? 'null']
         const labelOffset: [number, number] = [
           (index - (chartScopes.length - 1) / 2) * 7,
@@ -263,12 +258,12 @@ const metricCharts = computed(() =>
         ]
         return {
           name: scope.label,
-          type: isLine ? 'line' : 'bar',
-          smooth: isLine,
+          type: 'bar',
+          smooth: false,
           symbol: 'circle',
-          symbolSize: isLine ? 8 : undefined,
-          barMinHeight: isLine ? undefined : 2,
-          barMaxWidth: isLine ? undefined : 28,
+          symbolSize: undefined,
+          barMinHeight: 2,
+          barMaxWidth: 28,
           barGap: '20%',
           data: displayedDetails.value.map((detail) =>
             chartMetricValue(scopedMetricValue(detail, metric.key, scope.trackCode), metric.key),
@@ -290,23 +285,20 @@ const metricCharts = computed(() =>
               return value === null || value === undefined ? '' : formatChartMetric(value, metric)
             },
           },
-          lineStyle: isLine ? { color: scope.color, width: 3 } : undefined,
-          itemStyle: isLine
-            ? { color: scope.color }
-            : {
-                color: {
-                  type: 'linear',
-                  x: 0,
-                  y: 0,
-                  x2: 0,
-                  y2: 1,
-                  colorStops: [
-                    { offset: 0, color: gradient.start },
-                    { offset: 1, color: gradient.end },
-                  ],
-                },
-                borderRadius: [6, 6, 0, 0],
-              },
+          itemStyle: {
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: gradient.start },
+                { offset: 1, color: gradient.end },
+              ],
+            },
+            borderRadius: [6, 6, 0, 0],
+          },
           markLine:
             index !== 0 || chartAverage === null
               ? undefined
@@ -354,14 +346,52 @@ watch(
   { immediate: true },
 )
 
+type QuestionTrackCode = 'phonological' | 'short-text' | 'fluency'
+const activeQuestionTrack = ref<QuestionTrackCode>('phonological')
+const questionTracks = [
+  { code: 'phonological' as const, label: '음운 인식' },
+  { code: 'short-text' as const, label: '짧은 글' },
+  { code: 'fluency' as const, label: '유창성' },
+] as const
+
+function matchesTrackCode(code: string | null | undefined, target: string): boolean {
+  if (!code) return false
+  const normalized = code.toLowerCase().replace(/_/g, '-')
+  if (target === 'phonological') {
+    return (
+      normalized === 'phonological' ||
+      normalized === 'phonological-awareness' ||
+      normalized === 'phonological_awareness'
+    )
+  }
+  if (target === 'short-text') {
+    return normalized === 'short-text' || normalized === 'short_text'
+  }
+  if (target === 'fluency') {
+    return normalized === 'fluency'
+  }
+  return false
+}
+
+function selectQuestion(question: TestQuestionResult): void {
+  if (studentId.value !== null) {
+    void testStore.selectQuestionGaze(studentId.value, question.testId, question.questionNo)
+  }
+}
+
 watch(
-  currentDetail,
-  (detail) => {
+  [currentDetail, activeQuestionTrack],
+  ([detail, track]) => {
     if (studentId.value === null || !detail || detail.questions.length === 0) return
     void testStore.loadQuestionGazeAvailability(
       studentId.value,
       detail.questions,
     )
+    const questionsForTrack = detail.questions.filter((q) => matchesTrackCode(q.trackCode, track))
+    const firstQuestion = questionsForTrack[0] ?? detail.questions[0]
+    if (firstQuestion) {
+      selectQuestion(firstQuestion)
+    }
   },
   { immediate: true },
 )
@@ -425,12 +455,6 @@ function formatPronunciationMetric(question: TestQuestionResult): string {
   return formatMetric(question.pronunciationScore, '점')
 }
 
-function selectQuestion(question: TestQuestionResult): void {
-  if (studentId.value !== null) {
-    void testStore.selectQuestionGaze(studentId.value, question.testId, question.questionNo)
-  }
-}
-
 function questionKey(question: TestQuestionResult): string {
   return `${question.testId}:${question.questionNo}`
 }
@@ -445,6 +469,13 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
     selectedQuestionNo.value === question.questionNo
   )
 }
+
+const activeTrackQuestions = computed(() => {
+  if (!currentDetail.value) return []
+  return currentDetail.value.questions.filter((question) =>
+    matchesTrackCode(question.trackCode, activeQuestionTrack.value),
+  )
+})
 </script>
 
 <template>
@@ -687,7 +718,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
           <Card class="question-section">
             <header class="section-heading">
               <div>
-                <h2>9개 문항 결과</h2>
+                <h2>문항 결과</h2>
               </div>
               <span v-if="questionContractWarning === null" class="question-contract-ok">
                 9문항 확인
@@ -696,6 +727,24 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
                 >{{ currentDetail?.completedQuestions }}/{{ currentDetail?.totalQuestions }}</span
               >
             </header>
+
+            <div class="question-track-tabs" role="tablist" aria-label="문항 영역 선택">
+              <button
+                v-for="track in questionTracks"
+                :key="track.code"
+                class="question-track-tab"
+                :class="{ active: activeQuestionTrack === track.code }"
+                type="button"
+                role="tab"
+                :aria-selected="activeQuestionTrack === track.code"
+                @click="activeQuestionTrack = track.code"
+              >
+                <span>{{ track.label }}</span>
+                <span class="track-count">
+                  {{ currentDetail?.questions.filter((q) => matchesTrackCode(q.trackCode, track.code)).length ?? 0 }}
+                </span>
+              </button>
+            </div>
 
             <p
               v-if="questionGazeAvailabilityStatus === 'loading'"
@@ -717,61 +766,48 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
             <div v-if="currentDetail?.questions.length === 0" class="inline-empty">
               제공된 문항 결과가 없습니다.
             </div>
-            <ol v-else class="question-list">
-              <li
-                v-for="question in currentDetail?.questions"
-                :key="question.sequenceNo"
-                :class="{ 'is-gaze-selected': isSelectedQuestion(question) }"
-              >
-                <header>
-                  <div>
-                    <strong>문항 {{ question.sequenceNo }}</strong>
-                    <small>{{ question.trackCode }} · {{ question.responseType }}</small>
-                  </div>
-                  <span :class="questionStatusClass(question)">{{ questionStatus(question) }}</span>
-                </header>
-                <p>{{ question.question ?? '문항 원본 없음' }}</p>
-                <dl>
-                  <div>
-                    <dt>제출 답안</dt>
-                    <dd>{{ formatTestAnswer(question.selectedAnswer) }}</dd>
-                  </div>
-                  <div>
-                    <dt>정답</dt>
-                    <dd>{{ formatTestAnswer(question.correctAnswer) }}</dd>
-                  </div>
-                  <div>
-                    <dt>점수</dt>
-                    <dd>{{ formatMetric(question.score, '점') }}</dd>
-                  </div>
-                  <div>
-                    <dt>발음 점수</dt>
-                    <dd>{{ formatPronunciationMetric(question) }}</dd>
-                  </div>
-                  <div>
-                    <dt>풀이 시간</dt>
-                    <dd>{{ formatTestSeconds(question.solvingTimeSeconds) }}</dd>
-                  </div>
-                  <div>
-                    <dt>시선 이탈</dt>
-                    <dd>{{ formatMetric(question.gazeDepartureCount, '회') }}</dd>
-                  </div>
-                </dl>
-                <Button
-                  v-if="hasGazeButton(question)"
-                  variant="outline"
-                  type="button"
-                  :aria-pressed="isSelectedQuestion(question)"
-                  @click="selectQuestion(question)"
-                >
-                  {{
-                    isSelectedQuestion(question)
-                      ? '시선 분석 선택됨'
-                      : '이 검사 구간의 시선 분석 보기'
-                  }}
-                </Button>
-              </li>
-            </ol>
+            <div v-else class="question-table-wrapper">
+              <table class="question-table">
+                <thead>
+                  <tr>
+                    <th scope="col">문항</th>
+                    <th scope="col">질문 / 내용</th>
+                    <th scope="col">채점</th>
+                    <th scope="col">제출 답안</th>
+                    <th scope="col">정답</th>
+                    <th scope="col">점수</th>
+                    <th scope="col">발음 점수</th>
+                    <th scope="col">풀이 시간</th>
+                    <th scope="col">시선 이탈</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="question in activeTrackQuestions"
+                    :key="question.sequenceNo"
+                    :class="{ 'is-gaze-selected': isSelectedQuestion(question) }"
+                    @click="selectQuestion(question)"
+                  >
+                    <td class="col-seq">
+                      <strong>문항 {{ question.sequenceNo }}</strong>
+                      <small>{{ question.responseType }}</small>
+                    </td>
+                    <td class="col-content">
+                      <p>{{ question.question ?? '문항 원본 없음' }}</p>
+                    </td>
+                    <td class="col-status">
+                      <span :class="questionStatusClass(question)">{{ questionStatus(question) }}</span>
+                    </td>
+                    <td class="col-answer">{{ formatTestAnswer(question.selectedAnswer) }}</td>
+                    <td class="col-answer">{{ formatTestAnswer(question.correctAnswer) }}</td>
+                    <td class="col-metric">{{ formatMetric(question.score, '점') }}</td>
+                    <td class="col-metric">{{ formatPronunciationMetric(question) }}</td>
+                    <td class="col-metric">{{ formatTestSeconds(question.solvingTimeSeconds) }}</td>
+                    <td class="col-metric">{{ formatMetric(question.gazeDepartureCount, '회') }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
             <GazeAnalysisPanel
               v-if="selectedQuestion"
               :title="`문항 ${selectedQuestion.sequenceNo} 시선 분석`"
@@ -813,9 +849,11 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
 .selection-field label { color: var(--slate-500); font-size: 10px; font-weight: 700; }
 .selection-field select { min-height: 36px; padding: 0 34px 0 12px; border: 1px solid var(--slate-300); border-radius: var(--radius-sm); background: var(--white); color: var(--slate-800); font: inherit; font-size: 12px; }
 .metric-chart-heading { align-items: flex-end; }
-.comparison-chips { display: flex; min-width: 0; min-height: 28px; align-items: center; align-self: start; gap: 4px; padding-block: 1px; overflow-x: auto; overflow-y: hidden; }
-.comparison-chip { display: inline-flex; min-height: 28px; flex: 0 1 auto; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; }
-.comparison-chip button { width: 18px; height: 18px; flex: 0 0 18px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; }
+.comparison-chips { display: flex; min-width: 0; min-height: 28px; align-items: center; align-self: start; gap: 6px; padding-block: 2px; overflow-x: auto; overflow-y: hidden; }
+.status-pill { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; }
+.comparison-chip { display: inline-flex; min-height: 28px; flex: 0 1 auto; align-items: center; gap: 6px; padding: 2px 6px 2px 10px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; }
+.comparison-chip button { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex: 0 0 18px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; transition: background 0.15s ease; }
+.comparison-chip button:hover { background: var(--primary-100); }
 .state-card, .metric-chart-section, .question-section { min-width: 0; padding: 20px; border-radius: var(--radius-lg); }
 .metric-chart-section { height: 500px; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
 .metric-chart-section::-webkit-scrollbar { display: none; }
@@ -830,22 +868,31 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
 .metric-tabs { display: flex; min-height: 28px; flex: 0 0 28px; align-items: center; gap: 4px; margin-top: -2px; overflow-x: auto; }
 .metric-tab { height: 28px; flex: 0 0 auto; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); color: var(--slate-600); font: inherit; font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; cursor: pointer; }
 .metric-tab.active { border-color: var(--primary-300); background: var(--active-selection-background); color: var(--active-selection-foreground); }
-.status-pill { padding: 4px 8px; border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 11px; font-weight: 700; }
-.warning { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px 8px 14px; border: 1px solid var(--warning-500); border-radius: var(--radius-sm); color: var(--slate-700); font-size: 12px; }
-.question-list dl { display: grid; gap: 8px; margin: 0; }
-.question-list dl div { padding: 8px; border-radius: var(--radius-sm); }
-dt { color: var(--slate-500); font-size: 11px; }
-dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
-.question-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
-.question-list li { padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); }
-.question-list li.is-gaze-selected { border-color: var(--primary-300); background: var(--primary-50); }
-.question-list li > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.question-list header div { display: grid; gap: 3px; }
-.question-list header small { color: var(--slate-500); font-size: 11px; }
-.question-list li > p { margin: 12px 0; color: var(--slate-800); }
-.question-list dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.question-list dl div { background: var(--slate-50); }
-.question-list li > button { margin-top: 12px; }
+.question-track-tabs { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.question-track-tab { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--white); color: var(--slate-700); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s ease; }
+.question-track-tab:hover { background: var(--slate-50); border-color: var(--slate-300); }
+.question-track-tab.active { background: var(--primary-600); border-color: var(--primary-600); color: white; }
+.question-track-tab .track-count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--slate-100); color: var(--slate-700); font-size: 11px; font-weight: 800; }
+.question-track-tab.active .track-count { background: rgba(255, 255, 255, 0.25); color: white; }
+.question-table-wrapper { overflow-x: auto; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.question-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+.question-table th { padding: 12px 14px; background: var(--slate-50); color: var(--slate-700); font-size: 12px; font-weight: 700; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.question-table td { padding: 12px 14px; border-bottom: 1px solid var(--slate-100); color: var(--slate-800); vertical-align: middle; }
+.question-table tbody tr { transition: background 0.15s ease; cursor: pointer; }
+.question-table tbody tr:hover { background: var(--slate-50); }
+.question-table tbody tr.is-gaze-selected { background: #eff6ff; box-shadow: inset 4px 0 0 0 #3b82f6; }
+.question-table tbody tr.is-gaze-selected td { border-bottom-color: #bfdbfe; color: #1e40af; }
+.question-table tbody tr.is-gaze-selected td strong { color: #1e3a8a; }
+.question-table tbody tr:last-child td { border-bottom: none; }
+.col-seq { white-space: nowrap; }
+.col-seq strong { display: block; color: var(--slate-900); font-size: 13px; }
+.col-seq small { display: block; color: var(--slate-500); font-size: 11px; margin-top: 2px; }
+.col-content { min-width: 180px; }
+.col-content p { margin: 0; color: var(--slate-800); font-size: 13px; line-height: 1.4; }
+.col-status { white-space: nowrap; }
+.col-answer { min-width: 150px; white-space: normal; word-break: break-word; line-height: 1.4; }
+.col-metric { white-space: nowrap; font-weight: 600; }
+.text-muted { color: var(--slate-400); }
 .question-contract-ok { color: var(--success-600); font-size: 12px; font-weight: 800; }
 .warning-copy { margin: 0; padding: 10px 12px; border: 1px solid var(--warning-500); border-radius: var(--radius-sm); color: var(--slate-700); font-size: 12px; }
 .gaze-availability-copy { margin: 0; color: var(--slate-500); font-size: 12px; }
@@ -861,7 +908,6 @@ dd { margin: 3px 0 0; color: var(--slate-900); font-size: 13px; font-weight: 700
 @media (max-width: 760px) {
   .selection-field { min-width: 100%; }
   .section-heading { align-items: flex-start; flex-direction: column; }
-  .question-list dl { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 480px) {
   .test-browser, .metric-chart-section, .question-section { padding: 16px; }

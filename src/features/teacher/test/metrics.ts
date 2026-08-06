@@ -12,7 +12,15 @@ export interface TestMetricAverage {
 }
 
 export function testMetricValue(detail: TestDetail, metric: TestMetricKey): number | null {
-  return detail[metric]
+  if (metric === 'overallScore' || metric === 'pronunciationScore') {
+    return detail[metric]
+  }
+  const questions = detail.questions ?? []
+  const values = questions
+    .map((q) => q[metric])
+    .filter((v): v is number => v !== null && Number.isFinite(v))
+  if (values.length === 0) return detail[metric]
+  return Math.round((values.reduce((sum, v) => sum + v, 0) / values.length) * 10) / 10
 }
 
 export function averageTestMetric(
