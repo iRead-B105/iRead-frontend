@@ -1,11 +1,8 @@
 import type { EditableLessonMaterialItem, LessonMaterialData } from './model'
 import type { LessonQuestionType } from './lessonMaterial'
+import { hasDisallowedControlCharacter } from '@/lib/inputValidation'
 
-export type LessonMaterialCategory =
-  | 'PHONOLOGICAL_AWARENESS'
-  | 'PHONICS'
-  | 'SHORT_TEXT'
-  | 'FLUENCY'
+export type LessonMaterialCategory = 'PHONOLOGICAL_AWARENESS' | 'PHONICS' | 'SHORT_TEXT' | 'FLUENCY'
 
 export type LessonMaterialEditorCode =
   | 'E01'
@@ -37,6 +34,9 @@ export interface LessonMaterialFieldDefinition {
   readonly kind: LessonMaterialFieldKind
   readonly help?: string
   readonly readonly?: boolean
+  readonly maxLength?: number
+  readonly maxItems?: number
+  readonly max?: number
   /** 읽기 전용 필드의 표시값 변환 (저장 값은 그대로 두고 화면 표기만 바꾼다) */
   readonly format?: (value: unknown) => string
   readonly options?: readonly {
@@ -110,48 +110,44 @@ const text = (key: string, label: string, help?: string): LessonMaterialFieldDef
   label,
   kind: 'text',
   help,
+  maxLength: 200,
 })
 const textarea = (key: string, label: string, help?: string): LessonMaterialFieldDefinition => ({
   key,
   label,
   kind: 'textarea',
   help,
+  maxLength: 2_000,
 })
 const number = (key: string, label: string, help?: string): LessonMaterialFieldDefinition => ({
   key,
   label,
   kind: 'number',
   help,
+  max: 1_000,
 })
-const stringList = (
-  key: string,
-  label: string,
-  help?: string,
-): LessonMaterialFieldDefinition => ({
+const stringList = (key: string, label: string, help?: string): LessonMaterialFieldDefinition => ({
   key,
   label,
   kind: 'string-list',
   help,
+  maxLength: 200,
+  maxItems: 20,
 })
-const choiceList = (
-  key: string,
-  label: string,
-  help?: string,
-): LessonMaterialFieldDefinition => ({
+const choiceList = (key: string, label: string, help?: string): LessonMaterialFieldDefinition => ({
   key,
   label,
   kind: 'choice-list',
   help,
+  maxLength: 200,
+  maxItems: 20,
 })
-const jsonList = (
-  key: string,
-  label: string,
-  help?: string,
-): LessonMaterialFieldDefinition => ({
+const jsonList = (key: string, label: string, help?: string): LessonMaterialFieldDefinition => ({
   key,
   label,
   kind: 'json-list',
   help,
+  maxItems: 20,
 })
 const readonlyText = (
   key: string,
@@ -191,9 +187,25 @@ function definition(
 // 발음 평가 시 백엔드가 자음을 ㅡ 붙인 소리로 바꿔 평가한다(ㅁ→므).
 // 교사 화면 표기용으로 같은 규칙을 복제한다.
 const CONSONANT_PRONUNCIATION_WITH_EU: Readonly<Record<string, string>> = {
-  ㄱ: '그', ㄲ: '끄', ㄴ: '느', ㄷ: '드', ㄸ: '뜨', ㄹ: '르', ㅁ: '므',
-  ㅂ: '브', ㅃ: '쁘', ㅅ: '스', ㅆ: '쓰', ㅇ: '으', ㅈ: '즈', ㅉ: '쯔',
-  ㅊ: '츠', ㅋ: '크', ㅌ: '트', ㅍ: '프', ㅎ: '흐',
+  ㄱ: '그',
+  ㄲ: '끄',
+  ㄴ: '느',
+  ㄷ: '드',
+  ㄸ: '뜨',
+  ㄹ: '르',
+  ㅁ: '므',
+  ㅂ: '브',
+  ㅃ: '쁘',
+  ㅅ: '스',
+  ㅆ: '쓰',
+  ㅇ: '으',
+  ㅈ: '즈',
+  ㅉ: '쯔',
+  ㅊ: '츠',
+  ㅋ: '크',
+  ㅌ: '트',
+  ㅍ: '프',
+  ㅎ: '흐',
 }
 
 export function consonantPronunciationWithEu(value: unknown): string {
@@ -247,7 +259,10 @@ const componentBaseAnswer = [
   number('medialAnswerIndex', '정답 중성'),
   result,
 ] as const
-const sentenceFields = [textarea('sentence', '표시 문장'), stringList('tokens', '어절 단위')] as const
+const sentenceFields = [
+  textarea('sentence', '표시 문장'),
+  stringList('tokens', '어절 단위'),
+] as const
 
 const DEFINITION_INPUTS: Readonly<Record<LessonQuestionType, DefinitionInput>> = {
   VOWEL_TRACE: {
@@ -527,10 +542,7 @@ const DEFINITION_INPUTS: Readonly<Record<LessonQuestionType, DefinitionInput>> =
   PHRASE_READING: {
     category: 'FLUENCY',
     editorCode: 'E10',
-    contentFields: [
-      textarea('sentence', '표시 문장'),
-      stringList('phrases', '끊어 읽기 단위'),
-    ],
+    contentFields: [textarea('sentence', '표시 문장'), stringList('phrases', '끊어 읽기 단위')],
     answerFields: [expectedText],
   },
   REPEATED_SENTENCE_READING: {
@@ -542,17 +554,12 @@ const DEFINITION_INPUTS: Readonly<Record<LessonQuestionType, DefinitionInput>> =
   SHORT_STORY_READING: {
     category: 'FLUENCY',
     editorCode: 'E10',
-    contentFields: [
-      text('title', '이야기 제목'),
-      jsonList('sentences', '화자와 문장 목록'),
-    ],
+    contentFields: [text('title', '이야기 제목'), jsonList('sentences', '화자와 문장 목록')],
     answerFields: [expectedText],
   },
 }
 
-export const LESSON_MATERIAL_QUESTION_TYPES = Object.keys(
-  DEFINITION_INPUTS,
-) as LessonQuestionType[]
+export const LESSON_MATERIAL_QUESTION_TYPES = Object.keys(DEFINITION_INPUTS) as LessonQuestionType[]
 
 export const LESSON_MATERIAL_EDITOR_REGISTRY: Readonly<
   Record<LessonQuestionType, LessonMaterialEditorDefinition>
@@ -759,18 +766,14 @@ export function isLessonQuestionType(value: string): value is LessonQuestionType
 export function getLessonMaterialEditorDefinition(
   questionType: string,
 ): LessonMaterialEditorDefinition | null {
-  return isLessonQuestionType(questionType)
-    ? LESSON_MATERIAL_EDITOR_REGISTRY[questionType]
-    : null
+  return isLessonQuestionType(questionType) ? LESSON_MATERIAL_EDITOR_REGISTRY[questionType] : null
 }
 
 export function lessonMaterialCategoryLabel(category: LessonMaterialCategory): string {
   return CATEGORY_LABELS[category]
 }
 
-export function defaultLessonMaterialData(
-  questionType: LessonQuestionType,
-): MaterialExample {
+export function defaultLessonMaterialData(questionType: LessonQuestionType): MaterialExample {
   return structuredClone(DEFAULT_LESSON_MATERIAL_DATA[questionType])
 }
 
@@ -819,10 +822,7 @@ const HANGUL_CONSONANT_JAMO = /^[ㄱ-ㅎ]$/
 const HANGUL_VOWEL_JAMO = /^[ㅏ-ㅣ]$/
 const HANGUL_SYLLABLE = /^[가-힣]$/
 
-function traceTargetIssue(
-  questionType: string,
-  target: string,
-): string | null {
+function traceTargetIssue(questionType: string, target: string): string | null {
   if (questionType === 'CONSONANT_TRACE' && !HANGUL_CONSONANT_JAMO.test(target)) {
     return HANGUL_VOWEL_JAMO.test(target)
       ? '자음 따라보기에는 모음을 넣을 수 없습니다. 자음(ㄱ~ㅎ) 한 글자를 입력해 주세요.'
@@ -932,11 +932,52 @@ export function validateLessonMaterialItem(
   }
 
   const issues: LessonMaterialValidationIssue[] = []
+  const presentationFields = [
+    ['activityName', '활동 이름', 100],
+    ['instruction', '지시문', 500],
+  ] as const
+  for (const [key, label, maxLength] of presentationFields) {
+    const value = material.presentation[key]
+    if (!value.trim()) {
+      issues.push({ path: `presentation.${key}`, message: `${label}을(를) 입력해 주세요.` })
+    } else if (value.length > maxLength) {
+      issues.push({
+        path: `presentation.${key}`,
+        message: `${label}은(는) ${maxLength}자 이내로 입력해 주세요.`,
+      })
+    } else if (hasDisallowedControlCharacter(value, true)) {
+      issues.push({
+        path: `presentation.${key}`,
+        message: `${label}에 허용되지 않는 제어 문자가 포함되어 있습니다.`,
+      })
+    }
+  }
   for (const field of definition.contentFields) {
     if (field.readonly) continue
     const value = material.content[field.key]
     if (field.kind === 'text' || field.kind === 'textarea' || field.kind === 'select') {
       addRequired(issues, material.content, 'content', field.key, field.label)
+      if (typeof value === 'string' && field.maxLength && value.length > field.maxLength) {
+        issues.push({
+          path: `content.${field.key}`,
+          message: `${field.label}은(는) ${field.maxLength.toLocaleString('ko-KR')}자 이내로 입력해 주세요.`,
+        })
+      } else if (typeof value === 'string' && hasDisallowedControlCharacter(value, true)) {
+        issues.push({
+          path: `content.${field.key}`,
+          message: `${field.label}에 허용되지 않는 제어 문자가 포함되어 있습니다.`,
+        })
+      }
+      if (
+        field.kind === 'select' &&
+        typeof value === 'string' &&
+        !field.options?.some((option) => option.value === value)
+      ) {
+        issues.push({
+          path: `content.${field.key}`,
+          message: `${field.label}의 허용된 값을 선택해 주세요.`,
+        })
+      }
     } else if (
       (field.kind === 'string-list' ||
         field.kind === 'choice-list' ||
@@ -947,10 +988,32 @@ export function validateLessonMaterialItem(
         path: `content.${field.key}`,
         message: `${field.label}을(를) 한 개 이상 입력해 주세요.`,
       })
+    } else if (Array.isArray(value) && field.maxItems && value.length > field.maxItems) {
+      issues.push({
+        path: `content.${field.key}`,
+        message: `${field.label}은(는) ${field.maxItems}개 이하로 입력해 주세요.`,
+      })
+    } else if (
+      (field.kind === 'string-list' || field.kind === 'choice-list') &&
+      (stringValues(value) ?? []).some(
+        (item) =>
+          (field.maxLength !== undefined && item.length > field.maxLength) ||
+          hasDisallowedControlCharacter(item, true),
+      )
+    ) {
+      issues.push({
+        path: `content.${field.key}`,
+        message: `${field.label}의 각 항목을 ${field.maxLength}자 이내의 올바른 텍스트로 입력해 주세요.`,
+      })
     } else if (field.kind === 'number' && !integer(value)) {
       issues.push({
         path: `content.${field.key}`,
         message: `${field.label}을(를) 올바르게 입력해 주세요.`,
+      })
+    } else if (field.kind === 'number' && field.max !== undefined && Number(value) > field.max) {
+      issues.push({
+        path: `content.${field.key}`,
+        message: `${field.label}은(는) ${field.max} 이하로 입력해 주세요.`,
       })
     }
   }
@@ -959,6 +1022,27 @@ export function validateLessonMaterialItem(
     const value = material.answer[field.key]
     if (field.kind === 'text' || field.kind === 'textarea' || field.kind === 'select') {
       addRequired(issues, material.answer, 'answer', field.key, field.label)
+      if (typeof value === 'string' && field.maxLength && value.length > field.maxLength) {
+        issues.push({
+          path: `answer.${field.key}`,
+          message: `${field.label}은(는) ${field.maxLength.toLocaleString('ko-KR')}자 이내로 입력해 주세요.`,
+        })
+      } else if (typeof value === 'string' && hasDisallowedControlCharacter(value, true)) {
+        issues.push({
+          path: `answer.${field.key}`,
+          message: `${field.label}에 허용되지 않는 제어 문자가 포함되어 있습니다.`,
+        })
+      }
+      if (
+        field.kind === 'select' &&
+        typeof value === 'string' &&
+        !field.options?.some((option) => option.value === value)
+      ) {
+        issues.push({
+          path: `answer.${field.key}`,
+          message: `${field.label}의 허용된 값을 선택해 주세요.`,
+        })
+      }
     } else if (
       (field.kind === 'string-list' ||
         field.kind === 'choice-list' ||
@@ -969,10 +1053,32 @@ export function validateLessonMaterialItem(
         path: `answer.${field.key}`,
         message: `${field.label}을(를) 한 개 이상 입력해 주세요.`,
       })
+    } else if (Array.isArray(value) && field.maxItems && value.length > field.maxItems) {
+      issues.push({
+        path: `answer.${field.key}`,
+        message: `${field.label}은(는) ${field.maxItems}개 이하로 입력해 주세요.`,
+      })
+    } else if (
+      (field.kind === 'string-list' || field.kind === 'choice-list') &&
+      (stringValues(value) ?? []).some(
+        (item) =>
+          (field.maxLength !== undefined && item.length > field.maxLength) ||
+          hasDisallowedControlCharacter(item, true),
+      )
+    ) {
+      issues.push({
+        path: `answer.${field.key}`,
+        message: `${field.label}의 각 항목을 ${field.maxLength}자 이내의 올바른 텍스트로 입력해 주세요.`,
+      })
     } else if (field.kind === 'number' && !integer(value)) {
       issues.push({
         path: `answer.${field.key}`,
         message: `${field.label}을(를) 올바르게 입력해 주세요.`,
+      })
+    } else if (field.kind === 'number' && field.max !== undefined && Number(value) > field.max) {
+      issues.push({
+        path: `answer.${field.key}`,
+        message: `${field.label}은(는) ${field.max} 이하로 입력해 주세요.`,
       })
     }
   }
@@ -982,10 +1088,7 @@ export function validateLessonMaterialItem(
       // soundText는 TTS 안내 문구라 표시 글자와 달라도 된다(예: "ㅁ를 따라 써요").
       // 자음 따라보기에 모음, 모음 따라보기에 자음이 들어가는 실수를 저장 전에 막는다
       if (nonBlank(material.content.target)) {
-        const targetIssue = traceTargetIssue(
-          material.questionType,
-          material.content.target.trim(),
-        )
+        const targetIssue = traceTargetIssue(material.questionType, material.content.target.trim())
         if (targetIssue) {
           issues.push({ path: 'content.target', message: targetIssue })
         }
@@ -1002,10 +1105,22 @@ export function validateLessonMaterialItem(
       const type = material.questionType
       if (type === 'FINAL_CONSONANT_DELETE') {
         const units = stringValues(material.content.removableUnits) ?? []
-        validateIndex(material.answer.answerIndex, units.length, 'answer.answerIndex', '삭제 위치', issues)
+        validateIndex(
+          material.answer.answerIndex,
+          units.length,
+          'answer.answerIndex',
+          '삭제 위치',
+          issues,
+        )
       } else if (type === 'SYLLABLE_DELETE') {
         const syllables = stringValues(material.content.syllables) ?? []
-        validateIndex(material.answer.deleteIndex, syllables.length, 'answer.deleteIndex', '삭제 위치', issues)
+        validateIndex(
+          material.answer.deleteIndex,
+          syllables.length,
+          'answer.deleteIndex',
+          '삭제 위치',
+          issues,
+        )
         if (
           integer(material.answer.deleteIndex) &&
           nonBlank(material.answer.result) &&
@@ -1020,8 +1135,20 @@ export function validateLessonMaterialItem(
       } else {
         const choices = stringValues(material.content.choices) ?? []
         const source = nonBlank(material.content.source) ? [...material.content.source] : []
-        validateIndex(material.answer.replaceIndex, source.length, 'answer.replaceIndex', '대치 위치', issues)
-        validateIndex(material.answer.answerIndex, choices.length, 'answer.answerIndex', '대체 선택지', issues)
+        validateIndex(
+          material.answer.replaceIndex,
+          source.length,
+          'answer.replaceIndex',
+          '대치 위치',
+          issues,
+        )
+        validateIndex(
+          material.answer.answerIndex,
+          choices.length,
+          'answer.answerIndex',
+          '대체 선택지',
+          issues,
+        )
         if (
           integer(material.answer.replaceIndex) &&
           integer(material.answer.answerIndex) &&
@@ -1080,7 +1207,13 @@ export function validateLessonMaterialItem(
       ] as const
       for (const [choicesKey, answerKey, label] of slots) {
         const choices = stringValues(material.content[choicesKey]) ?? []
-        validateIndex(material.answer[answerKey], choices.length, `answer.${answerKey}`, label, issues)
+        validateIndex(
+          material.answer[answerKey],
+          choices.length,
+          `answer.${answerKey}`,
+          label,
+          issues,
+        )
       }
       break
     }

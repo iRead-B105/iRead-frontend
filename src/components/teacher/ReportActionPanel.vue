@@ -4,6 +4,7 @@ import type { ReportMemoStatus } from '@/features/teacher/report'
 
 defineProps<{
   memoDirty: boolean
+  memoValid: boolean
   memoStatus: ReportMemoStatus
 }>()
 
@@ -16,9 +17,7 @@ const emit = defineEmits<{
 
 <template>
   <div class="report-actions">
-    <Button variant="outline" type="button" @click="emit('back')">
-      보고서 목록
-    </Button>
+    <Button variant="outline" type="button" @click="emit('back')"> 보고서 목록 </Button>
     <div class="report-actions__group">
       <Button
         variant="ghost"
@@ -30,7 +29,7 @@ const emit = defineEmits<{
       </Button>
       <Button
         type="button"
-        :disabled="!memoDirty || memoStatus === 'saving'"
+        :disabled="!memoDirty || !memoValid || memoStatus === 'saving'"
         @click="emit('saveMemo')"
       >
         {{ memoStatus === 'saving' ? '의견 저장 중…' : '의견 저장' }}

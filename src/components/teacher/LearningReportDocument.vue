@@ -9,6 +9,7 @@ import {
   formatReportDateTime,
   hasAlignedReportLearningMetrics,
   REPORT_MEMO_MAX_LENGTH,
+  validateTeacherMemo,
   type ReportDetail,
   type ReportMemoStatus,
 } from '@/features/teacher/report'
@@ -28,6 +29,8 @@ const props = defineProps<{
 const alignedLearningMetrics = computed(() =>
   hasAlignedReportLearningMetrics(props.report.snapshot),
 )
+const memoValidationError = computed(() => validateTeacherMemo(props.teacherMemoDraft))
+const displayedMemoError = computed(() => memoValidationError.value ?? props.memoError)
 
 const emit = defineEmits<{
   'update:teacherMemoDraft': [value: string]
@@ -101,16 +104,17 @@ const emit = defineEmits<{
         :model-value="teacherMemoDraft"
         :maxlength="REPORT_MEMO_MAX_LENGTH"
         aria-label="교수자 의견"
-        :aria-invalid="Boolean(memoError)"
+        :aria-invalid="Boolean(displayedMemoError)"
         placeholder="저장할 교수자 의견을 입력해 주세요. 공백만 저장하면 의견이 삭제됩니다."
         @update:model-value="emit('update:teacherMemoDraft', String($event))"
       />
       <p v-if="memoStatus === 'saved'" class="save-state" role="status">
         교수자 의견을 저장했습니다.
       </p>
-      <p v-if="memoError" class="error-state" role="alert">{{ memoError }}</p>
+      <p v-if="displayedMemoError" class="error-state" role="alert">{{ displayedMemoError }}</p>
       <ReportActionPanel
         :memo-dirty="memoDirty"
+        :memo-valid="!memoValidationError"
         :memo-status="memoStatus"
         @back="emit('back')"
         @save-memo="emit('saveMemo')"

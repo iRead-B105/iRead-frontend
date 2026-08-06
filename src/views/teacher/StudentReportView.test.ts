@@ -151,6 +151,23 @@ describe('StudentReportView', () => {
     expect(buttonWithText(wrapper, '의견 저장')?.attributes('disabled')).toBeUndefined()
   })
 
+  it('보고서 필터의 역전·미래 기간과 의견 제어문자를 즉시 거부한다', async () => {
+    const { wrapper } = await mountReport()
+    const from = wrapper.get<HTMLInputElement>('[aria-label="보고서 기간 시작일"]')
+    const to = wrapper.get<HTMLInputElement>('[aria-label="보고서 기간 종료일"]')
+    await from.setValue('2026-07-29')
+    await to.setValue('2026-07-20')
+
+    expect(wrapper.text()).toContain('종료일은 시작일과 같거나 이후여야 합니다.')
+    expect(buttonWithText(wrapper, '조회')?.attributes('disabled')).toBeDefined()
+
+    await wrapper.get('.saved-report-row').trigger('click')
+    await flushPromises()
+    await wrapper.get('[aria-label="교수자 의견"]').setValue('의견\u0000')
+    expect(wrapper.text()).toContain('제어 문자')
+    expect(buttonWithText(wrapper, '의견 저장')?.attributes('disabled')).toBeDefined()
+  })
+
   it('완료 학습이 없는 기간은 입력을 유지하고 빈 보고서를 만들지 않는다', async () => {
     const repository = new TestReportRepository({ delayMs: 0 })
     const create = vi.spyOn(repository, 'create')
