@@ -1,11 +1,14 @@
 export function formatTestDate(value: string): string {
   const date = new Date(value.length === 10 ? `${value}T00:00:00` : value)
   if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('ko-KR', {
+  const parts = new Intl.DateTimeFormat('ko-KR', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(date)
+  }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((candidate) => candidate.type === type)?.value ?? ''
+  return `${part('year')}.${part('month')}.${part('day')}`
 }
 
 export function formatTestAnswer(value: unknown): string {

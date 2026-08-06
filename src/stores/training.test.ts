@@ -743,6 +743,29 @@ describe('Training store', () => {
     expect(store.historyGazeAnalysis).toMatchObject({ status: 'AVAILABLE' })
   })
 
+  it('커리큘럼 선택 시 기존 훈련 상세 카드를 유지하고 상세를 다시 조회하지 않는다', async () => {
+    const repository = new TestTrainingRepository()
+    const store = useTrainingStore()
+    store.setRepository(repository)
+    await store.loadHistoryForStudent(1)
+    const previousDetail = store.historyTrainingDetail
+    const previousGaze = store.historyGazeAnalysis
+    const getTrainingDetail = vi.spyOn(repository, 'getTrainingDetail')
+    const getGazeAnalysis = vi.spyOn(repository, 'getGazeAnalysis')
+
+    await store.selectHistoryCurriculum(1, 189)
+
+    expect(store.selectedCurriculumId).toBe(189)
+    expect(store.trainingLog?.curriculumId).toBe(189)
+    expect(store.selectedHistoryTrainingId).toBe(901)
+    expect(store.historyTrainingDetail).toBe(previousDetail)
+    expect(store.historyGazeAnalysis).toBe(previousGaze)
+    expect(store.historyDetailStatus).toBe('success')
+    expect(store.historyGazeStatus).toBe('success')
+    expect(getTrainingDetail).not.toHaveBeenCalled()
+    expect(getGazeAnalysis).not.toHaveBeenCalled()
+  })
+
   it('훈련 전환 중 이전 훈련의 상세와 시선 집계를 새 선택에 표시하지 않는다', async () => {
     const mock = new TestTrainingRepository()
     const nextDetail = await mock.getTrainingDetail(1, 902)

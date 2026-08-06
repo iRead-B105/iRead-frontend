@@ -197,7 +197,6 @@ const movementSteps = computed(() => {
   <section class="gaze-analysis" :class="{ 'gaze-analysis--compact': compact }" :aria-label="title">
     <header class="gaze-analysis__heading">
       <div>
-        <span>시선트래킹</span>
         <h2>{{ title }}</h2>
       </div>
       <strong
@@ -306,15 +305,8 @@ const movementSteps = computed(() => {
   gap: 18px;
 }
 
-.gaze-analysis__heading span {
-  color: var(--primary-600);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-}
-
 .gaze-analysis h2 {
-  margin: 3px 0 0;
+  margin: 0;
   color: var(--slate-900);
   font-size: 17px;
 }
