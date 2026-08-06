@@ -303,10 +303,9 @@ export const useTestStore = defineStore('test', () => {
       return false
     }
     comparisonTestCurriculumIds.value = [...comparisonTestCurriculumIds.value, testCurriculumId]
-    comparisonResult.value = null
     comparisonStatus.value = 'loading'
     comparisonError.value = null
-    return loadComparison(currentStudentId)
+    return loadComparison(currentStudentId, true)
   }
 
   async function removeComparisonTest(
@@ -316,14 +315,16 @@ export const useTestStore = defineStore('test', () => {
     const next = comparisonTestCurriculumIds.value.filter((id) => id !== testCurriculumId)
     if (sameIds(next, comparisonTestCurriculumIds.value)) return false
     comparisonTestCurriculumIds.value = next
-    comparisonResult.value = null
     comparisonStatus.value = 'loading'
     comparisonError.value = null
-    return loadComparison(currentStudentId)
+    return loadComparison(currentStudentId, true)
   }
 
   async function retryComparison(): Promise<void> {
-    if (studentId.value !== null) await loadComparison(studentId.value)
+    if (studentId.value === null) return
+    const preserveCurrentResult = comparisonResult.value !== null
+    comparisonStatus.value = 'loading'
+    await loadComparison(studentId.value, preserveCurrentResult)
   }
 
   async function loadComparison(currentStudentId: number, background = false): Promise<boolean> {
@@ -357,8 +358,8 @@ export const useTestStore = defineStore('test', () => {
       if (isAbortError(error) || generation !== comparisonGeneration) return false
       if (!background) {
         comparisonResult.value = null
-        comparisonStatus.value = 'error'
       }
+      comparisonStatus.value = 'error'
       comparisonError.value = testErrorMessage(error, '검사 상세 결과를 불러오지 못했습니다.')
       return false
     } finally {

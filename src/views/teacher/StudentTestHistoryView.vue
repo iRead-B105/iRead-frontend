@@ -44,7 +44,6 @@ const {
   listError,
   listUiError,
   comparisonError,
-  trendError,
   selectedQuestionTestId,
   selectedQuestionNo,
   questionGazeAnalysis,
@@ -52,7 +51,6 @@ const {
   questionGazeError,
   questionGazeAvailability,
   questionGazeAvailabilityStatus,
-  questionGazeAvailabilityFailedCount,
 } = storeToRefs(testStore)
 const listErrorKind = computed(() => asyncStateKind(listUiError.value))
 
@@ -571,15 +569,22 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
             </nav>
           </Card>
 
-          <Card v-if="comparisonStatus === 'loading'" class="state-card" aria-live="polite">
+          <Card
+            v-if="comparisonStatus === 'loading' && !comparisonResult"
+            class="state-card"
+            aria-live="polite"
+          >
             <strong>선택한 검사 결과를 불러오는 중입니다.</strong>
           </Card>
-          <Card v-else-if="comparisonStatus === 'error'" class="state-card state-card--error">
+          <Card
+            v-else-if="comparisonStatus === 'error' && !comparisonResult"
+            class="state-card state-card--error"
+          >
             <strong>{{ comparisonError }}</strong>
             <Button type="button" @click="testStore.retryComparison()">다시 시도</Button>
           </Card>
           <Card
-            v-else-if="comparisonStatus === 'success' && comparisonResult"
+            v-else-if="comparisonResult"
             class="metric-chart-section"
           >
             <header class="section-heading metric-chart-heading">
@@ -612,7 +617,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
                 </select>
               </div>
             </header>
-            <div v-if="comparisonTestCurriculumIds.length" class="comparison-chips">
+            <div class="comparison-chips">
               <span class="status-pill">비교 {{ comparisonTestCurriculumIds.length }}/2건</span>
               <span
                 v-for="test in testStore.comparisonTests"
@@ -630,12 +635,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
               </span>
             </div>
             <span v-if="trendStatus === 'loading'" class="status-pill">전체 평균 계산 중</span>
-            <div v-if="trendError" class="warning" role="status">
-              <span>{{ trendError }}</span>
-              <Button variant="outline" type="button" @click="testStore.retryTrend()">
-                다시 확인
-              </Button>
-            </div>
+
             <div class="metric-tabs" role="tablist" aria-label="검사 비교 지표">
               <button
                 v-for="metric in metricDefinitions"
@@ -650,8 +650,24 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
                 {{ metric.label }}
               </button>
             </div>
+            <div
+              v-if="comparisonStatus === 'loading'"
+              class="metric-chart-state"
+              data-test="metric-chart-loading"
+              role="status"
+            >
+              검사 지표 비교 그래프를 갱신하는 중입니다.
+            </div>
+            <div
+              v-else-if="comparisonStatus === 'error'"
+              class="metric-chart-state metric-chart-state--error"
+              role="alert"
+            >
+              <strong>{{ comparisonError }}</strong>
+              <Button type="button" @click="testStore.retryComparison()">다시 시도</Button>
+            </div>
             <ChartPanel
-              v-if="selectedMetricChart"
+              v-else-if="selectedMetricChart"
               data-test="metric-chart"
               :option="selectedMetricChart.option"
               animated
@@ -667,7 +683,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
           </Card>
         </div>
 
-        <template v-if="comparisonStatus === 'success' && comparisonResult">
+        <template v-if="comparisonResult">
           <Card class="question-section">
             <header class="section-heading">
               <div>
@@ -680,9 +696,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
                 >{{ currentDetail?.completedQuestions }}/{{ currentDetail?.totalQuestions }}</span
               >
             </header>
-            <p v-if="questionContractWarning" class="warning-copy" role="alert">
-              {{ questionContractWarning }}
-            </p>
+
             <p
               v-if="questionGazeAvailabilityStatus === 'loading'"
               class="gaze-availability-copy"
@@ -690,13 +704,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
             >
               시선 분석 기록이 있는 검사 구간을 확인하는 중입니다.
             </p>
-            <p
-              v-else-if="questionGazeAvailabilityFailedCount > 0"
-              class="warning-copy"
-              role="status"
-            >
-              일부 검사 구간의 시선 분석 존재 여부를 확인하지 못했습니다.
-            </p>
+
             <p
               v-else-if="
                 questionGazeAvailabilityStatus === 'success' &&
@@ -805,22 +813,24 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
 .selection-field label { color: var(--slate-500); font-size: 10px; font-weight: 700; }
 .selection-field select { min-height: 36px; padding: 0 34px 0 12px; border: 1px solid var(--slate-300); border-radius: var(--radius-sm); background: var(--white); color: var(--slate-800); font: inherit; font-size: 12px; }
 .metric-chart-heading { align-items: flex-end; }
-.comparison-chips { display: flex; min-width: 0; min-height: 32px; align-items: center; align-self: start; gap: 6px; padding-block: 1px; overflow-x: auto; overflow-y: hidden; }
-.comparison-chip { display: inline-flex; min-height: 30px; flex: 0 1 auto; align-items: center; gap: 6px; padding: 3px 5px 3px 10px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 12px; font-weight: 700; line-height: 1; white-space: nowrap; }
-.comparison-chip button { width: 20px; height: 20px; flex: 0 0 20px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; }
+.comparison-chips { display: flex; min-width: 0; min-height: 28px; align-items: center; align-self: start; gap: 4px; padding-block: 1px; overflow-x: auto; overflow-y: hidden; }
+.comparison-chip { display: inline-flex; min-height: 28px; flex: 0 1 auto; align-items: center; gap: 4px; padding: 2px 4px 2px 8px; border: 1px solid var(--primary-100); border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; }
+.comparison-chip button { width: 18px; height: 18px; flex: 0 0 18px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; }
 .state-card, .metric-chart-section, .question-section { min-width: 0; padding: 20px; border-radius: var(--radius-lg); }
 .metric-chart-section { height: 500px; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
 .metric-chart-section::-webkit-scrollbar { display: none; }
 .state-card { display: grid; justify-items: start; gap: 10px; }
 .state-card--error { border-color: color-mix(in oklch, var(--danger-600) 25%, var(--border)); }
-.section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
-.section-heading h2 { margin: 0; color: var(--slate-900); font-size: 17px; }
+.metric-chart-state { min-height: 320px; display: grid; place-content: center; gap: 12px; text-align: center; color: var(--muted-foreground); }
+.metric-chart-state--error { color: var(--danger-600); }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.section-heading h2 { margin: 0; color: var(--slate-900); font-size: 17px; font-weight: 700; }
 .section-heading p { margin: 5px 0 0; color: var(--slate-500); font-size: 12px; }
-.metric-chart-section, .question-section { display: grid; gap: 14px; }
-.metric-tabs { display: flex; min-height: 32px; flex: 0 0 32px; align-items: center; gap: 6px; margin-top: 4px; overflow-x: auto; }
-.metric-tab { height: 30px; flex: 0 0 auto; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); color: var(--slate-600); font: inherit; font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; cursor: pointer; }
+.metric-chart-section, .question-section { display: grid; gap: 10px; }
+.metric-tabs { display: flex; min-height: 28px; flex: 0 0 28px; align-items: center; gap: 4px; margin-top: -2px; overflow-x: auto; }
+.metric-tab { height: 28px; flex: 0 0 auto; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--white); color: var(--slate-600); font: inherit; font-size: 11px; font-weight: 700; line-height: 1; white-space: nowrap; cursor: pointer; }
 .metric-tab.active { border-color: var(--primary-300); background: var(--active-selection-background); color: var(--active-selection-foreground); }
-.status-pill { padding: 6px 9px; border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 11px; font-weight: 700; }
+.status-pill { padding: 4px 8px; border-radius: 999px; background: var(--primary-50); color: var(--primary-700); font-size: 11px; font-weight: 700; }
 .warning { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px 8px 14px; border: 1px solid var(--warning-500); border-radius: var(--radius-sm); color: var(--slate-700); font-size: 12px; }
 .question-list dl { display: grid; gap: 8px; margin: 0; }
 .question-list dl div { padding: 8px; border-radius: var(--radius-sm); }

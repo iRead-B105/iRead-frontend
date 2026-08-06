@@ -74,7 +74,6 @@ function mountEditor(
   return mount(LessonMaterialEditor, {
     props: {
       training,
-      attemptLabel: '서로 다른 받침 음절 비교하기 1/1회차',
       detail,
       lessonMaterial,
       detailStatus: 'success',
@@ -106,9 +105,9 @@ function mountEditor(
 describe('LessonMaterialEditor', () => {
   it('공통 편집 모델로 수정하고 저장 요청에서 서버 관리 필드를 제외한다', async () => {
     const wrapper = mountEditor('NOT_STARTED')
-    const activityName = wrapper.find('fieldset input')
+    const audioText = wrapper.get('#material-1-content-audioText')
 
-    await activityName.setValue('수정한 활동 이름')
+    await audioText.setValue('수정한 소리')
     await wrapper
       .findAll('button')
       .find((button) => button.text() === '교안 저장')
@@ -122,7 +121,7 @@ describe('LessonMaterialEditor', () => {
     expect(request.materials[0]).toMatchObject({
       questionNo: 1,
       questionType: 'FINAL_CONSONANT_COMPARISON',
-      presentation: { activityName: '수정한 활동 이름' },
+      content: { audioText: '수정한 소리' },
     })
     expect(request).not.toHaveProperty('materials.0.responseType')
     expect(request).not.toHaveProperty('materials.0.requiredInputs')
@@ -131,7 +130,6 @@ describe('LessonMaterialEditor', () => {
   it('진행 중 훈련은 같은 화면을 읽기 전용으로 제공한다', () => {
     const wrapper = mountEditor('IN_PROGRESS')
 
-    expect(wrapper.text()).toContain('읽기 전용')
     expect(wrapper.find('fieldset').attributes('disabled')).toBeDefined()
     expect(
       wrapper
@@ -143,8 +141,8 @@ describe('LessonMaterialEditor', () => {
 
   it('저장 중 편집 불가로 전환되어도 작성 중인 초안은 화면에 유지한다', async () => {
     const wrapper = mountEditor('NOT_STARTED')
-    const activityName = wrapper.get('fieldset input')
-    await activityName.setValue('저장 전 작성 내용')
+    const audioText = wrapper.get('#material-1-content-audioText')
+    await audioText.setValue('저장 전 작성 내용')
     const document = wrapper.props('lessonMaterial')
     expect(document).not.toBeNull()
     if (!document) return
@@ -157,7 +155,10 @@ describe('LessonMaterialEditor', () => {
       lessonMaterialSaveIssue: 'not-editable',
     })
 
-    expect(wrapper.get('fieldset input').element).toHaveProperty('value', '저장 전 작성 내용')
+    expect(wrapper.get('#material-1-content-audioText').element).toHaveProperty(
+      'value',
+      '저장 전 작성 내용',
+    )
     expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined()
   })
 
@@ -215,7 +216,7 @@ describe('LessonMaterialEditor', () => {
       lessonMaterialSaveIssue: 'revision-conflict',
       lessonMaterialRemoteChange: true,
     })
-    await wrapper.find('fieldset input').setValue('수정한 활동')
+    await wrapper.get('#material-1-content-audioText').setValue('수정한 활동')
 
     expect(wrapper.text()).toContain('서버의 교안이 변경되었습니다.')
     expect(
@@ -244,15 +245,15 @@ describe('LessonMaterialEditor', () => {
       lessonMaterialSaveIssue: 'validation',
       lessonMaterialFieldErrors: [
         {
-          path: 'materials[0].presentation.activityName',
+          path: 'materials[0].content.audioText',
           reason: 'NOT_BLANK',
-          message: '활동 이름을 입력해 주세요.',
+          message: '소리 내용을 입력해 주세요.',
         },
       ],
     })
 
-    expect(wrapper.text()).toContain('활동 이름을 입력해 주세요.')
-    expect(wrapper.get('fieldset input').attributes('aria-invalid')).toBe('true')
+    expect(wrapper.text()).toContain('소리 내용을 입력해 주세요.')
+    expect(wrapper.get('#material-1-content-audioText').attributes('aria-invalid')).toBe('true')
   })
 
   it('하단 돌아가기 버튼으로 커리큘럼 화면 복귀 이벤트를 전달한다', async () => {
@@ -266,7 +267,7 @@ describe('LessonMaterialEditor', () => {
 
   it('수정 내용이 있으면 복귀 전에 취소 확인을 거친다', async () => {
     const wrapper = mountEditor('NOT_STARTED')
-    await wrapper.find('fieldset input').setValue('수정한 활동')
+    await wrapper.get('#material-1-content-audioText').setValue('수정한 활동')
 
     await wrapper.get('[data-test="material-editor-footer-back"]').trigger('click')
     const confirmDialog = wrapper
@@ -281,5 +282,27 @@ describe('LessonMaterialEditor', () => {
 
     expect(wrapper.emitted('close')).toHaveLength(1)
     expect(wrapper.emitted('update:open')).toEqual([[false]])
+  })
+
+  it('모달 밖을 클릭하면(pointer-down-outside) 복귀 이벤트를 발생시킨다', async () => {
+    const wrapper = mountEditor('NOT_STARTED')
+
+    await wrapper.get('.material-dialog').trigger('pointer-down-outside')
+
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.emitted('update:open')).toEqual([[false]])
+  })
+
+  it('교안 편집 화면에서 메타정보와 화면 표시 필드를 노출하지 않는다', () => {
+    const wrapper = mountEditor('NOT_STARTED')
+
+    expect(wrapper.text()).not.toContain('편집 가능')
+    expect(wrapper.text()).not.toContain('동일 데이터 미리보기')
+    expect(wrapper.text()).not.toContain('활동 이름')
+    expect(wrapper.text()).not.toContain('활동 지시문')
+    expect(wrapper.text()).not.toContain('정답 피드백')
+    expect(wrapper.text()).not.toContain('재시도 피드백')
+    expect(wrapper.text()).not.toContain('시작 전')
+    expect(wrapper.find('.preview-device').exists()).toBe(false)
   })
 })

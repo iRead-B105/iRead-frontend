@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, reactive, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import SaveToast from '@/components/common/SaveToast.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -22,6 +23,22 @@ const form = reactive({
 })
 const submitting = ref(false)
 
+const toastVisible = ref(false)
+const toastMessage = ref('')
+let toastTimer: number | null = null
+
+function triggerToast(msg: string): void {
+  if (toastTimer !== null) {
+    window.clearTimeout(toastTimer)
+  }
+  toastMessage.value = msg
+  toastVisible.value = true
+  toastTimer = window.setTimeout(() => {
+    toastVisible.value = false
+    toastTimer = null
+  }, 3000)
+}
+
 async function focusError(field?: string): Promise<void> {
   await nextTick()
   const fieldIds: Record<string, string> = {
@@ -42,6 +59,7 @@ async function signup() {
   if (!validation.ok) {
     errorMessage.value = validation.message
     errorField.value = validation.field
+    triggerToast(validation.message)
     await focusError(validation.field)
     return
   }
@@ -54,7 +72,9 @@ async function signup() {
     await authRepositories.auth.signUp(validation.value)
     await router.push('/login')
   } catch (error) {
-    errorMessage.value = getSignUpErrorMessage(error)
+    const errorMsg = getSignUpErrorMessage(error)
+    errorMessage.value = errorMsg
+    triggerToast(errorMsg)
     await focusError()
   } finally {
     submitting.value = false
@@ -188,6 +208,8 @@ async function signup() {
         이미 계정이 있으신가요? <RouterLink to="/login">로그인</RouterLink>
       </p>
     </form>
+
+    <SaveToast :visible="toastVisible" :message="toastMessage" />
   </main>
 </template>
 

@@ -453,7 +453,7 @@ function refreshEditedPage(): void {
 
 .story-selector-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
@@ -464,7 +464,9 @@ function refreshEditedPage(): void {
 }
 
 .story-selector-heading h2 {
-  font-size: 18px;
+  color: var(--slate-900);
+  font-size: 17px;
+  font-weight: 700;
 }
 
 .story-selector-heading p {

@@ -9,6 +9,14 @@ import { testGazeFixtures } from '@/test/fixtures/gaze'
 import { useTestStore } from '@/stores/test'
 import StudentTestHistoryView from './StudentTestHistoryView.vue'
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolver) => {
+    resolve = resolver
+  })
+  return { promise, resolve }
+}
+
 async function mountHistory(
   repository: TestRepository,
   initialPath = '/teacher/students/1/test-history',
@@ -66,6 +74,32 @@ async function mountHistory(
 }
 
 describe('StudentTestHistoryView', () => {
+  it('reloads only the chart when the comparison target changes', async () => {
+    const pending = deferred<Awaited<ReturnType<TestTestRepository['compareTests']>>>()
+    const repository = new TestTestRepository()
+    const compareTests = repository.compareTests.bind(repository)
+    vi.spyOn(repository, 'compareTests').mockImplementation(
+      (studentId, currentId, comparisonIds, options) =>
+        comparisonIds.length === 0
+          ? compareTests(studentId, currentId, comparisonIds, options)
+          : pending.promise,
+    )
+    const { wrapper } = await mountHistory(repository)
+
+    const change = wrapper.get<HTMLSelectElement>('#comparison-test').setValue('1008')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="metric-chart"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="metric-chart-loading"]').exists()).toBe(true)
+    expect(wrapper.findAll('.question-list > li')).toHaveLength(9)
+
+    pending.resolve(await compareTests(1, '1011', ['1008']))
+    await change
+    await flushPromises()
+    expect(wrapper.find('[data-test="metric-chart-loading"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="metric-chart"]').exists()).toBe(true)
+  })
+
   it('잘못된 studentId에서는 Repository를 호출하지 않는다', async () => {
     const repository = new TestTestRepository()
     const getTests = vi.spyOn(repository, 'getTests')
@@ -183,10 +217,6 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.findAll('[data-test="metric-chart"]')).toHaveLength(1)
     expect(wrapper.get('[data-test="metric-chart"]').text()).toContain('bar, line')
     expect(wrapper.get('[data-test="metric-chart"]').text()).toContain('true')
-    expect(wrapper.findAll('[data-metric-key="overallScore"].highlighted')).toHaveLength(
-      wrapper.findAll('.detail-card').length,
-    )
-
     await wrapper.get<HTMLSelectElement>('#comparison-test').setValue('1008')
     await flushPromises()
     expect(wrapper.findAll('.comparison-chip')).toHaveLength(1)

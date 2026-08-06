@@ -358,7 +358,7 @@ function formatQuestionScore(score: number | null): string | null {
 
           <Card class="curriculum-overview">
             <section class="curriculum-trainings">
-              <h3>학습 목록</h3>
+              <h2>학습 목록</h2>
               <AsyncStatePanel
                 v-if="trainingLogStatus === 'loading'"
                 kind="loading"
@@ -408,7 +408,7 @@ function formatQuestionScore(score: number | null): string | null {
               </div>
               <p v-if="trainingLog?.trainings.length" class="curriculum-complete-note">
                 <InfoIcon aria-hidden="true" />
-                모든 훈련을 완료했습니다. 훈련을 선택하면 상세 학습 결과를 확인할 수 있습니다.
+                훈련을 선택하면 상세 학습 결과를 확인할 수 있습니다.
               </p>
             </section>
           </Card>
@@ -417,12 +417,12 @@ function formatQuestionScore(score: number | null): string | null {
         <Card class="detail-card">
           <header class="detail-heading">
             <div>
-              <span>선택 훈련 상세</span>
+              <h2>선택 훈련 상세</h2>
               <template v-if="historyDetailStatus === 'success' && historyTrainingDetail">
-                <h2>{{ historyTrainingDetail.name }}</h2>
+                <h3>{{ historyTrainingDetail.name }}</h3>
               </template>
               <template v-else>
-                <h2>{{ selectedHistoryTraining?.trainingName ?? '훈련을 선택해 주세요.' }}</h2>
+                <h3>{{ selectedHistoryTraining?.trainingName ?? '훈련을 선택해 주세요.' }}</h3>
                 <p v-if="historyDetailStatus === 'loading'">새 훈련 상세를 불러오는 중입니다.</p>
                 <p v-else-if="historyDetailStatus === 'error'">상세 조회를 완료하지 못했습니다.</p>
               </template>
@@ -478,11 +478,7 @@ function formatQuestionScore(score: number | null): string | null {
                 </div>
               </dl>
 
-              <section class="question-results" aria-labelledby="question-results-title">
-                <header>
-                  <h3 id="question-results-title">문항 결과</h3>
-                  <span>{{ detailQuestions.length }}건</span>
-                </header>
+              <section class="question-results" aria-label="문항 결과">
                 <p v-if="detailQuestions.length === 0" class="section-state">
                   저장된 문항 결과가 없습니다.
                 </p>
@@ -621,8 +617,7 @@ function formatQuestionScore(score: number | null): string | null {
   gap: 16px;
 }
 
-.section-heading h2,
-.detail-heading h2 {
+.section-heading h2 {
   margin: 0;
   font-size: 17px;
 }
@@ -745,7 +740,7 @@ function formatQuestionScore(score: number | null): string | null {
   margin-top: 0;
 }
 
-.curriculum-trainings > h3 {
+.curriculum-trainings > h2 {
   margin: 0 0 12px;
   color: var(--slate-800);
   font-size: 14px;
@@ -897,11 +892,6 @@ function formatQuestionScore(score: number | null): string | null {
   color: var(--destructive);
 }
 
-.question-results h3 {
-  margin: 0;
-  font-size: 13px;
-}
-
 .detail-metrics {
   display: grid;
   gap: 8px;
@@ -931,14 +921,15 @@ dd {
   min-height: 300px;
 }
 
-.detail-heading > div > span {
+.detail-heading > div > h2 {
+  margin: 0;
   color: var(--slate-500);
   font-size: 12px;
   font-weight: 700;
 }
 
-.detail-heading h2 {
-  margin-top: 5px;
+.detail-heading h3 {
+  margin: 5px 0 0;
   font-size: 20px;
 }
 
@@ -980,18 +971,6 @@ dd {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: color-mix(in oklch, var(--muted) 32%, transparent);
-}
-
-.question-results > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.question-results > header span {
-  color: var(--slate-500);
-  font-size: 11px;
 }
 
 .question-table {
@@ -1144,8 +1123,7 @@ dd {
 
 @container (max-width: 480px) {
   .section-heading,
-  .detail-heading,
-  .question-results > header {
+  .detail-heading {
     align-items: flex-start;
     flex-direction: column;
   }

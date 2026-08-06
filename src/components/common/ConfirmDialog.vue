@@ -17,9 +17,10 @@ withDefaults(
     title: string
     message: string
     confirmLabel?: string
+    cancelLabel?: string
     tone?: 'danger' | 'primary'
   }>(),
-  { confirmLabel: '삭제', tone: 'danger' },
+  { confirmLabel: '삭제', cancelLabel: '취소', tone: 'danger' },
 )
 
 const emit = defineEmits<{ cancel: []; confirm: [] }>()
@@ -36,7 +37,7 @@ const emit = defineEmits<{ cancel: []; confirm: [] }>()
         <AlertDialogDescription>{{ message }}</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel @click="emit('cancel')">취소</AlertDialogCancel>
+        <AlertDialogCancel @click="emit('cancel')">{{ cancelLabel }}</AlertDialogCancel>
         <AlertDialogAction
           :variant="tone === 'danger' ? 'destructive' : 'default'"
           @click.prevent="emit('confirm')"

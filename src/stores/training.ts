@@ -1231,37 +1231,49 @@ export const useTrainingStore = defineStore('training', () => {
     ) {
       return
     }
-    await loadHistoryCurriculum(studentId, curriculumId)
+    await loadHistoryCurriculum(studentId, curriculumId, false)
   }
 
-  async function loadHistoryCurriculum(studentId: number, curriculumId: number): Promise<void> {
+  async function loadHistoryCurriculum(
+    studentId: number,
+    curriculumId: number,
+    loadInitialTraining = true,
+  ): Promise<void> {
     const isBackgroundRefresh =
       selectedCurriculumId.value === curriculumId && trainingLog.value !== null
     historyCurriculumController?.abort()
-    historyDetailController?.abort()
-    historyGazeController?.abort()
+    if (loadInitialTraining) {
+      historyDetailController?.abort()
+      historyGazeController?.abort()
+    }
     const controller = new AbortController()
     historyCurriculumController = controller
     const generation = ++historyCurriculumGeneration
-    historyDetailGeneration += 1
-    historyGazeGeneration += 1
+    if (loadInitialTraining) {
+      historyDetailGeneration += 1
+      historyGazeGeneration += 1
+    }
     selectedCurriculumId.value = curriculumId
     if (!isBackgroundRefresh) {
       trainingLog.value = null
       statistics.value = null
-      selectedHistoryTrainingId.value = null
-      historyTrainingDetail.value = null
-      historyGazeAnalysis.value = null
       trainingLogStatus.value = 'loading'
       statisticsStatus.value = 'loading'
-      historyDetailStatus.value = 'idle'
-      historyGazeStatus.value = 'idle'
+      if (loadInitialTraining) {
+        selectedHistoryTrainingId.value = null
+        historyTrainingDetail.value = null
+        historyGazeAnalysis.value = null
+        historyDetailStatus.value = 'idle'
+        historyGazeStatus.value = 'idle'
+      }
     }
     trainingLogError.value = null
     statisticsError.value = null
-    historyDetailError.value = null
-    historyGazeError.value = null
-    exportError.value = null
+    if (loadInitialTraining) {
+      historyDetailError.value = null
+      historyGazeError.value = null
+      exportError.value = null
+    }
 
     const logRequest = repository.value
       .getTrainingLog(studentId, curriculumId, { signal: controller.signal })
@@ -1276,7 +1288,7 @@ export const useTrainingStore = defineStore('training', () => {
         const currentStillExists = log.trainings.some(
           (training) => training.trainingId === selectedHistoryTrainingId.value,
         )
-        if (!currentStillExists) {
+        if (loadInitialTraining && !currentStillExists) {
           selectedHistoryTrainingId.value = log.trainings[0]?.trainingId ?? null
         }
         trainingLogStatus.value = 'success'
@@ -1313,7 +1325,7 @@ export const useTrainingStore = defineStore('training', () => {
     await Promise.all([logRequest, statisticsRequest])
     if (generation !== historyCurriculumGeneration) return
     historyCurriculumController = null
-    if (selectedHistoryTrainingId.value !== null) {
+    if (loadInitialTraining && selectedHistoryTrainingId.value !== null) {
       await Promise.all([
         loadHistoryTrainingDetail(studentId, selectedHistoryTrainingId.value),
         loadHistoryTrainingGaze(studentId, selectedHistoryTrainingId.value),

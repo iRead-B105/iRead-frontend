@@ -35,7 +35,7 @@ describe('TeacherLayout accessibility', () => {
     expect(wrapper.get('main').attributes('tabindex')).toBe('-1')
   })
 
-  it('3초 이상 최신화되지 않을 때만 연결 경고를 표시한다', async () => {
+  it('3초 이상 최신화되지 않을 때만 간결한 연결 경고를 표시한다', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-31T10:00:00+09:00'))
     const { wrapper, store } = mountLayout()
@@ -53,5 +53,7 @@ describe('TeacherLayout accessibility', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).toContain('연결이 불안정합니다.')
+    expect(wrapper.text()).not.toContain('마지막 갱신')
+    expect(wrapper.find('button').exists()).toBe(false)
   })
 })

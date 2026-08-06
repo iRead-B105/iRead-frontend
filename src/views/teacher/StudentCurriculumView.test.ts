@@ -137,11 +137,12 @@ describe('StudentCurriculumView', () => {
       warnings: [],
     })
     const { wrapper, store } = await mountCurriculum(repository())
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    const generateStar = wrapper.get('[aria-label="AI 커리큘럼 생성"]')
-    expect(generateStar.classes()).not.toContain('is-ai-active')
-    await generateStar.trigger('click')
+    const aiToggleBtn = wrapper.get('.ai-recommendation-toggle')
+    expect(wrapper.text()).toContain('아동의 최신 학습 기록을 바탕으로 커리큘럼을 AI가 추천해 드려요')
+    expect(aiToggleBtn.classes()).not.toContain('is-ai-active')
+    await aiToggleBtn.trigger('click')
     await flushPromises()
 
     expect(request).toHaveBeenCalledWith('/api/admin/training/1/ai-recommendation', {
@@ -149,37 +150,23 @@ describe('StudentCurriculumView', () => {
     })
     expect(store.draftTrainingIds).toEqual([1, 2, 3, 4, 5])
     expect(store.savedCurriculum).toEqual(currentCurriculumFixture)
+    expect(aiToggleBtn.classes()).toContain('is-ai-active')
     const details = wrapper.get('#ai-recommendation-details')
-    expect(details.isVisible()).toBe(false)
-
-    const activeStar = wrapper.get('[aria-label="AI 추천 설명 보기"]')
-    expect(activeStar.classes()).toContain('is-ai-active')
-    await activeStar.trigger('click')
     expect(details.isVisible()).toBe(true)
     expect(wrapper.text()).toContain('학습 기록을 바탕으로 이렇게 구성했어요')
     expect(wrapper.text()).toContain('집중 연습 · 겹받침 ㄺ')
     expect(wrapper.text()).not.toContain('GRAPHEME.CODA.COMPLEX.ㄺ')
     expect(wrapper.text()).not.toContain('openai')
 
-    await wrapper.get('[aria-label="AI 추천 설명 닫기"]').trigger('click')
-    expect(details.isVisible()).toBe(false)
-    await wrapper.get('[aria-label="AI 추천 설명 보기"]').trigger('click')
-    expect(details.isVisible()).toBe(true)
-    await buttonWithText(wrapper, 'AI로 다시 생성')?.trigger('click')
+    await aiToggleBtn.trigger('click')
     await flushPromises()
     expect(request).toHaveBeenCalledTimes(2)
-    expect(details.isVisible()).toBe(false)
+    expect(wrapper.find('#ai-recommendation-details').exists()).toBe(true)
 
     store.moveDraftItem(store.draftItems[0]!.key, store.draftItems[1]!.key)
     await wrapper.vm.$nextTick()
-    expect(wrapper.get('[aria-label="AI 커리큘럼 생성"]').classes()).not.toContain('is-ai-active')
-    expect(details.isVisible()).toBe(false)
-
-    await wrapper.get('[aria-label="AI 커리큘럼 생성"]').trigger('click')
-    await flushPromises()
-    expect(confirm).toHaveBeenCalled()
-    expect(request).toHaveBeenCalledTimes(3)
-    expect(wrapper.get('[aria-label="AI 추천 설명 보기"]').classes()).toContain('is-ai-active')
+    expect(aiToggleBtn.classes()).not.toContain('is-ai-active')
+    expect(wrapper.find('#ai-recommendation-details').exists()).toBe(true)
   })
 
   it('잘못된 studentId에서는 API를 호출하지 않고 목록 이동 action을 표시한다', async () => {
@@ -215,18 +202,18 @@ describe('StudentCurriculumView', () => {
     })
     const { wrapper } = await mountCurriculum(trainingRepository)
 
-    expect(wrapper.text()).toContain('다음 회차가 비어 있습니다.')
+    expect(wrapper.text()).toContain('다음 회차가 비어 있습니다')
     for (let index = 0; index < 5; index += 1) {
       await buttonWithText(wrapper, '학습 추가')?.trigger('click')
       await flushPromises()
     }
-    await buttonWithText(wrapper, '커리큘럼 생성')?.trigger('click')
+    await wrapper.get('.save-curriculum-button').trigger('click')
     await flushPromises()
 
     expect(createCurriculum).toHaveBeenCalledWith(1, {
       trainingTemplateIds: [1, 1, 1, 1, 1],
     })
-    expect(wrapper.findAll('.recommendation-list article')).toHaveLength(5)
+    expect(wrapper.text()).toContain('커리큘럼 변경 사항이 저장되었습니다.')
   })
 
   it('실제 training ID가 있는 반복 시행에서만 교안 편집을 연다', async () => {
@@ -245,7 +232,8 @@ describe('StudentCurriculumView', () => {
       102,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
-    expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기 2/2회차')
+    expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기')
+    expect(wrapper.text()).not.toContain('2/2회차')
     expect(wrapper.text()).toContain('읽기 전용')
     expect(wrapper.text()).not.toContain('자료 추가')
     expect(wrapper.text()).not.toContain('훈련 기본 정보')
@@ -450,15 +438,13 @@ describe('StudentCurriculumView', () => {
 
     await wrapper.find('.remove-button').trigger('click')
     await flushPromises()
-
     expect(wrapper.find('.remove-button').classes()).toContain('is-confirming')
-    expect(wrapper.find('.remove-button').attributes('aria-label')).toContain('한 번 더 누르면 삭제')
+
     await wrapper.find('.remove-button').trigger('click')
     await flushPromises()
 
     expect(store.draftItems).toHaveLength(currentCurriculumFixture.trainings.length - 1)
     expect(store.draftItems.some((item) => item.key === target.key)).toBe(false)
-    expect(wrapper.findAll('.recommendation-list article')).toHaveLength(2)
   })
 
   it('검사 결과에서 지정한 추천 커리큘럼의 상태를 표시하고 최종 검수를 완료한다', async () => {
