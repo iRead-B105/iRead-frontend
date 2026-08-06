@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { Search, RotateCcw, Settings2 } from '@lucide/vue'
+import AuthenticatedImage from '@/components/common/AuthenticatedImage.vue'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import SaveToast from '@/components/common/SaveToast.vue'
 import { Button } from '@/components/ui/button'
@@ -33,7 +34,6 @@ import {
 import { asyncStateKind } from '@/features/teacher/error'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import { useStudentStore } from '@/stores/students'
-import { resolveImageUrl } from '@/lib/image'
 
 const route = useRoute()
 const router = useRouter()
@@ -288,7 +288,7 @@ onBeforeUnmount(() => {
           >
             <TableCell>
               <div class="student-link">
-                <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
+                <AuthenticatedImage v-if="student.imageUrl" :src="student.imageUrl" alt="" />
                 <span v-else class="avatar" aria-hidden="true">{{
                   studentInitial(student.name)
                 }}</span>
@@ -353,7 +353,7 @@ onBeforeUnmount(() => {
       >
         <div class="mobile-card-header">
           <div class="student-link">
-            <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
+            <AuthenticatedImage v-if="student.imageUrl" :src="student.imageUrl" alt="" />
             <span v-else class="avatar" aria-hidden="true">{{
               studentInitial(student.name)
             }}</span>
