@@ -90,6 +90,7 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.findAll('.question-list > li')).toHaveLength(9)
     expect(wrapper.text()).toContain('제출 답안')
     expect(wrapper.text()).toContain('발음 점수')
+    expect(wrapper.text()).toContain('해당 없음')
     expect(wrapper.text()).not.toContain('추천 훈련 커리큘럼')
     expect(wrapper.text()).not.toContain('추천 교안 검수하기')
     expect(wrapper.text()).toContain('9문항 확인')

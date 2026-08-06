@@ -264,6 +264,7 @@ function refreshEditedPage(): void {
                 {{ formatStoryActivityAt(story.activityAt) }}
               </time>
               <span class="story-title-tab__progress">
+                {{ story.generationProgress }}% ·
                 {{ story.readLineCount }}/{{ story.totalLineCount }}문장
               </span>
             </button>
