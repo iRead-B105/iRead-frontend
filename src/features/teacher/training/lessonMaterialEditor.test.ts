@@ -59,12 +59,13 @@ describe('lesson material editor registry', () => {
   })
 
   it('4개 학습 카테고리에 10·11·4·9개로 이중 분류한다', () => {
-    const counts = Object.values(LESSON_MATERIAL_EDITOR_REGISTRY).reduce<
-      Record<string, number>
-    >((result, definition) => {
-      result[definition.category] = (result[definition.category] ?? 0) + 1
-      return result
-    }, {})
+    const counts = Object.values(LESSON_MATERIAL_EDITOR_REGISTRY).reduce<Record<string, number>>(
+      (result, definition) => {
+        result[definition.category] = (result[definition.category] ?? 0) + 1
+        return result
+      },
+      {},
+    )
 
     expect(counts).toEqual({
       PHONICS: 11,
@@ -169,6 +170,19 @@ describe('lesson material type validation', () => {
     )
   })
 
+  it('자음 소리 고르기 선택지 개수를 3개 초과해 입력하면 검증에서 막는다', () => {
+    const current = material('CONSONANT_SOUND_CHOICE')
+    const invalid = {
+      ...current,
+      content: { ...current.content, choices: ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ'] },
+      answer: { answerIndex: 0 },
+    }
+
+    const issues = validateLessonMaterialItem(invalid)
+    expect(issues.map((issue) => issue.path)).toContain('content.choices')
+    expect(issues.some((issue) => issue.message.includes('3개 이하'))).toBe(true)
+  })
+
   it('문장 카드 순서와 완성 문장의 불일치를 찾는다', () => {
     const current = material('SENTENCE_ASSEMBLY')
     const invalid = {
@@ -251,5 +265,19 @@ describe('lesson material type validation', () => {
     }
 
     expect(validateLessonMaterialItem(saved)).toEqual([])
+  })
+
+  it('필드 길이·제어문자·허용되지 않은 선택값을 저장 전에 거부한다', () => {
+    const source = material('SENTENCE_REPEAT')
+    const invalid = {
+      ...source,
+      presentation: { ...source.presentation, activityName: '가'.repeat(101) },
+      content: { ...source.content, emotion: 'ANGRY', sentence: '문장\u0000' },
+    }
+
+    const issues = validateLessonMaterialItem(invalid)
+    expect(issues.map((issue) => issue.path)).toEqual(
+      expect.arrayContaining(['presentation.activityName', 'content.emotion', 'content.sentence']),
+    )
   })
 })

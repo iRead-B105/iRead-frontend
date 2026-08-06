@@ -35,7 +35,8 @@ const emit = defineEmits<{
   retry: []
 }>()
 
-function parseLocalDate(value: string): Date {
+function parseLocalDate(value: string | null | undefined): Date {
+  if (!value) return new Date()
   const [year, month, day] = value.split('-').map(Number)
   return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1, 12)
 }
@@ -184,17 +185,17 @@ function isInRange(date: string): boolean {
           'is-outside': !day.inVisibleMonth,
           'is-selected': isSelected(day.date),
           'is-in-range': isInRange(day.date),
-          'has-training': (completedDateCounts[day.date] ?? 0) > 0,
+          'has-training': (completedDateCounts?.[day.date] ?? 0) > 0,
         }"
         type="button"
         :disabled="disabled || day.disabled"
         :aria-pressed="isSelected(day.date)"
-        :aria-label="`${day.date}${completedDateCounts[day.date] ? `, 완료 훈련 ${completedDateCounts[day.date]}개` : ''}`"
+        :aria-label="`${day.date}${completedDateCounts?.[day.date] ? `, 완료 훈련 ${completedDateCounts[day.date]}개` : ''}`"
         @click="selectDate(day.date)"
       >
         <span>{{ day.day }}</span>
-        <b v-if="completedDateCounts[day.date]" aria-hidden="true">
-          {{ completedDateCounts[day.date] }}
+        <b v-if="completedDateCounts?.[day.date]" aria-hidden="true">
+          {{ completedDateCounts?.[day.date] }}
         </b>
       </button>
     </div>

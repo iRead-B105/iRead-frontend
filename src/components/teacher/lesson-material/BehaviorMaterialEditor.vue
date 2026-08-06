@@ -8,15 +8,20 @@ import {
   type LessonMaterialFieldError,
   type LessonMaterialEditorCode,
   type LessonMaterialFieldDefinition,
+  type LessonMaterialValidationIssue,
 } from '@/features/teacher/training'
 import ImageWordCandidatePicker from './ImageWordCandidatePicker.vue'
 
-const props = defineProps<{
-  material: EditableLessonMaterialItem
-  editorCode: LessonMaterialEditorCode
-  disabled: boolean
-  fieldErrors: readonly LessonMaterialFieldError[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    material: EditableLessonMaterialItem
+    editorCode: LessonMaterialEditorCode
+    disabled: boolean
+    fieldErrors: readonly LessonMaterialFieldError[]
+    validationIssues?: readonly LessonMaterialValidationIssue[]
+  }>(),
+  { validationIssues: () => [] },
+)
 
 const emit = defineEmits<{
   updateField: [section: 'content' | 'answer', key: string, value: unknown]
@@ -62,6 +67,17 @@ function errorsFor(
   )
 }
 
+function validationIssuesFor(
+  section: 'content' | 'answer',
+  key: string,
+): readonly LessonMaterialValidationIssue[] {
+  const path = `${section}.${key}`
+  return props.validationIssues.filter(
+    (issue) =>
+      issue.path === path || issue.path.startsWith(`${path}.`) || issue.path.startsWith(`${path}[`),
+  )
+}
+
 function update(
   section: 'content' | 'answer',
   field: LessonMaterialFieldDefinition,
@@ -87,7 +103,8 @@ function updateNumber(
 ): void {
   const displayed = Number(value)
   const normalized = field.key.endsWith('Index') ? displayed - 1 : displayed
-  update(section, field, Number.isFinite(normalized) ? Math.max(0, normalized) : 0)
+  const bounded = Number.isFinite(normalized) ? Math.max(0, normalized) : 0
+  update(section, field, field.max === undefined ? bounded : Math.min(field.max, bounded))
 }
 
 function listValue(value: unknown): unknown[] {
@@ -134,6 +151,7 @@ function updateListItem(
 
 function addListItem(section: 'content' | 'answer', field: LessonMaterialFieldDefinition): void {
   const items = listValue(valueFor(section, field.key))
+  if (field.maxItems !== undefined && items.length >= field.maxItems) return
   update(section, field, [...items, ''])
 }
 
@@ -167,6 +185,12 @@ function updateJson(
   const value = (event.target as HTMLTextAreaElement).value
   const id = jsonKey(section, field.key)
   jsonTexts.value = { ...jsonTexts.value, [id]: value }
+  if (value.length > 20_000) {
+    const next = { ...jsonErrors.value, [id]: 'JSON 입력은 20,000자 이내로 입력해 주세요.' }
+    jsonErrors.value = next
+    emit('editorError', Object.values(next)[0] ?? null)
+    return
+  }
   try {
     const parsed = JSON.parse(value)
     const remaining = { ...jsonErrors.value }
@@ -217,7 +241,11 @@ function updateJson(
           v-else-if="field.kind === 'textarea'"
           :id="fieldId(section, field.key)"
           :value="textValue(valueFor(section, field.key))"
-          :aria-invalid="errorsFor(section, field.key).length > 0"
+          :aria-invalid="
+            errorsFor(section, field.key).length > 0 ||
+            validationIssuesFor(section, field.key).length > 0
+          "
+          :maxlength="field.maxLength"
           rows="3"
           @input="update(section, field, ($event.target as HTMLTextAreaElement).value)"
         />
@@ -226,7 +254,11 @@ function updateJson(
           v-else-if="field.kind === 'text'"
           :id="fieldId(section, field.key)"
           :model-value="textValue(valueFor(section, field.key))"
-          :aria-invalid="errorsFor(section, field.key).length > 0"
+          :aria-invalid="
+            errorsFor(section, field.key).length > 0 ||
+            validationIssuesFor(section, field.key).length > 0
+          "
+          :maxlength="field.maxLength"
           @update:model-value="update(section, field, String($event))"
         />
 
@@ -235,8 +267,12 @@ function updateJson(
           :id="fieldId(section, field.key)"
           type="number"
           min="1"
+          :max="field.max"
           :model-value="numberValue(valueFor(section, field.key), field)"
-          :aria-invalid="errorsFor(section, field.key).length > 0"
+          :aria-invalid="
+            errorsFor(section, field.key).length > 0 ||
+            validationIssuesFor(section, field.key).length > 0
+          "
           @update:model-value="updateNumber(section, field, $event)"
         />
 
@@ -244,7 +280,10 @@ function updateJson(
           v-else-if="field.kind === 'select'"
           :id="fieldId(section, field.key)"
           :value="textValue(valueFor(section, field.key))"
-          :aria-invalid="errorsFor(section, field.key).length > 0"
+          :aria-invalid="
+            errorsFor(section, field.key).length > 0 ||
+            validationIssuesFor(section, field.key).length > 0
+          "
           @change="update(section, field, ($event.target as HTMLSelectElement).value)"
         >
           <option
@@ -281,6 +320,7 @@ function updateJson(
               :model-value="itemText(item)"
               :aria-label="`${field.label} ${index + 1}`"
               :disabled="isImageCandidate(item)"
+              :maxlength="field.maxLength"
               @update:model-value="updateListItem(section, field, index, String($event))"
             />
             <Button
@@ -293,7 +333,16 @@ function updateJson(
               ×
             </Button>
           </div>
-          <Button variant="outline" size="sm" type="button" @click="addListItem(section, field)">
+          <Button
+            v-if="
+              field.maxItems === undefined ||
+              listValue(valueFor(section, field.key)).length < field.maxItems
+            "
+            variant="outline"
+            size="sm"
+            type="button"
+            @click="addListItem(section, field)"
+          >
             + 항목 추가
           </Button>
         </div>
@@ -312,6 +361,14 @@ function updateJson(
         </div>
 
         <small v-if="field.help && !field.readonly" class="field-help">{{ field.help }}</small>
+        <small
+          v-for="issue in validationIssuesFor(section, field.key)"
+          :key="`${issue.path}-${issue.message}`"
+          class="field-error"
+          role="alert"
+        >
+          {{ issue.message }}
+        </small>
         <small
           v-for="error in errorsFor(section, field.key)"
           :key="`${error.path}-${error.reason}`"

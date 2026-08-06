@@ -8,11 +8,14 @@ import {
   authRepositories,
   getSignUpErrorMessage,
   validateSignUpForm,
+  validateSignUpFields,
+  type SignUpFormErrors,
 } from '@/features/teacher/auth'
 
 const router = useRouter()
 const errorMessage = ref('')
 const errorField = ref('')
+const fieldErrors = ref<SignUpFormErrors>({})
 const errorSummary = ref<HTMLElement | null>(null)
 const form = reactive({
   email: '',
@@ -39,6 +42,25 @@ function triggerToast(msg: string): void {
   }, 3000)
 }
 
+function validateField(field: keyof SignUpFormErrors): void {
+  const errors = validateSignUpFields(form)
+  fieldErrors.value = { ...fieldErrors.value, [field]: errors[field] }
+  if (errorMessage.value && errorField.value === field) {
+    const firstField = (
+      ['email', 'password', 'passwordConfirm', 'name', 'organization'] as const
+    ).find((candidate) => fieldErrors.value[candidate])
+    errorField.value = firstField ?? ''
+    errorMessage.value = firstField ? (fieldErrors.value[firstField] ?? '') : ''
+  }
+}
+
+function revalidateEditedField(field: keyof SignUpFormErrors): void {
+  if (fieldErrors.value[field]) validateField(field)
+  if (field === 'password' && fieldErrors.value.passwordConfirm) {
+    validateField('passwordConfirm')
+  }
+}
+
 async function focusError(field?: string): Promise<void> {
   await nextTick()
   const fieldIds: Record<string, string> = {
@@ -57,6 +79,7 @@ async function signup() {
 
   const validation = validateSignUpForm(form)
   if (!validation.ok) {
+    fieldErrors.value = validateSignUpFields(form)
     errorMessage.value = validation.message
     errorField.value = validation.field
     triggerToast(validation.message)
@@ -67,6 +90,7 @@ async function signup() {
   submitting.value = true
   errorMessage.value = ''
   errorField.value = ''
+  fieldErrors.value = {}
 
   try {
     await authRepositories.auth.signUp(validation.value)
@@ -109,9 +133,14 @@ async function signup() {
             maxlength="50"
             autocomplete="email"
             placeholder="example@email.com"
-            :aria-invalid="errorField === 'email'"
-            :aria-describedby="errorField === 'email' ? 'signup-error' : undefined"
+            :aria-invalid="Boolean(fieldErrors.email)"
+            :aria-describedby="fieldErrors.email ? 'signup-email-error' : undefined"
+            @blur="validateField('email')"
+            @update:model-value="revalidateEditedField('email')"
           />
+          <p v-if="fieldErrors.email" id="signup-email-error" class="field-error" role="alert">
+            {{ fieldErrors.email }}
+          </p>
         </div>
 
         <div class="field">
@@ -126,15 +155,23 @@ async function signup() {
             type="password"
             autocomplete="new-password"
             placeholder="8~100자 입력"
-            :aria-invalid="errorField === 'password'"
+            :aria-invalid="Boolean(fieldErrors.password)"
             :aria-describedby="
-              errorField === 'password'
-                ? 'signup-password-help signup-error'
+              fieldErrors.password
+                ? 'signup-password-help signup-password-error'
                 : 'signup-password-help'
             "
+            @blur="validateField('password')"
+            @update:model-value="revalidateEditedField('password')"
           />
-          <p id="signup-password-help" class="field-help">
-            8~100자의 비밀번호를 입력해 주세요.
+          <p id="signup-password-help" class="field-help">8~100자의 비밀번호를 입력해 주세요.</p>
+          <p
+            v-if="fieldErrors.password"
+            id="signup-password-error"
+            class="field-error"
+            role="alert"
+          >
+            {{ fieldErrors.password }}
           </p>
         </div>
 
@@ -150,9 +187,21 @@ async function signup() {
             type="password"
             autocomplete="new-password"
             placeholder="비밀번호 다시 입력"
-            :aria-invalid="errorField === 'passwordConfirm'"
-            :aria-describedby="errorField === 'passwordConfirm' ? 'signup-error' : undefined"
+            :aria-invalid="Boolean(fieldErrors.passwordConfirm)"
+            :aria-describedby="
+              fieldErrors.passwordConfirm ? 'signup-password-confirm-error' : undefined
+            "
+            @blur="validateField('passwordConfirm')"
+            @update:model-value="revalidateEditedField('passwordConfirm')"
           />
+          <p
+            v-if="fieldErrors.passwordConfirm"
+            id="signup-password-confirm-error"
+            class="field-error"
+            role="alert"
+          >
+            {{ fieldErrors.passwordConfirm }}
+          </p>
         </div>
       </fieldset>
 
@@ -170,9 +219,14 @@ async function signup() {
             maxlength="10"
             autocomplete="name"
             placeholder="교수자 이름"
-            :aria-invalid="errorField === 'name'"
-            :aria-describedby="errorField === 'name' ? 'signup-error' : undefined"
+            :aria-invalid="Boolean(fieldErrors.name)"
+            :aria-describedby="fieldErrors.name ? 'signup-name-error' : undefined"
+            @blur="validateField('name')"
+            @update:model-value="revalidateEditedField('name')"
           />
+          <p v-if="fieldErrors.name" id="signup-name-error" class="field-error" role="alert">
+            {{ fieldErrors.name }}
+          </p>
         </div>
 
         <div class="field">
@@ -185,9 +239,19 @@ async function signup() {
             maxlength="100"
             autocomplete="organization"
             placeholder="소속 기관명"
-            :aria-invalid="errorField === 'organization'"
-            :aria-describedby="errorField === 'organization' ? 'signup-error' : undefined"
+            :aria-invalid="Boolean(fieldErrors.organization)"
+            :aria-describedby="fieldErrors.organization ? 'signup-organization-error' : undefined"
+            @blur="validateField('organization')"
+            @update:model-value="revalidateEditedField('organization')"
           />
+          <p
+            v-if="fieldErrors.organization"
+            id="signup-organization-error"
+            class="field-error"
+            role="alert"
+          >
+            {{ fieldErrors.organization }}
+          </p>
         </div>
       </fieldset>
 
@@ -239,6 +303,7 @@ async function signup() {
 .signup-fields legend { margin-bottom: 14px; color: var(--slate-800); font-weight: 800; }
 .signup-fields .input { height: 46px; }
 .field-help { margin: -2px 0 0; color: var(--slate-500); font-size: 11px; }
+.field-error { margin: 0; color: var(--danger-600); font-size: 11px; }
 .signup-divider { height: 1px; margin: 30px 0; background: var(--slate-200); }
 .signup-error { padding: 10px 13px; border-radius: 8px; background: #fff1f2; color: var(--danger-600); font-size: 12px; }
 .signup-submit { width: 100%; min-height: 50px; margin-top: 30px; }

@@ -32,7 +32,7 @@ describe('GazeAnalysisPanel', () => {
   })
 
   it.each([
-    ['NO_DATA', '시선 분석 데이터가 없습니다.'],
+    ['NO_DATA', '시선 분석 데이터가 기록되지 않았습니다.'],
     ['FAILED', '시선 분석을 완료하지 못했습니다.'],
   ] as const)('%s 도메인 상태를 요청 오류와 구분한다', (state, message) => {
     const wrapper = mount(GazeAnalysisPanel, {
@@ -44,6 +44,10 @@ describe('GazeAnalysisPanel', () => {
 
     expect(wrapper.text()).toContain(message)
     expect(wrapper.find('button').exists()).toBe(false)
+    if (state === 'NO_DATA') {
+      expect(wrapper.find('[data-test="gaze-no-data-placeholder"]').exists()).toBe(true)
+      expect(wrapper.find('.analysis-state--error').exists()).toBe(false)
+    }
   })
 
   it('요청 오류에서 오류 안내와 재시도 이벤트를 제공한다', async () => {

@@ -118,7 +118,7 @@ export function installTeacherRealtimeSync(pinia: Pinia, router: Router): () => 
         request = Promise.all([
           students.loadDetail(studentId),
           students.loadLearningSummary(studentId),
-          students.loadLearningEvents(studentId),
+          students.loadLearningEvents(studentId, 4),
           students.loadAccuracyTrend(studentId),
           students.loadAccuracyRecords(studentId),
           students.loadReadingSpeedTrend(studentId),

@@ -1,19 +1,15 @@
-import type {
-  StudentCreateInput,
-  StudentDetail,
-  StudentGender,
-  StudentUpdateInput,
-} from './model'
+import type { StudentCreateInput, StudentDetail, StudentGender, StudentUpdateInput } from './model'
 import {
   PROFILE_IMAGE_MAX_BYTES,
   validateProfileImage,
 } from '@/features/teacher/profileImageValidation'
+import { hasDisallowedControlCharacter } from '@/lib/inputValidation'
 
 export const STUDENT_FIELD_MAX_LENGTH = {
   name: 10,
   school: 20,
   guardian: 10,
-  guardianContact: 20,
+  guardianContact: 13,
   guardianEmail: 50,
   address: 100,
 } as const
@@ -36,6 +32,15 @@ export type StudentFormField = keyof StudentFormDraft | 'image'
 export type StudentFormErrors = Partial<Record<StudentFormField, string>>
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const personNamePattern = /^[\p{L}\p{M}]+(?:[ .\-\u00B7'\u2019][\p{L}\p{M}]+)*$/u
+const guardianContactPattern = /^010-\d{4}-\d{4}$/
+
+export function formatGuardianContact(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11)
+  if (digits.length <= 3) return digits
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+}
 function isValidDate(value: string): boolean {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
   if (!match) return false
@@ -44,9 +49,7 @@ function isValidDate(value: string): boolean {
   const day = Number(match[3])
   const date = new Date(Date.UTC(year, month - 1, day))
   return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
   )
 }
 
@@ -75,6 +78,10 @@ function validateRequired(
   }
   if (value.trim().length > STUDENT_FIELD_MAX_LENGTH[field]) {
     errors[field] = `${label}은(는) ${STUDENT_FIELD_MAX_LENGTH[field]}자 이내로 입력해 주세요.`
+    return
+  }
+  if (hasDisallowedControlCharacter(value)) {
+    errors[field] = `${label}에 줄바꿈이나 제어 문자를 입력할 수 없습니다.`
   }
 }
 
@@ -87,6 +94,19 @@ export function validateStudentForm(
   validateRequired(errors, 'school', draft.school, '학교명')
   validateRequired(errors, 'guardian', draft.guardian, '보호자명')
   validateRequired(errors, 'guardianContact', draft.guardianContact, '보호자 연락처')
+
+  if (!errors.name && !personNamePattern.test(draft.name.trim())) {
+    errors.name = '아동명은 문자와 이름 구분 기호(공백, 마침표, 하이픈)만 입력해 주세요.'
+  }
+  if (!errors.guardian && !personNamePattern.test(draft.guardian.trim())) {
+    errors.guardian = '보호자명은 문자와 이름 구분 기호(공백, 마침표, 하이픈)만 입력해 주세요.'
+  }
+  if (!errors.guardianContact) {
+    const contact = draft.guardianContact.trim()
+    if (!guardianContactPattern.test(contact)) {
+      errors.guardianContact = '연락처는 010으로 시작하는 숫자 11자리를 입력해 주세요.'
+    }
+  }
 
   if (!draft.birthday) {
     errors.birthday = '생년월일을 입력해 주세요.'
@@ -109,6 +129,8 @@ export function validateStudentForm(
 
   if (draft.address.trim().length > STUDENT_FIELD_MAX_LENGTH.address) {
     errors.address = `주소는 ${STUDENT_FIELD_MAX_LENGTH.address}자 이내로 입력해 주세요.`
+  } else if (hasDisallowedControlCharacter(draft.address)) {
+    errors.address = '주소에 줄바꿈이나 제어 문자를 입력할 수 없습니다.'
   }
 
   return errors
@@ -125,6 +147,9 @@ export function normalizeTeacherMemo(value: string): string | null {
 export function validateTeacherMemo(value: string): string | null {
   if (value.trim().length > STUDENT_MEMO_MAX_LENGTH) {
     return `교수자 내부 메모는 ${STUDENT_MEMO_MAX_LENGTH.toLocaleString('ko-KR')}자 이내로 입력해 주세요.`
+  }
+  if (hasDisallowedControlCharacter(value, true)) {
+    return '교수자 내부 메모에 허용되지 않는 제어 문자가 포함되어 있습니다.'
   }
   return null
 }

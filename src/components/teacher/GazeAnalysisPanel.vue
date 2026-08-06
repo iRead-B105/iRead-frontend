@@ -56,49 +56,6 @@ const metrics = computed(() => {
     },
   ]
 })
-
-
-interface AggregateBar {
-  readonly label: string
-  readonly value: number | null
-  readonly displayValue: string
-  readonly width: string
-}
-
-function aggregateBars(values: readonly Omit<AggregateBar, 'width'>[]): readonly AggregateBar[] {
-  const maximum = Math.max(
-    0,
-    ...values.map((item) => item.value).filter((value): value is number => value !== null),
-  )
-  return values.map((item) => ({
-    ...item,
-    width:
-      item.value === null || maximum === 0
-        ? '0%'
-        : `${Math.max(4, Math.round((item.value / maximum) * 100))}%`,
-  }))
-}
-
-const aggregateGroups = computed(() => {
-  if (props.state?.status !== 'AVAILABLE') return []
-  const analysis = props.state.analysis
-  return [
-    {
-      title: '체류 시간',
-      items: aggregateBars([
-        { label: '총 체류', value: analysis.totalVisitedDurationMs, displayValue: formatGazeDuration(analysis.totalVisitedDurationMs) },
-        { label: '평균 체류', value: analysis.avgVisitedDurationMs, displayValue: formatGazeAverage(analysis.avgVisitedDurationMs) },
-      ]),
-    },
-    {
-      title: '체류 행동',
-      items: aggregateBars([
-        { label: '총 체류', value: analysis.totalVisitedCount, displayValue: formatGazeCount(analysis.totalVisitedCount) },
-        { label: '되돌아보기', value: analysis.reverseReadCount, displayValue: formatGazeCount(analysis.reverseReadCount) },
-      ]),
-    },
-  ]
-})
 const replay = computed(() =>
   props.state?.status === 'AVAILABLE' ? props.state.analysis.replay ?? null : null,
 )
@@ -210,9 +167,14 @@ const movementSteps = computed(() => {
       <Button variant="outline" type="button" @click="$emit('retry')">다시 불러오기</Button>
     </div>
 
-    <p v-else-if="state?.status === 'NO_DATA'" class="analysis-state">
-      시선 분석 데이터가 없습니다.
-    </p>
+    <div
+      v-else-if="state?.status === 'NO_DATA'"
+      class="analysis-state analysis-state--placeholder"
+      data-test="gaze-no-data-placeholder"
+    >
+      <strong>시선 분석 데이터가 기록되지 않았습니다.</strong>
+      <span>학습자가 시선 측정을 진행한 문항에서 분석 결과를 확인할 수 있습니다.</span>
+    </div>
 
     <p v-else-if="state?.status === 'FAILED'" class="analysis-state analysis-state--warning">
       시선 분석을 완료하지 못했습니다.
@@ -415,6 +377,21 @@ const movementSteps = computed(() => {
 
 .analysis-state p {
   margin: 0;
+}
+
+.analysis-state--placeholder {
+  gap: 6px;
+  text-align: center;
+}
+
+.analysis-state--placeholder strong {
+  color: var(--slate-700);
+  font-size: 13px;
+}
+
+.analysis-state--placeholder span {
+  color: var(--slate-500);
+  font-size: 11px;
 }
 
 .analysis-state--error {

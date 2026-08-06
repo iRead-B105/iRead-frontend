@@ -2,12 +2,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import AuthenticatedImage from '@/components/common/AuthenticatedImage.vue'
 import { Button } from '@/components/ui/button'
 import type { StudentNavigationItem } from '@/features/teacher/student'
 import { useReportStore } from '@/stores/report'
 import { useSessionStore } from '@/stores/session'
 import { useStudentStore } from '@/stores/students'
-import { resolveImageUrl } from '@/lib/image'
 import SidebarIcon from '@/components/teacher/SidebarIcon.vue'
 import StudentSwitcher from '@/components/teacher/StudentSwitcher.vue'
 
@@ -28,7 +28,7 @@ const currentStudent = computed(
     null,
 )
 const profileImageUrl = computed(
-  () => resolveImageUrl(teacher.value?.profileImageUrl) ?? '/images/teacher-profile.png',
+  () => teacher.value?.profileImageUrl ?? '/images/teacher-profile.png',
 )
 const studentRouteNames = new Set([
   'student-overview',
@@ -170,7 +170,7 @@ onMounted(() => {
           aria-label="프로필 설정으로 이동"
           @click="openProfileSettings"
         >
-          <img :src="profileImageUrl" :alt="`${teacher?.name ?? '교수자'} 프로필`" />
+          <AuthenticatedImage :src="profileImageUrl" :alt="`${teacher?.name ?? '교수자'} 프로필`" />
           <span>
             <strong>{{ teacher?.name ?? '교수자' }}</strong>
             <small>{{ teacher?.organization ?? '' }}</small>

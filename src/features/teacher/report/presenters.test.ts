@@ -3,6 +3,7 @@ import {
   ALIGNED_REPORT_CALCULATION_VERSION,
   ALIGNED_REPORT_READING_SPEED_UNIT,
   ALIGNED_REPORT_SNAPSHOT_VERSION,
+  formatReportDateTime,
   hasAlignedReportLearningMetrics,
 } from './presenters'
 
@@ -19,5 +20,21 @@ describe('report metric alignment', () => {
     expect(hasAlignedReportLearningMetrics({ ...aligned, snapshotVersion: null })).toBe(false)
     expect(hasAlignedReportLearningMetrics({ ...aligned, calculationVersion: null })).toBe(false)
     expect(hasAlignedReportLearningMetrics({ ...aligned, readingSpeedUnit: 'CPM' })).toBe(false)
+  })
+})
+
+describe('report date presentation', () => {
+  it('보고서 생성시각을 실행 환경과 무관하게 한국시간으로 표시한다', () => {
+    const formatted = formatReportDateTime('2026-08-06T16:30:00Z')
+
+    expect(formatted).toContain('2026. 08. 07')
+    expect(formatted).toContain('01:30')
+  })
+
+  it('timezone 없는 서버 LocalDateTime을 한국시간으로 해석한다', () => {
+    const formatted = formatReportDateTime('2026-08-07T01:30:00')
+
+    expect(formatted).toContain('2026. 08. 07')
+    expect(formatted).toContain('01:30')
   })
 })

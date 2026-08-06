@@ -47,6 +47,7 @@ interface ReplayStepView {
   readonly toTokenIndex: number
   readonly dwellMs: number
   readonly dwellQualified: boolean
+  readonly eventAtMs: number
 }
 
 function formatOffset(milliseconds: number): string {
@@ -88,7 +89,7 @@ const pageMovementSteps = computed<readonly ReplayStepView[]>(() => {
         key: `${event.pageNo}:${event.eventIndex}:${event.toTokenIndex}`,
         order: index + 1,
         label: tokenLabel(wordByTokenIndex.value.get(event.toTokenIndex), event.toTokenIndex),
-        detail: `${movementLabel} · ${formatOffset(event.eventAtMs)}`,
+        detail: `${movementLabel} · 발생 시점 ${formatOffset(event.eventAtMs)} · 체류 ${formatGazeDuration(event.dwellDurationMs)} · ${event.dwellQualified ? '체류 조건 충족' : '체류 조건 미충족'}`,
         kind,
         tokenIndexes: kind === 'skip'
           ? [...new Set([...event.skippedTokenIndexes, event.toTokenIndex])]
@@ -97,6 +98,7 @@ const pageMovementSteps = computed<readonly ReplayStepView[]>(() => {
         toTokenIndex: event.toTokenIndex,
         dwellMs: event.dwellDurationMs,
         dwellQualified: event.dwellQualified,
+        eventAtMs: event.eventAtMs,
       }
     })
 })
@@ -127,6 +129,19 @@ const visibleReplayStep = computed(() => activeReplayStep.value ?? {
   label: '페이지 리플레이',
   detail: 'Backend 판정 이벤트가 없어 재생할 이동 기록이 없습니다.',
 })
+const replayStatusLabel = computed(() => {
+  if (activeReplayStep.value?.kind === 'regression') return '역행'
+  if (activeReplayStep.value?.kind === 'skip') return '건너뜀'
+  return '읽음'
+})
+const replayStatusClass = computed(() => `is-${activeReplayStep.value?.kind ?? 'read'}`)
+const replayEventTime = computed(() =>
+  activeReplayStep.value ? formatOffset(activeReplayStep.value.eventAtMs) : '-',
+)
+const replayDwellDuration = computed(() =>
+  activeReplayStep.value ? formatGazeDuration(activeReplayStep.value.dwellMs) : '-',
+)
+const replayDwellQualified = computed(() => activeReplayStep.value?.dwellQualified ?? false)
 const replayProgressStyle = computed(() => {
   const total = pageMovementSteps.value.length
   const progress = total === 0 ? 0 : total === 1 ? 100 : Math.round((replayStepIndex.value / (total - 1)) * 100)
@@ -271,11 +286,26 @@ onBeforeUnmount(stopReplay)
           </div>
           <span>{{ replayDataLabel }}</span>
         </header>
+        <div class="story-page-replay__legend" aria-label="리플레이 판정 기준">
+          <span><i class="is-read" />읽음</span>
+          <span><i class="is-regression" />역행</span>
+          <span><i class="is-skip" />건너뜀</span>
+          <span><i class="is-dwell" />체류 조건 충족</span>
+          <small>중복 판정: 역행 &gt; 건너뜀 &gt; 체류</small>
+        </div>
         <div class="story-page-replay__stage">
           <b aria-hidden="true">{{ visibleReplayStep.order }}</b>
           <div>
-            <strong>{{ visibleReplayStep.label }}</strong>
-            <p>{{ visibleReplayStep.detail }}</p>
+            <div class="story-page-replay__stage-heading">
+              <strong>{{ visibleReplayStep.label }}</strong>
+              <span :class="['story-page-replay__status', replayStatusClass]">
+                {{ replayStatusLabel }}
+              </span>
+            </div>
+            <p>발생 시점 {{ replayEventTime }} · 체류 {{ replayDwellDuration }}</p>
+            <p :class="['story-page-replay__dwell-status', { 'is-qualified': replayDwellQualified }]">
+              {{ replayDwellQualified ? '체류 조건 충족' : '체류 조건 미충족' }}
+            </p>
           </div>
         </div>
         <div class="story-page-replay__progress" aria-hidden="true">
@@ -442,6 +472,51 @@ onBeforeUnmount(stopReplay)
   font-size: 10px;
 }
 
+.story-page-replay__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 10px;
+  color: var(--slate-600);
+  font-size: 10px;
+}
+
+.story-page-replay__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.story-page-replay__legend small {
+  flex-basis: 100%;
+  color: var(--slate-500);
+  font-size: 9px;
+}
+
+.story-page-replay__legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: rgb(96 165 250 / 34%);
+  box-shadow: 0 0 0 1px rgb(37 99 235 / 42%);
+}
+
+.story-page-replay__legend i.is-regression {
+  background: rgb(245 158 11 / 38%);
+  box-shadow: 0 0 0 1px rgb(217 119 6 / 46%);
+}
+
+.story-page-replay__legend i.is-skip {
+  background: rgb(220 38 38 / 24%);
+  box-shadow: 0 0 0 1px rgb(220 38 38 / 40%);
+}
+
+.story-page-replay__legend i.is-dwell {
+  background: rgb(168 85 247 / 40%);
+  box-shadow: 0 0 0 1px rgb(126 34 206 / 54%);
+}
+
 .story-page-replay__stage {
   display: flex;
   align-items: center;
@@ -468,10 +543,48 @@ onBeforeUnmount(stopReplay)
   margin: 0;
 }
 
+.story-page-replay__stage-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.story-page-replay__status {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgb(96 165 250 / 14%);
+  color: var(--primary-700);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.story-page-replay__status.is-regression {
+  background: rgb(217 119 6 / 14%);
+  color: #b45309;
+}
+
+.story-page-replay__status.is-skip {
+  background: rgb(220 38 38 / 12%);
+  color: #b91c1c;
+}
+
 .story-page-replay__stage p {
   margin-top: 3px;
   color: var(--slate-600);
   font-size: 12px;
+}
+
+.story-page-replay__stage p.story-page-replay__dwell-status {
+  min-height: 15px;
+  color: var(--slate-500);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.story-page-replay__stage p.story-page-replay__dwell-status.is-qualified {
+  color: #7e22ce;
 }
 
 .story-page-replay__progress {

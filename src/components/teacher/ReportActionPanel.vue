@@ -1,52 +1,37 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button'
-import type {
-  ReportGazeRefreshStatus,
-  ReportMemoStatus,
-} from '@/features/teacher/report'
+import type { ReportMemoStatus } from '@/features/teacher/report'
 
 defineProps<{
   memoDirty: boolean
+  memoValid: boolean
   memoStatus: ReportMemoStatus
-  gazeRefreshStatus: ReportGazeRefreshStatus
 }>()
 
 const emit = defineEmits<{
   back: []
   saveMemo: []
   cancelMemo: []
-  refreshGaze: []
 }>()
 </script>
 
 <template>
   <div class="report-actions">
-    <Button variant="outline" type="button" @click="emit('back')">
-      보고서 목록
-    </Button>
     <div class="report-actions__group">
       <Button
-        variant="outline"
         type="button"
-        :disabled="gazeRefreshStatus === 'refreshing'"
-        @click="emit('refreshGaze')"
+        :disabled="!memoDirty || !memoValid || memoStatus === 'saving'"
+        @click="emit('saveMemo')"
       >
-        {{ gazeRefreshStatus === 'refreshing' ? '시선 결과 갱신 중…' : '시선 결과 갱신' }}
+        {{ memoStatus === 'saving' ? '저장 중…' : '저장' }}
       </Button>
       <Button
-        variant="ghost"
+        variant="outline"
         type="button"
         :disabled="!memoDirty || memoStatus === 'saving'"
         @click="emit('cancelMemo')"
       >
-        의견 취소
-      </Button>
-      <Button
-        type="button"
-        :disabled="!memoDirty || memoStatus === 'saving'"
-        @click="emit('saveMemo')"
-      >
-        {{ memoStatus === 'saving' ? '의견 저장 중…' : '의견 저장' }}
+        취소
       </Button>
     </div>
   </div>
@@ -56,7 +41,7 @@ const emit = defineEmits<{
 .report-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   margin-top: 16px;
   padding-top: 16px;
@@ -82,3 +67,4 @@ const emit = defineEmits<{
   }
 }
 </style>
+

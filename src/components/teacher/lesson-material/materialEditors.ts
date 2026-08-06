@@ -3,6 +3,7 @@ import type {
   EditableLessonMaterialItem,
   LessonMaterialFieldError,
   LessonMaterialEditorCode,
+  LessonMaterialValidationIssue,
 } from '@/features/teacher/training'
 import BehaviorMaterialEditor from './BehaviorMaterialEditor.vue'
 
@@ -24,6 +25,10 @@ function createMaterialEditor(name: string, editorCode: LessonMaterialEditorCode
         type: Array as PropType<readonly LessonMaterialFieldError[]>,
         default: () => [],
       },
+      validationIssues: {
+        type: Array as PropType<readonly LessonMaterialValidationIssue[]>,
+        default: () => [],
+      },
     },
     emits: {
       updateField: (section: 'content' | 'answer', key: string, _value: unknown) =>
@@ -43,6 +48,7 @@ function createMaterialEditor(name: string, editorCode: LessonMaterialEditorCode
           editorCode,
           disabled: props.disabled,
           fieldErrors: props.fieldErrors,
+          validationIssues: props.validationIssues,
           onUpdateField,
           onEditorError,
         })

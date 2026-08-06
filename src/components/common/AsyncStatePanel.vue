@@ -43,7 +43,10 @@ const icons = {
   'not-found': FileQuestion,
 }
 
-const resolvedTitle = computed(() => props.title ?? defaultTitles[props.kind])
+const resolvedTitle = computed(() => {
+  if (props.title !== undefined) return props.title
+  return defaultTitles[props.kind]
+})
 const icon = computed(() => icons[props.kind])
 const role = computed(() =>
   ['error', 'forbidden', 'not-found'].includes(props.kind) ? 'alert' : 'status',
@@ -68,8 +71,8 @@ const showActions = computed(
     </span>
 
     <div class="async-state-panel__content">
-      <h2 class="async-state-panel__title">{{ resolvedTitle }}</h2>
-      <p class="async-state-panel__message">{{ message }}</p>
+      <h2 v-if="resolvedTitle" class="async-state-panel__title">{{ resolvedTitle }}</h2>
+      <p v-if="message" class="async-state-panel__message">{{ message }}</p>
       <slot />
     </div>
 

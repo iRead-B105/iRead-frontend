@@ -192,10 +192,6 @@ function statusLabel(status: ReportGazeSeries['status']): string {
         </p>
       </template>
     </section>
-
-    <p class="diagnostic-notice">
-      시선 지표는 학습 과정 참고용이며 의학적·임상적 진단 결과가 아닙니다.
-    </p>
   </section>
 </template>
 
@@ -282,8 +278,7 @@ function statusLabel(status: ReportGazeSeries['status']): string {
   font-weight: 750;
 }
 .comparison-notice,
-.failed-sessions,
-.diagnostic-notice {
+.failed-sessions {
   margin: 12px 0 0;
   color: var(--muted-foreground);
   font-size: 11px;
@@ -313,11 +308,7 @@ function statusLabel(status: ReportGazeSeries['status']): string {
   font-size: 11px;
   line-height: 1.55;
 }
-.diagnostic-notice {
-  padding: 11px 13px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
+
 @media (max-width: 760px) {
   .gaze-metrics,
   .gaze-charts {

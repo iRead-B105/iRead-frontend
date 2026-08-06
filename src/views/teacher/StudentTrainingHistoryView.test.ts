@@ -147,7 +147,7 @@ describe('StudentTrainingHistoryView', () => {
     await rows.find((row) => row.text().includes('비슷한 소리 고르기'))?.trigger('click')
     await flushPromises()
     expect(store.historyGazeStatus).toBe('success')
-    expect(wrapper.text()).toContain('시선 분석 데이터가 없습니다.')
+    expect(wrapper.text()).toContain('시선 분석 데이터가 기록되지 않았습니다.')
     expect(wrapper.find('[data-test="chart"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('미제출')
     expect(wrapper.text()).toContain('채점 대상 아님')
@@ -236,7 +236,7 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.get('.detail-card').element).toBe(detailCard)
     expect(wrapper.get('.detail-content-shell').element).toBe(detailShell)
     expect(wrapper.get('.detail-content-shell').attributes('aria-busy')).toBe('true')
-    expect(wrapper.get('.detail-content-shell').text()).toContain('훈련 상세를 불러오는 중입니다.')
+    expect(wrapper.get('.detail-content-shell [data-kind="loading"]').exists()).toBe(true)
     expect(wrapper.find('.history-gaze-shell').exists()).toBe(true)
     expect(wrapper.get('.history-gaze-shell').text()).toContain(
       '시선 분석 결과를 불러오는 중입니다.',

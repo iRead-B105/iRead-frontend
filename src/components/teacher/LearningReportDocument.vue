@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
+import SaveToast from '@/components/common/SaveToast.vue'
 import ReportActionPanel from '@/components/teacher/ReportActionPanel.vue'
 import ReportGazeTrend from '@/components/teacher/ReportGazeTrend.vue'
 import ReportLearningSnapshot from '@/components/teacher/ReportLearningSnapshot.vue'
 import { Textarea } from '@/components/ui/textarea'
+import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import {
   formatReportDate,
   formatReportDateTime,
   hasAlignedReportLearningMetrics,
   REPORT_MEMO_MAX_LENGTH,
+  validateTeacherMemo,
   type ReportDetail,
-  type ReportGazeRefreshStatus,
   type ReportMemoStatus,
 } from '@/features/teacher/report'
 
@@ -24,12 +26,30 @@ const props = defineProps<{
   memoDirty: boolean
   memoStatus: ReportMemoStatus
   memoError: string | null
-  gazeRefreshStatus: ReportGazeRefreshStatus
-  gazeRefreshError: string | null
 }>()
+
+const { visible: memoSavedVisible, show: showMemoSaved } = useTemporaryNotice()
+const { visible: memoErrorVisible, show: showMemoError } = useTemporaryNotice()
 
 const alignedLearningMetrics = computed(() =>
   hasAlignedReportLearningMetrics(props.report.snapshot),
+)
+const memoValidationError = computed(() => validateTeacherMemo(props.teacherMemoDraft))
+const displayedMemoError = computed(() => memoValidationError.value ?? props.memoError)
+
+watch(
+  () => props.memoStatus,
+  (status) => {
+    if (status === 'saved') showMemoSaved()
+  },
+)
+
+watch(
+  displayedMemoError,
+  (error) => {
+    if (error) showMemoError()
+  },
+  { immediate: true },
 )
 
 const emit = defineEmits<{
@@ -37,7 +57,6 @@ const emit = defineEmits<{
   back: []
   saveMemo: []
   cancelMemo: []
-  refreshGaze: []
 }>()
 </script>
 
@@ -82,8 +101,6 @@ const emit = defineEmits<{
       </div>
     </dl>
 
-    <p class="report-snapshot-notice">완료된 학습 데이터를 기준으로 생성된 보고서입니다.</p>
-
     <ReportLearningSnapshot :snapshot="report.snapshot" />
     <ReportGazeTrend
       :trend="report.snapshot.gazeTrend"
@@ -105,25 +122,19 @@ const emit = defineEmits<{
         :model-value="teacherMemoDraft"
         :maxlength="REPORT_MEMO_MAX_LENGTH"
         aria-label="교수자 의견"
-        :aria-invalid="Boolean(memoError)"
+        :aria-invalid="Boolean(displayedMemoError)"
         placeholder="저장할 교수자 의견을 입력해 주세요. 공백만 저장하면 의견이 삭제됩니다."
         @update:model-value="emit('update:teacherMemoDraft', String($event))"
       />
-      <p v-if="memoStatus === 'saved'" class="save-state" role="status">
-        교수자 의견을 저장했습니다.
-      </p>
-      <p v-if="memoError" class="error-state" role="alert">{{ memoError }}</p>
-      <p v-if="gazeRefreshError" class="error-state" role="alert">
-        {{ gazeRefreshError }}
-      </p>
+      <SaveToast :visible="memoSavedVisible" message="교수자 의견이 저장되었습니다." />
+      <SaveToast :visible="memoErrorVisible" :message="displayedMemoError ?? undefined" tone="error" />
       <ReportActionPanel
         :memo-dirty="memoDirty"
+        :memo-valid="!memoValidationError"
         :memo-status="memoStatus"
-        :gaze-refresh-status="gazeRefreshStatus"
         @back="emit('back')"
         @save-memo="emit('saveMemo')"
         @cancel-memo="emit('cancelMemo')"
-        @refresh-gaze="emit('refreshGaze')"
       />
     </section>
 
@@ -145,16 +156,6 @@ const emit = defineEmits<{
   color: var(--foreground);
 }
 
-.report-snapshot-notice {
-  margin: 0 0 24px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--muted);
-  color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1.5;
-}
 .learning-report__header {
   display: flex;
   align-items: flex-start;

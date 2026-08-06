@@ -2,11 +2,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Search, Settings2, Check, Users } from '@lucide/vue'
+import AuthenticatedImage from '@/components/common/AuthenticatedImage.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { StudentNavigationItem } from '@/features/teacher/student'
 import { useStudentStore } from '@/stores/students'
-import { resolveImageUrl } from '@/lib/image'
 
 const props = defineProps<{
   currentStudent: StudentNavigationItem | null
@@ -151,9 +151,9 @@ onBeforeUnmount(() => {
       :aria-label="currentStudent ? '학습자 변경' : '아동 목록에서 학습자 선택'"
       @click="toggle"
     >
-      <img
+      <AuthenticatedImage
         v-if="currentStudent?.imageUrl"
-        :src="resolveImageUrl(currentStudent.imageUrl) || ''"
+        :src="currentStudent.imageUrl"
         :alt="currentStudent.name"
       />
       <span v-else-if="currentStudent" class="student-avatar" aria-hidden="true">
@@ -214,7 +214,7 @@ onBeforeUnmount(() => {
           :aria-current="student.studentId === currentStudent?.studentId ? 'true' : undefined"
           @click="selectStudent(student)"
         >
-          <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
+          <AuthenticatedImage v-if="student.imageUrl" :src="student.imageUrl" alt="" />
           <span v-else class="student-avatar" aria-hidden="true">{{
             studentInitial(student.name)
           }}</span>
@@ -238,7 +238,7 @@ onBeforeUnmount(() => {
           :aria-current="student.studentId === currentStudent?.studentId ? 'true' : undefined"
           @click="selectStudent(student)"
         >
-          <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
+          <AuthenticatedImage v-if="student.imageUrl" :src="student.imageUrl" alt="" />
           <span v-else class="student-avatar" aria-hidden="true">{{
             studentInitial(student.name)
           }}</span>

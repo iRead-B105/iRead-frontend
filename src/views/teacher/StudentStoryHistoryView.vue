@@ -343,6 +343,7 @@ function refreshEditedPage(): void {
                           :active-replay-to-token-index="activeStoryReplayStep?.toTokenIndex ?? null"
                           :active-replay-dwell-ms="activeStoryReplayStep?.dwellMs ?? 0"
                           :heatmap-words="currentGazeAnalysis?.wordMetrics.filter((word) => word.storyLineId === selectedPage?.storyLineId && word.pageNo === selectedPage?.pageNo) ?? []"
+                          :heatmap-events="currentGazeAnalysis?.replay?.events.filter((event) => event.pageNo === selectedPage?.pageNo) ?? []"
                           :heatmap-visible="storyHeatmapVisible"
                         />
                       <StoryPageEditor

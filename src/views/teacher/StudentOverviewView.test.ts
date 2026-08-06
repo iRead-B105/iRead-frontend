@@ -6,23 +6,11 @@ import StudentOverviewView from './StudentOverviewView.vue'
 import type {
   StudentDetail,
   StudentLearningEvent,
-  StudentLearningEventDetail,
   StudentLearningSummary,
   StudentRepository,
 } from '@/features/teacher/student'
 import { ApiError } from '@/lib/api'
 import { useStudentStore } from '@/stores/students'
-
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve: (value: T) => void
-} {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((promiseResolve) => {
-    resolve = promiseResolve
-  })
-  return { promise, resolve }
-}
 
 function detail(studentId: number, name = '김하늘'): StudentDetail {
   return {
@@ -351,8 +339,17 @@ describe('StudentOverviewView', () => {
     expect(wrapper.text()).toContain('저장 실패')
   })
 
-  it('실제 eventId 상세과 Backend 추천을 표시한다', async () => {
-    const event: StudentLearningEvent = {
+  it('DB에서 받은 최신 4건을 펼침과 클릭 포커스 없이 표시한다', async () => {
+    const latestEvent: StudentLearningEvent = {
+      eventId: 702,
+      eventType: 'STORY',
+      occurredAt: '2026-07-28T16:00:00+09:00',
+      sourceId: 92,
+      accuracy: 82,
+      attentionRequired: false,
+      attentionReasons: [],
+    }
+    const olderEvent: StudentLearningEvent = {
       eventId: 701,
       eventType: 'TRAINING',
       occurredAt: '2026-07-27T16:00:00+09:00',
@@ -361,21 +358,10 @@ describe('StudentOverviewView', () => {
       attentionRequired: true,
       attentionReasons: ['LOW_ACCURACY'],
     }
-    const eventDetail: StudentLearningEventDetail = {
-      ...event,
-      retryCount: 2,
-      problemSegments: ['받침 ㄹ 발음'],
-      recommendedTrainingTemplateId: 301,
-      recommendedCurriculumUnitId: 31,
-      recommendedCurriculumUnitName: '받침이 있는 문장 읽기',
-      recommendationReason: '최근 6주 정확도가 가장 낮은 영역입니다.',
-      recommendedMinutes: 10,
-      recommendedRepeatCount: 2,
-    }
-    const getLearningEvent = vi.fn().mockResolvedValue(eventDetail)
-    const updateTeacherMemo = vi.fn().mockResolvedValue(undefined)
+    const listLearningEvents = vi.fn().mockResolvedValue([latestEvent, olderEvent])
+    const getLearningEvent = vi.fn()
     const studentRepository = repository({
-      listLearningEvents: vi.fn().mockResolvedValue([event]),
+      listLearningEvents,
       getLearningEvent,
       getAccuracyTrend: vi.fn().mockResolvedValue({
         dailyAccuracy: [
@@ -429,41 +415,24 @@ describe('StudentOverviewView', () => {
           },
         ],
       }),
-      updateTeacherMemo,
     })
     const { wrapper } = await mountOverview(studentRepository)
 
+    expect(listLearningEvents).toHaveBeenCalledWith(1, { limit: 4 })
     expect(wrapper.find('[data-test="accuracy-chart"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('전체 훈련 이력 보기')
+    const learningEventCards = wrapper.findAll('.learning-event')
+    expect(learningEventCards).toHaveLength(2)
+    expect(learningEventCards[0]!.text()).toContain('이야기 학습')
+    expect(wrapper.find('.learning-event-list button').exists()).toBe(false)
+    expect(wrapper.find('[aria-expanded]').exists()).toBe(false)
+    expect(wrapper.find('.event-detail-shell').exists()).toBe(false)
+    expect(getLearningEvent).not.toHaveBeenCalled()
 
     await wrapper
       .findAll('[role="tab"]')
       .find((tab) => tab.text().trim() === '읽기 속도')!
       .trigger('click')
-
-    const learningEventButton = wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('읽기 훈련'))!
-    await learningEventButton.trigger('click')
-    await flushPromises()
-
-    expect(getLearningEvent).toHaveBeenCalledWith(1, 'TRAINING', 701)
-    expect(learningEventButton.attributes('aria-expanded')).toBe('true')
-    const expandedEvent = wrapper.get('.learning-event-item.is-expanded')
-    expect(expandedEvent.find('.event-detail-shell').exists()).toBe(true)
-    expect(expandedEvent.text()).toContain('학습 결과')
-    expect(expandedEvent.text()).toContain('교수자 확인')
-    expect(expandedEvent.text()).toContain('다음 학습 제안')
-    expect(wrapper.text()).toContain('받침이 있는 문장 읽기')
-    expect(wrapper.text()).toContain('최근 6주 정확도가 가장 낮은 영역입니다.')
-    expect(wrapper.get('.event-detail').element.closest('.learning-event-item')).toBe(
-      expandedEvent.element,
-    )
-
-    await learningEventButton.trigger('click')
-
-    expect(learningEventButton.attributes('aria-expanded')).toBe('false')
-    expect(wrapper.find('.event-detail').exists()).toBe(false)
   })
 
   it('학습 분석 API 오류를 고정 mock 이벤트로 대체하지 않는다', async () => {
@@ -487,153 +456,4 @@ describe('StudentOverviewView', () => {
     expect(wrapper.text()).toContain('읽기 속도 추이를 불러오지 못했습니다.')
   })
 
-  it('열린 상세를 유지한 채 다른 기록을 조회하고 응답 후 한 번에 전환한다', async () => {
-    const firstEvent: StudentLearningEvent = {
-      eventId: 701,
-      eventType: 'TRAINING',
-      occurredAt: '2026-07-27T16:00:00+09:00',
-      sourceId: 91,
-      accuracy: 68,
-      attentionRequired: true,
-      attentionReasons: ['LOW_ACCURACY'],
-    }
-    const secondEvent: StudentLearningEvent = {
-      eventId: 702,
-      eventType: 'STORY',
-      occurredAt: '2026-07-28T16:00:00+09:00',
-      sourceId: 92,
-      accuracy: 82,
-      attentionRequired: false,
-      attentionReasons: [],
-    }
-    const firstDetail: StudentLearningEventDetail = {
-      ...firstEvent,
-      retryCount: 2,
-      problemSegments: ['기존 상세 문제'],
-      recommendedTrainingTemplateId: null,
-      recommendedCurriculumUnitId: null,
-      recommendedCurriculumUnitName: null,
-      recommendationReason: null,
-      recommendedMinutes: null,
-      recommendedRepeatCount: null,
-    }
-    const secondRequest = deferred<StudentLearningEventDetail>()
-    const getLearningEvent = vi
-      .fn()
-      .mockImplementation((_studentId: number, _eventType: string, eventId: number) =>
-        eventId === firstEvent.eventId ? Promise.resolve(firstDetail) : secondRequest.promise,
-      )
-    const { wrapper } = await mountOverview(
-      repository({
-        listLearningEvents: vi.fn().mockResolvedValue([firstEvent, secondEvent]),
-        getLearningEvent,
-      }),
-    )
-    const eventButtons = wrapper.findAll('.learning-event')
-
-    await eventButtons[0]!.trigger('click')
-    await flushPromises()
-    expect(wrapper.text()).toContain('기존 상세 문제')
-
-    await eventButtons[1]!.trigger('click')
-
-    expect(eventButtons[0]!.attributes('aria-expanded')).toBe('true')
-    expect(eventButtons[1]!.attributes('aria-busy')).toBe('true')
-    expect(wrapper.findAll('.event-detail-shell')).toHaveLength(1)
-    expect(wrapper.text()).toContain('기존 상세 문제')
-    expect(wrapper.text()).not.toContain('학습 이벤트 상세를 불러오는 중입니다.')
-
-    secondRequest.resolve({
-      ...secondEvent,
-      retryCount: 0,
-      problemSegments: ['새 상세 문제'],
-      recommendedTrainingTemplateId: null,
-      recommendedCurriculumUnitId: null,
-      recommendedCurriculumUnitName: null,
-      recommendationReason: null,
-      recommendedMinutes: null,
-      recommendedRepeatCount: null,
-    })
-    await flushPromises()
-
-    expect(eventButtons[0]!.attributes('aria-expanded')).toBe('false')
-    expect(eventButtons[1]!.attributes('aria-expanded')).toBe('true')
-    expect(eventButtons[1]!.attributes('aria-busy')).toBeUndefined()
-    expect(wrapper.text()).toContain('새 상세 문제')
-    expect(wrapper.text()).not.toContain('기존 상세 문제')
-  })
-
-  it('기록을 빠르게 바꿔도 이전 상세 응답이 현재 선택을 덮어쓰지 않는다', async () => {
-    const firstEvent: StudentLearningEvent = {
-      eventId: 701,
-      eventType: 'TRAINING',
-      occurredAt: '2026-07-27T16:00:00+09:00',
-      sourceId: 91,
-      accuracy: 68,
-      attentionRequired: true,
-      attentionReasons: ['LOW_ACCURACY'],
-    }
-    const secondEvent: StudentLearningEvent = {
-      eventId: 702,
-      eventType: 'GAZE',
-      occurredAt: '2026-07-28T16:00:00+09:00',
-      sourceId: 92,
-      accuracy: null,
-      attentionRequired: true,
-      attentionReasons: ['GAZE_ANALYSIS_FAILED'],
-    }
-    const firstRequest = deferred<StudentLearningEventDetail>()
-    const secondRequest = deferred<StudentLearningEventDetail>()
-    const getLearningEvent = vi
-      .fn()
-      .mockImplementation((_studentId: number, _eventType: string, eventId: number) =>
-        eventId === firstEvent.eventId ? firstRequest.promise : secondRequest.promise,
-      )
-    const { wrapper } = await mountOverview(
-      repository({
-        listLearningEvents: vi.fn().mockResolvedValue([firstEvent, secondEvent]),
-        getLearningEvent,
-      }),
-    )
-    const eventButtons = wrapper.findAll('.learning-event')
-
-    await eventButtons[0]!.trigger('click')
-    await eventButtons[1]!.trigger('click')
-
-    expect(wrapper.findAll('.event-detail-shell')).toHaveLength(1)
-    expect(eventButtons[1]!.classes()).toContain('is-selected')
-    expect(wrapper.text()).toContain('학습 이벤트 상세를 불러오는 중입니다.')
-
-    firstRequest.resolve({
-      ...firstEvent,
-      retryCount: 1,
-      problemSegments: ['이전 상세 문제'],
-      recommendedTrainingTemplateId: null,
-      recommendedCurriculumUnitId: null,
-      recommendedCurriculumUnitName: null,
-      recommendationReason: null,
-      recommendedMinutes: null,
-      recommendedRepeatCount: null,
-    })
-    await flushPromises()
-
-    expect(wrapper.text()).not.toContain('이전 상세 문제')
-    expect(wrapper.text()).toContain('학습 이벤트 상세를 불러오는 중입니다.')
-
-    secondRequest.resolve({
-      ...secondEvent,
-      retryCount: 0,
-      problemSegments: ['현재 상세 문제'],
-      recommendedTrainingTemplateId: null,
-      recommendedCurriculumUnitId: null,
-      recommendedCurriculumUnitName: null,
-      recommendationReason: null,
-      recommendedMinutes: null,
-      recommendedRepeatCount: null,
-    })
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('현재 상세 문제')
-    expect(wrapper.text()).not.toContain('이전 상세 문제')
-  })
 })

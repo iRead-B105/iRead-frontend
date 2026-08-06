@@ -89,6 +89,19 @@ describe('TeacherSignupView', () => {
     await flushPromises()
   })
 
+  it('필드를 벗어날 때 해당 입력 오류를 즉시 표시하고 수정하면 해제한다', async () => {
+    const { wrapper } = await mountSignupView()
+    const name = wrapper.get<HTMLInputElement>('#signup-name')
+
+    await name.setValue('교수자1')
+    await name.trigger('blur')
+    expect(wrapper.get('#signup-name-error').text()).toContain('문자')
+    expect(name.attributes('aria-invalid')).toBe('true')
+
+    await name.setValue('김교수')
+    expect(wrapper.find('#signup-name-error').exists()).toBe(false)
+  })
+
   it('이메일 중복 오류를 사용자 안내로 표시한다', async () => {
     vi.spyOn(authRepositories.auth, 'signUp').mockRejectedValue(
       new ApiError({
@@ -114,7 +127,7 @@ describe('TeacherSignupView', () => {
 
     const email = wrapper.get<HTMLInputElement>('#signup-email')
     expect(email.attributes('aria-invalid')).toBe('true')
-    expect(email.attributes('aria-describedby')).toBe('signup-error')
+    expect(email.attributes('aria-describedby')).toBe('signup-email-error')
     expect(document.activeElement).toBe(email.element)
   })
 })

@@ -5,6 +5,7 @@ import {
   type EditableLessonMaterialItem,
   type LessonMaterialFieldError,
   type LessonMaterialEditorCode,
+  type LessonMaterialValidationIssue,
 } from '@/features/teacher/training'
 import {
   AudioLetterChoiceMaterialEditor,
@@ -26,6 +27,7 @@ const props = defineProps<{
   material: EditableLessonMaterialItem
   disabled: boolean
   fieldErrors?: readonly LessonMaterialFieldError[]
+  validationIssues?: readonly LessonMaterialValidationIssue[]
 }>()
 
 const emit = defineEmits<{
@@ -68,6 +70,7 @@ function handleEditorError(message: string | null): void {
     :material="material"
     :disabled="disabled"
     :field-errors="fieldErrors ?? []"
+    :validation-issues="validationIssues ?? []"
     @update-field="handleUpdateField"
     @editor-error="handleEditorError"
   />

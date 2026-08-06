@@ -32,8 +32,8 @@ const emit = defineEmits<{
 
 const invalid = computed(
   () =>
-    Boolean(props.periodErrors.startDate) ||
-    Boolean(props.periodErrors.endDate) ||
+    Boolean(props.periodErrors?.startDate) ||
+    Boolean(props.periodErrors?.endDate) ||
     props.historyStatus !== 'success' ||
     props.learningDayCount < 1,
 )
@@ -63,8 +63,8 @@ const invalid = computed(
           @visible-range="emit('visibleRange', $event)"
           @retry="emit('retryHistory')"
         />
-        <p v-if="periodErrors.startDate || periodErrors.endDate" class="field-error">
-          {{ periodErrors.startDate ?? periodErrors.endDate }}
+        <p v-if="periodErrors?.startDate || periodErrors?.endDate" class="field-error">
+          {{ periodErrors?.startDate ?? periodErrors?.endDate }}
         </p>
         <p v-else-if="historyStatus === 'success' && learningDayCount < 1" class="field-error">
           보고서를 생성하려면 완료 학습일이 1일 이상 필요합니다.

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { Search, RotateCcw, Settings2 } from '@lucide/vue'
+import AuthenticatedImage from '@/components/common/AuthenticatedImage.vue'
 import AsyncStatePanel from '@/components/common/AsyncStatePanel.vue'
 import SaveToast from '@/components/common/SaveToast.vue'
 import { Button } from '@/components/ui/button'
@@ -33,7 +34,6 @@ import {
 import { asyncStateKind } from '@/features/teacher/error'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import { useStudentStore } from '@/stores/students'
-import { resolveImageUrl } from '@/lib/image'
 
 const route = useRoute()
 const router = useRouter()
@@ -154,7 +154,7 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <SaveToast :visible="mutationNoticeVisible" :message="mutationNoticeMessage" inline />
+    <SaveToast :visible="mutationNoticeVisible" :message="mutationNoticeMessage" />
 
     <Card class="filters">
       <label class="search" for="student-search">
@@ -265,7 +265,7 @@ onBeforeUnmount(() => {
       class="table-card desktop-view"
     >
       <Table caption="담당 아동 목록">
-        <TableHeader>
+        <TableHeader class="student-table-header">
           <TableRow>
             <TableHead>아동</TableHead>
             <TableHead class="text-center">현재 학습</TableHead>
@@ -288,7 +288,7 @@ onBeforeUnmount(() => {
           >
             <TableCell>
               <div class="student-link">
-                <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
+                <AuthenticatedImage v-if="student.imageUrl" :src="student.imageUrl" alt="" />
                 <span v-else class="avatar" aria-hidden="true">{{
                   studentInitial(student.name)
                 }}</span>
@@ -353,7 +353,7 @@ onBeforeUnmount(() => {
       >
         <div class="mobile-card-header">
           <div class="student-link">
-            <img v-if="student.imageUrl" :src="resolveImageUrl(student.imageUrl) || ''" alt="" />
+            <AuthenticatedImage v-if="student.imageUrl" :src="student.imageUrl" alt="" />
             <span v-else class="avatar" aria-hidden="true">{{
               studentInitial(student.name)
             }}</span>
@@ -504,6 +504,18 @@ onBeforeUnmount(() => {
   min-width: 0;
   overflow-x: auto;
   padding: 0;
+}
+.table-card :deep(.student-table-header) {
+  background-color: color-mix(in oklch, var(--primary-50) 35%, var(--slate-50));
+  border-bottom: 1px solid var(--slate-200);
+}
+.table-card :deep(.student-table-header th) {
+  color: var(--slate-700);
+  font-weight: 650;
+  font-size: 13px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  letter-spacing: -0.01em;
 }
 .table-card :deep(th:first-child),
 .table-card :deep(td:first-child) {

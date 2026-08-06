@@ -38,34 +38,6 @@ const learningEventsStatus = computed(
 const learningEventsError = computed(
   () => studentStore.learningEventsErrorById[studentId.value] ?? null,
 )
-const selectedEventId = ref<number | null>(null)
-const selectedEventType = ref<StudentLearningEventType | null>(null)
-const pendingEventId = ref<number | null>(null)
-const pendingEventType = ref<StudentLearningEventType | null>(null)
-let learningEventSelectionSequence = 0
-const selectedEventKey = computed(() =>
-  selectedEventId.value === null || selectedEventType.value === null
-    ? null
-    : studentStore.insightKey(
-        studentId.value,
-        `${selectedEventType.value}:${selectedEventId.value}`,
-      ),
-)
-const selectedEventDetail = computed(() =>
-  selectedEventKey.value
-    ? (studentStore.learningEventDetailsByKey[selectedEventKey.value] ?? null)
-    : null,
-)
-const selectedEventDetailStatus = computed(() =>
-  selectedEventKey.value
-    ? (studentStore.learningEventDetailStatusByKey[selectedEventKey.value] ?? 'idle')
-    : 'idle',
-)
-const selectedEventDetailError = computed(() =>
-  selectedEventKey.value
-    ? (studentStore.learningEventDetailErrorByKey[selectedEventKey.value] ?? null)
-    : null,
-)
 const accuracyTrendStatus = computed(
   () => studentStore.accuracyTrendStatusById[studentId.value] ?? 'idle',
 )
@@ -251,13 +223,8 @@ function memoErrorMessage(error: unknown): string {
 }
 
 async function loadOverview(nextStudentId: number): Promise<void> {
-  learningEventSelectionSequence += 1
   noteDraft.value = ''
   memoError.value = ''
-  selectedEventId.value = null
-  selectedEventType.value = null
-  pendingEventId.value = null
-  pendingEventType.value = null
   selectedTrend.value = 'accuracy'
   if (!Number.isInteger(nextStudentId) || nextStudentId <= 0) return
 
@@ -273,61 +240,6 @@ async function loadOverview(nextStudentId: number): Promise<void> {
   ])
   if (studentId.value !== nextStudentId) return
   noteDraft.value = studentStore.detailsById[nextStudentId]?.teacherMemo ?? ''
-}
-
-async function selectLearningEvent(event: StudentLearningEvent): Promise<void> {
-  if (selectedEventId.value === event.eventId && selectedEventType.value === event.eventType) {
-    learningEventSelectionSequence += 1
-    selectedEventId.value = null
-    selectedEventType.value = null
-    pendingEventId.value = null
-    pendingEventType.value = null
-    return
-  }
-
-  if (pendingEventId.value === event.eventId && pendingEventType.value === event.eventType) return
-
-  const requestSequence = ++learningEventSelectionSequence
-  const eventKey = studentStore.insightKey(studentId.value, `${event.eventType}:${event.eventId}`)
-  const cachedDetail = studentStore.learningEventDetailsByKey[eventKey]
-  const keepCurrentDetailVisible = selectedEventDetail.value !== null && cachedDetail === undefined
-
-  pendingEventId.value = event.eventId
-  pendingEventType.value = event.eventType
-
-  if (!keepCurrentDetailVisible) {
-    selectedEventId.value = event.eventId
-    selectedEventType.value = event.eventType
-  }
-
-  const loadedDetail = await studentStore.loadLearningEvent(
-    studentId.value,
-    event.eventType,
-    event.eventId,
-  )
-  if (learningEventSelectionSequence !== requestSequence) return
-
-  pendingEventId.value = null
-  pendingEventType.value = null
-  if (loadedDetail !== null || studentStore.learningEventDetailStatusByKey[eventKey] === 'error') {
-    selectedEventId.value = event.eventId
-    selectedEventType.value = event.eventType
-  }
-}
-
-async function retryLearningEvent(event: StudentLearningEvent): Promise<void> {
-  await studentStore.loadLearningEvent(studentId.value, event.eventType, event.eventId)
-}
-
-function openLearningEventHistory(
-  eventType: Exclude<StudentLearningEventType, 'GAZE'>,
-): void {
-  const routeName = {
-    TRAINING: 'student-training-history',
-    TEST: 'student-test-history',
-    STORY: 'student-story-history',
-  }[eventType]
-  void router.push({ name: routeName, params: { id: studentId.value } })
 }
 
 async function retryDetail(): Promise<void> {
@@ -410,19 +322,9 @@ watch(studentId, loadOverview, { immediate: true })
         <aside class="recent-panel" aria-label="최근 학습 기록">
           <StudentLearningEvents
             :events="recentLearningEvents"
-            :selected-event-id="selectedEventId"
-            :selected-event-type="selectedEventType"
-            :pending-event-id="pendingEventId"
-            :pending-event-type="pendingEventType"
-            :detail="selectedEventDetail"
             :list-status="learningEventsStatus"
             :list-error="learningEventsError"
-            :detail-status="selectedEventDetailStatus"
-            :detail-error="selectedEventDetailError"
-            @select="selectLearningEvent"
             @retry-list="studentStore.loadLearningEvents(detail.studentId, 4)"
-            @retry-detail="retryLearningEvent"
-            @open-history="openLearningEventHistory"
           />
           <RouterLink
             class="history-link"

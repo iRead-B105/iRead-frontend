@@ -28,6 +28,7 @@ describe('ReportGazeTrend', () => {
     expect(wrapper.text()).toContain('되돌아보기 횟수')
     expect(wrapper.text()).toContain('시선 자동 분석 문구는 규칙 기반 Backend 연동 후 제공됩니다.')
     expect(wrapper.text()).not.toContain('되돌아보기 횟수는 7회에서 5회로 2회 감소했습니다.')
+    expect(wrapper.text()).not.toContain('시선 지표는 학습 과정 참고용이며')
   })
 
   it('통일된 보고서에서는 저장된 규칙 기반 시선 분석을 표시한다', () => {

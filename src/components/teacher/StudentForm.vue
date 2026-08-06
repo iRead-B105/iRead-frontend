@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
+import SaveToast from '@/components/common/SaveToast.vue'
 import FormActions from '@/components/teacher/FormActions.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import ProfileImageEditor from '@/components/teacher/ProfileImageEditor.vue'
@@ -29,11 +30,13 @@ import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import {
   buildStudentUpdateInput,
   createStudentFormDraft,
+  formatGuardianContact,
   getStudentBirthdayMax,
   normalizeStudentCreateInput,
   STUDENT_FIELD_MAX_LENGTH,
   validateStudentForm,
   type StudentDetail,
+  type StudentFormField,
   type StudentFormErrors,
 } from '@/features/teacher/student'
 import { mapCommonError } from '@/features/teacher/error'
@@ -48,6 +51,7 @@ const props = defineProps<{
 const router = useRouter()
 const studentStore = useStudentStore()
 const { visible: saved, show: showSaved } = useTemporaryNotice()
+const { visible: submitErrorVisible, show: showSubmitError } = useTemporaryNotice()
 const currentDetail = ref(props.initialValue)
 const form = reactive(createStudentFormDraft(props.initialValue))
 const selectedImage = ref<File | null>(null)
@@ -55,6 +59,10 @@ const imagePreviewVersion = ref(0)
 const fieldErrors = ref<StudentFormErrors>({})
 const submitting = ref(false)
 const submitError = ref('')
+
+watch(submitError, (err) => {
+  if (err) showSubmitError()
+})
 const savedSnapshot = ref(JSON.stringify(form))
 
 const deleteDialogOpen = ref(false)
@@ -95,6 +103,24 @@ function selectImage(file: File): void {
 
 function setImageError(message: string | null): void {
   fieldErrors.value = { ...fieldErrors.value, image: message ?? undefined }
+}
+
+function validateField(field: Exclude<StudentFormField, 'image'>): void {
+  const message = validateStudentForm(form)[field]
+  fieldErrors.value = { ...fieldErrors.value, [field]: message }
+}
+
+function revalidateEditedField(field: Exclude<StudentFormField, 'image'>): void {
+  if (fieldErrors.value[field]) validateField(field)
+}
+
+function preventNonDigitInput(event: InputEvent): void {
+  if (event.data && /\D/.test(event.data)) event.preventDefault()
+}
+
+function updateGuardianContact(value: string | number): void {
+  form.guardianContact = formatGuardianContact(String(value))
+  revalidateEditedField('guardianContact')
 }
 
 function markSaved(detail?: StudentDetail): void {
@@ -249,6 +275,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
             :aria-invalid="Boolean(fieldErrors.name)"
             :aria-describedby="fieldErrors.name ? 'student-name-error' : undefined"
             placeholder="아동 이름"
+            @blur="validateField('name')"
+            @update:model-value="revalidateEditedField('name')"
           />
           <p v-if="fieldErrors.name" id="student-name-error" class="field-error">
             {{ fieldErrors.name }}
@@ -264,6 +292,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
             :aria-invalid="Boolean(fieldErrors.birthday)"
             :aria-describedby="fieldErrors.birthday ? 'student-birthday-error' : undefined"
             type="date"
+            @blur="validateField('birthday')"
+            @update:model-value="revalidateEditedField('birthday')"
           />
           <p v-if="fieldErrors.birthday" id="student-birthday-error" class="field-error">
             {{ fieldErrors.birthday }}
@@ -271,7 +301,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
         </div>
         <div class="field">
           <Label for="student-gender">성별 <span aria-hidden="true">*</span></Label>
-          <Select v-model="form.gender">
+          <Select v-model="form.gender" @update:model-value="validateField('gender')">
             <SelectTrigger
               id="student-gender"
               class="!w-full"
@@ -300,6 +330,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
             :aria-invalid="Boolean(fieldErrors.school)"
             :aria-describedby="fieldErrors.school ? 'student-school-error' : undefined"
             placeholder="학교명"
+            @blur="validateField('school')"
+            @update:model-value="revalidateEditedField('school')"
           />
           <p v-if="fieldErrors.school" id="student-school-error" class="field-error">
             {{ fieldErrors.school }}
@@ -320,6 +352,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
             :aria-invalid="Boolean(fieldErrors.guardian)"
             :aria-describedby="fieldErrors.guardian ? 'guardian-name-error' : undefined"
             placeholder="보호자 이름"
+            @blur="validateField('guardian')"
+            @update:model-value="revalidateEditedField('guardian')"
           />
           <p v-if="fieldErrors.guardian" id="guardian-name-error" class="field-error">
             {{ fieldErrors.guardian }}
@@ -329,13 +363,16 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
           <Label for="guardian-contact">보호자 연락처 <span aria-hidden="true">*</span></Label>
           <Input
             id="guardian-contact"
-            v-model="form.guardianContact"
+            :model-value="form.guardianContact"
             required
             :maxlength="STUDENT_FIELD_MAX_LENGTH.guardianContact"
             :aria-invalid="Boolean(fieldErrors.guardianContact)"
             :aria-describedby="fieldErrors.guardianContact ? 'guardian-contact-error' : undefined"
-            inputmode="tel"
+            inputmode="numeric"
             placeholder="010-0000-0000"
+            @beforeinput="preventNonDigitInput"
+            @blur="validateField('guardianContact')"
+            @update:model-value="updateGuardianContact"
           />
           <p v-if="fieldErrors.guardianContact" id="guardian-contact-error" class="field-error">
             {{ fieldErrors.guardianContact }}
@@ -351,6 +388,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
             :aria-describedby="fieldErrors.guardianEmail ? 'guardian-email-error' : undefined"
             type="email"
             placeholder="example@email.com"
+            @blur="validateField('guardianEmail')"
+            @update:model-value="revalidateEditedField('guardianEmail')"
           />
           <p v-if="fieldErrors.guardianEmail" id="guardian-email-error" class="field-error">
             {{ fieldErrors.guardianEmail }}
@@ -365,6 +404,8 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
             :aria-invalid="Boolean(fieldErrors.address)"
             :aria-describedby="fieldErrors.address ? 'student-address-error' : undefined"
             placeholder="주소를 입력하세요"
+            @blur="validateField('address')"
+            @update:model-value="revalidateEditedField('address')"
           />
           <p v-if="fieldErrors.address" id="student-address-error" class="field-error">
             {{ fieldErrors.address }}
@@ -374,7 +415,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
     </SettingsSection>
 
     <div class="student-form__footer">
-      <p v-if="submitError" class="student-form__error" role="alert">{{ submitError }}</p>
+      <SaveToast :visible="submitErrorVisible" :message="submitError" tone="error" />
       <FormActions
         :saved="saved"
         :disabled="!canSubmit"
@@ -389,7 +430,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
     <section v-if="mode === 'edit'" class="danger-zone" aria-label="위험 구역">
       <div class="danger-zone__info">
         <h3>아동 계정 삭제</h3>
-        <p>아동 정보와 연결된 모든 학습 및 검사 기록이 영구 삭제되며, 이 작업은 복구할 수 없습니다.</p>
+        <p>
+          아동 정보와 연결된 모든 학습 및 검사 기록이 영구 삭제되며, 이 작업은 복구할 수 없습니다.
+        </p>
       </div>
       <Button
         variant="outline"

@@ -298,22 +298,7 @@ function formatQuestionScore(score: number | null): string | null {
               compact
               @retry="trainingStore.retryHistory()"
             />
-            <div v-else class="curriculum-groups">
-              <AsyncStatePanel
-                v-if="curriculumLogsStatus === 'error'"
-                :kind="curriculumLogsErrorKind"
-                title="최신 이력을 불러오지 못했습니다"
-                :message="`${curriculumLogsError ?? '잠시 후 다시 시도해 주세요.'} 이전 이력을 계속 표시합니다.`"
-                :retry-label="curriculumLogsUiError?.retryable ? '다시 불러오기' : undefined"
-                compact
-                @retry="trainingStore.retryHistory()"
-              />
-              <AsyncStatePanel
-                v-else-if="curriculumLogsStatus === 'loading'"
-                kind="loading"
-                message="최신 이력을 확인하는 동안 이전 이력을 표시합니다."
-                compact
-              />
+            <div class="curriculum-groups" :aria-busy="curriculumLogsStatus === 'loading'">
               <section v-for="group in curriculumGroups" :key="group.key" class="curriculum-group">
                 <h3>{{ group.label }}</h3>
                 <div class="curriculum-list">
@@ -385,14 +370,7 @@ function formatQuestionScore(score: number | null): string | null {
               />
               <template v-else>
                 <p
-                  v-if="trainingLogStatus === 'loading'"
-                  class="section-state"
-                  role="status"
-                >
-                  학습 목록을 갱신하는 중입니다.
-                </p>
-                <p
-                  v-else-if="trainingLogStatus === 'error'"
+                  v-if="trainingLogStatus === 'error'"
                   class="section-state section-state--error"
                   role="alert"
                 >
@@ -448,13 +426,11 @@ function formatQuestionScore(score: number | null): string | null {
               <h2>선택 훈련 상세</h2>
               <template v-if="historyTrainingDetail">
                 <h3>{{ historyTrainingDetail.name }}</h3>
-                <p v-if="historyDetailStatus === 'loading'">새 훈련 상세를 불러오는 중입니다.</p>
-                <p v-else-if="historyDetailStatus === 'error'">상세 조회를 완료하지 못했습니다.</p>
+                <p v-if="historyDetailStatus === 'error'">상세 조회를 완료하지 못했습니다.</p>
               </template>
               <template v-else>
                 <h3>훈련을 선택해 주세요.</h3>
-                <p v-if="historyDetailStatus === 'loading'">새 훈련 상세를 불러오는 중입니다.</p>
-                <p v-else-if="historyDetailStatus === 'error'">상세 조회를 완료하지 못했습니다.</p>
+                <p v-if="historyDetailStatus === 'error'">상세 조회를 완료하지 못했습니다.</p>
               </template>
             </div>
           </header>
@@ -463,7 +439,8 @@ function formatQuestionScore(score: number | null): string | null {
             <AsyncStatePanel
               v-if="historyDetailStatus === 'loading' && !historyTrainingDetail"
               kind="loading"
-              message="훈련 상세를 불러오는 중입니다."
+              title=""
+              message=""
               compact
             />
             <AsyncStatePanel
@@ -661,6 +638,14 @@ function formatQuestionScore(score: number | null): string | null {
   margin: 5px 0 0;
   color: var(--slate-500);
   font-size: 12px;
+}
+
+.curriculum-groups[aria-busy='true'],
+.training-list[aria-busy='true'],
+.detail-content-shell[aria-busy='true'] {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.15s ease-in-out;
 }
 
 .curriculum-groups {

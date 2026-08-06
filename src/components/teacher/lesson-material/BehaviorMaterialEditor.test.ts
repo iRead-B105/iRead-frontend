@@ -28,4 +28,33 @@ describe('BehaviorMaterialEditor', () => {
     expect(wrapper.text()).not.toContain('획순 에셋은 서버가 관리합니다.')
     expect(wrapper.text()).toContain('화면 표시 글자')
   })
+
+  it('클라이언트 검증 오류를 해당 필드에 연결하고 입력 길이를 제한한다', () => {
+    const material: EditableLessonMaterialItem = {
+      questionNo: 1,
+      questionType: 'SENTENCE_REPEAT',
+      presentation: {
+        activityName: '문장 따라 읽기',
+        instruction: '문장을 읽어요.',
+        hint: '',
+        correctFeedback: '잘했어요.',
+        retryFeedback: '다시 해봐요.',
+      },
+      ...defaultLessonMaterialData('SENTENCE_REPEAT'),
+    }
+    const wrapper = mount(BehaviorMaterialEditor, {
+      props: {
+        material,
+        editorCode: 'E10',
+        disabled: false,
+        fieldErrors: [],
+        validationIssues: [{ path: 'content.sentence', message: '문장을 확인해 주세요.' }],
+      },
+    })
+
+    const sentence = wrapper.get('#material-1-content-sentence')
+    expect(sentence.attributes('aria-invalid')).toBe('true')
+    expect(sentence.attributes('maxlength')).toBe('2000')
+    expect(wrapper.text()).toContain('문장을 확인해 주세요.')
+  })
 })
