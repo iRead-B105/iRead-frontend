@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   formatStoryActivityAt,
+  type StoryGazeReplayEvent,
   type StoryGazeWordMetric,
   type StoryImageGenerationStatus,
   type StoryPage,
@@ -18,6 +19,7 @@ const props = defineProps<{
   activeReplayToTokenIndex?: number | null
   activeReplayDwellMs?: number
   heatmapWords?: readonly StoryGazeWordMetric[]
+  heatmapEvents?: readonly StoryGazeReplayEvent[]
   heatmapVisible?: boolean
 }>()
 
@@ -62,6 +64,16 @@ const heatmapByTokenIndex = computed(() => new Map(
   (props.heatmapWords ?? [])
     .filter((word) => word.tokenIndex !== null)
     .map((word) => [word.tokenIndex!, word]),
+))
+const heatmapRegressionTokenIndexes = computed(() => new Set(
+  (props.heatmapEvents ?? [])
+    .filter((event) => event.movementType === 'REGRESSION')
+    .map((event) => event.toTokenIndex),
+))
+const heatmapSkippedTokenIndexes = computed(() => new Set(
+  (props.heatmapEvents ?? [])
+    .filter((event) => event.movementType === 'SKIP')
+    .flatMap((event) => [event.toTokenIndex, ...event.skippedTokenIndexes]),
 ))
 
 function splitStorySentences(source: string): string[] {
@@ -116,13 +128,16 @@ const previewTextLines = computed(() => {
 function wordReplayClass(word: StoryPreviewWord) {
   const isActive = !props.heatmapVisible && activeReplayTokenIndexSet.value.has(word.tokenIndex)
   const metric = heatmapByTokenIndex.value.get(word.tokenIndex)
+  const hasRegression = heatmapRegressionTokenIndexes.value.has(word.tokenIndex) || (metric?.regressionCount ?? 0) > 0
+  const isSkipped = heatmapSkippedTokenIndexes.value.has(word.tokenIndex) || metric?.skipped === true
   return {
     'is-replay-active': isActive,
     'is-replay-regression': isActive && props.activeReplayKind === 'regression',
     'is-replay-skip': isActive && props.activeReplayKind === 'skip',
     'is-replay-dwell': isActive && (props.activeReplayDwellMs ?? 0) > 0,
-    'is-heatmap-skipped': props.heatmapVisible && metric?.skipped === true,
-    'is-heatmap-regression': props.heatmapVisible && (metric?.regressionCount ?? 0) > 0,
+    'is-heatmap-skipped': props.heatmapVisible && !hasRegression && isSkipped,
+    'is-heatmap-regression': props.heatmapVisible && hasRegression,
+    'is-heatmap-dwell': props.heatmapVisible && !hasRegression && !isSkipped && (metric?.dwellDurationMs ?? 0) > 0,
   }
 }
 
@@ -452,12 +467,20 @@ onBeforeUnmount(() => copyResizeObserver?.disconnect())
 }
 
 .story-reader-word.is-heatmap-skipped {
+  background: rgb(220 38 38 / 24%);
+  box-shadow: 0 0 0 .08em rgb(220 38 38 / 40%);
   text-decoration: underline dashed #dc2626;
   text-decoration-thickness: 2px;
   text-underline-offset: .2em;
 }
 
+.story-reader-word.is-heatmap-dwell {
+  background: rgb(168 85 247 / 40%);
+  box-shadow: 0 0 0 .08em #7e22ce;
+}
+
 .story-reader-word.is-heatmap-regression {
+  background: rgb(245 158 11 / 38%);
   box-shadow: 0 0 0 .08em #d97706;
 }
 
