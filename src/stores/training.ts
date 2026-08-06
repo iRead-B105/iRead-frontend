@@ -1286,7 +1286,7 @@ export const useTrainingStore = defineStore('training', () => {
         trainingLogStatus.value = 'error'
         trainingLogError.value = historyErrorMessage(
           error,
-          '선택한 커리큘럼의 훈련 이력을 불러오지 못했습니다.',
+          '선택한 커리큘럼의 학습 이력을 불러오지 못했습니다.',
         )
       })
 

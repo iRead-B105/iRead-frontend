@@ -1,33 +1,11 @@
 <script setup lang="ts">
-// ECharts 전체가 아닌 실제 사용하는 차트·부품·렌더러만 가져와 최종 파일 크기를 줄입니다.
-import { BarChart, LineChart } from 'echarts/charts'
-import {
-  GridComponent,
-  LegendComponent,
-  MarkLineComponent,
-  MarkPointComponent,
-  TooltipComponent,
-} from 'echarts/components'
-import * as echarts from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
+import * as echarts from 'echarts'
 import type { ECharts, EChartsOption } from 'echarts'
 import { nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { twitterChartTheme } from '@/features/teacher/chartTheme'
 
 const chartThemeName = 'iread-twitter'
 echarts.registerTheme(chartThemeName, twitterChartTheme)
-
-// 가져온 기능을 ECharts 엔진에 등록해야 실제 차트를 그릴 수 있습니다.
-echarts.use([
-  BarChart,
-  LineChart,
-  GridComponent,
-  LegendComponent,
-  MarkLineComponent,
-  MarkPointComponent,
-  TooltipComponent,
-  CanvasRenderer,
-])
 
 // option은 차트 데이터/모양 설정이고, 선택값인 높이와 접근성 문구에는 기본값을 줍니다.
 const props = withDefaults(
@@ -56,11 +34,13 @@ function renderChartNow() {
   // 아직 div가 화면에 만들어지지 않았다면 그릴 곳이 없으므로 종료합니다.
   if (!chartElement.value) return
   // ??=는 chart가 없을 때만 새 인스턴스를 만든다는 뜻이라 중복 생성을 방지합니다.
-  chart ??= echarts.init(chartElement.value, chartThemeName)
+  chart ??=
+    echarts.getInstanceByDom(chartElement.value) ??
+    echarts.init(chartElement.value, chartThemeName)
   // 부모가 전달한 최신 설정으로 차트를 다시 그립니다.
   chart.setOption(
     { ...props.option, animation: Boolean(props.animated) && !reducedMotion.value },
-    { notMerge: false, lazyUpdate: true },
+    { notMerge: true, lazyUpdate: false },
   )
 }
 
@@ -100,8 +80,8 @@ onMounted(async () => {
   }
 })
 
-// option 객체 내부의 데이터까지 감시하여 부모의 값 변경을 즉시 차트에 반영합니다.
-watch([() => props.option, () => props.animated, reducedMotion], renderChart, { deep: true })
+// 부모가 새 option을 전달하거나 모션 설정이 바뀌면 차트를 다시 그립니다.
+watch([() => props.option, () => props.animated, reducedMotion], renderChart)
 
 onBeforeUnmount(() => {
   // 페이지를 떠날 때 감시와 차트 메모리를 정리해 누수를 막습니다.

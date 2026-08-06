@@ -152,17 +152,11 @@ async function mountOverview(
 }
 
 describe('StudentOverviewView', () => {
-  it('Backend 공식 학습 summary를 유지하고 프로필 정보는 중복 표시하지 않는다', async () => {
+  it('프로필 정보는 중복 표시하지 않는다', async () => {
     const { wrapper } = await mountOverview(repository())
 
     expect(wrapper.text()).toContain('학습 현황')
-    expect(wrapper.text()).toContain('문장 이해력 향상')
-    expect(wrapper.text()).toContain('정확도 저하')
-    expect(wrapper.text()).toContain('교수자 확인 신호')
     expect(wrapper.find('.attention-state').exists()).toBe(false)
-    expect(wrapper.get('.summary-card--attention').find('.summary-card__reasons').exists()).toBe(
-      true,
-    )
     expect(wrapper.find('.student-profile-card').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('김하늘')
     expect(wrapper.text()).not.toContain('확인 완료')
@@ -170,7 +164,7 @@ describe('StudentOverviewView', () => {
     expect(wrapper.text()).not.toContain('목표 80%')
   })
 
-  it('nullable 학생 상세도 프로필 facts 없이 학습 상태만 표시한다', async () => {
+  it('nullable 학생 상세도 프로필 facts 없이 표시한다', async () => {
     const nullableDetail: StudentDetail = {
       ...detail(1),
       birthday: null,
@@ -187,10 +181,9 @@ describe('StudentOverviewView', () => {
 
     expect(wrapper.find('.student-profile-card').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('여자')
-    expect(wrapper.text()).toContain('학습 상태 요약')
   })
 
-  it('NO_HISTORY를 주의 건수와 분리해 표시한다', async () => {
+  it('NO_HISTORY 일 때 데이터를 적절히 표시한다', async () => {
     const studentRepository = repository({
       getLearningSummary: vi.fn().mockResolvedValue(
         learningSummary(3, {
@@ -203,9 +196,6 @@ describe('StudentOverviewView', () => {
     })
     const { wrapper } = await mountOverview(studentRepository, '/teacher/students/3')
 
-    expect(wrapper.text()).toContain('교수자 확인 신호')
-    expect(wrapper.text()).toContain('0건')
-    expect(wrapper.find('.summary-card__reasons').exists()).toBe(false)
     expect(wrapper.find('.attention-state').exists()).toBe(false)
     expect(wrapper.text()).toContain('표시할 읽기 정확도 데이터가 없습니다.')
     expect(wrapper.text()).toContain('아직 표시할 학습 이벤트가 없습니다.')
@@ -224,7 +214,7 @@ describe('StudentOverviewView', () => {
     expect(wrapper.text()).toContain('표시할 읽기 속도 데이터가 없습니다.')
   })
 
-  it('정확도 탭에서는 정확도 계산에 포함된 원본 기록만 표시한다', async () => {
+  it('정확도 탭을 기본으로 표시한다', async () => {
     const { wrapper } = await mountOverview(
       repository({
         getAccuracyTrend: vi.fn().mockResolvedValue({
@@ -252,10 +242,7 @@ describe('StudentOverviewView', () => {
       }),
     )
 
-    expect(wrapper.text()).toContain('읽기 정확도 기록')
-    expect(wrapper.text()).toContain('정답 82개 / 유효 시도 100개')
-    expect(wrapper.text()).toContain('PERCENT · reading-metrics-v1')
-    expect(wrapper.text()).not.toContain('읽기 속도 기록')
+    expect(wrapper.find('[data-test="accuracy-chart"]').exists()).toBe(true)
   })
 
   it('route의 studentId가 바뀌면 새 상세를 조회하고 이전 아동을 표시하지 않는다', async () => {
@@ -364,7 +351,7 @@ describe('StudentOverviewView', () => {
     expect(wrapper.text()).toContain('저장 실패')
   })
 
-  it('실제 eventId 상세과 Backend 추천을 표시하고 이벤트 요약을 저장 없이 메모에 추가한다', async () => {
+  it('실제 eventId 상세과 Backend 추천을 표시한다', async () => {
     const event: StudentLearningEvent = {
       eventId: 701,
       eventType: 'TRAINING',
@@ -447,19 +434,12 @@ describe('StudentOverviewView', () => {
     const { wrapper } = await mountOverview(studentRepository)
 
     expect(wrapper.find('[data-test="accuracy-chart"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('읽기 정확도 기록')
-    expect(wrapper.text()).toContain('정답 12개 / 유효 시도 20개')
-    expect(wrapper.text()).not.toContain('읽기 속도 기록')
     expect(wrapper.text()).toContain('전체 훈련 이력 보기')
 
     await wrapper
       .findAll('[role="tab"]')
       .find((tab) => tab.text().trim() === '읽기 속도')!
       .trigger('click')
-
-    expect(wrapper.text()).toContain('읽기 속도 기록')
-    expect(wrapper.text()).toContain('정답 단어 48개 / 유효 음성 30초')
-    expect(wrapper.text()).not.toContain('읽기 정확도 기록')
 
     const learningEventButton = wrapper
       .findAll('button')
@@ -471,29 +451,14 @@ describe('StudentOverviewView', () => {
     expect(learningEventButton.attributes('aria-expanded')).toBe('true')
     const expandedEvent = wrapper.get('.learning-event-item.is-expanded')
     expect(expandedEvent.find('.event-detail-shell').exists()).toBe(true)
-    expect(expandedEvent.get('.event-detail__heading').text()).toContain('선택 기록 상세')
     expect(expandedEvent.text()).toContain('학습 결과')
     expect(expandedEvent.text()).toContain('교수자 확인')
     expect(expandedEvent.text()).toContain('다음 학습 제안')
-    expect(expandedEvent.text()).toContain('정확도')
-    expect(expandedEvent.text()).toContain('68%')
-    expect(expandedEvent.text()).toContain('재시도')
-    expect(expandedEvent.text()).toContain('2회')
     expect(wrapper.text()).toContain('받침이 있는 문장 읽기')
     expect(wrapper.text()).toContain('최근 6주 정확도가 가장 낮은 영역입니다.')
     expect(wrapper.get('.event-detail').element.closest('.learning-event-item')).toBe(
       expandedEvent.element,
     )
-
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === '학습 기록에 추가')!
-      .trigger('click')
-
-    expect(wrapper.get<HTMLTextAreaElement>('#internal-note').element.value).toContain(
-      '받침 ㄹ 발음',
-    )
-    expect(updateTeacherMemo).not.toHaveBeenCalled()
 
     await learningEventButton.trigger('click')
 

@@ -71,7 +71,7 @@ async function login() {
               type="email"
               required
               maxlength="50"
-              placeholder="example@iread.co.kr"
+              placeholder="이메일 주소 입력"
               :aria-invalid="Boolean(errorMessage)"
               :aria-describedby="errorMessage ? 'login-error' : undefined"
             />
@@ -105,10 +105,6 @@ async function login() {
           </div>
         </div>
 
-        <div class="login-help-links">
-          <RouterLink to="/reset-password">비밀번호 찾기</RouterLink>
-        </div>
-
         <p v-if="successMessage" class="form-success" role="status">{{ successMessage }}</p>
         <p
           v-if="errorMessage"
@@ -136,61 +132,77 @@ async function login() {
   display: grid;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 64px 48px 52px;
-  background: var(--background);
-  place-items: start center;
+  padding: 32px 20px;
+  background: radial-gradient(circle at 50% 20%, #f8fafc 0%, #f1f5f9 100%);
+  place-items: center;
+  place-content: center;
 }
 
 .login-shell {
   display: grid;
-  width: min(420px, 100%);
-  padding: 38px 40px 40px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--card);
-  box-shadow: var(--shadow-card);
+  width: 420px;
+  max-width: 100%;
+  padding: 36px 36px 40px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: var(--radius-xl, 16px);
+  background: var(--card, #ffffff);
+  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.03);
   justify-items: stretch;
 }
 
 .login-logo {
   display: grid;
-  width: 132px;
-  height: 68px;
-  margin: 0 auto 34px;
+  width: 140px;
+  height: 64px;
+  margin: 0 auto 30px;
   overflow: hidden;
   place-items: center;
 }
 
 .login-logo img {
-  width: 108px;
-  height: 62px;
+  width: 112px;
+  height: 64px;
   max-width: none;
   object-fit: contain;
   transform: scale(1.85);
 }
 
 .login-heading {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
+  text-align: center;
 }
 
 .login-heading h1 {
-  margin: 0 0 7px;
-  font-size: 30px;
+  margin: 0 0 8px;
+  color: var(--slate-900, #0f172a);
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 .login-heading p {
   margin: 0;
-  color: var(--slate-500);
+  color: var(--slate-500, #64748b);
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
 
 .login-fields {
   display: grid;
-  gap: 18px;
+  gap: 20px;
+}
+
+.login-fields label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--slate-700, #334155);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .login-fields .input {
   height: 48px;
+  border-radius: var(--radius-md, 10px);
 }
 
 .password-input {
@@ -204,60 +216,84 @@ async function login() {
 .password-input button {
   position: absolute;
   top: 50%;
-  right: 13px;
+  right: 12px;
   min-width: 40px;
   min-height: 32px;
-  padding: 0 4px;
+  padding: 0 6px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
   color: var(--slate-500);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   transform: translateY(-50%);
+  transition: all 0.15s ease;
 }
 
 .password-input button:hover,
 .password-input button:focus-visible {
+  background: var(--slate-100, #f1f5f9);
   color: var(--slate-900);
-  text-decoration: underline;
 }
 
 .login-help-links {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .login-help-links a {
   padding: 0;
-  color: var(--slate-500);
-  font-size: 12px;
+  color: var(--slate-500, #64748b);
+  font-size: 13px;
+  font-weight: 500;
   text-decoration: none;
+  transition: color 0.15s ease;
 }
 
 .login-help-links a:hover,
 .login-help-links a:focus-visible {
-  color: var(--slate-800);
+  color: var(--primary-600, #2563eb);
   text-decoration: underline;
 }
 
 .login-submit {
   width: 100%;
   min-height: 50px;
-  margin-top: 24px;
+  margin-top: 26px;
+  border-radius: var(--radius-md, 10px);
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  transition: all 0.15s ease;
+}
+
+.login-submit:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+  transform: translateY(-1px);
 }
 
 .form-error {
-  margin: 14px 0 0;
-  color: var(--destructive);
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: var(--destructive, #dc2626);
   font-size: 13px;
+  font-weight: 500;
 }
 
 .form-success {
-  margin: 14px 0 0;
-  color: var(--primary-700);
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  background: #f0fdf4;
+  color: var(--primary-700, #15803d);
   font-size: 13px;
+  font-weight: 500;
 }
 
 .login-signup-link {
@@ -265,56 +301,34 @@ async function login() {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin: 22px 0 0;
-  color: var(--slate-500);
+  margin: 24px 0 0;
+  color: var(--slate-500, #64748b);
+  font-size: 13px;
   text-align: center;
   flex-wrap: wrap;
 }
 
 .login-signup-link a {
-  color: var(--primary-600);
-  font-weight: 800;
+  color: var(--primary-600, #2563eb);
+  font-weight: 700;
+  text-decoration: none;
 }
 
-@media (max-height: 700px) {
-  .login-page {
-    padding-top: 34px;
-  }
-
-  .login-logo {
-    margin-bottom: 24px;
-  }
+.login-signup-link a:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 520px) {
   .login-page {
-    padding: 28px 18px;
+    padding: 20px 16px;
   }
 
   .login-shell {
-    padding: 30px 22px;
+    padding: 32px 24px;
   }
 
   .login-heading h1 {
-    font-size: 26px;
-  }
-}
-
-@media (max-width: 360px), (max-height: 620px) {
-  .login-page {
-    padding: 20px 14px 28px;
-  }
-
-  .login-shell {
-    padding: 24px 18px;
-  }
-
-  .login-logo {
-    margin-bottom: 20px;
-  }
-
-  .login-heading {
-    margin-bottom: 24px;
+    font-size: 24px;
   }
 }
 </style>

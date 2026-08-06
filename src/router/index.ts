@@ -104,7 +104,7 @@ const router = createRouter({
               path: 'training-history',
               name: 'student-training-history',
               component: () => import('@/views/teacher/StudentTrainingHistoryView.vue'),
-              meta: { title: '훈련 이력' },
+              meta: { title: '학습 이력' },
             },
             {
               path: 'test-history',

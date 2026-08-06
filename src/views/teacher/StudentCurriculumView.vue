@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { Check, Trash2 } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
+import { Sparkles, X } from '@lucide/vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import SaveToast from '@/components/common/SaveToast.vue'
@@ -68,13 +70,21 @@ const dragTargetKey = ref<string | null>(null)
 const recommendationList = ref<HTMLElement | null>(null)
 const selectedCatalogUnit = ref('all')
 const materialEditorOpen = ref(false)
-const draftPendingDeletion = ref<CurriculumDraftItem | null>(null)
+const draftPendingDeletionKey = ref<string | null>(null)
 const reviewConfirmOpen = ref(false)
 const reorderAnnouncement = ref('')
 const aiRecommendationStatus = ref<'idle' | 'loading' | 'success' | 'error'>('idle')
 const aiRecommendationError = ref<string | null>(null)
 const aiRecommendation = ref<AiCurriculumRecommendation | null>(null)
+const aiRecommendationDetailsOpen = ref(false)
+const aiRecommendationAppliedTemplateIds = ref<readonly number[] | null>(null)
 const { visible: saved, show: showSaved } = useTemporaryNotice()
+const toastMessage = ref('커리큘럼 변경 사항이 저장되었습니다.')
+
+function triggerToast(msg: string = '커리큘럼 변경 사항이 저장되었습니다.'): void {
+  toastMessage.value = msg
+  showSaved()
+}
 
 interface AiCurriculumRecommendation {
   readonly recommendationProvider: string
@@ -114,6 +124,58 @@ let suppressRowClickUntil = 0
 
 const DRAG_ACTIVATION_THRESHOLD = 6
 
+const recommendationRoleLabels: Record<string, string> = {
+  CORE: '집중 연습',
+  REINFORCEMENT: '기초 복습',
+  STRETCH: '가벼운 도전',
+}
+
+const recommendationFeatureLabels: Record<string, string> = {
+  'PHONOLOGY.LIAISON.CODA_TO_SILENT_ONSET': '받침 뒤에 모음이 이어질 때 소리 연결하기',
+  'PHONOLOGY.LIAISON': '연음',
+  'PHONOLOGY.ASPIRATION': '거센소리 변화',
+  'PHONOLOGY.NASALIZATION': '비음화',
+  'PHONOLOGY.PALATALIZATION': '구개음화',
+  'PHONOLOGY.LIQUIDIZATION': '유음화',
+  'PHONOLOGY.TENSIFICATION': '된소리되기',
+  'PHONOLOGY.CODA_NEUTRALIZATION': '받침 대표음',
+  'SYLLABLE.COMPLEX_CODA': '겹받침 음절',
+  'WORD.DECODING': '낱말 읽기',
+  'SENTENCE.FLUENCY': '문장 유창성',
+}
+
+function recommendationRoleLabel(role: string): string {
+  return recommendationRoleLabels[role] ?? '맞춤 연습'
+}
+
+function recommendationFeatureLabel(featureCode: string): string {
+  if (recommendationFeatureLabels[featureCode]) {
+    return recommendationFeatureLabels[featureCode]
+  }
+  const finalPart = featureCode.split('.').at(-1) ?? ''
+  if (featureCode.startsWith('GRAPHEME.ONSET.TENSE.')) return `된소리 초성 ${finalPart}`
+  if (featureCode.startsWith('GRAPHEME.ONSET.ASPIRATED.')) return `거센소리 초성 ${finalPart}`
+  if (featureCode.startsWith('GRAPHEME.ONSET.')) return `첫소리 ${finalPart}`
+  if (featureCode.startsWith('GRAPHEME.VOWEL.')) return `모음 ${finalPart}`
+  if (featureCode.startsWith('GRAPHEME.CODA.COMPLEX.')) return `겹받침 ${finalPart}`
+  if (featureCode.startsWith('GRAPHEME.CODA.')) return `받침 ${finalPart}`
+  if (featureCode.startsWith('WORD.SYLLABLE_COUNT.')) return `${finalPart}음절 낱말`
+  return '읽기 기초'
+}
+
+function recommendationFeatureSummary(featureCodes: readonly string[]): string {
+  const codes = featureCodes.filter(
+    (code) =>
+      code !== 'PHONOLOGY.LIAISON' ||
+      !featureCodes.includes('PHONOLOGY.LIAISON.CODA_TO_SILENT_ONSET'),
+  )
+  return [...new Set(codes.map(recommendationFeatureLabel))].join(' · ') || '읽기 기초 다지기'
+}
+
+function closeAiRecommendationDetails(): void {
+  aiRecommendationDetailsOpen.value = false
+}
+
 function parseStudentId(value: unknown): number | null {
   const normalized = Array.isArray(value) ? value[0] : value
   const parsed = typeof normalized === 'string' ? Number(normalized) : Number.NaN
@@ -124,24 +186,22 @@ const studentId = computed(() => parseStudentId(route.params.id))
 const requestedCurriculumId = computed(() => parseStudentId(route.query.curriculumId))
 const invalidStudentId = computed(() => studentId.value === null)
 const canEditCurriculum = computed(() => canEditCurriculumFromStore.value)
+const isCurrentDraftAiRecommendation = computed(() => {
+  const appliedTemplateIds = aiRecommendationAppliedTemplateIds.value
+  return (
+    aiRecommendation.value !== null &&
+    appliedTemplateIds !== null &&
+    appliedTemplateIds.length === draftTrainingIds.value.length &&
+    appliedTemplateIds.every((templateId, index) => templateId === draftTrainingIds.value[index])
+  )
+})
 const canSave = computed(
   () =>
     hasChanges.value &&
-    draftTrainingIds.value.length === CURRICULUM_TRAINING_COUNT &&
     canEditCurriculum.value &&
     curriculumStatus.value === 'success' &&
     !isSavingCurriculum.value,
 )
-const curriculumSizeGuidance = computed(() => {
-  const difference = CURRICULUM_TRAINING_COUNT - draftTrainingIds.value.length
-  if (difference > 0) {
-    return `저장하려면 훈련을 ${difference}개 더 추가해 총 ${CURRICULUM_TRAINING_COUNT}개로 구성해야 합니다.`
-  }
-  if (difference < 0) {
-    return `저장하려면 훈련을 ${Math.abs(difference)}개 삭제해 총 ${CURRICULUM_TRAINING_COUNT}개로 구성해야 합니다.`
-  }
-  return null
-})
 const showCurriculumFeedback = computed(
   () =>
     curriculumStatus.value === 'error' ||
@@ -149,7 +209,6 @@ const showCurriculumFeedback = computed(
     curriculumSynchronizationStatus.value === 'refreshing' ||
     curriculumSaveConflict.value ||
     Boolean(curriculumError.value) ||
-    (hasChanges.value && Boolean(curriculumSizeGuidance.value)) ||
     Boolean(savedCurriculum.value && !canEditCurriculum.value),
 )
 const selectedAttemptLabel = computed(() => {
@@ -176,22 +235,24 @@ const selectedCatalogTabId = computed(
 )
 const visibleCatalogRows = computed(() =>
   catalog.value
-    .map((item, catalogIndex) => ({ item, catalogIndex }))
     .filter(
-      ({ item }) =>
+      (item) =>
         selectedCatalogUnit.value === 'all' || item.unitName === selectedCatalogUnit.value,
-    ),
+    )
+    .map((item, rowIndex) => ({ item, rowIndex })),
 )
 
 watch(
   [studentId, requestedCurriculumId],
   async ([id, curriculumId]) => {
     materialEditorOpen.value = false
-    draftPendingDeletion.value = null
+    draftPendingDeletionKey.value = null
     selectedCatalogUnit.value = 'all'
     aiRecommendationStatus.value = 'idle'
     aiRecommendationError.value = null
     aiRecommendation.value = null
+    aiRecommendationDetailsOpen.value = false
+    aiRecommendationAppliedTemplateIds.value = null
     cancelPointerDragging()
     if (id === null) {
       trainingStore.reset()
@@ -205,7 +266,7 @@ watch(
 watch(curriculumSynchronizationStatus, (status) => {
   if (status === 'synced') return
   materialEditorOpen.value = false
-  draftPendingDeletion.value = null
+  draftPendingDeletionKey.value = null
   cancelPointerDragging()
 })
 
@@ -213,6 +274,10 @@ watch(catalogUnitTabs, (tabs) => {
   if (!tabs.some((tab) => tab.key === selectedCatalogUnit.value)) {
     selectedCatalogUnit.value = 'all'
   }
+})
+
+watch(isCurrentDraftAiRecommendation, (isCurrent) => {
+  if (!isCurrent) aiRecommendationDetailsOpen.value = false
 })
 
 function confirmDiscard(): boolean {
@@ -391,29 +456,33 @@ async function openMaterialEditor(item: CurriculumDraftItem): Promise<void> {
 
 async function requestDraftDeletion(item: CurriculumDraftItem): Promise<void> {
   if (!canEditCurriculum.value) return
+  if (draftPendingDeletionKey.value === item.key) {
+    trainingStore.removeDraftItem(item.key)
+    draftPendingDeletionKey.value = null
+    trainingStore.setLessonMaterialEditingState(null)
+    materialEditorOpen.value = false
+    return
+  }
   if (studentId.value !== null && item.trainingId !== null) {
     await selectDraftItem(item)
   }
-  draftPendingDeletion.value = item
-}
-
-function confirmDraftDeletion(): void {
-  if (!draftPendingDeletion.value) return
-  trainingStore.removeDraftItem(draftPendingDeletion.value.key)
-  draftPendingDeletion.value = null
-  trainingStore.setLessonMaterialEditingState(null)
-  materialEditorOpen.value = false
+  draftPendingDeletionKey.value = item.key
 }
 
 async function saveChanges(): Promise<void> {
+  if (draftTrainingIds.value.length !== CURRICULUM_TRAINING_COUNT) {
+    triggerToast(`커리큘럼은 ${CURRICULUM_TRAINING_COUNT}개의 훈련으로 구성해야 합니다.`)
+    return
+  }
   if (await trainingStore.saveCurriculum()) {
-    showSaved()
+    triggerToast('커리큘럼 변경 사항이 저장되었습니다.')
   }
 }
 
-async function loadAiRecommendation(): Promise<void> {
+async function loadAiRecommendation(options: { confirmReplacement?: boolean } = {}): Promise<void> {
   if (studentId.value === null || !canEditCurriculum.value) return
   if (
+    options.confirmReplacement !== false &&
     hasChanges.value &&
     !window.confirm('현재 편집 중인 커리큘럼을 AI 추천 5개로 바꿀까요?')
   ) {
@@ -422,6 +491,7 @@ async function loadAiRecommendation(): Promise<void> {
 
   aiRecommendationStatus.value = 'loading'
   aiRecommendationError.value = null
+  aiRecommendationDetailsOpen.value = false
   try {
     const result = await apiRequest<AiCurriculumRecommendation>(
       `/api/admin/training/${studentId.value}/ai-recommendation`,
@@ -434,13 +504,31 @@ async function loadAiRecommendation(): Promise<void> {
       throw new Error('AI 추천을 현재 커리큘럼 편집 목록에 적용할 수 없습니다.')
     }
     aiRecommendation.value = result
+    aiRecommendationAppliedTemplateIds.value = result.recommendations.map(
+      (item) => item.trainingTemplateId,
+    )
     aiRecommendationStatus.value = 'success'
+    triggerToast('커리큘럼이 생성되었습니다.')
   } catch (error) {
     aiRecommendation.value = null
+    aiRecommendationAppliedTemplateIds.value = null
     aiRecommendationStatus.value = 'error'
+    aiRecommendationDetailsOpen.value = false
     aiRecommendationError.value =
       error instanceof Error ? error.message : 'AI 추천을 불러오지 못했습니다.'
   }
+}
+
+async function handleAiRecommendationStar(): Promise<void> {
+  if (isCurrentDraftAiRecommendation.value) {
+    aiRecommendationDetailsOpen.value = !aiRecommendationDetailsOpen.value
+    return
+  }
+  await loadAiRecommendation()
+}
+
+async function regenerateAiRecommendation(): Promise<void> {
+  await loadAiRecommendation({ confirmReplacement: false })
 }
 
 async function retryResources(): Promise<void> {
@@ -475,7 +563,7 @@ async function saveLessonMaterial(
   request: Parameters<typeof trainingStore.saveSelectedLessonMaterial>[0],
 ): Promise<void> {
   if (await trainingStore.saveSelectedLessonMaterial(request)) {
-    showSaved()
+    triggerToast('교안 내용이 저장되었습니다.')
   }
 }
 
@@ -530,10 +618,9 @@ async function reloadLatestLessonMaterial(): Promise<void> {
   }
 }
 
-function deletionMessage(): string {
-  const item = draftPendingDeletion.value
-  if (!item) return ''
-  return `${attemptLabel(item)}을(를) 다음 회차에서 제거합니다.`
+function addTraining(templateId: number): void {
+  trainingStore.selectTemplate(templateId)
+  trainingStore.addSelectedTemplate()
 }
 </script>
 
@@ -541,7 +628,7 @@ function deletionMessage(): string {
   <div class="curriculum page-stack">
     <PageHeader title="커리큘럼 관리">
       <template #actions>
-        <SaveToast :visible="saved" inline message="커리큘럼 변경 사항이 저장되었습니다." />
+        <SaveToast :visible="saved" :message="toastMessage" />
       </template>
     </PageHeader>
 
@@ -601,7 +688,6 @@ function deletionMessage(): string {
             <div>
               <h2>전체 훈련 목록</h2>
             </div>
-            <span>{{ catalog.length }}개 훈련</span>
           </header>
 
           <div
@@ -641,109 +727,90 @@ function deletionMessage(): string {
             :aria-labelledby="`catalog-tab-${selectedCatalogTabId}`"
           >
             <div class="curriculum-table__head">
-              <span>순서</span><span>영역</span><span>훈련명</span><span>진행률</span>
+              <span>순서</span><span>훈련명</span><span>진행률</span><span></span>
             </div>
-            <Button
-              v-for="{ item, catalogIndex } in visibleCatalogRows"
+            <div
+              v-for="{ item, rowIndex } in visibleCatalogRows"
               :key="item.trainingTemplateId"
               class="curriculum-row"
               :class="{ active: item.trainingTemplateId === selectedTemplateId }"
-              type="button"
+              tabindex="0"
+              role="button"
               :aria-pressed="item.trainingTemplateId === selectedTemplateId"
               @click="trainingStore.selectTemplate(item.trainingTemplateId)"
+              @keydown.enter="trainingStore.selectTemplate(item.trainingTemplateId)"
+              @keydown.space.prevent="trainingStore.selectTemplate(item.trainingTemplateId)"
             >
-              <b>{{ catalogIndex + 1 }}</b>
-              <span class="unit-label">{{ item.unitName }}</span>
-              <strong>{{ item.trainingName }}</strong>
-              <span class="achievement">
-                <b>
-                  {{
-                    item.studentAchievementRate === null ? '—' : `${item.studentAchievementRate}%`
-                  }}
-                </b>
-                <small>{{ achievementLabel(item.studentAchievementRate) }}</small>
+              <b>{{ rowIndex + 1 }}</b>
+              <span class="training-info">
+                <span v-if="selectedCatalogUnit === 'ALL'" class="unit-badge">{{ item.unitName }}</span>
+                <strong>{{ item.trainingName }}</strong>
               </span>
-            </Button>
+              <span class="achievement">
+                <b>{{ item.studentAchievementRate === null ? '—' : `${item.studentAchievementRate}%` }}</b>
+              </span>
+              <span class="curriculum-row__action">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  class="add-training-btn"
+                  :disabled="!canEditCurriculum || isSavingCurriculum"
+                  @click.stop="addTraining(item.trainingTemplateId)"
+                >
+                  학습 추가
+                </Button>
+              </span>
+            </div>
           </div>
         </Card>
 
         <Card class="curriculum-panel">
-          <section class="selected-training">
-            <header class="section-heading">
-              <h2>선택한 훈련</h2>
-            </header>
-            <template v-if="selectedTemplate">
-              <div class="selected-training__identity">
-                <strong>{{ selectedTemplate.trainingName }}</strong>
-                <span>{{ selectedTemplate.unitName }} · {{ selectedTemplate.sequence }}단계</span>
-              </div>
-              <dl>
-                <div>
-                  <dt>현재 진행률</dt>
-                  <dd>
-                    {{
-                      selectedTemplate.studentAchievementRate === null
-                        ? '미수행(평가 기록 없음)'
-                        : `${selectedTemplate.studentAchievementRate}%`
-                    }}
-                  </dd>
-                </div>
-                <div>
-                  <dt>학습 판단</dt>
-                  <dd>{{ achievementLabel(selectedTemplate.studentAchievementRate) }}</dd>
-                </div>
-                <div>
-                  <dt>다음 회차 포함</dt>
-                  <dd>
-                    {{
-                      draftItems.filter(
-                        (item) => item.trainingTemplateId === selectedTemplate?.trainingTemplateId,
-                      ).length
-                    }}회
-                  </dd>
-                </div>
-              </dl>
-              <div class="selected-training__actions">
-                <Button
-                  variant="outline"
-                  type="button"
-                  :disabled="!canEditCurriculum || isSavingCurriculum"
-                  @click="trainingStore.addSelectedTemplate"
-                >
-                  다음 회차에 1회 추가
-                </Button>
-              </div>
-            </template>
-            <p v-else class="section-state">전체 훈련 목록에서 훈련을 선택해 주세요.</p>
-          </section>
 
           <section class="next-session">
             <header class="section-heading next-session__heading">
               <div>
                 <h2>다음 회차 순서</h2>
                 <p v-if="curriculumStatus === 'loading'">커리큘럼을 불러오는 중입니다.</p>
-                <p v-else-if="savedCurriculum">
-                  {{ draftItems.length }}회 시행 · {{ trainingStatusLabel(savedCurriculum.status) }}
-                </p>
-                <p v-else>저장된 다음 회차가 없습니다. 훈련을 추가해 새로 구성하세요.</p>
               </div>
               <div class="next-session__actions">
                 <Button
-                  variant="outline"
-                  size="sm"
+                  class="ai-recommendation-toggle"
+                  :class="{
+                    'is-ai-active': isCurrentDraftAiRecommendation,
+                    'is-loading': aiRecommendationStatus === 'loading',
+                  }"
+                  variant="ghost"
+                  size="icon"
                   type="button"
+                  aria-controls="ai-recommendation-details"
+                  :aria-expanded="aiRecommendationDetailsOpen"
                   :disabled="
                     !canEditCurriculum ||
                     aiRecommendationStatus === 'loading' ||
                     isSavingCurriculum
                   "
-                  @click="loadAiRecommendation"
-                >
-                  {{
+                  :aria-label="
                     aiRecommendationStatus === 'loading'
-                      ? 'AI 추천 중...'
-                      : 'AI 추천 불러오기'
-                  }}
+                      ? 'AI 커리큘럼 생성 중'
+                      : isCurrentDraftAiRecommendation
+                        ? aiRecommendationDetailsOpen
+                          ? 'AI 추천 설명 닫기'
+                          : 'AI 추천 설명 보기'
+                        : 'AI 커리큘럼 생성'
+                  "
+                  :title="
+                    aiRecommendationStatus === 'loading'
+                      ? 'AI 커리큘럼 생성 중'
+                      : isCurrentDraftAiRecommendation
+                        ? aiRecommendationDetailsOpen
+                          ? 'AI 추천 설명 닫기'
+                          : 'AI 추천 설명 보기'
+                        : 'AI 커리큘럼 생성'
+                  "
+                  @click="handleAiRecommendationStar"
+                >
+                  <Sparkles aria-hidden="true" />
                 </Button>
                 <Button
                   class="save-curriculum-button"
@@ -771,24 +838,68 @@ function deletionMessage(): string {
               {{ aiRecommendationError }}
             </div>
             <div
-              v-else-if="aiRecommendation"
+              v-else-if="aiRecommendation && isCurrentDraftAiRecommendation"
+              v-show="aiRecommendationDetailsOpen"
+              id="ai-recommendation-details"
               class="ai-recommendation-preview"
               aria-live="polite"
+              role="status"
             >
-              <strong>
-                AI 추천 적용 · {{ aiRecommendation.recommendationProvider }} · 현재 단계
-                {{ aiRecommendation.currentStage }} / 허용 {{ aiRecommendation.maximumAllowedStage }}
-              </strong>
-              <ol>
-                <li v-for="item in aiRecommendation.recommendations" :key="item.trainingTemplateId">
-                  <span>{{ item.role }}</span>
-                  {{ item.trainingName }}
-                  <small>{{ item.targetFeatureCodes.join(', ') }}</small>
+              <header class="ai-recommendation-preview__header">
+                <span class="ai-recommendation-preview__icon" aria-hidden="true">
+                  <Sparkles />
+                </span>
+                <div class="ai-recommendation-preview__title">
+                  <small>AI 커리큘럼 제안</small>
+                  <strong>학습 기록을 바탕으로 이렇게 구성했어요</strong>
+                </div>
+                <Button
+                  class="ai-recommendation-preview__close"
+                  variant="ghost"
+                  size="icon-sm"
+                  type="button"
+                  aria-label="AI 추천 설명 닫기"
+                  title="AI 추천 설명 닫기"
+                  @click="closeAiRecommendationDetails"
+                >
+                  <X aria-hidden="true" />
+                </Button>
+              </header>
+              <p class="ai-recommendation-preview__summary">
+                {{ aiRecommendation.stageRationale }}
+              </p>
+              <ol class="ai-recommendation-preview__list">
+                <li
+                  v-for="(item, index) in aiRecommendation.recommendations"
+                  :key="item.trainingTemplateId"
+                >
+                  <span class="ai-recommendation-preview__order">{{ index + 1 }}</span>
+                  <span>
+                    <strong>{{ item.trainingName }}</strong>
+                    <small>
+                      {{ recommendationRoleLabel(item.role) }} ·
+                      {{ recommendationFeatureSummary(item.targetFeatureCodes) }}
+                    </small>
+                  </span>
                 </li>
               </ol>
-              <p>{{ aiRecommendation.stageRationale }}</p>
+              <footer class="ai-recommendation-preview__footer">
+                <p class="ai-recommendation-preview__notice">
+                  추천 순서가 편집 목록에 반영되었습니다. 저장하기 전에 확인해 주세요.
+                </p>
+                <Button
+                  class="ai-recommendation-preview__regenerate"
+                  variant="outline"
+                  size="xs"
+                  type="button"
+                  :disabled="aiRecommendationStatus === 'loading'"
+                  @click="regenerateAiRecommendation"
+                >
+                  <Sparkles aria-hidden="true" />
+                  AI로 다시 생성
+                </Button>
+              </footer>
             </div>
-
             <div v-if="showCurriculumFeedback" class="curriculum-feedback" aria-live="polite">
               <div
                 v-if="curriculumStatus === 'error'"
@@ -863,13 +974,6 @@ function deletionMessage(): string {
                 {{ curriculumError }}
               </p>
               <p
-                v-else-if="hasChanges && curriculumSizeGuidance"
-                class="feedback-message is-guidance"
-                role="status"
-              >
-                {{ curriculumSizeGuidance }}
-              </p>
-              <p
                 v-else-if="savedCurriculum && !canEditCurriculum"
                 class="feedback-message"
                 role="status"
@@ -914,11 +1018,10 @@ function deletionMessage(): string {
                   :aria-pressed="selectedDraftItemKey === item.key"
                   @click="handleDraftItemClick(item, $event)"
                 >
-                  <small>{{ templateFor(item)?.unitName }} · {{ attemptNumber(item) }}회차</small>
+                  <small>{{ templateFor(item)?.unitName }}</small>
                   <strong>{{ templateFor(item)?.trainingName }}</strong>
                 </button>
                 <div class="recommendation-actions">
-                  <span v-if="item.trainingId === null" class="unsaved-label">저장 전</span>
                   <Button
                     class="material-edit-button"
                     variant="outline"
@@ -936,14 +1039,18 @@ function deletionMessage(): string {
                   <Button
                     v-if="canEditCurriculum"
                     class="remove-button"
+                    :class="{ 'is-confirming': draftPendingDeletionKey === item.key }"
                     variant="ghost"
                     size="icon-sm"
                     type="button"
-                    :aria-label="`${templateFor(item)?.trainingName ?? '훈련'} 삭제`"
+                    :aria-label="draftPendingDeletionKey === item.key ? '삭제 확인, 한 번 더 누르면 삭제' : '훈련 삭제'"
+                    :title="draftPendingDeletionKey === item.key ? '한 번 더 누르면 삭제됩니다' : '삭제'"
                     :disabled="!canEditCurriculum || isSavingCurriculum"
                     @click.stop="requestDraftDeletion(item)"
+                    @keydown.esc="draftPendingDeletionKey = null"
                   >
-                    ×
+                    <Check v-if="draftPendingDeletionKey === item.key" :size="16" aria-hidden="true" />
+                    <Trash2 v-else :size="16" aria-hidden="true" />
                   </Button>
                 </div>
               </article>
@@ -975,14 +1082,6 @@ function deletionMessage(): string {
       </div>
     </template>
 
-    <ConfirmDialog
-      :open="Boolean(draftPendingDeletion)"
-      title="다음 회차에서 훈련을 삭제할까요?"
-      :message="deletionMessage()"
-      confirm-label="훈련 삭제"
-      @cancel="draftPendingDeletion = null"
-      @confirm="confirmDraftDeletion"
-    />
 
     <ConfirmDialog
       :open="reviewConfirmOpen"
@@ -1194,7 +1293,7 @@ function deletionMessage(): string {
   display: grid;
   align-items: center;
   gap: 12px;
-  grid-template-columns: 46px 120px minmax(0, 1fr) 94px;
+  grid-template-columns: 46px minmax(0, 1fr) 72px 92px;
 }
 .curriculum-table__head {
   position: sticky;
@@ -1211,13 +1310,14 @@ function deletionMessage(): string {
 .curriculum-row {
   position: relative;
   width: 100%;
-  min-height: 58px;
-  padding: 10px 14px;
+  min-height: 52px;
+  padding: 8px 14px;
   border: 0;
   border-bottom: 1px solid var(--slate-200);
   background: transparent;
   color: var(--slate-700);
   text-align: left;
+  cursor: pointer;
 }
 .curriculum-row::before {
   position: absolute;
@@ -1238,106 +1338,239 @@ function deletionMessage(): string {
 .curriculum-row.active::before {
   background: var(--primary-600);
 }
-.unit-label {
-  color: var(--slate-500);
+.training-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+.unit-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--slate-100, #f1f5f9);
+  color: var(--slate-600, #475569);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .achievement {
-  display: grid;
-  justify-items: end;
-  gap: 1px;
-}
-.achievement small {
-  color: var(--slate-500);
-  font-size: 11px;
-}
-.selected-training {
-  padding-bottom: 10px;
-}
-.selected-training__identity {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-top: 14px;
-}
-.selected-training__identity strong {
-  color: var(--slate-900);
-  font-size: 15px;
-}
-.selected-training__identity span {
-  color: var(--slate-500);
-  font-size: 11px;
-}
-.selected-training dl {
-  display: grid;
-  gap: 8px;
-  margin: 17px 0 14px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.selected-training dl > div {
-  padding: 12px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: color-mix(in oklch, var(--muted) 35%, transparent);
-  text-align: center;
-}
-.selected-training dt {
-  color: var(--slate-500);
-  font-size: 12px;
-}
-.selected-training dd {
-  margin: 4px 0 0;
-  color: var(--slate-900);
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--slate-800, #1e293b);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
+}
+.curriculum-row__action {
+  display: flex;
+  justify-content: flex-end;
+}
+.curriculum-row .add-training-btn {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+.curriculum-row:hover .add-training-btn,
+.curriculum-row:focus-within .add-training-btn,
+.curriculum-row.active .add-training-btn {
+  opacity: 1;
+  visibility: visible;
 }
 .next-session {
-  margin-top: 14px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border);
+  margin-top: 0;
 }
 .next-session__actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
 }
+.ai-recommendation-toggle {
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--slate-400);
+}
+.ai-recommendation-toggle svg {
+  transition: fill 160ms ease, filter 160ms ease, transform 160ms ease;
+}
+.ai-recommendation-toggle.is-ai-active {
+  border-color: color-mix(in oklch, var(--primary-600) 42%, var(--border));
+  background: color-mix(in oklch, var(--primary-50) 74%, var(--white));
+  color: var(--primary-700);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary-500) 14%, transparent);
+}
+.ai-recommendation-toggle.is-ai-active svg {
+  fill: currentcolor;
+  filter: drop-shadow(0 0 4px color-mix(in oklch, var(--primary-500) 55%, transparent));
+}
+.ai-recommendation-toggle.is-loading svg {
+  animation: ai-star-pulse 800ms ease-in-out infinite alternate;
+}
+@keyframes ai-star-pulse {
+  to {
+    opacity: 0.45;
+    transform: scale(0.82) rotate(-8deg);
+  }
+}
 .ai-recommendation-preview {
+  position: relative;
   display: grid;
-  gap: 8px;
+  gap: 14px;
   margin-top: 10px;
-  padding: 12px 14px;
+  padding: 18px;
+  overflow: hidden;
   border: 1px solid color-mix(in oklch, var(--primary-600) 35%, var(--border));
-  border-radius: var(--radius-sm);
-  background: color-mix(in oklch, var(--primary-50) 55%, var(--white));
+  border-radius: 16px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklch, var(--primary-50) 78%, var(--white)) 0%,
+    var(--white) 72%
+  );
   color: var(--slate-700);
   font-size: 12px;
+  box-shadow: 0 12px 30px color-mix(in oklch, var(--primary-900) 9%, transparent);
+}
+.ai-recommendation-preview::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--primary-500), var(--primary-300), transparent);
+  content: '';
 }
 .ai-recommendation-preview.is-error {
   border-color: color-mix(in oklch, var(--danger-600) 35%, var(--border));
   color: var(--danger-600);
 }
-.ai-recommendation-preview ol {
+.ai-recommendation-preview__header {
   display: grid;
-  gap: 4px;
-  margin: 0;
-  padding-left: 20px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
 }
-.ai-recommendation-preview li span {
-  display: inline-block;
-  min-width: 104px;
+.ai-recommendation-preview__title {
+  display: grid;
+  gap: 2px;
+}
+.ai-recommendation-preview__close {
+  align-self: start;
+  border-radius: 999px;
+  color: var(--slate-400);
+}
+.ai-recommendation-preview__close:hover {
+  background: color-mix(in oklch, var(--slate-200) 55%, transparent);
+  color: var(--slate-700);
+}
+.ai-recommendation-preview__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 11px;
+  border-top: 1px solid color-mix(in oklch, var(--primary-600) 12%, var(--border));
+}
+.ai-recommendation-preview__header small {
   color: var(--primary-700);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.ai-recommendation-preview__header strong {
+  color: var(--slate-900);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.ai-recommendation-preview__icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--primary-600) 18%, transparent);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--primary-600) 13%, var(--white));
+  color: var(--primary-700);
+  box-shadow: 0 5px 12px color-mix(in oklch, var(--primary-700) 10%, transparent);
+}
+.ai-recommendation-preview__icon svg {
+  width: 17px;
+  height: 17px;
+}
+.ai-recommendation-preview__summary {
+  margin: 0;
+  padding: 11px 12px;
+  border-left: 3px solid color-mix(in oklch, var(--primary-600) 54%, transparent);
+  border-radius: 0 10px 10px 0;
+  background: color-mix(in oklch, var(--primary-50) 50%, transparent);
+  color: var(--slate-700);
+  line-height: 1.6;
+}
+.ai-recommendation-preview__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ai-recommendation-preview__list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid color-mix(in oklch, var(--primary-600) 16%, var(--border));
+  border-radius: 11px;
+  background: color-mix(in oklch, var(--white) 90%, transparent);
+  box-shadow: 0 3px 10px color-mix(in oklch, var(--primary-900) 4%, transparent);
+}
+.ai-recommendation-preview__list li > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.ai-recommendation-preview__list li strong {
+  overflow: hidden;
+  color: var(--slate-900);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-recommendation-preview__list li small {
+  color: var(--slate-500);
+  font-size: 10px;
+  line-height: 1.4;
+}
+.ai-recommendation-preview__order {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary-600) 12%, var(--white));
+  color: var(--primary-700);
+  font-size: 10px;
   font-weight: 800;
 }
-.ai-recommendation-preview li small {
-  display: block;
-  margin-left: 108px;
-  color: var(--slate-500);
-}
-.ai-recommendation-preview p {
+.ai-recommendation-preview__notice {
   margin: 0;
   color: var(--slate-500);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.ai-recommendation-preview__regenerate {
+  flex: none;
+  border-color: color-mix(in oklch, var(--primary-600) 26%, var(--border));
+  background: var(--white);
+  color: var(--primary-700);
+  box-shadow: 0 3px 9px color-mix(in oklch, var(--primary-900) 6%, transparent);
 }
 .curriculum-feedback {
   height: 92px;
@@ -1373,10 +1606,6 @@ function deletionMessage(): string {
 .feedback-message.is-error strong {
   color: var(--danger-600);
 }
-.feedback-message.is-guidance {
-  color: var(--primary-800);
-  font-weight: 700;
-}
 .recommendation-list {
   position: relative;
   display: grid;
@@ -1391,14 +1620,20 @@ function deletionMessage(): string {
   gap: 8px;
   padding: 10px 11px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: color-mix(in oklch, var(--muted) 25%, transparent);
+  border-radius: 10px;
+  background: var(--white);
   grid-template-columns: 20px 22px minmax(0, 1fr) auto;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
   transition: 150ms ease;
 }
+.recommendation-list article.editable:hover {
+  border-color: var(--slate-300);
+  box-shadow: 0 5px 14px rgb(15 23 42 / 8%);
+}
 .recommendation-list article.selected {
-  border-color: var(--primary-300);
+  border-color: var(--primary-400);
   background: var(--active-selection-background);
+  box-shadow: 0 5px 14px rgb(15 23 42 / 7%);
 }
 .recommendation-list article.editable {
   cursor: grab;
@@ -1407,9 +1642,11 @@ function deletionMessage(): string {
   cursor: grab;
 }
 .recommendation-list article.dragging {
-  z-index: 2;
-  opacity: 0.78;
-  box-shadow: var(--shadow-card);
+  z-index: 3;
+  opacity: 1;
+  border-color: var(--primary-400);
+  background: var(--white);
+  box-shadow: 0 14px 30px rgb(15 23 42 / 18%);
   cursor: grabbing;
   transition: none;
 }
@@ -1433,8 +1670,16 @@ function deletionMessage(): string {
   touch-action: none;
 }
 .recommendation-order {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--slate-100);
   color: var(--slate-500);
   font-size: 12px;
+  font-weight: 800;
 }
 .recommendation-copy small,
 .recommendation-copy strong {
@@ -1477,6 +1722,10 @@ function deletionMessage(): string {
 .remove-button:hover {
   color: var(--danger-600);
 }
+.remove-button.is-confirming {
+  background: color-mix(in oklch, var(--danger-600) 12%, transparent);
+  color: var(--danger-600);
+}
 .draft-actions {
   display: flex;
   align-items: center;
@@ -1514,6 +1763,10 @@ function deletionMessage(): string {
   }
   .recommendation-actions {
     grid-column: 3;
+  }
+
+  .ai-recommendation-preview__list {
+    grid-template-columns: 1fr;
   }
 
   .draft-actions {

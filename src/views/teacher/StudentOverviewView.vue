@@ -1,23 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { AlertCircle } from '@lucide/vue'
-import type { EChartsOption } from 'echarts'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import ChartPanel from '@/components/common/ChartPanel.vue'
+import LearningTrendChart from '@/components/teacher/LearningTrendChart.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import StudentCommunicationPanel from '@/components/teacher/StudentCommunicationPanel.vue'
 import StudentLearningEvents from '@/components/teacher/StudentLearningEvents.vue'
-import StudentMetricRecords from '@/components/teacher/StudentMetricRecords.vue'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import {
-  appendSummaryToTeacherMemo,
-  formatLearningEventMemoSummary,
   normalizeTeacherMemo,
   validateTeacherMemo,
-  type StudentLearningEventDetail,
   type StudentLearningEvent,
   type StudentLearningEventType,
 } from '@/features/teacher/student'
@@ -71,26 +66,17 @@ const selectedEventDetailError = computed(() =>
     ? (studentStore.learningEventDetailErrorByKey[selectedEventKey.value] ?? null)
     : null,
 )
-const accuracyTrend = computed(
-  () => studentStore.accuracyTrendById[studentId.value]?.dailyAccuracy ?? [],
-)
 const accuracyTrendStatus = computed(
   () => studentStore.accuracyTrendStatusById[studentId.value] ?? 'idle',
 )
 const accuracyTrendError = computed(
   () => studentStore.accuracyTrendErrorById[studentId.value] ?? null,
 )
+const accuracyTrend = computed(
+  () => studentStore.accuracyTrendById[studentId.value] ?? null,
+)
 const accuracyRecords = computed(
   () => studentStore.accuracyRecordsById[studentId.value] ?? null,
-)
-const accuracyRecordsStatus = computed(
-  () => studentStore.accuracyRecordsStatusById[studentId.value] ?? 'idle',
-)
-const accuracyRecordsError = computed(
-  () => studentStore.accuracyRecordsErrorById[studentId.value] ?? null,
-)
-const readingSpeedTrend = computed(
-  () => studentStore.readingSpeedTrendById[studentId.value]?.points ?? [],
 )
 const readingSpeedTrendStatus = computed(
   () => studentStore.readingSpeedTrendStatusById[studentId.value] ?? 'idle',
@@ -98,123 +84,93 @@ const readingSpeedTrendStatus = computed(
 const readingSpeedTrendError = computed(
   () => studentStore.readingSpeedTrendErrorById[studentId.value] ?? null,
 )
+const readingSpeedTrend = computed(
+  () => studentStore.readingSpeedTrendById[studentId.value] ?? null,
+)
 const readingSpeedRecords = computed(
   () => studentStore.readingSpeedRecordsById[studentId.value] ?? null,
 )
-const readingSpeedRecordsStatus = computed(
-  () => studentStore.readingSpeedRecordsStatusById[studentId.value] ?? 'idle',
-)
-const readingSpeedRecordsError = computed(
-  () => studentStore.readingSpeedRecordsErrorById[studentId.value] ?? null,
-)
 const selectedTrend = ref<'accuracy' | 'reading-speed'>('accuracy')
-const selectedRecordsStatus = computed(() =>
-  selectedTrend.value === 'accuracy'
-    ? accuracyRecordsStatus.value
-    : readingSpeedRecordsStatus.value,
-)
-const selectedRecordsError = computed(() =>
-  selectedTrend.value === 'accuracy' ? accuracyRecordsError.value : readingSpeedRecordsError.value,
-)
-const accuracyChartSummary = computed(
-  () =>
-    `날짜별 읽기 정확도: ${accuracyTrend.value
-      .map((point) => `${point.date} ${point.accuracy}%`)
-      .join(', ')}`,
-)
-const accuracyChartOption = computed<EChartsOption>(() => ({
-  grid: { left: 42, right: 18, top: 24, bottom: 34 },
-  tooltip: {
-    trigger: 'axis',
-    valueFormatter: (value) => `${value}%`,
-  },
-  xAxis: {
-    type: 'category',
-    data: accuracyTrend.value.map((point) => point.date.slice(5).replace('-', '.')),
-    boundaryGap: false,
-  },
-  yAxis: {
-    type: 'value',
-    min: 0,
-    max: 100,
-    axisLabel: { formatter: '{value}%' },
-  },
-  series: [
-    {
-      type: 'line',
-      name: '읽기 정확도',
-      data: accuracyTrend.value.map((point) => point.accuracy),
-      smooth: true,
-      symbolSize: 8,
-      lineStyle: { width: 3 },
-      areaStyle: { opacity: 0.08 },
-    },
-  ],
-}))
-const readingSpeedChartSummary = computed(
-  () =>
-    `날짜별 읽기 속도: ${readingSpeedTrend.value
-      .map((point) => `${point.date} 분당 ${point.speed}개 정답 단어`)
-      .join(', ')}`,
-)
-
-function formatReadingDuration(milliseconds: number | null | undefined): string {
-  if (milliseconds === null || milliseconds === undefined) return '미측정'
-  return `${Number((milliseconds / 1_000).toFixed(1))}초`
+const recentLearningEvents = computed(() => learningEvents.value.slice(0, 4))
+const eventTypeLabels: Readonly<Record<StudentLearningEventType, string>> = {
+  TEST: '읽기 검사',
+  TRAINING: '훈련',
+  STORY: '이야기 학습',
+  GAZE: '시선 분석',
 }
 
-function readingSpeedTooltip(params: unknown): string {
-  const first = Array.isArray(params) ? params[0] : params
-  if (typeof first !== 'object' || first === null) return ''
-  const dataIndex = (first as { readonly dataIndex?: unknown }).dataIndex
-  if (typeof dataIndex !== 'number') return ''
-  const point = readingSpeedTrend.value[dataIndex]
-  if (!point) return ''
-  const correctWords =
-    point.correctWordCount === null || point.correctWordCount === undefined
-      ? '미측정'
-      : `${point.correctWordCount}개`
-  const trainings =
-    point.trainingCount === null || point.trainingCount === undefined
-      ? '미측정'
-      : `${point.trainingCount}회`
-  return [
-    point.date,
-    `읽기 속도: ${point.speed} 단어/분`,
-    `정답 단어: ${correctWords}`,
-    `음성 측정 시간: ${formatReadingDuration(point.measuredDurationMs)}`,
-    `포함 훈련: ${trainings}`,
-  ].join('<br>')
+function recordMatchesEvent(
+  record: { readonly sourceType: string; readonly sourceId: number },
+  event: StudentLearningEvent,
+): boolean {
+  return (
+    record.sourceId === event.sourceId &&
+    record.sourceType.toUpperCase() === event.eventType
+  )
 }
 
-const readingSpeedChartOption = computed<EChartsOption>(() => ({
-  grid: { left: 52, right: 18, top: 24, bottom: 34 },
-  tooltip: {
-    trigger: 'axis',
-    formatter: readingSpeedTooltip,
-  },
-  xAxis: {
-    type: 'category',
-    data: readingSpeedTrend.value.map((point) => point.date.slice(5).replace('-', '.')),
-    boundaryGap: false,
-  },
-  yAxis: {
-    type: 'value',
-    min: 0,
-    axisLabel: { formatter: '{value}' },
-  },
-  series: [
-    {
-      type: 'line',
-      name: '읽기 속도',
-      data: readingSpeedTrend.value.map((point) => point.speed),
-      smooth: true,
-      symbolSize: 8,
-      lineStyle: { width: 3 },
-      areaStyle: { opacity: 0.08 },
-    },
-  ],
-}))
+const accuracyChartPoints = computed(() => {
+  const eventPoints = [...recentLearningEvents.value].reverse().flatMap((event) => {
+    const record = accuracyRecords.value?.records.find((item) => recordMatchesEvent(item, event))
+    const value = event.accuracy ?? record?.accuracy
+    if (value === null || value === undefined) return []
+    return [{
+      date: event.occurredAt.slice(0, 10),
+      label: record?.trainingName ?? eventTypeLabels[event.eventType],
+      value,
+    }]
+  })
+  if (eventPoints.length >= 2) return eventPoints
+
+  const recordPoints = [...(accuracyRecords.value?.records ?? [])]
+    .sort((left, right) => left.measuredAt.localeCompare(right.measuredAt))
+    .slice(-4)
+    .map((record) => ({
+      date: record.measuredAt.slice(0, 10),
+      label: record.trainingName,
+      value: record.accuracy,
+  }))
+  if (recordPoints.length > 0) return recordPoints
+
+  const trendPoints = (accuracyTrend.value?.dailyAccuracy ?? []).slice(-4).map((point) => ({
+    date: point.date,
+    label: '읽기 정확도',
+    value: point.accuracy,
+  }))
+  return trendPoints.length > 0 ? trendPoints : eventPoints
+})
+
+const readingSpeedChartPoints = computed(() => {
+  const eventPoints = [...recentLearningEvents.value].reverse().flatMap((event) => {
+    const record = readingSpeedRecords.value?.records.find((item) =>
+      recordMatchesEvent(item, event),
+    )
+    if (!record) return []
+    return [{
+      date: event.occurredAt.slice(0, 10),
+      label: record.trainingName,
+      value: record.speed,
+    }]
+  })
+  if (eventPoints.length >= 2) return eventPoints
+
+  const recordPoints = [...(readingSpeedRecords.value?.records ?? [])]
+    .sort((left, right) => left.measuredAt.localeCompare(right.measuredAt))
+    .slice(-4)
+    .map((record) => ({
+      date: record.measuredAt.slice(0, 10),
+      label: record.trainingName,
+      value: record.speed,
+  }))
+  if (recordPoints.length > 0) return recordPoints
+
+  const trendPoints = (readingSpeedTrend.value?.points ?? []).slice(-4).map((point) => ({
+    date: point.date,
+    label: '읽기 속도',
+    value: point.speed,
+  }))
+  return trendPoints.length > 0 ? trendPoints : eventPoints
+})
 const selectedTrendStatus = computed(() =>
   selectedTrend.value === 'accuracy' ? accuracyTrendStatus.value : readingSpeedTrendStatus.value,
 )
@@ -223,8 +179,8 @@ const selectedTrendError = computed(() =>
 )
 const selectedTrendHasData = computed(() =>
   selectedTrend.value === 'accuracy'
-    ? accuracyTrend.value.length > 0
-    : readingSpeedTrend.value.length > 0,
+    ? accuracyChartPoints.value.length > 0
+    : readingSpeedChartPoints.value.length > 0,
 )
 const selectedTrendLoadingLabel = computed(() =>
   selectedTrend.value === 'accuracy'
@@ -241,11 +197,8 @@ const selectedTrendEmptyLabel = computed(() =>
     ? '표시할 읽기 정확도 데이터가 없습니다.'
     : '표시할 읽기 속도 데이터가 없습니다.',
 )
-const selectedTrendOption = computed(() =>
-  selectedTrend.value === 'accuracy' ? accuracyChartOption.value : readingSpeedChartOption.value,
-)
-const selectedTrendSummary = computed(() =>
-  selectedTrend.value === 'accuracy' ? accuracyChartSummary.value : readingSpeedChartSummary.value,
+const selectedTrendPoints = computed(() =>
+  selectedTrend.value === 'accuracy' ? accuracyChartPoints.value : readingSpeedChartPoints.value,
 )
 const selectedTrendAriaLabel = computed(() =>
   selectedTrend.value === 'accuracy'
@@ -312,7 +265,7 @@ async function loadOverview(nextStudentId: number): Promise<void> {
     studentStore.detailsById[nextStudentId] && studentStore.detailStaleById[nextStudentId] !== true
       ? Promise.resolve(studentStore.detailsById[nextStudentId])
       : studentStore.loadDetail(nextStudentId),
-    studentStore.loadLearningEvents(nextStudentId, 3),
+    studentStore.loadLearningEvents(nextStudentId, 4),
     studentStore.loadAccuracyTrend(nextStudentId),
     studentStore.loadAccuracyRecords(nextStudentId),
     studentStore.loadReadingSpeedTrend(nextStudentId),
@@ -364,18 +317,6 @@ async function selectLearningEvent(event: StudentLearningEvent): Promise<void> {
 
 async function retryLearningEvent(event: StudentLearningEvent): Promise<void> {
   await studentStore.loadLearningEvent(studentId.value, event.eventType, event.eventId)
-}
-
-function addLearningEventToMemo(event: StudentLearningEventDetail): void {
-  const summary = formatLearningEventMemoSummary(event)
-  const nextDraft = appendSummaryToTeacherMemo(noteDraft.value, summary)
-  const validationError = validateTeacherMemo(nextDraft)
-  if (validationError) {
-    memoError.value = validationError
-    return
-  }
-  noteDraft.value = nextDraft
-  memoError.value = ''
 }
 
 function openLearningEventHistory(
@@ -465,12 +406,40 @@ watch(studentId, loadOverview, { immediate: true })
     <template v-else>
       <PageHeader title="학습 현황" />
 
-
-
       <div class="learning-analysis">
-        <Card class="trend-panel" :aria-labelledby="`${selectedTrend}-tab`">
+        <aside class="recent-panel" aria-label="최근 학습 기록">
+          <StudentLearningEvents
+            :events="recentLearningEvents"
+            :selected-event-id="selectedEventId"
+            :selected-event-type="selectedEventType"
+            :pending-event-id="pendingEventId"
+            :pending-event-type="pendingEventType"
+            :detail="selectedEventDetail"
+            :list-status="learningEventsStatus"
+            :list-error="learningEventsError"
+            :detail-status="selectedEventDetailStatus"
+            :detail-error="selectedEventDetailError"
+            @select="selectLearningEvent"
+            @retry-list="studentStore.loadLearningEvents(detail.studentId, 4)"
+            @retry-detail="retryLearningEvent"
+            @open-history="openLearningEventHistory"
+          />
+          <RouterLink
+            class="history-link"
+            :to="{ name: 'student-training-history', params: { id: detail.studentId } }"
+          >
+            전체 훈련 이력 보기
+          </RouterLink>
+        </aside>
+
+        <Card class="trend-panel overflow-visible" :aria-labelledby="`${selectedTrend}-tab`">
           <header class="trend-heading">
             <div class="trend-tabs" role="tablist" aria-label="학습 변화 지표">
+              <div
+                class="trend-tabs__indicator"
+                :style="{ transform: selectedTrend === 'accuracy' ? 'translateX(0)' : 'translateX(100%)' }"
+                aria-hidden="true"
+              />
               <button
                 id="accuracy-tab"
                 class="trend-tab"
@@ -527,51 +496,21 @@ watch(studentId, loadOverview, { immediate: true })
             <div v-else-if="!selectedTrendHasData" class="insight-state">
               {{ selectedTrendEmptyLabel }}
             </div>
-            <ChartPanel
+            <LearningTrendChart
               v-else
-              :option="selectedTrendOption"
-              height="220px"
+              :key="`${selectedTrend}:${selectedTrend === 'accuracy'
+                ? accuracyChartPoints.length
+                : readingSpeedChartPoints.length}`"
+              :data-test="selectedTrend === 'accuracy' ? 'accuracy-chart' : 'reading-speed-chart'"
+              :points="selectedTrendPoints"
+              :unit="selectedTrend === 'accuracy' ? '%' : ' 단어/분'"
+              :color="selectedTrend === 'accuracy' ? '#2563eb' : '#16a34a'"
+              :max-value="selectedTrend === 'accuracy' ? 100 : undefined"
               :aria-label="selectedTrendAriaLabel"
-              :summary="selectedTrendSummary"
             />
           </div>
-
-          <StudentMetricRecords
-            :student-id="detail.studentId"
-            :selected-trend="selectedTrend"
-            :accuracy-records="accuracyRecords"
-            :reading-speed-records="readingSpeedRecords"
-            :status="selectedRecordsStatus"
-            :error="selectedRecordsError"
-            @retry="retrySelectedTrend"
-          />
         </Card>
 
-        <aside class="recent-panel" aria-label="최근 학습 기록">
-          <StudentLearningEvents
-            :events="learningEvents"
-            :selected-event-id="selectedEventId"
-            :selected-event-type="selectedEventType"
-            :pending-event-id="pendingEventId"
-            :pending-event-type="pendingEventType"
-            :detail="selectedEventDetail"
-            :list-status="learningEventsStatus"
-            :list-error="learningEventsError"
-            :detail-status="selectedEventDetailStatus"
-            :detail-error="selectedEventDetailError"
-            @select="selectLearningEvent"
-            @retry-list="studentStore.loadLearningEvents(detail.studentId, 3)"
-            @retry-detail="retryLearningEvent"
-            @add-to-memo="addLearningEventToMemo"
-            @open-history="openLearningEventHistory"
-          />
-          <RouterLink
-            class="history-link"
-            :to="{ name: 'student-training-history', params: { id: detail.studentId } }"
-          >
-            전체 훈련 이력 보기
-          </RouterLink>
-        </aside>
       </div>
 
       <StudentCommunicationPanel
@@ -590,7 +529,7 @@ watch(studentId, loadOverview, { immediate: true })
 .overview {
   width: 100%;
   min-width: 0;
-  max-width: 1120px;
+  max-width: 1200px;
   margin: 0 auto;
   gap: 20px;
   container-type: inline-size;
@@ -643,7 +582,7 @@ watch(studentId, loadOverview, { immediate: true })
   display: grid;
   align-items: stretch;
   gap: 24px;
-  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.75fr);
+  grid-template-columns: minmax(320px, 0.75fr) minmax(0, 1.45fr);
 }
 
 .trend-panel {
@@ -652,49 +591,71 @@ watch(studentId, loadOverview, { immediate: true })
   gap: 0;
   padding: 20px;
   border-radius: var(--radius-lg);
+  overflow: visible !important;
 }
 
 .trend-heading {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin: -4px -4px 14px;
+  margin: -4px 0 16px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
 
 .trend-tabs {
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  background: var(--slate-100, #f1f5f9);
+  border: 1px solid var(--slate-200, #e2e8f0);
+  border-radius: 9999px;
+}
+
+.trend-tabs__indicator {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12), 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
 }
 
 .trend-tab {
-  min-height: 44px;
-  padding: 0 14px;
+  position: relative;
+  z-index: 1;
+  min-height: 32px;
+  padding: 0 16px;
   border: 0;
-  border-bottom: 3px solid transparent;
+  border-radius: 9999px;
   background: transparent;
-  color: var(--slate-500);
+  color: var(--slate-600, #475569);
   font: inherit;
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
+  transition: color 0.2s ease;
+  user-select: none;
 }
 
 .trend-tab:hover {
-  color: var(--slate-800);
+  color: var(--slate-900, #0f172a);
 }
 
 .trend-tab.is-selected {
-  border-bottom-color: var(--primary-600);
-  color: var(--slate-950);
+  color: var(--primary-700, #1d4ed8);
+  font-weight: 700;
 }
 
 .trend-tab:focus-visible {
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  outline: 3px solid color-mix(in oklch, var(--ring) 44%, transparent);
-  outline-offset: -3px;
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
 }
 
 .trend-heading > :deep([data-slot='button']) {
@@ -702,11 +663,9 @@ watch(studentId, loadOverview, { immediate: true })
 }
 
 .trend-content {
+  position: relative;
   min-height: 250px;
-}
-
-.trend-panel :deep(.chart-panel) {
-  padding-top: 2px;
+  overflow: visible;
 }
 
 .recent-panel {

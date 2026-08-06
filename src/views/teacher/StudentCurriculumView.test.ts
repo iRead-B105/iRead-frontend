@@ -117,7 +117,7 @@ function dispatchPointerEvent(
 
 describe('StudentCurriculumView', () => {
   it('loads five AI recommendations into the editable draft without saving them', async () => {
-    const request = vi.spyOn(api, 'apiRequest').mockResolvedValueOnce({
+    const request = vi.spyOn(api, 'apiRequest').mockResolvedValue({
       recommendationProvider: 'openai',
       dataSufficiency: 'SUFFICIENT',
       currentStage: 3,
@@ -137,8 +137,11 @@ describe('StudentCurriculumView', () => {
       warnings: [],
     })
     const { wrapper, store } = await mountCurriculum(repository())
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    await buttonWithText(wrapper, 'AI 추천 불러오기')?.trigger('click')
+    const generateStar = wrapper.get('[aria-label="AI 커리큘럼 생성"]')
+    expect(generateStar.classes()).not.toContain('is-ai-active')
+    await generateStar.trigger('click')
     await flushPromises()
 
     expect(request).toHaveBeenCalledWith('/api/admin/training/1/ai-recommendation', {
@@ -146,7 +149,37 @@ describe('StudentCurriculumView', () => {
     })
     expect(store.draftTrainingIds).toEqual([1, 2, 3, 4, 5])
     expect(store.savedCurriculum).toEqual(currentCurriculumFixture)
-    expect(wrapper.text()).toContain('AI 추천 적용 · openai')
+    const details = wrapper.get('#ai-recommendation-details')
+    expect(details.isVisible()).toBe(false)
+
+    const activeStar = wrapper.get('[aria-label="AI 추천 설명 보기"]')
+    expect(activeStar.classes()).toContain('is-ai-active')
+    await activeStar.trigger('click')
+    expect(details.isVisible()).toBe(true)
+    expect(wrapper.text()).toContain('학습 기록을 바탕으로 이렇게 구성했어요')
+    expect(wrapper.text()).toContain('집중 연습 · 겹받침 ㄺ')
+    expect(wrapper.text()).not.toContain('GRAPHEME.CODA.COMPLEX.ㄺ')
+    expect(wrapper.text()).not.toContain('openai')
+
+    await wrapper.get('[aria-label="AI 추천 설명 닫기"]').trigger('click')
+    expect(details.isVisible()).toBe(false)
+    await wrapper.get('[aria-label="AI 추천 설명 보기"]').trigger('click')
+    expect(details.isVisible()).toBe(true)
+    await buttonWithText(wrapper, 'AI로 다시 생성')?.trigger('click')
+    await flushPromises()
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(details.isVisible()).toBe(false)
+
+    store.moveDraftItem(store.draftItems[0]!.key, store.draftItems[1]!.key)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('[aria-label="AI 커리큘럼 생성"]').classes()).not.toContain('is-ai-active')
+    expect(details.isVisible()).toBe(false)
+
+    await wrapper.get('[aria-label="AI 커리큘럼 생성"]').trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalled()
+    expect(request).toHaveBeenCalledTimes(3)
+    expect(wrapper.get('[aria-label="AI 추천 설명 보기"]').classes()).toContain('is-ai-active')
   })
 
   it('잘못된 studentId에서는 API를 호출하지 않고 목록 이동 action을 표시한다', async () => {
@@ -184,7 +217,7 @@ describe('StudentCurriculumView', () => {
 
     expect(wrapper.text()).toContain('저장된 다음 회차가 없습니다.')
     for (let index = 0; index < 5; index += 1) {
-      await buttonWithText(wrapper, '다음 회차에 1회 추가')?.trigger('click')
+      await buttonWithText(wrapper, '학습 추가')?.trigger('click')
       await flushPromises()
     }
     await buttonWithText(wrapper, '커리큘럼 생성')?.trigger('click')
@@ -224,11 +257,11 @@ describe('StudentCurriculumView', () => {
     expect(wrapper.findComponent(LessonMaterialEditor).exists()).toBe(false)
   })
 
-  it('성취도 null을 0%가 아니라 미수행 평가 기록 없음으로 표시한다', async () => {
+  it('성취도 null을 0%가 아니라 대시(—)로 표시한다', async () => {
     const { wrapper } = await mountCurriculum(repository())
 
     expect(wrapper.text()).toContain('31개 훈련')
-    expect(wrapper.text()).toContain('미수행(평가 기록 없음)')
+    expect(wrapper.text()).toContain('—')
     expect(wrapper.text()).not.toContain('모음 따라 보기0%')
   })
 
@@ -249,10 +282,13 @@ describe('StudentCurriculumView', () => {
 
     const filteredRows = wrapper.findAll('.curriculum-row')
     expect(filteredRows).toHaveLength(4)
-    expect(filteredRows.map((row) => row.find('.unit-label').text())).toEqual(
-      Array.from({ length: 4 }, () => '글자 만들기'),
-    )
-    expect(filteredRows.map((row) => row.find('b').text())).toEqual(['13', '14', '15', '16'])
+    expect(filteredRows.map((row) => row.find('.unit-badge').exists())).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ])
+    expect(filteredRows.map((row) => row.find('b').text())).toEqual(['1', '2', '3', '4'])
     expect(wrapper.get('[role="tabpanel"]').attributes('aria-labelledby')).toBe(
       wrapper.find('[role="tab"][aria-selected="true"]').attributes('id'),
     )
