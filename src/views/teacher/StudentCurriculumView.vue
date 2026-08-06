@@ -812,7 +812,7 @@ function addTraining(templateId: number): void {
                     'is-ai-active': isCurrentDraftAiRecommendation,
                     'is-loading': aiRecommendationStatus === 'loading',
                     'is-prompt-active':
-                      !aiRecommendation &&
+                      !isCurrentDraftAiRecommendation &&
                       canEditCurriculum &&
                       aiRecommendationStatus !== 'loading',
                   }"
