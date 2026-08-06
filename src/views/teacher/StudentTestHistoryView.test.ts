@@ -189,7 +189,7 @@ describe('StudentTestHistoryView', () => {
 
     await wrapper.get<HTMLSelectElement>('#comparison-test').setValue('1008')
     await flushPromises()
-    expect(wrapper.findAll('.detail-card')).toHaveLength(2)
+    expect(wrapper.findAll('.comparison-chip')).toHaveLength(1)
     expect(wrapper.text()).toContain('비교 1/2건')
   })
 

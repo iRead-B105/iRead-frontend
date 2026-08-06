@@ -287,8 +287,8 @@ const metricCharts = computed(() =>
             color: '#334155',
             fontSize: 10,
             fontWeight: 600,
-            formatter: (params) => {
-              const value = (params as { readonly value?: unknown }).value
+            formatter: (params: { readonly value?: unknown }) => {
+              const value = params.value
               return value === null || value === undefined ? '' : formatChartMetric(value, metric)
             },
           },

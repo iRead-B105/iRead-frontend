@@ -139,7 +139,7 @@ describe('StudentStoryHistoryView', () => {
     const { wrapper, pinia } = await mountView()
 
     expect(wrapper.text()).toContain('별빛 숲의 친구')
-    expect(wrapper.text()).toContain('100% · 9/12문장')
+    expect(wrapper.text()).toContain('100% · 9/12페이지')
     expect(useStoryHistoryStore(pinia).selectedStoryId).toBe(6801)
     expect(wrapper.text()).not.toContain('아직 이야기를 읽지 않았어요')
     expect(wrapper.text()).not.toContain('선택한 이야기')

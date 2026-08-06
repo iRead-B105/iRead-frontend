@@ -14,7 +14,6 @@ import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import { apiRequest } from '@/lib/api'
 import {
   CURRICULUM_TRAINING_COUNT,
-  trainingStatusLabel,
   type CurriculumDraftItem,
   type TrainingCatalogItem,
 } from '@/features/teacher/training'
@@ -30,7 +29,6 @@ const {
   selectedTemplateId,
   selectedDraftItemKey,
   selectedTrainingId,
-  selectedTemplate,
   selectedTraining,
   selectedTrainingDetail,
   selectedLessonMaterial,
@@ -293,13 +291,6 @@ onBeforeRouteUpdate((to) => {
 })
 
 onBeforeRouteLeave(() => confirmDiscard())
-
-function achievementLabel(value: number | null): string {
-  if (value === null) return '미수행(평가 기록 없음)'
-  if (value >= 80) return '충분'
-  if (value >= 60) return '보완 필요'
-  return '우선 학습'
-}
 
 function templateFor(item: CurriculumDraftItem): TrainingCatalogItem | null {
   return (

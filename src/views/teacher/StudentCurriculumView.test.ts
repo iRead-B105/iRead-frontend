@@ -215,7 +215,7 @@ describe('StudentCurriculumView', () => {
     })
     const { wrapper } = await mountCurriculum(trainingRepository)
 
-    expect(wrapper.text()).toContain('저장된 다음 회차가 없습니다.')
+    expect(wrapper.text()).toContain('다음 회차가 비어 있습니다.')
     for (let index = 0; index < 5; index += 1) {
       await buttonWithText(wrapper, '학습 추가')?.trigger('click')
       await flushPromises()
@@ -226,7 +226,7 @@ describe('StudentCurriculumView', () => {
     expect(createCurriculum).toHaveBeenCalledWith(1, {
       trainingTemplateIds: [1, 1, 1, 1, 1],
     })
-    expect(wrapper.text()).toContain('5회 시행')
+    expect(wrapper.findAll('.recommendation-list article')).toHaveLength(5)
   })
 
   it('실제 training ID가 있는 반복 시행에서만 교안 편집을 연다', async () => {
@@ -260,19 +260,19 @@ describe('StudentCurriculumView', () => {
   it('성취도 null을 0%가 아니라 대시(—)로 표시한다', async () => {
     const { wrapper } = await mountCurriculum(repository())
 
-    expect(wrapper.text()).toContain('31개 훈련')
+    expect(wrapper.text()).toContain('전체 28')
     expect(wrapper.text()).toContain('—')
     expect(wrapper.text()).not.toContain('모음 따라 보기0%')
   })
 
-  it('전체와 영역별 탭으로 31개 목록을 원래 순서 그대로 필터링한다', async () => {
+  it('전체와 영역별 탭으로 28개 목록을 원래 순서 그대로 필터링한다', async () => {
     const { wrapper, store } = await mountCurriculum(repository())
 
     const tabs = wrapper.findAll('[role="tab"]')
     expect(tabs[0]?.text()).toContain('전체')
-    expect(tabs[0]?.text()).toContain('31')
+    expect(tabs[0]?.text()).toContain('28')
     expect(tabs[0]?.attributes('aria-selected')).toBe('true')
-    expect(wrapper.findAll('.curriculum-row')).toHaveLength(31)
+    expect(wrapper.findAll('.curriculum-row')).toHaveLength(28)
     expect(store.catalog.map((item) => item.trainingTemplateId)).toEqual(
       trainingCatalogFixture.map((item) => item.trainingTemplateId),
     )
@@ -444,23 +444,21 @@ describe('StudentCurriculumView', () => {
     ).toBe(false)
   })
 
-  it('삭제 확인 후 선택한 훈련을 draft에서 제거한다', async () => {
+  it('삭제 버튼을 두 번 눌러 확인한 뒤 선택한 훈련을 draft에서 제거한다', async () => {
     const { wrapper, store } = await mountCurriculum(repository())
     const target = store.draftItems[0]!
 
     await wrapper.find('.remove-button').trigger('click')
     await flushPromises()
 
-    const confirmDialog = wrapper.findComponent(ConfirmDialog)
-    expect(confirmDialog.props('open')).toBe(true)
-    expect(confirmDialog.props('title')).toBe('다음 회차에서 훈련을 삭제할까요?')
-    confirmDialog.vm.$emit('confirm')
+    expect(wrapper.find('.remove-button').classes()).toContain('is-confirming')
+    expect(wrapper.find('.remove-button').attributes('aria-label')).toContain('한 번 더 누르면 삭제')
+    await wrapper.find('.remove-button').trigger('click')
     await flushPromises()
 
     expect(store.draftItems).toHaveLength(currentCurriculumFixture.trainings.length - 1)
     expect(store.draftItems.some((item) => item.key === target.key)).toBe(false)
-    expect(wrapper.text()).toContain('2회 시행')
-    expect(wrapper.text()).toContain('훈련을 3개 더 추가해 총 5개로 구성해야 합니다.')
+    expect(wrapper.findAll('.recommendation-list article')).toHaveLength(2)
   })
 
   it('검사 결과에서 지정한 추천 커리큘럼의 상태를 표시하고 최종 검수를 완료한다', async () => {

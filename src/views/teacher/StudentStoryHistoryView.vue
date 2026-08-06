@@ -40,7 +40,6 @@ const {
   query,
   storyTemplates,
   stories,
-  totalElements,
   totalPages,
   selectedStory,
   selectedStoryId,
@@ -264,7 +263,7 @@ function refreshEditedPage(): void {
               </time>
               <span class="story-title-tab__progress">
                 {{ story.generationProgress }}% ·
-                {{ story.readLineCount }}/{{ story.totalLineCount }}문장
+                {{ story.readLineCount }}/{{ story.totalLineCount }}페이지
               </span>
             </button>
           </div>

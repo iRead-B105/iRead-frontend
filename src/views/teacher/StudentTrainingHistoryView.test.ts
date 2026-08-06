@@ -6,15 +6,6 @@ import { TestTrainingRepository } from '@/test/repositories'
 import { useTrainingStore } from '@/stores/training'
 import StudentTrainingHistoryView from './StudentTrainingHistoryView.vue'
 
-const { saveDownloadMock } = vi.hoisted(() => ({
-  saveDownloadMock: vi.fn(),
-}))
-
-vi.mock('@/lib/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api')>()),
-  saveDownload: saveDownloadMock,
-}))
-
 async function mountHistory(
   repository: TestTrainingRepository,
   initialPath = '/teacher/students/1/training-history',
@@ -44,26 +35,11 @@ async function mountHistory(
     {
       global: {
         plugins: [pinia, router],
-        stubs: {
-          ChartPanel: {
-            props: ['ariaLabel', 'summary', 'option'],
-            computed: {
-              categories() {
-                return this.option.xAxis.data.join(', ')
-              },
-            },
-            template: '<div data-test="chart">{{ ariaLabel }} {{ categories }} {{ summary }}</div>',
-          },
-        },
       },
     },
   )
   await flushPromises()
   return { wrapper, router, store }
-}
-
-function buttonWithText(wrapper: ReturnType<typeof mount>, text: string) {
-  return wrapper.findAll('button').find((button) => button.text().includes(text))
 }
 
 describe('StudentTrainingHistoryView', () => {
@@ -80,41 +56,34 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('학습자 목록으로 이동')
   })
 
-  it('최신 커리큘럼의 첫 실제 훈련 상세·정확도 비교·시선 집계를 표시한다', async () => {
+  it('최신 커리큘럼의 평균 정확도·훈련별 정확도·문항 상세·시선 집계를 표시한다', async () => {
     const { wrapper } = await mountHistory(new TestTrainingRepository())
 
     const selectionCard = wrapper.get('[data-test="history-selection-card"]')
-    expect(selectionCard.findAll('.history-selection-section')).toHaveLength(2)
-    expect(selectionCard.get('.curriculum-section').text()).toContain('완료 커리큘럼')
-    expect(selectionCard.get('.training-section').text()).toContain('커리큘럼별 훈련')
-    expect(selectionCard.get('.training-section').classes()).toContain('history-selection-section')
+    const trainingCard = wrapper.get('.curriculum-overview')
+    expect(selectionCard.text()).toContain('완료한 커리큘럼')
+    expect(trainingCard.text()).toContain('학습 목록')
+    expect(selectionCard.text()).toContain('평균 정확도')
+    expect(trainingCard.text()).toContain('훈련 정확도')
 
     expect(wrapper.text()).toContain('2026.07.20')
     expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기')
     expect(wrapper.text()).toContain('8분 30초')
     expect(wrapper.text()).not.toContain('학습 판단')
     expect(wrapper.text()).toContain('전체 문항2건')
-    expect(wrapper.text()).toContain('정답1건')
-    expect(wrapper.text()).toContain('오답1건')
     expect(wrapper.text()).not.toContain('오답 문항에 한해 제공됩니다.')
     expect(wrapper.text()).toContain('다음 중 끝소리가 같은 낱말을 고르세요.')
     expect(wrapper.text()).toContain('보기: 꽃, 옷 / 꽃, 낮')
-    expect(wrapper.text()).toContain('음성 응답 완료 · 전사 데이터 없음')
+    expect(wrapper.text()).toContain('음성 응답 완료')
     expect(wrapper.text()).toContain('100점')
-    expect(wrapper.text()).toContain('선택 훈련 정확도 비교')
-    expect(wrapper.findAll('[data-test="chart"]')).toHaveLength(1)
-    expect(wrapper.get('[data-test="chart"]').text()).toContain(
-      '현재 훈련과 이전 훈련 정확도 막대그래프',
-    )
-    expect(wrapper.get('[data-test="chart"]').text()).toContain('이전 훈련, 현재 훈련')
-    expect(wrapper.get('[data-test="chart"]').text()).toContain('이전 훈련 정확도 70%')
+    expect(wrapper.text()).not.toContain('선택 훈련 정확도 비교')
+    expect(wrapper.find('[data-test="chart"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('음성 읽기 속도 추이')
     expect(wrapper.text()).not.toContain('아이 트래킹 기준')
     expect(wrapper.text()).toContain('훈련 시선 분석')
     expect(wrapper.text()).toContain('42.4초')
     expect(wrapper.text()).toContain('68회')
     expect(wrapper.text()).toContain('7회')
-    expect(wrapper.text()).toContain('의학적 진단 결과가 아닙니다.')
     expect(wrapper.text()).not.toContain('읽기 이탈')
     expect(wrapper.text()).not.toContain('권장합니다')
     expect(wrapper.text()).not.toContain('generatedData')
@@ -169,7 +138,7 @@ describe('StudentTrainingHistoryView', () => {
     await flushPromises()
     expect(store.historyGazeStatus).toBe('success')
     expect(wrapper.text()).toContain('시선 분석 데이터가 없습니다.')
-    expect(wrapper.get('[data-test="chart"]').text()).toContain('이전 훈련 정확도 기록 없음')
+    expect(wrapper.text()).not.toContain('선택 훈련 정확도 비교')
     expect(wrapper.text()).toContain('미제출')
     expect(wrapper.text()).toContain('채점 대상 아님')
     expect(wrapper.text()).toContain('정답 정보 없음')
@@ -220,19 +189,6 @@ describe('StudentTrainingHistoryView', () => {
     expect(zeroCurriculum?.text()).toContain('0%')
     expect(wrapper.text()).toContain('오답')
     expect(wrapper.text()).toContain('문항 원본 없음')
-  })
-
-  it('공통 saveDownload으로 선택 훈련 CSV를 저장한다', async () => {
-    saveDownloadMock.mockClear()
-    const { wrapper } = await mountHistory(new TestTrainingRepository())
-
-    await buttonWithText(wrapper, 'CSV 저장')?.trigger('click')
-    await flushPromises()
-
-    expect(saveDownloadMock).toHaveBeenCalledWith(
-      expect.objectContaining({ fileName: 'training-901-mock.csv' }),
-      'training-901.csv',
-    )
   })
 
   it('훈련 전환 중 상세와 시선 분석 외곽을 유지하고 내부 로딩 상태를 표시한다', async () => {

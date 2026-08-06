@@ -400,7 +400,10 @@ function formatQuestionScore(score: number | null): string | null {
                     </small>
                   </span>
                   <span class="training-accuracy__icon"><BarChart3Icon aria-hidden="true" /></span>
-                  <b>{{ formatAccuracy(training.accuracy) }}</b>
+                  <span class="training-row__accuracy">
+                    <small>훈련 정확도</small>
+                    <b>{{ formatAccuracy(training.accuracy) }}</b>
+                  </span>
                 </Button>
               </div>
               <p v-if="trainingLog?.trainings.length" class="curriculum-complete-note">
@@ -816,11 +819,24 @@ function formatQuestionScore(score: number | null): string | null {
   height: 16px;
 }
 
-.training-row > b {
+.training-row__accuracy {
   min-width: 64px;
+  text-align: right;
+}
+
+.training-row__accuracy small {
+  display: block;
+  color: var(--slate-500);
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.training-row__accuracy b {
+  display: block;
+  margin-top: 3px;
   color: var(--primary-600);
   font-size: 17px;
-  text-align: right;
 }
 
 .curriculum-complete-note {
@@ -881,36 +897,17 @@ function formatQuestionScore(score: number | null): string | null {
   color: var(--destructive);
 }
 
-.accuracy-comparison {
-  margin-top: 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--slate-200);
-}
-
-.accuracy-card .accuracy-comparison {
-  margin-top: 16px;
-  padding-top: 0;
-  border-top: 0;
-}
-
-.accuracy-comparison h3,
 .question-results h3 {
   margin: 0;
   font-size: 13px;
 }
 
-.accuracy-comparison dl,
 .detail-metrics {
   display: grid;
   gap: 8px;
   margin: 10px 0 0;
 }
 
-.accuracy-comparison dl {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.accuracy-comparison dl > div,
 .detail-metrics > div {
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -1134,7 +1131,6 @@ dd {
 @container (max-width: 720px) {
   .history-summary-grid,
   .detail-metrics,
-  .accuracy-comparison dl,
   .result-summary {
     grid-template-columns: 1fr;
   }
@@ -1175,8 +1171,15 @@ dd {
     display: none;
   }
 
-  .training-row > b {
+  .training-row__accuracy {
     min-width: 56px;
+  }
+
+  .training-row__accuracy small {
+    display: none;
+  }
+
+  .training-row__accuracy b {
     font-size: 14px;
   }
 
