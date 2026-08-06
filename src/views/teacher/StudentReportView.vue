@@ -43,14 +43,12 @@ const {
   detailStatus,
   createStatus,
   memoStatus,
-  gazeRefreshStatus,
   listError,
   listUiError,
   detailError,
   detailUiError,
   createError,
   memoError,
-  gazeRefreshError,
   duplicateReportId,
   memoDirty,
 } = storeToRefs(reportStore)
@@ -339,13 +337,10 @@ async function retryStudent(): Promise<void> {
             :memo-dirty="memoDirty"
             :memo-status="memoStatus"
             :memo-error="memoError"
-            :gaze-refresh-status="gazeRefreshStatus"
-            :gaze-refresh-error="gazeRefreshError"
             @update:teacher-memo-draft="reportStore.setTeacherMemoDraft"
             @back="reportStore.startNewReport()"
             @save-memo="reportStore.saveTeacherMemo()"
             @cancel-memo="reportStore.cancelTeacherMemo()"
-            @refresh-gaze="reportStore.refreshGazeTrend()"
           />
         </ReportPreview>
       </template>

@@ -434,6 +434,11 @@ onBeforeUnmount(() => copyResizeObserver?.disconnect())
   box-shadow: 0 0 0 0.06em rgb(37 99 235 / 42%);
 }
 
+.story-reader-word.is-replay-dwell {
+  background: linear-gradient(transparent 58%, rgb(168 85 247 / 40%) 58%);
+  box-shadow: 0 0 0 0.06em rgb(126 34 206 / 54%), 0 0 0.5em rgb(192 132 252 / 48%);
+}
+
 .story-reader-word.is-replay-regression {
   background: linear-gradient(transparent 58%, rgb(245 158 11 / 38%) 58%);
   box-shadow: 0 0 0 0.06em rgb(217 119 6 / 46%);
@@ -444,11 +449,6 @@ onBeforeUnmount(() => copyResizeObserver?.disconnect())
   box-shadow: 0 0 0 0.06em rgb(220 38 38 / 40%);
   text-decoration: underline dashed rgb(220 38 38 / 72%);
   text-underline-offset: 0.18em;
-}
-
-.story-reader-word.is-replay-dwell {
-  background: linear-gradient(transparent 58%, rgb(168 85 247 / 40%) 58%);
-  box-shadow: 0 0 0 0.06em rgb(126 34 206 / 54%), 0 0 0.5em rgb(192 132 252 / 48%);
 }
 
 .story-reader-word.is-heatmap-skipped {

@@ -88,7 +88,7 @@ const pageMovementSteps = computed<readonly ReplayStepView[]>(() => {
         key: `${event.pageNo}:${event.eventIndex}:${event.toTokenIndex}`,
         order: index + 1,
         label: tokenLabel(wordByTokenIndex.value.get(event.toTokenIndex), event.toTokenIndex),
-        detail: `${movementLabel} · ${formatOffset(event.eventAtMs)}`,
+        detail: `${movementLabel} · 발생 시점 ${formatOffset(event.eventAtMs)} · 체류 ${formatGazeDuration(event.dwellDurationMs)} · ${event.dwellQualified ? '체류 조건 충족' : '체류 조건 미충족'}`,
         kind,
         tokenIndexes: kind === 'skip'
           ? [...new Set([...event.skippedTokenIndexes, event.toTokenIndex])]
@@ -271,6 +271,12 @@ onBeforeUnmount(stopReplay)
           </div>
           <span>{{ replayDataLabel }}</span>
         </header>
+        <div class="story-page-replay__legend" aria-label="리플레이 판정 기준">
+          <span><i class="is-read" />읽음</span>
+          <span><i class="is-regression" />역행</span>
+          <span><i class="is-skip" />건너뜀</span>
+          <span><i class="is-dwell" />체류 조건 충족</span>
+        </div>
         <div class="story-page-replay__stage">
           <b aria-hidden="true">{{ visibleReplayStep.order }}</b>
           <div>
@@ -440,6 +446,45 @@ onBeforeUnmount(stopReplay)
 .story-page-section-heading span {
   color: var(--slate-500);
   font-size: 10px;
+}
+
+.story-page-replay__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 10px;
+  color: var(--slate-600);
+  font-size: 10px;
+}
+
+.story-page-replay__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.story-page-replay__legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: rgb(96 165 250 / 34%);
+  box-shadow: 0 0 0 1px rgb(37 99 235 / 42%);
+}
+
+.story-page-replay__legend i.is-regression {
+  background: rgb(245 158 11 / 38%);
+  box-shadow: 0 0 0 1px rgb(217 119 6 / 46%);
+}
+
+.story-page-replay__legend i.is-skip {
+  background: rgb(220 38 38 / 24%);
+  box-shadow: 0 0 0 1px rgb(220 38 38 / 40%);
+}
+
+.story-page-replay__legend i.is-dwell {
+  background: rgb(168 85 247 / 40%);
+  box-shadow: 0 0 0 1px rgb(126 34 206 / 54%);
 }
 
 .story-page-replay__stage {

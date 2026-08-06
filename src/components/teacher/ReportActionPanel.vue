@@ -1,21 +1,16 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button'
-import type {
-  ReportGazeRefreshStatus,
-  ReportMemoStatus,
-} from '@/features/teacher/report'
+import type { ReportMemoStatus } from '@/features/teacher/report'
 
 defineProps<{
   memoDirty: boolean
   memoStatus: ReportMemoStatus
-  gazeRefreshStatus: ReportGazeRefreshStatus
 }>()
 
 const emit = defineEmits<{
   back: []
   saveMemo: []
   cancelMemo: []
-  refreshGaze: []
 }>()
 </script>
 
@@ -25,14 +20,6 @@ const emit = defineEmits<{
       보고서 목록
     </Button>
     <div class="report-actions__group">
-      <Button
-        variant="outline"
-        type="button"
-        :disabled="gazeRefreshStatus === 'refreshing'"
-        @click="emit('refreshGaze')"
-      >
-        {{ gazeRefreshStatus === 'refreshing' ? '시선 결과 갱신 중…' : '시선 결과 갱신' }}
-      </Button>
       <Button
         variant="ghost"
         type="button"

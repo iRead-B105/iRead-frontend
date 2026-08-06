@@ -10,7 +10,6 @@ import {
   hasAlignedReportLearningMetrics,
   REPORT_MEMO_MAX_LENGTH,
   type ReportDetail,
-  type ReportGazeRefreshStatus,
   type ReportMemoStatus,
 } from '@/features/teacher/report'
 
@@ -24,8 +23,6 @@ const props = defineProps<{
   memoDirty: boolean
   memoStatus: ReportMemoStatus
   memoError: string | null
-  gazeRefreshStatus: ReportGazeRefreshStatus
-  gazeRefreshError: string | null
 }>()
 
 const alignedLearningMetrics = computed(() =>
@@ -37,7 +34,6 @@ const emit = defineEmits<{
   back: []
   saveMemo: []
   cancelMemo: []
-  refreshGaze: []
 }>()
 </script>
 
@@ -113,17 +109,12 @@ const emit = defineEmits<{
         교수자 의견을 저장했습니다.
       </p>
       <p v-if="memoError" class="error-state" role="alert">{{ memoError }}</p>
-      <p v-if="gazeRefreshError" class="error-state" role="alert">
-        {{ gazeRefreshError }}
-      </p>
       <ReportActionPanel
         :memo-dirty="memoDirty"
         :memo-status="memoStatus"
-        :gaze-refresh-status="gazeRefreshStatus"
         @back="emit('back')"
         @save-memo="emit('saveMemo')"
         @cancel-memo="emit('cancelMemo')"
-        @refresh-gaze="emit('refreshGaze')"
       />
     </section>
 
