@@ -116,7 +116,7 @@ function dispatchPointerEvent(
 }
 
 describe('StudentCurriculumView', () => {
-  it('loads five AI recommendations into the editable draft without saving them', async () => {
+  it('AI 추천을 적용하면 즉시 저장해 교안 생성을 시작한다', async () => {
     const request = vi.spyOn(api, 'apiRequest').mockResolvedValue({
       recommendationProvider: 'openai',
       dataSufficiency: 'SUFFICIENT',
@@ -136,7 +136,20 @@ describe('StudentCurriculumView', () => {
       })),
       warnings: [],
     })
-    const { wrapper, store } = await mountCurriculum(repository())
+    const savedFromRecommendation: DailyCurriculum = {
+      curriculumId: 201,
+      status: 'NOT_STARTED',
+      trainings: [1, 2, 3, 4, 5].map((trainingTemplateId, index) => ({
+        trainingId: 900 + index,
+        trainingTemplateId,
+        sequence: index + 1,
+        unitName: '글자 따라 보기',
+        trainingName: `AI 추천 ${trainingTemplateId}`,
+        status: 'NOT_READY' as const,
+      })),
+    }
+    const updateCurriculum = vi.fn().mockResolvedValue(savedFromRecommendation)
+    const { wrapper, store } = await mountCurriculum(repository({ updateCurriculum }))
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     const aiToggleBtn = wrapper.get('.ai-recommendation-toggle')
@@ -148,8 +161,12 @@ describe('StudentCurriculumView', () => {
     expect(request).toHaveBeenCalledWith('/api/admin/training/1/ai-recommendation', {
       method: 'POST',
     })
+    // 추천 적용 직후 자동 저장되어 교안 생성이 시작된다
+    expect(updateCurriculum).toHaveBeenCalledWith(1, 201, {
+      trainingTemplateIds: [1, 2, 3, 4, 5],
+    })
     expect(store.draftTrainingIds).toEqual([1, 2, 3, 4, 5])
-    expect(store.savedCurriculum).toEqual(currentCurriculumFixture)
+    expect(store.savedCurriculum).toEqual(savedFromRecommendation)
     expect(aiToggleBtn.classes()).toContain('is-ai-active')
     const details = wrapper.get('#ai-recommendation-details')
     expect(details.isVisible()).toBe(true)
@@ -158,10 +175,14 @@ describe('StudentCurriculumView', () => {
     expect(wrapper.text()).not.toContain('GRAPHEME.CODA.COMPLEX.ㄺ')
     expect(wrapper.text()).not.toContain('openai')
 
-    await aiToggleBtn.trigger('click')
-    await flushPromises()
-    expect(request).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('#ai-recommendation-details').exists()).toBe(true)
+    // 교안이 만들어지기 전(NOT_READY)에는 편집 버튼이 비활성 상태로 생성 중임을 알린다
+    const pendingButtons = wrapper
+      .findAll('button')
+      .filter((button) => button.text().includes('교안 생성 중'))
+    expect(pendingButtons).toHaveLength(5)
+    expect(pendingButtons.every((button) => button.attributes('disabled') !== undefined)).toBe(
+      true,
+    )
 
     store.moveDraftItem(store.draftItems[0]!.key, store.draftItems[1]!.key)
     await wrapper.vm.$nextTick()
@@ -216,26 +237,30 @@ describe('StudentCurriculumView', () => {
     expect(wrapper.text()).toContain('커리큘럼 변경 사항이 저장되었습니다.')
   })
 
-  it('실제 training ID가 있는 반복 시행에서만 교안 편집을 연다', async () => {
+  it('교안이 준비된 훈련만 편집을 열고 생성 전 훈련은 비활성화한다', async () => {
     const getLessonMaterial = vi.fn().mockResolvedValue(undefined as never)
     const { wrapper } = await mountCurriculum(repository({ getLessonMaterial }))
 
+    // 교안이 준비된 훈련(101, 103)만 편집 가능하고, 생성 전(102)은 비활성이다
     const editorButtons = wrapper
       .findAll('button')
       .filter((button) => button.text().includes('교안 편집'))
-    expect(editorButtons).toHaveLength(3)
-    await editorButtons[1]?.trigger('click')
+    expect(editorButtons).toHaveLength(2)
+    const pendingButtons = wrapper
+      .findAll('button')
+      .filter((button) => button.text().includes('교안 생성 중'))
+    expect(pendingButtons).toHaveLength(1)
+    expect(pendingButtons[0]?.attributes('disabled')).toBeDefined()
+
+    await editorButtons[0]?.trigger('click')
     await flushPromises()
 
     expect(getLessonMaterial).toHaveBeenCalledWith(
       1,
-      102,
+      101,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
     expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기')
-    expect(wrapper.text()).not.toContain('2/2회차')
-    expect(wrapper.text()).toContain('읽기 전용')
-    expect(wrapper.text()).not.toContain('자료 추가')
     expect(wrapper.text()).not.toContain('훈련 기본 정보')
 
     const editor = wrapper.findComponent(LessonMaterialEditor)

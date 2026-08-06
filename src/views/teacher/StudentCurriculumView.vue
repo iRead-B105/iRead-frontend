@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Check, Sparkles, Trash2 } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
@@ -429,10 +429,61 @@ async function handleDraftItemClick(item: CurriculumDraftItem, event: MouseEvent
   await selectDraftItem(item)
 }
 
+// 교안은 저장된 훈련에 백그라운드로 생성되므로, 생성 전(NOT_READY)에는 편집을 열 수 없다.
+const trainingStatusById = computed(() => {
+  const statusById = new Map<number, string>()
+  for (const training of savedCurriculum.value?.trainings ?? []) {
+    statusById.set(training.trainingId, training.status)
+  }
+  return statusById
+})
+
+function materialReady(item: CurriculumDraftItem): boolean {
+  if (item.trainingId === null) return false
+  return trainingStatusById.value.get(item.trainingId) !== 'NOT_READY'
+}
+
+const hasPendingMaterials = computed(() =>
+  (savedCurriculum.value?.trainings ?? []).some((training) => training.status === 'NOT_READY'),
+)
+
+// 교안 생성 완료는 실시간 이벤트로 반영되지만, 이벤트를 놓쳐도 버튼이 살아나도록 폴링한다.
+let materialPollTimer: number | null = null
+
+function scheduleMaterialPoll(): void {
+  if (materialPollTimer !== null) return
+  materialPollTimer = window.setTimeout(async () => {
+    materialPollTimer = null
+    if (
+      studentId.value === null ||
+      !hasPendingMaterials.value ||
+      curriculumSynchronizationStatus.value !== 'synced' ||
+      trainingStore.hasChanges
+    ) {
+      return
+    }
+    await trainingStore.refreshForStudent(studentId.value)
+    if (hasPendingMaterials.value) scheduleMaterialPoll()
+  }, 5_000)
+}
+
+watch(
+  hasPendingMaterials,
+  (pending) => {
+    if (pending) scheduleMaterialPoll()
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  if (materialPollTimer !== null) window.clearTimeout(materialPollTimer)
+})
+
 async function openMaterialEditor(item: CurriculumDraftItem): Promise<void> {
   if (
     studentId.value === null ||
     item.trainingId === null ||
+    !materialReady(item) ||
     curriculumSynchronizationStatus.value !== 'synced'
   ) {
     return
@@ -489,7 +540,13 @@ async function loadAiRecommendation(): Promise<void> {
       (item) => item.trainingTemplateId,
     )
     aiRecommendationStatus.value = 'success'
-    triggerToast('커리큘럼이 생성되었습니다.')
+    // 교사가 바로 교안을 검수할 수 있도록 추천 구성을 즉시 저장해 교안 생성을 시작한다.
+    const saved = await trainingStore.saveCurriculum()
+    if (!saved && trainingStore.hasChanges) {
+      triggerToast('추천을 적용했지만 저장하지 못했습니다. 변경 사항 저장을 눌러 주세요.')
+    } else {
+      triggerToast('커리큘럼이 생성되었습니다. 교안이 준비되면 바로 검수할 수 있어요.')
+    }
   } catch {
     aiRecommendation.value = null
     aiRecommendationAppliedTemplateIds.value = null
@@ -950,13 +1007,20 @@ function addTraining(templateId: number): void {
                     size="sm"
                     type="button"
                     :disabled="
-                      item.trainingId === null ||
+                      !materialReady(item) ||
                       curriculumSynchronizationStatus !== 'synced' ||
                       isSavingCurriculum
                     "
+                    :title="
+                      materialReady(item)
+                        ? undefined
+                        : item.trainingId === null
+                          ? '커리큘럼을 저장하면 교안이 생성됩니다.'
+                          : 'AI가 교안을 생성하고 있어요. 잠시만 기다려 주세요.'
+                    "
                     @click.stop="openMaterialEditor(item)"
                   >
-                    교안 편집
+                    {{ item.trainingId !== null && !materialReady(item) ? '교안 생성 중' : '교안 편집' }}
                   </Button>
                   <Button
                     v-if="canEditCurriculum"
