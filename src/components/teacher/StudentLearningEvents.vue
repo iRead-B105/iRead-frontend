@@ -457,13 +457,17 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
 .event-insight-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.event-insight-grid > * {
+  min-width: 0;
 }
 
 .event-insight {
   display: grid;
   align-content: start;
-  gap: 6px;
+  gap: 8px;
   padding: 14px;
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-md);
@@ -480,6 +484,7 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
   margin: 0;
   color: var(--slate-800);
   font-size: 13px;
+  word-break: keep-all;
 }
 
 .event-insight > div {
@@ -491,6 +496,7 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
 .problem-segments,
 .attention-reasons {
   display: flex;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 6px;
   margin: 4px 0 0;
@@ -499,6 +505,9 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
 }
 
 .problem-segments li {
+  flex: 0 1 auto;
+  white-space: nowrap;
+  word-break: keep-all;
   padding: 3px 10px;
   border-radius: 9999px;
   background: #fff7ed;
@@ -509,6 +518,9 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
 }
 
 .attention-reasons li {
+  flex: 0 1 auto;
+  white-space: nowrap;
+  word-break: keep-all;
   padding: 3px 10px;
   border-radius: 9999px;
   background: #fef2f2;
@@ -520,7 +532,8 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
 
 .recommendation {
   display: grid;
-  gap: 6px;
+  align-content: start;
+  gap: 8px;
   padding: 14px 16px;
   border: 1px solid #c7d2fe;
   border-radius: var(--radius-md, 8px);
@@ -531,6 +544,7 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
   color: #1e1b4b;
   font-size: 14px;
   font-weight: 700;
+  word-break: keep-all;
 }
 
 .recommendation p,
@@ -539,11 +553,12 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
   color: #475569;
   font-size: 12px;
   line-height: 1.55;
+  word-break: keep-all;
 }
 
 .recommendation-empty {
-  display: grid;
-  align-content: center;
+  display: block;
+  box-sizing: border-box;
   min-height: 100%;
   padding: 14px;
   border: 1px solid var(--slate-200);
@@ -586,8 +601,7 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
     justify-items: start;
   }
 
-  .recommendation dl,
-  .event-insight-grid {
+  .recommendation dl {
     grid-template-columns: 1fr;
   }
 

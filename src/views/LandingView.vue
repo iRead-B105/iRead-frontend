@@ -29,6 +29,19 @@ interface ServiceCard {
 }
 
 const childAppDownloadUrl = import.meta.env.VITE_CHILD_APP_DOWNLOAD_URL?.trim()
+// 아이트래커(Tobii Eye Tracker 5) 드라이버 설치 페이지. 배포 환경에서 env로 바꿀 수 있다.
+const eyeTrackerDriverUrl =
+  import.meta.env.VITE_EYE_TRACKER_DRIVER_URL?.trim() || 'https://gaming.tobii.com/getstarted/'
+
+const downloadModalOpen = ref(false)
+
+function openDownloadModal(): void {
+  downloadModalOpen.value = true
+}
+
+function closeDownloadModal(): void {
+  downloadModalOpen.value = false
+}
 
 const cards: ServiceCard[] = [
   {
@@ -200,18 +213,19 @@ function scrollToSection(index: number) {
             </span>
           </RouterLink>
 
-          <a
-            v-if="childAppDownloadUrl"
-            class="landing-header__dl"
-            :href="childAppDownloadUrl"
-            download
-          >
-            <span>아동용 앱 다운로드</span>
-            <span class="landing-header__dl-icon">
-              <Download :size="14" aria-hidden="true" />
-            </span>
-          </a>
-          <button v-else class="landing-header__dl btn-disabled" type="button" disabled>
+          <button class="landing-header__dl" type="button" @click="openDownloadModal">
+            <svg
+              class="windows-icon"
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                d="M0 3.45 9.75 2.1v9.15H0V3.45ZM10.95 1.95 24 0v11.25H10.95V1.95ZM0 12.75h9.75v9.15L0 20.55V12.75ZM10.95 12.75H24V24l-13.05-1.95V12.75Z"
+              />
+            </svg>
             <span>아동용 앱 다운로드</span>
             <span class="landing-header__dl-icon">
               <Download :size="14" aria-hidden="true" />
@@ -239,16 +253,19 @@ function scrollToSection(index: number) {
               <ArrowRight :size="18" aria-hidden="true" />
             </RouterLink>
 
-            <a
-              v-if="childAppDownloadUrl"
-              class="btn btn-black"
-              :href="childAppDownloadUrl"
-              download
-            >
-              아동용 앱 다운로드
-              <Download :size="18" aria-hidden="true" />
-            </a>
-            <button v-else class="btn btn-black btn-disabled" type="button" disabled>
+            <button class="btn btn-black" type="button" @click="openDownloadModal">
+              <svg
+                class="windows-icon"
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  d="M0 3.45 9.75 2.1v9.15H0V3.45ZM10.95 1.95 24 0v11.25H10.95V1.95ZM0 12.75h9.75v9.15L0 20.55V12.75ZM10.95 12.75H24V24l-13.05-1.95V12.75Z"
+                />
+              </svg>
               아동용 앱 다운로드
               <Download :size="18" aria-hidden="true" />
             </button>
@@ -446,16 +463,19 @@ function scrollToSection(index: number) {
               <ArrowRight :size="18" aria-hidden="true" />
             </RouterLink>
 
-            <a
-              v-if="childAppDownloadUrl"
-              class="btn btn-black"
-              :href="childAppDownloadUrl"
-              download
-            >
-              아동용 앱 다운로드
-              <Download :size="18" aria-hidden="true" />
-            </a>
-            <button v-else class="btn btn-black btn-disabled" type="button" disabled>
+            <button class="btn btn-black" type="button" @click="openDownloadModal">
+              <svg
+                class="windows-icon"
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  d="M0 3.45 9.75 2.1v9.15H0V3.45ZM10.95 1.95 24 0v11.25H10.95V1.95ZM0 12.75h9.75v9.15L0 20.55V12.75ZM10.95 12.75H24V24l-13.05-1.95V12.75Z"
+                />
+              </svg>
               아동용 앱 다운로드
               <Download :size="18" aria-hidden="true" />
             </button>
@@ -463,6 +483,84 @@ function scrollToSection(index: number) {
         </div>
       </section>
     </main>
+
+    <!-- 아동용 앱 다운로드 모달 -->
+    <div
+      v-if="downloadModalOpen"
+      class="download-modal-backdrop"
+      role="presentation"
+      @click.self="closeDownloadModal"
+    >
+      <section
+        class="download-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="download-modal-title"
+      >
+        <button
+          class="download-modal__close"
+          type="button"
+          aria-label="다운로드 안내 닫기"
+          @click="closeDownloadModal"
+        >
+          ×
+        </button>
+        <h2 id="download-modal-title" class="download-modal__title">아동용 앱 다운로드</h2>
+        <p class="download-modal__desc">
+          Windows용 아이리드 아동 앱 설치 파일을 내려받습니다.
+        </p>
+        <a
+          v-if="childAppDownloadUrl"
+          class="btn btn-black download-modal__download"
+          :href="childAppDownloadUrl"
+          download
+        >
+          <svg
+            class="windows-icon"
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M0 3.45 9.75 2.1v9.15H0V3.45ZM10.95 1.95 24 0v11.25H10.95V1.95ZM0 12.75h9.75v9.15L0 20.55V12.75ZM10.95 12.75H24V24l-13.05-1.95V12.75Z"
+            />
+          </svg>
+          아동용 앱 다운로드
+          <Download :size="18" aria-hidden="true" />
+        </a>
+        <button
+          v-else
+          class="btn btn-black btn-disabled download-modal__download"
+          type="button"
+          disabled
+        >
+          <svg
+            class="windows-icon"
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M0 3.45 9.75 2.1v9.15H0V3.45ZM10.95 1.95 24 0v11.25H10.95V1.95ZM0 12.75h9.75v9.15L0 20.55V12.75ZM10.95 12.75H24V24l-13.05-1.95V12.75Z"
+            />
+          </svg>
+          아동용 앱 다운로드
+          <Download :size="18" aria-hidden="true" />
+        </button>
+        <a
+          class="download-modal__driver"
+          :href="eyeTrackerDriverUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          아이리드는 Tobii 드라이버를 필요로 합니다(다운로드 링크).
+        </a>
+      </section>
+    </div>
 
   </div>
 </template>
@@ -480,6 +578,77 @@ function scrollToSection(index: number) {
   background: #ffffff; /* Fallback */
   color: var(--text-main);
   font-family: Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+}
+
+/* 아동용 앱 다운로드 모달 */
+.download-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(17 37 70 / 45%);
+}
+
+.download-modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: min(92vw, 560px);
+  padding: 56px 40px 48px;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 24px 64px rgb(17 37 70 / 24%);
+  text-align: center;
+}
+
+.download-modal__close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  padding: 2px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.download-modal__close:hover {
+  color: var(--ink);
+}
+
+.download-modal__title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.download-modal__desc {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 15px;
+}
+
+.download-modal__download {
+  margin-top: 6px;
+}
+
+.download-modal__driver {
+  margin-top: 2px;
+  color: var(--text-soft);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.download-modal__driver:hover {
+  color: var(--brand-blue);
 }
 
 /* Fixed Background Image */

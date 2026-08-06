@@ -507,19 +507,21 @@ describe('Training API target contract', () => {
 })
 
 describe('TestTrainingRepository', () => {
-  it('비활성 6·14·24번을 제외한 31개 template ID와 배열 순서를 공통으로 사용한다', async () => {
+  it('통합·비활성 6·14·24·26·32·34번을 제외한 28개 template ID를 사용한다', async () => {
     const repository = new TestTrainingRepository()
 
     await expect(repository.getCatalog(1)).resolves.toEqual(trainingCatalogFixture)
-    expect(trainingCatalogFixture).toHaveLength(31)
+    expect(trainingCatalogFixture).toHaveLength(28)
     expect(trainingCatalogFixture.map((item) => item.trainingTemplateId)).toEqual(
-      Array.from({ length: 34 }, (_, index) => index + 1).filter((id) => ![6, 14, 24].includes(id)),
+      Array.from({ length: 34 }, (_, index) => index + 1).filter(
+        (id) => ![6, 14, 24, 26, 32, 34].includes(id),
+      ),
     )
-    expect(trainingCatalogFixture[30]).toMatchObject({
-      trainingTemplateId: 34,
+    expect(trainingCatalogFixture[27]).toMatchObject({
+      trainingTemplateId: 33,
       unitName: '유창하게 읽기',
-      sequence: 5,
-      trainingName: '짧은 이야기 읽기',
+      sequence: 4,
+      trainingName: '같은 문장 다시 읽기',
     })
   })
 

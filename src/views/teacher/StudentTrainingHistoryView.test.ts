@@ -35,17 +35,6 @@ async function mountHistory(
     {
       global: {
         plugins: [pinia, router],
-        stubs: {
-          ChartPanel: {
-            props: ['ariaLabel', 'summary', 'option'],
-            computed: {
-              categories() {
-                return this.option.xAxis.data.join(', ')
-              },
-            },
-            template: '<div data-test="chart">{{ ariaLabel }} {{ categories }} {{ summary }}</div>',
-          },
-        },
       },
     },
   )
@@ -67,7 +56,7 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).toContain('학습자 목록으로 이동')
   })
 
-  it('최신 커리큘럼의 첫 실제 훈련 상세·정확도 비교·시선 집계를 표시한다', async () => {
+  it('최신 커리큘럼의 평균 정확도·훈련별 정확도·문항 상세·시선 집계를 표시한다', async () => {
     const { wrapper } = await mountHistory(new TestTrainingRepository())
 
     const selectionCard = wrapper.get('[data-test="history-selection-card"]')
@@ -80,6 +69,8 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.find('.question-results > header').exists()).toBe(false)
     expect(wrapper.get('.history-gaze-shell h2').text()).toBe('훈련 시선 분석')
     expect(wrapper.text()).not.toContain('시선트래킹')
+    expect(selectionCard.text()).toContain('평균 정확도')
+    expect(wrapper.get('.curriculum-overview').text()).toContain('훈련 정확도')
 
     expect(wrapper.text()).toContain('2026.07.20')
     expect(wrapper.text()).toContain('서로 다른 받침 음절 비교하기')
@@ -197,6 +188,8 @@ describe('StudentTrainingHistoryView', () => {
   it('커리큘럼 변경에는 상세 카드를 유지하고 새 훈련 선택 시에만 상세를 갱신한다', async () => {
     const { wrapper, store } = await mountHistory(new TestTrainingRepository())
     const detailCard = wrapper.get('.detail-card').element
+    const detailMetrics = wrapper.get('.detail-metrics').element
+    const firstQuestion = wrapper.get('.question-table__row').element
     const zeroCurriculum = wrapper
       .findAll('.curriculum-row')
       .find((row) => row.text().includes('2026.07.05'))
@@ -208,12 +201,17 @@ describe('StudentTrainingHistoryView', () => {
     expect(store.selectedHistoryTrainingId).toBe(901)
     expect(store.historyTrainingDetail?.trainingId).toBe(901)
     expect(wrapper.get('.detail-card').element).toBe(detailCard)
+    expect(wrapper.get('.detail-metrics').element).toBe(detailMetrics)
+    expect(wrapper.get('.question-table__row').element).toBe(firstQuestion)
     expect(zeroCurriculum?.text()).toContain('0%')
 
     await wrapper.findAll('.training-row')[0]?.trigger('click')
     await flushPromises()
 
     expect(store.selectedHistoryTrainingId).toBe(891)
+    expect(wrapper.get('.detail-card').element).toBe(detailCard)
+    expect(wrapper.get('.detail-metrics').element).toBe(detailMetrics)
+    expect(wrapper.get('.question-table__row').element).toBe(firstQuestion)
     expect(wrapper.text()).toContain('오답')
     expect(wrapper.text()).toContain('문항 원본 없음')
   })

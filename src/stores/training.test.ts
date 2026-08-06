@@ -766,7 +766,7 @@ describe('Training store', () => {
     expect(getGazeAnalysis).not.toHaveBeenCalled()
   })
 
-  it('훈련 전환 중 이전 훈련의 상세와 시선 집계를 새 선택에 표시하지 않는다', async () => {
+  it('훈련 전환 중 기존 상세 컴포넌트 데이터를 유지하다 새 응답으로 교체한다', async () => {
     const mock = new TestTrainingRepository()
     const nextDetail = await mock.getTrainingDetail(1, 902)
     const nextGaze = await mock.getGazeAnalysis(1, 902)
@@ -775,15 +775,17 @@ describe('Training store', () => {
     const store = useTrainingStore()
     store.setRepository(mock)
     await store.loadHistoryForStudent(1)
+    const previousDetail = store.historyTrainingDetail
+    const previousGaze = store.historyGazeAnalysis
 
     vi.spyOn(mock, 'getTrainingDetail').mockReturnValueOnce(pendingDetail.promise)
     vi.spyOn(mock, 'getGazeAnalysis').mockReturnValueOnce(pendingGaze.promise)
     const selection = store.selectHistoryTraining(1, 902)
 
     expect(store.selectedHistoryTrainingId).toBe(902)
-    expect(store.historyTrainingDetail).toBeNull()
+    expect(store.historyTrainingDetail).toBe(previousDetail)
     expect(store.historyDetailStatus).toBe('loading')
-    expect(store.historyGazeAnalysis).toBeNull()
+    expect(store.historyGazeAnalysis).toBe(previousGaze)
     expect(store.historyGazeStatus).toBe('loading')
 
     pendingDetail.resolve(nextDetail)

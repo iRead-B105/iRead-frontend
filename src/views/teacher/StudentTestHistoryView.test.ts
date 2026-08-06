@@ -74,7 +74,7 @@ async function mountHistory(
 }
 
 describe('StudentTestHistoryView', () => {
-  it('reloads only the chart when the comparison target changes', async () => {
+  it('비교 검사 변경 중에도 차트와 문항 컴포넌트를 유지한다', async () => {
     const pending = deferred<Awaited<ReturnType<TestTestRepository['compareTests']>>>()
     const repository = new TestTestRepository()
     const compareTests = repository.compareTests.bind(repository)
@@ -85,19 +85,59 @@ describe('StudentTestHistoryView', () => {
           : pending.promise,
     )
     const { wrapper } = await mountHistory(repository)
+    const chart = wrapper.get('[data-test="metric-chart"]').element
+    const question = wrapper.get('.question-list > li').element
 
     const change = wrapper.get<HTMLSelectElement>('#comparison-test').setValue('1008')
     await flushPromises()
 
-    expect(wrapper.find('[data-test="metric-chart"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="metric-chart"]').element).toBe(chart)
     expect(wrapper.find('[data-test="metric-chart-loading"]').exists()).toBe(true)
     expect(wrapper.findAll('.question-list > li')).toHaveLength(9)
+    expect(wrapper.get('.question-list > li').element).toBe(question)
 
     pending.resolve(await compareTests(1, '1011', ['1008']))
     await change
     await flushPromises()
     expect(wrapper.find('[data-test="metric-chart-loading"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="metric-chart"]').exists()).toBe(true)
+  })
+
+  it('완료한 검사 변경 시 카드와 문항 행을 재사용하고 데이터만 교체한다', async () => {
+    const pending = deferred<Awaited<ReturnType<TestTestRepository['compareTests']>>>()
+    const repository = new TestTestRepository()
+    const compareTests = repository.compareTests.bind(repository)
+    vi.spyOn(repository, 'compareTests').mockImplementation(
+      (studentId, currentId, comparisonIds, options) =>
+        currentId === '1008'
+          ? pending.promise
+          : compareTests(studentId, currentId, comparisonIds, options),
+    )
+    const { wrapper, store } = await mountHistory(repository)
+    const metricCard = wrapper.get('.metric-chart-section').element
+    const chart = wrapper.get('[data-test="metric-chart"]').element
+    const questionCard = wrapper.get('.question-section').element
+    const firstQuestion = wrapper.get('.question-list > li').element
+
+    const selection = wrapper.get<HTMLSelectElement>('#current-test').setValue('1008')
+    await flushPromises()
+
+    expect(store.currentTestCurriculumId).toBe('1008')
+    expect(wrapper.get('.metric-chart-section').element).toBe(metricCard)
+    expect(wrapper.get('[data-test="metric-chart"]').element).toBe(chart)
+    expect(wrapper.get('.question-section').element).toBe(questionCard)
+    expect(wrapper.get('.question-list > li').element).toBe(firstQuestion)
+    expect(wrapper.find('[data-test="metric-chart-loading"]').exists()).toBe(true)
+
+    pending.resolve(await compareTests(1, '1008', []))
+    await selection
+    await flushPromises()
+
+    expect(wrapper.get('.metric-chart-section').element).toBe(metricCard)
+    expect(wrapper.get('[data-test="metric-chart"]').element).toBe(chart)
+    expect(wrapper.get('.question-section').element).toBe(questionCard)
+    expect(wrapper.get('.question-list > li').element).toBe(firstQuestion)
+    expect(wrapper.text()).toContain('실력 도전 #1008')
   })
 
   it('잘못된 studentId에서는 Repository를 호출하지 않는다', async () => {
@@ -124,6 +164,7 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.findAll('.question-list > li')).toHaveLength(9)
     expect(wrapper.text()).toContain('제출 답안')
     expect(wrapper.text()).toContain('발음 점수')
+    expect(wrapper.text()).toContain('해당 없음')
     expect(wrapper.text()).not.toContain('추천 훈련 커리큘럼')
     expect(wrapper.text()).not.toContain('추천 교안 검수하기')
     expect(wrapper.text()).toContain('9문항 확인')

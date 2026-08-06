@@ -419,6 +419,12 @@ function formatMetric(value: number | null, unit: string): string {
   return value === null ? '측정값 없음' : `${value}${unit}`
 }
 
+function formatPronunciationMetric(question: TestQuestionResult): string {
+  const audioResponse = question.responseType === 'AUDIO' || question.responseType === 'VOICE'
+  if (!audioResponse) return '해당 없음'
+  return formatMetric(question.pronunciationScore, '점')
+}
+
 function selectQuestion(question: TestQuestionResult): void {
   if (studentId.value !== null) {
     void testStore.selectQuestionGaze(studentId.value, question.testId, question.questionNo)
@@ -661,7 +667,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
               <Button type="button" @click="testStore.retryComparison()">다시 시도</Button>
             </div>
             <ChartPanel
-              v-else-if="selectedMetricChart"
+              v-if="selectedMetricChart"
               data-test="metric-chart"
               :option="selectedMetricChart.option"
               animated
@@ -714,7 +720,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
             <ol v-else class="question-list">
               <li
                 v-for="question in currentDetail?.questions"
-                :key="questionKey(question)"
+                :key="question.sequenceNo"
                 :class="{ 'is-gaze-selected': isSelectedQuestion(question) }"
               >
                 <header>
@@ -740,7 +746,7 @@ function isSelectedQuestion(question: TestQuestionResult): boolean {
                   </div>
                   <div>
                     <dt>발음 점수</dt>
-                    <dd>{{ formatMetric(question.pronunciationScore, '점') }}</dd>
+                    <dd>{{ formatPronunciationMetric(question) }}</dd>
                   </div>
                   <div>
                     <dt>풀이 시간</dt>

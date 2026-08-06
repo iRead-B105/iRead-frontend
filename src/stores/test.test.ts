@@ -217,7 +217,7 @@ describe('Test store', () => {
     expect(store.comparisonResult?.currentTest.testCurriculumId).toBe('1005')
   })
 
-  it('기준 검사를 바꾸는 동안 이전 검사 상세와 시선 결과를 함께 숨긴다', async () => {
+  it('기준 검사를 바꾸는 동안 이전 검사 상세를 유지하고 시선 선택만 초기화한다', async () => {
     const pending = deferred<TestDetail>()
     const mock = new TestTestRepository()
     const store = useTestStore()
@@ -243,15 +243,17 @@ describe('Test store', () => {
     )
     await store.loadForStudent(1)
     await store.selectQuestionGaze(1, '10111', 1)
+    const previousResult = store.comparisonResult
 
     const selection = store.selectCurrentTest(1, '1008')
 
-    expect(store.comparisonResult).toBeNull()
+    expect(store.comparisonResult).toBe(previousResult)
     expect(store.comparisonStatus).toBe('loading')
     expect(store.selectedQuestionTestId).toBeNull()
     expect(store.questionGazeAnalysis).toBeNull()
     pending.resolve(await mock.getTest(1, '1008'))
     await selection
+    expect(store.comparisonResult?.currentTest.testCurriculumId).toBe('1008')
   })
 
   it('선택 문항의 시선 집계만 조회하고 다른 학습자의 문항 ID를 차단한다', async () => {
