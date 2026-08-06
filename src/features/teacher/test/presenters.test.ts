@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vitest'
 import {
   formatTestChange,
   formatTestAnswer,
+  formatTestDate,
   formatTestPercent,
   formatTestScore,
   formatTestSeconds,
 } from './presenters'
 
 describe('test presenters', () => {
+  it('검사 날짜를 공백과 마지막 마침표 없는 YYYY.MM.DD 형식으로 표시한다', () => {
+    expect(formatTestDate('2026-08-05')).toBe('2026.08.05')
+    expect(formatTestDate('2026-08-05T10:30:00+09:00')).toBe('2026.08.05')
+  })
+
   it('null과 0을 서로 다른 표시값으로 유지한다', () => {
     expect(formatTestScore(null)).toBe('-')
     expect(formatTestScore(0)).toBe('0점')
@@ -30,5 +36,4 @@ describe('test presenters', () => {
     expect(formatTestChange(8)).toBe('이전 검사 대비 +8점')
     expect(formatTestChange(-3)).toBe('이전 검사 대비 -3점')
   })
-
 })

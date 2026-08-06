@@ -31,7 +31,7 @@ const { warningVisible } = storeToRefs(realtimeFreshnessStore)
   min-width: 0;
   align-items: start;
   background: var(--content-background);
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 224px minmax(0, 1fr);
 }
 
 .teacher-content {

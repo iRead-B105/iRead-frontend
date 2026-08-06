@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  type TestComparison,
   type TestDetail,
   type TestListItem,
   type TestRepository,
@@ -61,6 +62,38 @@ describe('Test store', () => {
 
     expect(store.comparisonResult).toBe(previousComparison)
     expect(store.trendDetails).toBe(previousTrend)
+  })
+
+  it('keeps the current detail visible while only the comparison chart reloads', async () => {
+    const pending = deferred<TestComparison>()
+    const mock = new TestTestRepository()
+    const store = useTestStore()
+    store.setRepository(
+      repository({
+        getTests: vi
+          .fn()
+          .mockImplementation((studentId, options) => mock.getTests(studentId, options)),
+        getTest: vi
+          .fn()
+          .mockImplementation((studentId, id, options) => mock.getTest(studentId, id, options)),
+        compareTests: vi.fn().mockImplementation((studentId, id, ids, options) =>
+          ids.length === 0
+            ? mock.compareTests(studentId, id, ids, options)
+            : pending.promise,
+        ),
+      }),
+    )
+    await store.loadForStudent(1)
+    const previousResult = store.comparisonResult
+
+    const reload = store.addComparisonTest(1, '1008')
+
+    expect(store.comparisonStatus).toBe('loading')
+    expect(store.comparisonResult).toBe(previousResult)
+    pending.resolve(await mock.compareTests(1, '1011', ['1008']))
+    await expect(reload).resolves.toBe(true)
+    expect(store.comparisonStatus).toBe('success')
+    expect(store.comparisonResult?.comparisonTests).toHaveLength(1)
   })
 
   it('최신 완료 검사 커리큘럼을 기본 선택하고 단일 상세를 요청한다', async () => {

@@ -13,7 +13,7 @@ const props = withDefaults(
     unit: string
     color: string
     maxValue?: number
-    ariaLabel: string
+    label: string
   }>(),
   { maxValue: undefined },
 )
@@ -66,7 +66,7 @@ function shortDate(date: string): string {
 </script>
 
 <template>
-  <div class="learning-trend-chart" role="img" :aria-label="ariaLabel">
+  <div class="learning-trend-chart" role="img" :aria-label="label">
     <div class="chart-plot">
       <div
         v-for="tick in ticks"
@@ -162,6 +162,10 @@ function shortDate(date: string): string {
   transform: translate(-50%, -50%);
 }
 
+.chart-point-wrap:hover {
+  z-index: 10;
+}
+
 .chart-point {
   position: relative;
   display: block;
@@ -172,10 +176,27 @@ function shortDate(date: string): string {
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
   cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.chart-point::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
+.chart-point:hover,
+.chart-point:focus-visible {
+  transform: scale(1.35);
 }
 
 .chart-point:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--ring) 42%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--ring, #2563eb) 42%, transparent);
   outline-offset: 2px;
 }
 

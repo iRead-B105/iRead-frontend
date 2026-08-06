@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { nextTick, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import SaveToast from '@/components/common/SaveToast.vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getLoginErrorMessage } from '@/features/teacher/auth'
@@ -13,25 +14,39 @@ const sessionStore = useSessionStore()
 const form = reactive({ email: '', password: '' })
 const showPassword = ref(false)
 const submitting = ref(false)
-const errorMessage = ref('')
-const errorSummary = ref<HTMLElement | null>(null)
-const successMessage = ref(
-  route.query.passwordReset === 'success'
+
+const isPasswordResetSuccess = route.query.passwordReset === 'success'
+const toastVisible = ref(isPasswordResetSuccess)
+const toastMessage = ref(
+  isPasswordResetSuccess
     ? '비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해 주세요.'
     : '',
 )
-onMounted(async () => {
-  if (route.query.passwordReset !== 'success') return
+let toastTimer: number | null = null
 
-  const query = { ...route.query }
-  delete query.passwordReset
-  await router.replace({ query })
+function triggerToast(msg: string): void {
+  if (toastTimer !== null) {
+    window.clearTimeout(toastTimer)
+  }
+  toastMessage.value = msg
+  toastVisible.value = true
+  toastTimer = window.setTimeout(() => {
+    toastVisible.value = false
+    toastTimer = null
+  }, 3000)
+}
+
+onMounted(() => {
+  if (isPasswordResetSuccess) {
+    const query = { ...route.query }
+    delete query.passwordReset
+    void router.replace({ query })
+  }
 })
 
 async function login() {
   if (submitting.value) return
   submitting.value = true
-  errorMessage.value = ''
   try {
     await sessionStore.login({
       email: form.email.trim(),
@@ -39,9 +54,7 @@ async function login() {
     })
     await router.push(resolveTeacherRedirect(router, route.query.redirect))
   } catch (error) {
-    errorMessage.value = getLoginErrorMessage(error)
-    await nextTick()
-    errorSummary.value?.focus()
+    triggerToast(getLoginErrorMessage(error))
   } finally {
     submitting.value = false
   }
@@ -72,8 +85,6 @@ async function login() {
               required
               maxlength="50"
               placeholder="이메일 주소 입력"
-              :aria-invalid="Boolean(errorMessage)"
-              :aria-describedby="errorMessage ? 'login-error' : undefined"
             />
           </div>
           <div class="field">
@@ -88,8 +99,6 @@ async function login() {
                 maxlength="100"
                 :type="showPassword ? 'text' : 'password'"
                 placeholder="비밀번호 입력"
-                :aria-invalid="Boolean(errorMessage)"
-                :aria-describedby="errorMessage ? 'login-error' : undefined"
               />
               <Button
                 variant="ghost"
@@ -105,17 +114,6 @@ async function login() {
           </div>
         </div>
 
-        <p v-if="successMessage" class="form-success" role="status">{{ successMessage }}</p>
-        <p
-          v-if="errorMessage"
-          id="login-error"
-          ref="errorSummary"
-          class="form-error"
-          role="alert"
-          tabindex="-1"
-        >
-          {{ errorMessage }}
-        </p>
         <Button class="login-submit" type="submit" :disabled="submitting">
           {{ submitting ? '로그인 중...' : '로그인' }}
         </Button>
@@ -124,6 +122,8 @@ async function login() {
         </p>
       </form>
     </section>
+
+    <SaveToast :visible="toastVisible" :message="toastMessage" />
   </main>
 </template>
 

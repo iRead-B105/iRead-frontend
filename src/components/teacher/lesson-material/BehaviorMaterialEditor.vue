@@ -44,6 +44,11 @@ function valueFor(section: 'content' | 'answer', key: string): unknown {
   return props.material[section][key]
 }
 
+function fieldsFor(section: 'content' | 'answer'): readonly LessonMaterialFieldDefinition[] {
+  const fields = definition.value?.[section === 'content' ? 'contentFields' : 'answerFields'] ?? []
+  return fields.filter((field) => field.key !== 'traceAssetKey')
+}
+
 function errorsFor(
   section: 'content' | 'answer',
   key: string,
@@ -190,7 +195,7 @@ function updateJson(
     <fieldset v-for="section in ['content', 'answer'] as const" :key="section" :disabled="disabled">
       <legend>{{ section === 'content' ? '문항 내용' : '정답·평가 기준' }}</legend>
       <div
-        v-for="field in definition[section === 'content' ? 'contentFields' : 'answerFields']"
+        v-for="field in fieldsFor(section)"
         :key="`${section}-${field.key}`"
         class="behavior-field"
         :class="{ 'behavior-field--wide': field.kind !== 'number' && field.kind !== 'select' }"
@@ -212,6 +217,7 @@ function updateJson(
           v-else-if="field.kind === 'textarea'"
           :id="fieldId(section, field.key)"
           :value="textValue(valueFor(section, field.key))"
+          :aria-invalid="errorsFor(section, field.key).length > 0"
           rows="3"
           @input="update(section, field, ($event.target as HTMLTextAreaElement).value)"
         />
@@ -220,6 +226,7 @@ function updateJson(
           v-else-if="field.kind === 'text'"
           :id="fieldId(section, field.key)"
           :model-value="textValue(valueFor(section, field.key))"
+          :aria-invalid="errorsFor(section, field.key).length > 0"
           @update:model-value="update(section, field, String($event))"
         />
 
@@ -229,6 +236,7 @@ function updateJson(
           type="number"
           min="1"
           :model-value="numberValue(valueFor(section, field.key), field)"
+          :aria-invalid="errorsFor(section, field.key).length > 0"
           @update:model-value="updateNumber(section, field, $event)"
         />
 
@@ -236,6 +244,7 @@ function updateJson(
           v-else-if="field.kind === 'select'"
           :id="fieldId(section, field.key)"
           :value="textValue(valueFor(section, field.key))"
+          :aria-invalid="errorsFor(section, field.key).length > 0"
           @change="update(section, field, ($event.target as HTMLSelectElement).value)"
         >
           <option
