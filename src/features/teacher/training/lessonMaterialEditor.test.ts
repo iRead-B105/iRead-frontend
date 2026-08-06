@@ -170,6 +170,19 @@ describe('lesson material type validation', () => {
     )
   })
 
+  it('자음 소리 고르기 선택지 개수를 3개 초과해 입력하면 검증에서 막는다', () => {
+    const current = material('CONSONANT_SOUND_CHOICE')
+    const invalid = {
+      ...current,
+      content: { ...current.content, choices: ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ'] },
+      answer: { answerIndex: 0 },
+    }
+
+    const issues = validateLessonMaterialItem(invalid)
+    expect(issues.map((issue) => issue.path)).toContain('content.choices')
+    expect(issues.some((issue) => issue.message.includes('3개 이하'))).toBe(true)
+  })
+
   it('문장 카드 순서와 완성 문장의 불일치를 찾는다', () => {
     const current = material('SENTENCE_ASSEMBLY')
     const invalid = {

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import SaveToast from '@/components/common/SaveToast.vue'
 import MaterialEditorHost from '@/components/teacher/lesson-material/MaterialEditorHost.vue'
 import MaterialPreviewHost from '@/components/teacher/lesson-material/MaterialPreviewHost.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import {
   LESSON_MATERIAL_MAX_COUNT,
   LESSON_MATERIAL_MIN_COUNT,
@@ -156,6 +158,28 @@ const materialValidationError = computed(() => {
   const issue = invalidMaterialIndex >= 0 ? materialIssues.value[invalidMaterialIndex]?.[0] : null
   return issue ? `${invalidMaterialIndex + 1}번 자료: ${issue.message}` : null
 })
+const { visible: materialSavedVisible, show: showMaterialSaved } = useTemporaryNotice()
+const { visible: materialErrorVisible, show: showMaterialError } = useTemporaryNotice()
+const materialSavedMessage = computed(() =>
+  props.reviewRequiredAfterSave
+    ? '교안이 저장되었습니다. 수정된 커리큘럼은 재검수가 필요합니다.'
+    : '교안이 저장되었습니다.',
+)
+
+watch(
+  () => props.lessonMaterialSaveStatus,
+  (status) => {
+    if (status === 'success') showMaterialSaved()
+  },
+)
+
+watch(
+  () => props.lessonMaterialSaveError,
+  (err) => {
+    if (err) showMaterialError()
+  },
+)
+
 const canSave = computed(
   () =>
     canEditMaterial.value &&
@@ -443,25 +467,6 @@ function confirmReloadLatest(): void {
                   @update-field="updateField"
                   @editor-error="editorInputError = $event"
                 />
-
-                <div
-                  v-if="selectedIssues.length || selectedServerErrors.length"
-                  class="validation-summary"
-                  role="alert"
-                >
-                  <strong>자료 {{ selectedMaterialIndex + 1 }} 확인 필요</strong>
-                  <ul>
-                    <li v-for="issue in selectedIssues" :key="`${issue.path}-${issue.message}`">
-                      {{ issue.message }}
-                    </li>
-                    <li
-                      v-for="error in selectedServerErrors"
-                      :key="`${error.path}-${error.reason}`"
-                    >
-                      {{ error.message }}
-                    </li>
-                  </ul>
-                </div>
               </div>
             </template>
           </section>
@@ -504,23 +509,15 @@ function confirmReloadLatest(): void {
         </div>
 
         <footer class="editor-footer">
+          <SaveToast :visible="materialSavedVisible" :message="materialSavedMessage" />
+          <SaveToast
+            :visible="materialErrorVisible"
+            :message="lessonMaterialSaveError ?? undefined"
+            tone="error"
+          />
           <div>
             <p v-if="materialValidationError" class="inline-error" role="alert">
               {{ materialValidationError }}
-            </p>
-            <p v-else-if="lessonMaterialSaveError" class="inline-error" role="alert">
-              {{ lessonMaterialSaveError }}
-            </p>
-            <p
-              v-else-if="lessonMaterialSaveStatus === 'success'"
-              class="save-success"
-              role="status"
-            >
-              {{
-                reviewRequiredAfterSave
-                  ? '교안이 저장되었습니다. 수정된 커리큘럼은 재검수가 필요합니다 — 커리큘럼 관리에서 "최종 검수 완료"를 눌러야 아동에게 표시됩니다.'
-                  : '교안이 저장되었습니다.'
-              }}
             </p>
             <p v-else>
               {{
@@ -531,16 +528,16 @@ function confirmReloadLatest(): void {
             </p>
           </div>
           <div>
+            <Button type="button" :disabled="!canSave" @click="saveMaterial">
+              {{ isSavingLessonMaterial ? '저장 중...' : '저장' }}
+            </Button>
             <Button
               data-test="material-editor-footer-back"
               variant="outline"
               type="button"
               @click="requestClose"
             >
-              커리큘럼으로 돌아가기
-            </Button>
-            <Button type="button" :disabled="!canSave" @click="saveMaterial">
-              {{ isSavingLessonMaterial ? '저장 중' : '교안 저장' }}
+              취소
             </Button>
           </div>
         </footer>
@@ -666,6 +663,10 @@ function confirmReloadLatest(): void {
   min-width: 0;
   overflow-y: auto;
   padding: 20px;
+}
+.preview-panel {
+  display: flex;
+  flex-direction: column;
 }
 .edit-panel {
   border-right: 1px solid var(--border);
@@ -872,9 +873,11 @@ textarea:focus {
   border-color: #fecaca;
   background: #fef2f2;
 }
-.preview-content {
+.preview-content,
+.preview-empty {
   width: 100%;
-  margin-top: 18px;
+  margin-top: auto;
+  margin-bottom: auto;
 }
 .preview-content > small {
   color: var(--primary-700);

@@ -134,13 +134,18 @@ const stringList = (key: string, label: string, help?: string): LessonMaterialFi
   maxLength: 200,
   maxItems: 20,
 })
-const choiceList = (key: string, label: string, help?: string): LessonMaterialFieldDefinition => ({
+const choiceList = (
+  key: string,
+  label: string,
+  help?: string,
+  maxItems = 3,
+): LessonMaterialFieldDefinition => ({
   key,
   label,
   kind: 'choice-list',
   help,
   maxLength: 200,
-  maxItems: 20,
+  maxItems,
 })
 const jsonList = (key: string, label: string, help?: string): LessonMaterialFieldDefinition => ({
   key,
@@ -237,6 +242,10 @@ const audioChoiceFields = [
   text('audioText', '들려줄 텍스트'),
   choiceList('choices', '글자 선택지'),
 ] as const
+const consonantSoundChoiceFields = [
+  text('audioText', '들려줄 텍스트'),
+  choiceList('choices', '글자 선택지', undefined, 3),
+] as const
 const generalChoiceFields = [
   text('audioText', '목표 소리·낱말'),
   choiceList('choices', '선택지'),
@@ -286,7 +295,7 @@ const DEFINITION_INPUTS: Readonly<Record<LessonQuestionType, DefinitionInput>> =
   CONSONANT_SOUND_CHOICE: {
     category: 'PHONICS',
     editorCode: 'E02',
-    contentFields: audioChoiceFields,
+    contentFields: consonantSoundChoiceFields,
     answerFields: [answerIndex],
   },
   VOWEL_SOUND_CHOICE: {
@@ -440,13 +449,13 @@ const DEFINITION_INPUTS: Readonly<Record<LessonQuestionType, DefinitionInput>> =
   WORD_READING: {
     category: 'FLUENCY',
     editorCode: 'E08',
-    contentFields: [choiceList('words', '읽을 낱말')],
+    contentFields: [choiceList('words', '읽을 낱말', undefined, 20)],
     answerFields: [expectedText],
   },
   NONWORD_READING: {
     category: 'FLUENCY',
     editorCode: 'E08',
-    contentFields: [choiceList('words', '읽을 비단어')],
+    contentFields: [choiceList('words', '읽을 비단어', undefined, 20)],
     answerFields: [expectedText],
   },
   DIFFICULT_WORD_PREVIEW: {
@@ -848,6 +857,12 @@ function validateChoice(
     issues.push({ path: 'content.choices', message: '선택지를 2개 이상 입력해 주세요.' })
     return
   }
+  if (choices.length > 3) {
+    issues.push({
+      path: 'content.choices',
+      message: 'choices는 정답 1개와 오답 2개를 포함해 정확히 3개여야 합니다.',
+    })
+  }
   if (choices.some((choice) => !choice.trim())) {
     issues.push({ path: 'content.choices', message: '빈 선택지는 사용할 수 없습니다.' })
   }
@@ -989,9 +1004,13 @@ export function validateLessonMaterialItem(
         message: `${field.label}을(를) 한 개 이상 입력해 주세요.`,
       })
     } else if (Array.isArray(value) && field.maxItems && value.length > field.maxItems) {
+      const message =
+        field.key === 'choices'
+          ? 'choices는 정답 1개와 오답 2개를 포함해 정확히 3개여야 합니다.'
+          : `${field.label}은(는) ${field.maxItems}개 이하로 입력해 주세요.`
       issues.push({
         path: `content.${field.key}`,
-        message: `${field.label}은(는) ${field.maxItems}개 이하로 입력해 주세요.`,
+        message,
       })
     } else if (
       (field.kind === 'string-list' || field.kind === 'choice-list') &&

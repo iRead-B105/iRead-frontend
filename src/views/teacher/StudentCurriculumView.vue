@@ -82,6 +82,10 @@ function triggerToast(msg: string = '커리큘럼 변경 사항이 저장되었�
   showSaved()
 }
 
+watch(curriculumError, (err) => {
+  if (err) triggerToast(err)
+})
+
 interface AiCurriculumRecommendation {
   readonly recommendationProvider: string
   readonly dataSufficiency: string

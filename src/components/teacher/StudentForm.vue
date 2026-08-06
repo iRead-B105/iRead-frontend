@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
+import SaveToast from '@/components/common/SaveToast.vue'
 import FormActions from '@/components/teacher/FormActions.vue'
 import PageHeader from '@/components/teacher/PageHeader.vue'
 import ProfileImageEditor from '@/components/teacher/ProfileImageEditor.vue'
@@ -50,6 +51,7 @@ const props = defineProps<{
 const router = useRouter()
 const studentStore = useStudentStore()
 const { visible: saved, show: showSaved } = useTemporaryNotice()
+const { visible: submitErrorVisible, show: showSubmitError } = useTemporaryNotice()
 const currentDetail = ref(props.initialValue)
 const form = reactive(createStudentFormDraft(props.initialValue))
 const selectedImage = ref<File | null>(null)
@@ -57,6 +59,10 @@ const imagePreviewVersion = ref(0)
 const fieldErrors = ref<StudentFormErrors>({})
 const submitting = ref(false)
 const submitError = ref('')
+
+watch(submitError, (err) => {
+  if (err) showSubmitError()
+})
 const savedSnapshot = ref(JSON.stringify(form))
 
 const deleteDialogOpen = ref(false)
@@ -409,7 +415,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnl
     </SettingsSection>
 
     <div class="student-form__footer">
-      <p v-if="submitError" class="student-form__error" role="alert">{{ submitError }}</p>
+      <SaveToast :visible="submitErrorVisible" :message="submitError" tone="error" />
       <FormActions
         :saved="saved"
         :disabled="!canSubmit"

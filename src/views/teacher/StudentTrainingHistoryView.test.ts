@@ -236,7 +236,7 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.get('.detail-card').element).toBe(detailCard)
     expect(wrapper.get('.detail-content-shell').element).toBe(detailShell)
     expect(wrapper.get('.detail-content-shell').attributes('aria-busy')).toBe('true')
-    expect(wrapper.get('.detail-content-shell').text()).toContain('훈련 상세를 불러오는 중입니다.')
+    expect(wrapper.get('.detail-content-shell [data-kind="loading"]').exists()).toBe(true)
     expect(wrapper.find('.history-gaze-shell').exists()).toBe(true)
     expect(wrapper.get('.history-gaze-shell').text()).toContain(
       '시선 분석 결과를 불러오는 중입니다.',

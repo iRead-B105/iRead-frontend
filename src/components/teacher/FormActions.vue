@@ -22,7 +22,7 @@ defineEmits<{
 
 <template>
   <footer class="form-actions">
-    <SaveToast :visible="saved" :message="savedMessage" inline />
+    <SaveToast :visible="saved" :message="savedMessage" />
     <div class="form-actions__buttons">
       <Button variant="outline" type="button" @click="$emit('cancel')">취소</Button>
       <Button type="submit" :disabled="disabled">{{ saveLabel }}</Button>

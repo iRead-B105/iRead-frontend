@@ -17,22 +17,21 @@ const emit = defineEmits<{
 
 <template>
   <div class="report-actions">
-    <Button variant="outline" type="button" @click="emit('back')"> 보고서 목록 </Button>
     <div class="report-actions__group">
-      <Button
-        variant="ghost"
-        type="button"
-        :disabled="!memoDirty || memoStatus === 'saving'"
-        @click="emit('cancelMemo')"
-      >
-        의견 취소
-      </Button>
       <Button
         type="button"
         :disabled="!memoDirty || !memoValid || memoStatus === 'saving'"
         @click="emit('saveMemo')"
       >
-        {{ memoStatus === 'saving' ? '의견 저장 중…' : '의견 저장' }}
+        {{ memoStatus === 'saving' ? '저장 중…' : '저장' }}
+      </Button>
+      <Button
+        variant="outline"
+        type="button"
+        :disabled="!memoDirty || memoStatus === 'saving'"
+        @click="emit('cancelMemo')"
+      >
+        취소
       </Button>
     </div>
   </div>
@@ -42,7 +41,7 @@ const emit = defineEmits<{
 .report-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   margin-top: 16px;
   padding-top: 16px;
@@ -68,3 +67,4 @@ const emit = defineEmits<{
   }
 }
 </style>
+
