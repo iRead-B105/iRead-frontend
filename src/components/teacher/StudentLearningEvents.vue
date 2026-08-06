@@ -1,63 +1,27 @@
 <script setup lang="ts">
-import { ChevronDownIcon, LoaderCircleIcon } from '@lucide/vue'
-
 import { Button } from '@/components/ui/button'
 import {
   formatStudentDateTime,
   studentLearningEventTypeLabels,
   type StudentLearningEvent,
-  type StudentLearningEventDetail,
-  type StudentLearningEventType,
   type StudentRequestStatus,
 } from '@/features/teacher/student'
 
-const attentionReasonLabels = {
-  LOW_ACCURACY: '낮은 읽기 정확도',
-  GAZE_ANALYSIS_FAILED: '시선 분석 실패',
-  INACTIVE: '장기간 학습 없음',
-  NO_HISTORY: '학습 기록 없음',
-} as const
-
-const props = withDefaults(
+withDefaults(
   defineProps<{
     events: readonly StudentLearningEvent[]
-    selectedEventId?: number | null
-    selectedEventType?: StudentLearningEventType | null
-    pendingEventId?: number | null
-    pendingEventType?: StudentLearningEventType | null
-    detail?: StudentLearningEventDetail | null
     listStatus?: StudentRequestStatus
     listError?: string | null
-    detailStatus?: StudentRequestStatus
-    detailError?: string | null
   }>(),
   {
-    selectedEventId: null,
-    selectedEventType: null,
-    pendingEventId: null,
-    pendingEventType: null,
-    detail: null,
     listStatus: 'idle',
     listError: null,
-    detailStatus: 'idle',
-    detailError: null,
   },
 )
 
 const emit = defineEmits<{
-  select: [event: StudentLearningEvent]
   retryList: []
-  retryDetail: [event: StudentLearningEvent]
-  openHistory: [eventType: Exclude<StudentLearningEventType, 'GAZE'>]
 }>()
-
-function isSelectedEvent(event: StudentLearningEvent): boolean {
-  return props.selectedEventId === event.eventId && props.selectedEventType === event.eventType
-}
-
-function isPendingEvent(event: StudentLearningEvent): boolean {
-  return props.pendingEventId === event.eventId && props.pendingEventType === event.eventType
-}
 
 function eventResultLabel(event: StudentLearningEvent): string {
   if (event.accuracy !== null) return `${event.accuracy}%`
@@ -65,35 +29,12 @@ function eventResultLabel(event: StudentLearningEvent): string {
   if (event.eventType === 'GAZE') return `주의 신호 ${event.attentionReasons.length}개`
   return '점수 미측정'
 }
-
-function hasRecommendation(event: StudentLearningEventDetail): boolean {
-  return (
-    event.recommendedTrainingTemplateId !== null ||
-    event.recommendedCurriculumUnitId !== null ||
-    event.recommendedCurriculumUnitName !== null ||
-    event.recommendationReason !== null
-  )
-}
-
-function historyButtonLabel(eventType: Exclude<StudentLearningEventType, 'GAZE'>): string {
-  return `${studentLearningEventTypeLabels[eventType]} 상세 이력 보기`
-}
-
-function recommendationAmountLabel(event: StudentLearningEventDetail): string {
-  const amounts = [
-    event.recommendedMinutes === null ? null : `${event.recommendedMinutes}분`,
-    event.recommendedRepeatCount === null ? null : `${event.recommendedRepeatCount}회 반복`,
-  ].filter((value): value is string => value !== null)
-  return amounts.length > 0 ? amounts.join(' · ') : '권장량 없음'
-}
 </script>
 
 <template>
   <section class="learning-events" aria-labelledby="recent-learning-title">
     <header class="learning-events__heading">
-      <div>
-        <h2 id="recent-learning-title">최근 학습 기록</h2>
-      </div>
+      <h2 id="recent-learning-title">최근 학습 기록</h2>
       <Button
         v-if="listStatus === 'error'"
         variant="outline"
@@ -119,122 +60,15 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
         v-for="event in events"
         :key="`${event.eventType}:${event.eventId}`"
         class="learning-event-item"
-        :class="{
-          'is-expanded': isSelectedEvent(event),
-          'is-pending': isPendingEvent(event),
-        }"
       >
-        <button
-          class="learning-event"
-          :class="{ 'is-selected': isSelectedEvent(event) }"
-          type="button"
-          :aria-expanded="isSelectedEvent(event)"
-          :aria-busy="isPendingEvent(event) ? 'true' : undefined"
-          :aria-controls="`learning-event-detail-${event.eventType}-${event.eventId}`"
-          @click="emit('select', event)"
-        >
+        <div class="learning-event">
           <span class="learning-event__copy">
             <strong>{{ studentLearningEventTypeLabels[event.eventType] }}</strong>
             <small>{{ formatStudentDateTime(event.occurredAt) }}</small>
           </span>
           <span class="learning-event__result">
-            <span>
-              <b>{{ eventResultLabel(event) }}</b>
-            </span>
-            <LoaderCircleIcon
-              v-if="isPendingEvent(event)"
-              class="learning-event__pending"
-              aria-hidden="true"
-            />
-            <ChevronDownIcon v-else class="learning-event__chevron" aria-hidden="true" />
+            <b>{{ eventResultLabel(event) }}</b>
           </span>
-        </button>
-        <div
-          v-if="isSelectedEvent(event)"
-          :id="`learning-event-detail-${event.eventType}-${event.eventId}`"
-          class="event-detail-shell"
-          :aria-busy="detailStatus === 'loading' ? 'true' : undefined"
-        >
-          <div
-            v-if="detailStatus === 'loading' && !detail"
-            class="detail-placeholder"
-            aria-live="polite"
-          >
-            학습 이벤트 상세를 불러오는 중입니다.
-          </div>
-
-          <div
-            v-else-if="detailStatus === 'error' && !detail"
-            class="detail-placeholder is-error"
-            role="alert"
-          >
-            <strong>학습 이벤트 상세를 불러오지 못했습니다.</strong>
-            <span>{{ detailError ?? '잠시 후 다시 시도해 주세요.' }}</span>
-            <Button variant="outline" size="sm" type="button" @click="emit('retryDetail', event)">
-              상세 다시 시도
-            </Button>
-          </div>
-
-          <article
-            v-else-if="detail"
-            :key="`${detail.eventType}:${detail.eventId}`"
-            class="event-detail"
-            aria-live="polite"
-          >
-            <div class="event-insight-grid">
-              <section class="event-insight">
-                <span>학습 결과</span>
-                <h4>확인이 필요한 학습 구간</h4>
-                <div>
-                  <ul v-if="detail.problemSegments.length" class="problem-segments">
-                    <li v-for="segment in detail.problemSegments" :key="segment">
-                      {{ segment }}
-                    </li>
-                  </ul>
-                  <span v-else>확인된 문제 구간 없음</span>
-                </div>
-              </section>
-              <section class="event-insight">
-                <span>교수자 확인</span>
-                <h4>추가로 살펴볼 신호</h4>
-                <div>
-                  <ul v-if="detail.attentionReasons.length" class="attention-reasons">
-                    <li v-for="reason in detail.attentionReasons" :key="reason">
-                      {{ attentionReasonLabels[reason] }}
-                    </li>
-                  </ul>
-                  <span v-else>추가로 확인할 신호 없음</span>
-                </div>
-              </section>
-              <section v-if="hasRecommendation(detail)" class="recommendation">
-                <span>다음 학습 제안</span>
-                <strong>{{ detail.recommendedCurriculumUnitName ?? '추천 단원 정보 없음' }}</strong>
-                <p>{{ detail.recommendationReason ?? '추천 이유가 제공되지 않았습니다.' }}</p>
-                <dl>
-                  <div>
-                    <dt>권장 학습량</dt>
-                    <dd>{{ recommendationAmountLabel(detail) }}</dd>
-                  </div>
-                  <div>
-                    <dt>추천 단원</dt>
-                    <dd>{{ detail.recommendedCurriculumUnitName ?? '정보 없음' }}</dd>
-                  </div>
-                </dl>
-              </section>
-              <p v-else class="recommendation-empty">다음 학습으로 제안된 훈련이 없습니다.</p>
-            </div>
-
-            <div v-if="detail.eventType !== 'GAZE'" class="event-detail__actions">
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                @click="emit('openHistory', detail.eventType)"
-              >
-                {{ historyButtonLabel(detail.eventType) }}
-              </Button>
-            </div>
-          </article>
         </div>
       </li>
     </ol>
@@ -255,19 +89,9 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
   gap: 16px;
 }
 
-.learning-events__heading h2,
-.learning-events__heading p {
-  margin: 0;
-}
-
 .learning-events__heading h2 {
+  margin: 0;
   font-size: 17px;
-}
-
-.learning-events__heading p {
-  margin-top: 4px;
-  color: var(--slate-500);
-  font-size: 12px;
 }
 
 .learning-event-list {
@@ -279,41 +103,19 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
 }
 
 .learning-event-item {
-  display: grid;
   overflow: hidden;
   border: 1px solid var(--border, #e2e8f0);
   border-radius: var(--radius-md, 10px);
   background: var(--card, #ffffff);
-  transition: all 0.18s ease;
-}
-
-.learning-event-item.is-expanded {
-  border-color: #93c5fd;
-  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.08);
 }
 
 .learning-event {
   display: grid;
-  width: 100%;
   min-height: 66px;
   align-items: center;
   gap: 14px;
   padding: 12px 14px;
-  border: 0;
-  border-radius: 0;
-  background: var(--card, #ffffff);
-  color: inherit;
   grid-template-columns: minmax(0, 1fr) auto;
-  text-align: left;
-  transition: all 0.18s ease;
-}
-
-.learning-event:hover {
-  background: var(--slate-50, #f8fafc);
-}
-
-.learning-event.is-selected {
-  background: #f0f6ff;
 }
 
 .learning-event__copy,
@@ -335,38 +137,10 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
 }
 
 .learning-event__result {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.learning-event__result > span {
-  display: grid;
   justify-items: end;
-  gap: 5px;
 }
 
-.learning-event__chevron {
-  width: 16px;
-  height: 16px;
-  color: var(--slate-400);
-  transition: transform 140ms ease;
-}
-
-.learning-event__pending {
-  width: 16px;
-  height: 16px;
-  color: var(--primary-600);
-  animation: learning-event-spin 700ms linear infinite;
-}
-
-.learning-event.is-selected .learning-event__chevron {
-  transform: rotate(180deg);
-}
-
-.content-state,
-.detail-placeholder {
+.content-state {
   display: grid;
   min-height: 96px;
   place-content: center;
@@ -381,211 +155,14 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
   text-align: center;
 }
 
-.content-state.is-error,
-.detail-placeholder.is-error {
+.content-state.is-error {
   border-color: color-mix(in oklch, var(--danger-600) 30%, var(--border));
   background: #fff1f2;
   color: var(--danger-600);
 }
 
-.content-state span,
-.detail-placeholder span {
+.content-state span {
   display: block;
-}
-
-.event-detail-shell {
-  display: grid;
-  min-height: 0;
-  align-items: start;
-  border-top: 1px solid var(--border);
-  background: #ffffff;
-}
-
-.event-detail-shell .detail-placeholder {
-  min-height: 180px;
-  border: 0;
-  border-radius: 0;
-}
-
-.event-detail {
-  display: grid;
-  gap: 16px;
-  padding: 18px;
-  background: #ffffff;
-}
-
-.recommendation > span {
-  color: var(--slate-500);
-  font-size: 11px;
-}
-
-.recommendation dl {
-  display: grid;
-  margin: 0;
-  gap: 10px;
-}
-
-.recommendation dl {
-  margin-top: 4px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.recommendation dl > div {
-  display: grid;
-  gap: 3px;
-  padding: 10px 12px;
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: var(--radius-sm, 6px);
-  background: var(--card, #ffffff);
-}
-
-.recommendation dt {
-  color: var(--slate-500);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.recommendation dd {
-  margin: 0;
-  color: var(--slate-900);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.event-insight-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.event-insight-grid > * {
-  min-width: 0;
-}
-
-.event-insight {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  padding: 14px;
-  border: 1px solid var(--slate-200);
-  border-radius: var(--radius-md);
-  background: var(--card);
-}
-
-.event-insight > span {
-  color: var(--primary-700);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.event-insight h4 {
-  margin: 0;
-  color: var(--slate-800);
-  font-size: 13px;
-  word-break: keep-all;
-}
-
-.event-insight > div {
-  color: var(--slate-600);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.problem-segments,
-.attention-reasons {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 4px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.problem-segments li {
-  flex: 0 1 auto;
-  white-space: nowrap;
-  word-break: keep-all;
-  padding: 3px 10px;
-  border-radius: 9999px;
-  background: #fff7ed;
-  border: 1px solid #ffedd5;
-  color: #c2410c;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.attention-reasons li {
-  flex: 0 1 auto;
-  white-space: nowrap;
-  word-break: keep-all;
-  padding: 3px 10px;
-  border-radius: 9999px;
-  background: #fef2f2;
-  border: 1px solid #fee2e2;
-  color: #b91c1c;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.recommendation {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  padding: 14px 16px;
-  border: 1px solid #c7d2fe;
-  border-radius: var(--radius-md, 8px);
-  background: linear-gradient(135deg, #f5f3ff 0%, #eff6ff 100%);
-}
-
-.recommendation strong {
-  color: #1e1b4b;
-  font-size: 14px;
-  font-weight: 700;
-  word-break: keep-all;
-}
-
-.recommendation p,
-.recommendation-empty {
-  margin: 0;
-  color: #475569;
-  font-size: 12px;
-  line-height: 1.55;
-  word-break: keep-all;
-}
-
-.recommendation-empty {
-  display: block;
-  box-sizing: border-box;
-  min-height: 100%;
-  padding: 14px;
-  border: 1px solid var(--slate-200);
-  border-radius: var(--radius-md);
-  background: var(--slate-100);
-}
-
-.event-detail__actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-@keyframes learning-event-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .learning-event-item,
-  .learning-event__chevron {
-    transition: none;
-  }
-
-  .learning-event__pending {
-    animation: none;
-  }
 }
 
 @media (max-width: 620px) {
@@ -594,19 +171,7 @@ function recommendationAmountLabel(event: StudentLearningEventDetail): string {
   }
 
   .learning-event__result {
-    justify-content: space-between;
-  }
-
-  .learning-event__result > span {
     justify-items: start;
-  }
-
-  .recommendation dl {
-    grid-template-columns: 1fr;
-  }
-
-  .event-detail {
-    padding: 16px;
   }
 }
 </style>
