@@ -1136,10 +1136,12 @@ export const useTrainingStore = defineStore('training', () => {
     abortHistoryRequests()
     historyGeneration += 1
     historyCurriculumGeneration += 1
-    historyDetailGeneration += 1
-    historyGazeGeneration += 1
-    clearHistoryState(studentId, false)
-    await loadCurriculumLogs(studentId, false)
+
+    curriculumLogsStatus.value = 'loading'
+    curriculumLogsError.value = null
+    curriculumLogsUiError.value = null
+
+    await loadCurriculumLogs(studentId, false, true)
   }
 
   async function retryHistory(): Promise<void> {
@@ -1156,12 +1158,18 @@ export const useTrainingStore = defineStore('training', () => {
     await loadCurriculumLogs(studentId, false)
   }
 
-  async function loadCurriculumLogs(studentId: number, background = false): Promise<boolean> {
+  async function loadCurriculumLogs(
+    studentId: number,
+    background = false,
+    onlyCurriculumReload = false,
+  ): Promise<boolean> {
     const controller = new AbortController()
     historyController = controller
     const generation = historyGeneration
     const requestedPeriod = period.value
-    if (!background && curriculumLogs.value.length === 0) curriculumLogsStatus.value = 'loading'
+    if (!background && (curriculumLogs.value.length === 0 || onlyCurriculumReload)) {
+      curriculumLogsStatus.value = 'loading'
+    }
     curriculumLogsError.value = null
     try {
       const logs = await repository.value.getCurriculumLogs(studentId, requestedPeriod, {
@@ -1179,12 +1187,16 @@ export const useTrainingStore = defineStore('training', () => {
         (left, right) =>
           right.date.localeCompare(left.date) || right.curriculumId - left.curriculumId,
       )
-      selectedCurriculumId.value = curriculumLogs.value.some(
+      const hasRetained = curriculumLogs.value.some(
         (item) => item.curriculumId === retainedCurriculumId,
       )
+      selectedCurriculumId.value = hasRetained
         ? retainedCurriculumId
         : (curriculumLogs.value[0]?.curriculumId ?? null)
       curriculumLogsStatus.value = 'success'
+      if (onlyCurriculumReload && hasRetained && trainingLogStatus.value === 'success') {
+        return true
+      }
       if (selectedCurriculumId.value !== null) {
         await loadHistoryCurriculum(studentId, selectedCurriculumId.value)
       } else {
