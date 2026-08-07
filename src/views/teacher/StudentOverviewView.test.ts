@@ -186,8 +186,8 @@ describe('StudentOverviewView', () => {
 
     expect(wrapper.find('.attention-state').exists()).toBe(false)
     expect(wrapper.text()).toContain('표시할 읽기 정확도 데이터가 없습니다.')
-    expect(wrapper.text()).toContain('아직 표시할 학습 이벤트가 없습니다.')
-    expect(wrapper.text()).toContain('전체 훈련 이력 보기')
+    expect(wrapper.text()).toContain('아직 표시할 학습 이력이 없습니다.')
+    expect(wrapper.text()).toContain('전체 학습 이력 보기')
     expect(wrapper.text()).not.toContain('최근 읽기 정확도 확인 필요')
 
     const tabs = wrapper.findAll('[role="tab"]')
@@ -359,9 +359,30 @@ describe('StudentOverviewView', () => {
       attentionReasons: ['LOW_ACCURACY'],
     }
     const listLearningEvents = vi.fn().mockResolvedValue([latestEvent, olderEvent])
+    const getTrainingHistory = vi.fn().mockResolvedValue({
+      learningHistory: [
+        {
+          trainingId: 902,
+          date: '2026-07-28',
+          learningType: '짧은 이야기 읽기',
+          startedAt: '2026-07-28T15:50:00+09:00',
+          finishedAt: '2026-07-28T16:00:00+09:00',
+          achievement: 82,
+        },
+        {
+          trainingId: 901,
+          date: '2026-07-27',
+          learningType: '받침 소리 구분',
+          startedAt: '2026-07-27T15:50:00+09:00',
+          finishedAt: '2026-07-27T16:00:00+09:00',
+          achievement: 60,
+        },
+      ],
+    })
     const getLearningEvent = vi.fn()
     const studentRepository = repository({
       listLearningEvents,
+      getTrainingHistory,
       getLearningEvent,
       getAccuracyTrend: vi.fn().mockResolvedValue({
         dailyAccuracy: [
@@ -419,11 +440,16 @@ describe('StudentOverviewView', () => {
     const { wrapper } = await mountOverview(studentRepository)
 
     expect(listLearningEvents).toHaveBeenCalledWith(1, { limit: 4 })
+    expect(getTrainingHistory).toHaveBeenCalledWith(1, '30d')
     expect(wrapper.find('[data-test="accuracy-chart"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('전체 훈련 이력 보기')
+    expect(wrapper.text()).toContain('전체 학습 이력 보기')
     const learningEventCards = wrapper.findAll('.learning-event')
     expect(learningEventCards).toHaveLength(2)
-    expect(learningEventCards[0]!.text()).toContain('이야기 학습')
+    expect(learningEventCards[0]!.text()).toContain('짧은 이야기 읽기')
+    expect(learningEventCards[0]!.text()).toContain('82%')
+    expect(learningEventCards[1]!.text()).toContain('받침 소리 구분')
+    expect(learningEventCards[1]!.text()).toContain('60%')
+    expect(wrapper.text()).not.toContain('주의 신호')
     expect(wrapper.find('.learning-event-list button').exists()).toBe(false)
     expect(wrapper.find('[aria-expanded]').exists()).toBe(false)
     expect(wrapper.find('.event-detail-shell').exists()).toBe(false)
@@ -439,12 +465,14 @@ describe('StudentOverviewView', () => {
     const { wrapper } = await mountOverview(
       repository({
         listLearningEvents: vi.fn().mockRejectedValue(new Error('이벤트 연결 실패')),
+        getTrainingHistory: vi.fn().mockRejectedValue(new Error('이력 연결 실패')),
         getAccuracyTrend: vi.fn().mockRejectedValue(new Error('정확도 연결 실패')),
         getReadingSpeedTrend: vi.fn().mockRejectedValue(new Error('읽기 속도 연결 실패')),
       }),
     )
 
-    expect(wrapper.text()).toContain('최근 학습 이벤트를 불러오지 못했습니다.')
+    expect(wrapper.text()).toContain('최근 학습 이력을 불러오지 못했습니다.')
+    expect(wrapper.text()).toContain('학습자 정보를 불러오지 못했습니다.')
     expect(wrapper.text()).toContain('정확도 추이를 불러오지 못했습니다.')
     expect(wrapper.text()).not.toContain('받침이 있는 문장 읽기')
 

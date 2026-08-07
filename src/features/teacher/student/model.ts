@@ -81,6 +81,7 @@ export interface StudentLearningEvent {
   readonly accuracy: number | null
   readonly attentionRequired: boolean
   readonly attentionReasons: readonly StudentAttentionReason[]
+  readonly title?: string
 }
 
 export interface StudentLearningEventDetail extends StudentLearningEvent {

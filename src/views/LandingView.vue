@@ -3,11 +3,9 @@ import { computed, onMounted, onUnmounted, ref, type Component } from 'vue'
 import {
   ArrowRight,
   BookOpenText,
-  BrainCircuit,
   CheckCircle2,
   Download,
   Eye,
-  Mic,
   Sparkles,
   Users,
 } from '@lucide/vue'
@@ -21,9 +19,10 @@ interface ServiceCard {
   subtitle: string
   description: string
   highlights: string[]
-  type: 'image' | 'visual-gaze' | 'visual-story' | 'visual-teacher'
   imageSrc: string
   imageAlt: string
+  showcaseTitle: string
+  showcaseTag: string
   icon: Component
   tone: string
 }
@@ -51,34 +50,36 @@ const cards: ServiceCard[] = [
     title: '아동에게 맞춰진 즐거운 읽기 첫걸음',
     subtitle: '나의 성장 · 이야기 나라 · 글자 연습 · 실력 도전',
     description:
-      '초등 저학년 아동이 부담 없이 자신의 속도에 맞춰 글자와 소리를 익히고 이야기 탐험을 이어갈 수 있는 아동 전용 인터페이스입니다.',
+      '아이가 나의 성장, 이야기 나라, 글자 연습, 실력 도전을 직접 고르며 자신의 속도로 읽기 여정을 이어갑니다.',
     highlights: [
-      '아동 친화적 UI 및 흥미 유도 캐릭터 구성',
-      '오늘의 읽기 미션으로 꾸준한 습관 형성',
-      '난이도 자동 조절로 아동별 읽기 자신감 향상',
+      '네 가지 학습 영역을 한눈에 보여주는 섬 지도',
+      '큰 글자와 캐릭터로 구성한 아동 친화적 화면',
+      '성장과 연습, 이야기를 하나의 학습 여정으로 연결',
     ],
-    type: 'image',
-    imageSrc: '/images/learner-home-screenshot.png',
+    imageSrc: '/images/landing-learner-home.png',
     imageAlt: '나의 성장, 이야기 나라, 글자 연습, 실력 도전으로 구성된 아동용 아이리드 메인 화면',
+    showcaseTitle: '아동용 아이리드 메인 화면',
+    showcaseTag: '나만의 읽기 여정',
     icon: Sparkles,
     tone: 'blue',
   },
   {
     id: 'eyetracking-voice',
-    category: '시선·음성 훈련',
-    badge: 'AI 정밀 분석',
-    title: '시선 추적과 음성 반응으로 정밀하게',
-    subtitle: '읽기 흐름과 발음 정확도를 한 번에',
+    category: '맞춤 글자 훈련',
+    badge: '상호작용 학습',
+    title: '듣고, 보고, 고르며 익히는 글자',
+    subtitle: '소리 구별부터 발음 연습까지',
     description:
-      '아이가 글을 읽는 시선의 이탈과 머무름을 분석하고, Azure Speech 기반 음성 평가로 발음 정확도와 억양을 다각도로 관측합니다.',
+      '아이가 소리를 듣고 비슷한 글자를 고르며 글자와 소리의 관계를 자연스럽게 익힙니다. 큰 선택 카드와 짧은 안내로 학습에만 집중할 수 있습니다.',
     highlights: [
-      '시선 고정(Fixation) 및 역행(Regression) 실시간 관측',
-      '단어별 발음 정확도 및 음성 훈련 피드백',
-      '비침습적 웹캠 기반 시선 인식 기술 지원',
+      '듣기 버튼과 큰 선택 카드로 직관적인 훈련',
+      '노랑·민트·보라 카드로 선택지를 명확하게 구분',
+      '상단 진행 표시와 다음 버튼으로 학습 순서를 안내',
     ],
-    type: 'visual-gaze',
-    imageSrc: '',
-    imageAlt: '',
+    imageSrc: '/images/landing-letter-training.png',
+    imageAlt: '비슷한 소리를 듣고 난, 달, 밤 중 정답을 고르는 아동용 글자 훈련 화면',
+    showcaseTitle: '아동용 글자·소리 훈련 화면',
+    showcaseTag: '듣고 정답 고르기',
     icon: Eye,
     tone: 'purple',
   },
@@ -87,17 +88,18 @@ const cards: ServiceCard[] = [
     category: '이야기 읽기',
     badge: '맞춤 훈련',
     title: '이야기 속에서 자연스럽게 자라는 문해력',
-    subtitle: '단어 연습에서 단락 이해까지',
+    subtitle: '이야기를 읽고 스스로 생각하는 시간',
     description:
-      '재미있는 동화와 이야기 속에서 글자-소리 대응을 익히고, 아이의 개별 반응 데이터에 맞춰 유기적인 커리큘럼을 제공합니다.',
+      '친근한 동화 장면을 함께 읽고 다음 이야기를 예상하며, 내용 이해와 표현력을 함께 키웁니다.',
     highlights: [
-      '단계별 어휘 및 상호작용형 동화 콘텐츠',
-      '오독·재시도 시 따뜻한 안내 및 힌트 팝업',
-      '아동의 읽기 동기를 높이는 스티커 보상',
+      '한 화면에 집중할 수 있는 큰 동화 장면',
+      '이야기 흐름을 이어가는 예측·이해 질문',
+      '이전·다음 페이지로 자연스럽게 이어지는 독서 흐름',
     ],
-    type: 'visual-story',
-    imageSrc: '',
-    imageAlt: '',
+    imageSrc: '/images/landing-story-reading.png',
+    imageAlt: '토끼와 거북이 이야기를 보며 다음 작전을 묻는 아동용 이야기 읽기 화면',
+    showcaseTitle: '아동용 이야기 읽기 화면',
+    showcaseTag: '읽고 생각하기',
     icon: BookOpenText,
     tone: 'amber',
   },
@@ -105,18 +107,19 @@ const cards: ServiceCard[] = [
     id: 'teacher-web',
     category: '교수자 웹',
     badge: '학습 관리',
-    title: '아이의 오늘을 보고 다음 성장을 지원합니다',
-    subtitle: '학습 현황 · 정밀 분석 · 개별 커리큘럼',
+    title: '검사 결과를 한눈에, 다음 지도를 더 정교하게',
+    subtitle: '검사 이력 · 지표 비교 · 문항별 분석',
     description:
-      '교수자는 아동별 학습 이력, 검사 결과, 시선·음성 분석 리포트를 종합적으로 확인하고 최적의 교육 지침을 수립할 수 있습니다.',
+      '교수자는 아동의 검사 점수와 지표별 변화, 문항별 답변과 풀이 과정을 살펴보며 필요한 지도 방향을 구체화할 수 있습니다.',
     highlights: [
-      '아동별 실시간 학습 현황 및 출석 관리',
-      '시선 히트맵 및 읽기 속도 데이터 시각화',
-      '전문가 가이드라인에 맞춘 개별 보고서 생성',
+      '여러 검사의 점수·풀이 시간·시선 이탈 횟수 비교',
+      '음운 인식·짧은 글·유창성을 구분한 영역별 결과',
+      '제출 답안, 정답, 점수를 함께 보는 문항별 기록',
     ],
-    type: 'visual-teacher',
-    imageSrc: '',
-    imageAlt: '',
+    imageSrc: '/images/landing-teacher-history.png',
+    imageAlt: '아동의 검사 점수 비교 차트와 문항별 결과를 보여주는 교수자 검사 이력 화면',
+    showcaseTitle: '교수자 검사 이력 화면',
+    showcaseTag: '지표별 결과 분석',
     icon: Users,
     tone: 'green',
   },
@@ -309,138 +312,18 @@ function scrollToSection(index: number) {
           <!-- Right Side: Content Showcase Card -->
           <div class="hero-right">
             <div class="card-frame" :class="`frame--${card.tone}`">
-              <!-- Card Type 1: Learner App Image Screenshot -->
-              <div v-if="card.type === 'image'" class="showcase-box image-showcase">
+              <div class="showcase-box image-showcase">
                 <div class="showcase-topbar">
                   <span class="dot red"></span>
                   <span class="dot yellow"></span>
                   <span class="dot green"></span>
-                  <span class="showcase-title">아동용 아이리드 실행 화면</span>
+                  <span class="showcase-title">{{ card.showcaseTitle }}</span>
                 </div>
                 <div class="image-wrapper">
-                  <img :src="card.imageSrc" :alt="card.imageAlt" />
+                  <img :src="card.imageSrc" :alt="card.imageAlt" loading="lazy" />
                   <div class="image-overlay-tag">
                     <Sparkles :size="16" />
-                    <span>개인화 학습 홈</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Card Type 2: Eyetracking & Voice Visual -->
-              <div v-else-if="card.type === 'visual-gaze'" class="showcase-box gaze-showcase">
-                <div class="showcase-topbar">
-                  <span class="dot red"></span>
-                  <span class="dot yellow"></span>
-                  <span class="dot green"></span>
-                  <span class="showcase-title">시선 추적 & 음성 평가 엔진</span>
-                </div>
-                <div class="gaze-visual-body">
-                  <div class="gaze-reader-preview">
-                    <div class="reader-header">
-                      <span class="student-badge">
-                        <img src="/images/student-profile-boy.png" alt="아동 프로필" class="mini-avatar" />
-                        민우 아동 훈련 중
-                      </span>
-                      <span class="gaze-status">
-                        <Eye :size="14" /> 시선 추적 활성
-                      </span>
-                    </div>
-
-                    <div class="reader-text-box">
-                      <p class="sample-text">
-                        <span class="word read-perfect">소나무가</span>
-                        <span class="word read-perfect">바람에</span>
-                        <span class="word gaze-target">살랑살랑</span>
-                        <span class="word read-pending">흔들립니다.</span>
-                      </p>
-                      <div class="gaze-point-pulse" style="top: 48%; left: 52%">
-                        <span class="pulse-ring"></span>
-                        <span class="pulse-dot"></span>
-                      </div>
-                    </div>
-
-                    <div class="voice-meter-bar">
-                      <div class="voice-label">
-                        <Mic :size="15" /> Azure Speech 음성 정밀 분석
-                      </div>
-                      <div class="sound-wave">
-                        <i style="height: 60%"></i><i style="height: 100%"></i><i style="height: 40%"></i><i style="height: 80%"></i><i style="height: 50%"></i>
-                      </div>
-                      <span class="score-badge">발음 정확도 94점</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Card Type 3: Story Scene Visual -->
-              <div v-else-if="card.type === 'visual-story'" class="showcase-box story-showcase">
-                <div class="showcase-topbar">
-                  <span class="dot red"></span>
-                  <span class="dot yellow"></span>
-                  <span class="dot green"></span>
-                  <span class="showcase-title">이야기 나라 · 부엉이의 숲</span>
-                </div>
-                <div class="story-visual-body">
-                  <div class="story-canvas">
-                    <img src="/images/story-scene-owl.svg" alt="부엉이 이야기 장면" class="owl-illustration" />
-                    <div class="story-speech-bubble">
-                      <p class="story-quote">"밤하늘의 별들이 반짝이며 길을 밝혀주어요!"</p>
-                      <div class="interactive-word-chips">
-                        <span class="word-chip active">밤하늘</span>
-                        <span class="word-chip">반짝반짝</span>
-                        <span class="word-chip">길잡이</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Card Type 4: Teacher Web Visual -->
-              <div v-else-if="card.type === 'visual-teacher'" class="showcase-box teacher-showcase">
-                <div class="showcase-topbar">
-                  <span class="dot red"></span>
-                  <span class="dot yellow"></span>
-                  <span class="dot green"></span>
-                  <span class="showcase-title">교수자 학습 관리 콘솔</span>
-                </div>
-                <div class="teacher-visual-body">
-                  <div class="teacher-dashboard-preview">
-                    <div class="dash-sidebar">
-                      <span class="dash-menu active"><Users :size="14" /> 아동 목록</span>
-                      <span class="dash-menu"><BrainCircuit :size="14" /> 분석 리포트</span>
-                    </div>
-                    <div class="dash-content">
-                      <div class="student-info-row">
-                        <img src="/images/student-profile-girl.png" alt="학생" class="dash-avatar" />
-                        <div>
-                          <strong>이지은 아동</strong>
-                          <small>최근 학습: 오늘 14:20</small>
-                        </div>
-                        <span class="status-tag tag-success">훈련 정상</span>
-                      </div>
-
-                      <div class="dash-metrics-grid">
-                        <div class="metric-card">
-                          <small>주간 학습 시간</small>
-                          <strong>140분</strong>
-                        </div>
-                        <div class="metric-card">
-                          <small>읽기 속도 (WPM)</small>
-                          <strong>118 WPM</strong>
-                        </div>
-                      </div>
-
-                      <div class="dash-chart-box">
-                        <div class="chart-title">주간 읽기 수행률 변화</div>
-                        <div class="chart-bars">
-                          <div class="bar-col"><span style="height: 45%"></span><small>월</small></div>
-                          <div class="bar-col"><span style="height: 60%"></span><small>화</small></div>
-                          <div class="bar-col"><span style="height: 75%"></span><small>수</small></div>
-                          <div class="bar-col"><span style="height: 90%"></span><small>목</small></div>
-                          <div class="bar-col highlight"><span style="height: 95%"></span><small>금</small></div>
-                        </div>
-                      </div>
-                    </div>
+                    <span>{{ card.showcaseTag }}</span>
                   </div>
                 </div>
               </div>
@@ -1090,12 +973,13 @@ function scrollToSection(index: number) {
   width: 100%;
   aspect-ratio: 16 / 10;
   overflow: hidden;
+  background: #f5f7fa;
 }
 
 .image-wrapper img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .image-overlay-tag {

@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/card'
 import { useTemporaryNotice } from '@/composables/useTemporaryNotice'
 import {
   normalizeTeacherMemo,
+  trainingHistoryQueryKey,
   validateTeacherMemo,
   type StudentLearningEvent,
   type StudentLearningEventType,
@@ -32,12 +33,6 @@ const detailErrorStatus = computed(
 )
 
 const learningEvents = computed(() => studentStore.learningEventsById[studentId.value] ?? [])
-const learningEventsStatus = computed(
-  () => studentStore.learningEventsStatusById[studentId.value] ?? 'idle',
-)
-const learningEventsError = computed(
-  () => studentStore.learningEventsErrorById[studentId.value] ?? null,
-)
 const accuracyTrendStatus = computed(
   () => studentStore.accuracyTrendStatusById[studentId.value] ?? 'idle',
 )
@@ -62,8 +57,20 @@ const readingSpeedTrend = computed(
 const readingSpeedRecords = computed(
   () => studentStore.readingSpeedRecordsById[studentId.value] ?? null,
 )
+const recentHistoryQuery = '30d' as const
+const recentHistoryKey = computed(() =>
+  studentStore.insightKey(studentId.value, trainingHistoryQueryKey(recentHistoryQuery)),
+)
+const trainingHistory = computed(
+  () => studentStore.trainingHistoryByKey[recentHistoryKey.value] ?? null,
+)
+const trainingHistoryStatus = computed(
+  () => studentStore.trainingHistoryStatusByKey[recentHistoryKey.value] ?? 'idle',
+)
+const trainingHistoryError = computed(
+  () => studentStore.trainingHistoryErrorByKey[recentHistoryKey.value] ?? null,
+)
 const selectedTrend = ref<'accuracy' | 'reading-speed'>('accuracy')
-const recentLearningEvents = computed(() => learningEvents.value.slice(0, 4))
 const eventTypeLabels: Readonly<Record<StudentLearningEventType, string>> = {
   TEST: '읽기 검사',
   TRAINING: '훈련',
@@ -80,6 +87,34 @@ function recordMatchesEvent(
     record.sourceType.toUpperCase() === event.eventType
   )
 }
+
+const recentLearningEvents = computed(() => {
+  return learningEvents.value.slice(0, 4).map((event) => {
+    const record = accuracyRecords.value?.records.find((item) => recordMatchesEvent(item, event))
+    const accuracy = event.accuracy ?? record?.accuracy ?? null
+    const title = event.title || record?.trainingName || eventTypeLabels[event.eventType]
+    return {
+      ...event,
+      title,
+      accuracy,
+    }
+  })
+})
+
+function historyTimeValue(value: string | null, fallbackDate: string): number {
+  const time = Date.parse(value ?? fallbackDate)
+  return Number.isNaN(time) ? 0 : time
+}
+
+const recentTrainingHistory = computed(() =>
+  [...(trainingHistory.value?.learningHistory ?? [])]
+    .sort(
+      (left, right) =>
+        historyTimeValue(right.finishedAt ?? right.startedAt, right.date) -
+        historyTimeValue(left.finishedAt ?? left.startedAt, left.date),
+    )
+    .slice(0, 4),
+)
 
 const accuracyChartPoints = computed(() => {
   const eventPoints = [...recentLearningEvents.value].reverse().flatMap((event) => {
@@ -237,6 +272,7 @@ async function loadOverview(nextStudentId: number): Promise<void> {
     studentStore.loadAccuracyRecords(nextStudentId),
     studentStore.loadReadingSpeedTrend(nextStudentId),
     studentStore.loadReadingSpeedRecords(nextStudentId),
+    studentStore.loadTrainingHistory(nextStudentId, recentHistoryQuery),
   ])
   if (studentId.value !== nextStudentId) return
   noteDraft.value = studentStore.detailsById[nextStudentId]?.teacherMemo ?? ''
@@ -321,16 +357,16 @@ watch(studentId, loadOverview, { immediate: true })
       <div class="learning-analysis">
         <aside class="recent-panel" aria-label="최근 학습 기록">
           <StudentLearningEvents
-            :events="recentLearningEvents"
-            :list-status="learningEventsStatus"
-            :list-error="learningEventsError"
-            @retry-list="studentStore.loadLearningEvents(detail.studentId, 4)"
+            :history="recentTrainingHistory"
+            :list-status="trainingHistoryStatus"
+            :list-error="trainingHistoryError"
+            @retry-list="studentStore.loadTrainingHistory(detail.studentId, recentHistoryQuery)"
           />
           <RouterLink
             class="history-link"
             :to="{ name: 'student-training-history', params: { id: detail.studentId } }"
           >
-            전체 훈련 이력 보기
+            전체 학습 이력 보기
           </RouterLink>
         </aside>
 
