@@ -83,7 +83,9 @@ describe('StudentTrainingHistoryView', () => {
     expect(wrapper.text()).not.toContain('오답 문항에 한해 제공됩니다.')
     expect(wrapper.text()).toContain('다음 중 끝소리가 같은 낱말을 고르세요.')
     expect(wrapper.text()).toContain('보기: 꽃, 옷 / 꽃, 낮')
-    expect(wrapper.text()).toContain('음성 응답 완료')
+    // 학습자 제출 답안 열은 화면에서 제거했다(정답만 노출).
+    expect(wrapper.text()).not.toContain('음성 응답 완료')
+    expect(wrapper.text()).not.toContain('학습자 답')
     expect(wrapper.text()).toContain('100점')
     expect(wrapper.text()).not.toContain('선택 훈련 정확도 비교')
     expect(wrapper.find('[data-test="chart"]').exists()).toBe(false)
