@@ -212,9 +212,12 @@ export const useReportStore = defineStore('report', () => {
     }
   }
 
-  async function createReport(studentId: number): Promise<boolean> {
+  // maxSelectableDate: 종료일 상한. 데모 치트로 학습일을 넘기면 아동의 학습 날짜가
+  // 달력상 오늘보다 앞서므로, 뷰가 계산한 학습 날짜 기준 상한을 그대로 받는다.
+  // 생략하면 달력상 오늘로 검증한다.
+  async function createReport(studentId: number, maxSelectableDate?: string): Promise<boolean> {
     if (createStatus.value === 'submitting') return false
-    const periodErrors = validateReportPeriod(startDate.value, endDate.value)
+    const periodErrors = validateReportPeriod(startDate.value, endDate.value, maxSelectableDate)
     if (periodErrors.startDate || periodErrors.endDate) {
       createStatus.value = 'error'
       createError.value = periodErrors.startDate ?? periodErrors.endDate ?? null
