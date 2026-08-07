@@ -2,14 +2,13 @@
 import { Button } from '@/components/ui/button'
 import {
   formatStudentDateTime,
-  studentLearningEventTypeLabels,
-  type StudentLearningEvent,
   type StudentRequestStatus,
+  type StudentTrainingHistoryItem,
 } from '@/features/teacher/student'
 
 withDefaults(
   defineProps<{
-    events: readonly StudentLearningEvent[]
+    history: readonly StudentTrainingHistoryItem[]
     listStatus?: StudentRequestStatus
     listError?: string | null
   }>(),
@@ -23,11 +22,12 @@ const emit = defineEmits<{
   retryList: []
 }>()
 
-function eventResultLabel(event: StudentLearningEvent): string {
-  if (event.accuracy !== null) return `${event.accuracy}%`
-  if (event.eventType === 'STORY') return '이야기 학습'
-  if (event.eventType === 'GAZE') return `주의 신호 ${event.attentionReasons.length}개`
-  return '점수 미측정'
+function accuracyLabel(item: StudentTrainingHistoryItem): string {
+  return item.achievement === null ? '정확도 미측정' : `${item.achievement}%`
+}
+
+function learningDateTime(item: StudentTrainingHistoryItem): string {
+  return formatStudentDateTime(item.finishedAt ?? item.startedAt ?? item.date)
 }
 </script>
 
@@ -47,27 +47,27 @@ function eventResultLabel(event: StudentLearningEvent): string {
     </header>
 
     <p v-if="listStatus === 'loading'" class="content-state" aria-live="polite">
-      최근 학습 이벤트를 불러오는 중입니다.
+      최근 학습 이력을 불러오는 중입니다.
     </p>
     <div v-else-if="listStatus === 'error'" class="content-state is-error" role="alert">
-      <strong>최근 학습 이벤트를 불러오지 못했습니다.</strong>
+      <strong>최근 학습 이력을 불러오지 못했습니다.</strong>
       <span>{{ listError ?? '잠시 후 다시 확인해 주세요.' }}</span>
     </div>
-    <p v-else-if="events.length === 0" class="content-state">아직 표시할 학습 이벤트가 없습니다.</p>
+    <p v-else-if="history.length === 0" class="content-state">아직 표시할 학습 이력이 없습니다.</p>
 
     <ol v-else class="learning-event-list">
       <li
-        v-for="event in events"
-        :key="`${event.eventType}:${event.eventId}`"
+        v-for="item in history"
+        :key="item.trainingId"
         class="learning-event-item"
       >
         <div class="learning-event">
           <span class="learning-event__copy">
-            <strong>{{ studentLearningEventTypeLabels[event.eventType] }}</strong>
-            <small>{{ formatStudentDateTime(event.occurredAt) }}</small>
+            <strong>{{ item.learningType }}</strong>
+            <small>{{ learningDateTime(item) }}</small>
           </span>
           <span class="learning-event__result">
-            <b>{{ eventResultLabel(event) }}</b>
+            <b>{{ accuracyLabel(item) }}</b>
           </span>
         </div>
       </li>
