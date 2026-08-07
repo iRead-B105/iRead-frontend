@@ -209,19 +209,6 @@ function questionStatusClass(question: TrainingHistoryQuestionResult): string {
   return question.correct ? 'is-correct' : 'is-incorrect'
 }
 
-function selectedAnswerDetail(question: TrainingHistoryQuestionResult): string {
-  if (question.responseType === 'AUDIO') {
-    return hasSubmittedAnswer(question) ? '음성 응답 완료' : '미제출'
-  }
-  const formatted = formatTrainingQuestionAnswer(
-    question.selectedAnswer,
-    question.responseType,
-    question.question,
-  )
-  if (formatted) return formatted
-  return hasSubmittedAnswer(question) ? '응답 데이터 없음' : '미제출'
-}
-
 function correctAnswerDetail(question: TrainingHistoryQuestionResult): string {
   return (
     formatTrainingQuestionAnswer(
@@ -494,7 +481,6 @@ function formatQuestionScore(score: number | null): string | null {
                     <div class="question-table__head">
                       <span>문항</span>
                       <span>정답 여부</span>
-                      <span>학습자 답</span>
                       <span>정답</span>
                     </div>
                     <div
@@ -517,7 +503,6 @@ function formatQuestionScore(score: number | null): string | null {
                           {{ formatQuestionScore(question.score) }}
                         </small>
                       </span>
-                      <span>{{ selectedAnswerDetail(question) }}</span>
                       <span>{{ correctAnswerDetail(question) }}</span>
                     </div>
                   </div>
@@ -1000,7 +985,7 @@ dd {
   min-width: 750px;
   align-items: center;
   gap: 12px;
-  grid-template-columns: minmax(260px, 1.5fr) 110px minmax(130px, 0.8fr) minmax(130px, 0.8fr);
+  grid-template-columns: minmax(260px, 1.5fr) 110px minmax(130px, 0.8fr);
 }
 
 .question-table__head {

@@ -769,7 +769,6 @@ const activeTrackQuestions = computed(() => {
                     <th scope="col">문항</th>
                     <th scope="col">질문 / 내용</th>
                     <th scope="col">채점</th>
-                    <th scope="col">제출 답안</th>
                     <th scope="col">정답</th>
                     <th scope="col">점수</th>
                     <th scope="col">발음 점수</th>
@@ -794,7 +793,6 @@ const activeTrackQuestions = computed(() => {
                     <td class="col-status">
                       <span :class="questionStatusClass(question)">{{ questionStatus(question) }}</span>
                     </td>
-                    <td class="col-answer">{{ formatTestAnswer(question.selectedAnswer) }}</td>
                     <td class="col-answer">{{ formatTestAnswer(question.correctAnswer) }}</td>
                     <td class="col-metric">{{ formatMetric(question.score, '점') }}</td>
                     <td class="col-metric">{{ formatPronunciationMetric(question) }}</td>

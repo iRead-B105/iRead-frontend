@@ -164,7 +164,8 @@ describe('StudentTestHistoryView', () => {
     expect(wrapper.text()).toContain('짧은 글')
     expect(wrapper.text()).toContain('유창성')
     expect(wrapper.findAll('.question-table tbody tr')).toHaveLength(3)
-    expect(wrapper.text()).toContain('제출 답안')
+    // 제출 답안 열은 화면에서 제거했다(정답만 노출).
+    expect(wrapper.text()).not.toContain('제출 답안')
     expect(wrapper.text()).toContain('발음 점수')
     expect(wrapper.text()).toContain('해당 없음')
     expect(wrapper.text()).not.toContain('추천 훈련 커리큘럼')

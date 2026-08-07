@@ -110,6 +110,40 @@ describe('Report store', () => {
     expect(store.reports[0]?.reportId).toBe(created.reportId)
   })
 
+  it('학습 날짜 상한을 넘기면 달력상 오늘 이후의 종료일도 생성할 수 있다', async () => {
+    // 데모 치트로 학습일을 넘기면 아동의 학습 날짜가 달력상 오늘보다 앞선다.
+    // 뷰가 계산한 상한(maxSelectableDate)을 전달하면 그 날짜까지 허용해야 한다.
+    const future = new Date()
+    future.setDate(future.getDate() + 3)
+    const futureDate = future.toISOString().slice(0, 10)
+    const created = { reportId: 3003, createdAt: '2026-07-28T10:00:00+09:00' }
+    const detail: ReportDetail = {
+      ...reportFixtures[0]!,
+      reportId: created.reportId,
+      startDate: '2026-07-03',
+      endDate: futureDate,
+      createdAt: created.createdAt,
+    }
+    const store = useReportStore()
+    store.setRepository(
+      repository({
+        listByStudent: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([detail]),
+        create: vi.fn().mockResolvedValue(created),
+        get: vi.fn().mockResolvedValue(detail),
+      }),
+    )
+    await store.loadForStudent(1)
+    store.startDate = '2026-07-03'
+    store.endDate = futureDate
+
+    // 상한 없이 부르면 달력상 오늘 기준으로 거부된다.
+    await expect(store.createReport(1)).resolves.toBe(false)
+    expect(store.createError).toBe('종료일은 오늘 이후로 선택할 수 없습니다.')
+
+    // 학습 날짜 상한을 넘기면 통과한다.
+    await expect(store.createReport(1, futureDate)).resolves.toBe(true)
+  })
+
   it('완료 학습일이 없다는 서버 오류를 1일 기준 안내로 변환한다', async () => {
     const store = useReportStore()
     store.setRepository(

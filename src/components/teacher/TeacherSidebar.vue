@@ -207,8 +207,8 @@ onMounted(() => {
   top: 0;
   display: flex;
   height: 100vh;
-  width: 224px;
-  min-width: 224px;
+  width: 240px;
+  min-width: 240px;
   max-width: 100%;
   align-self: start;
   flex-direction: column;

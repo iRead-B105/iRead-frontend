@@ -273,7 +273,7 @@ function retrySelectedHistory(): void {
 
 async function generateReport(): Promise<void> {
   if (studentId.value === null) return
-  await reportStore.createReport(studentId.value)
+  await reportStore.createReport(studentId.value, maxSelectableDate.value)
 }
 
 async function selectReport(report: ReportListItem): Promise<void> {

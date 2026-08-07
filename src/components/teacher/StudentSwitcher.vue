@@ -148,7 +148,7 @@ onBeforeUnmount(() => {
       :aria-expanded="isOpen"
       aria-haspopup="dialog"
       aria-controls="student-switcher-popover"
-      :aria-label="currentStudent ? '학습자 변경' : '아동 목록에서 학습자 선택'"
+      :aria-label="currentStudent ? '학습자 변경' : '아동 선택'"
       @click="toggle"
     >
       <AuthenticatedImage
@@ -164,7 +164,7 @@ onBeforeUnmount(() => {
       </span>
       <span class="student-switcher__identity">
         <strong>{{ currentStudent?.name ?? '아동을 선택해 주세요' }}</strong>
-        <small>{{ currentStudent?.school ?? '목록에서 학습자 선택' }}</small>
+        <small v-if="currentStudent?.school">{{ currentStudent.school }}</small>
       </span>
       <span aria-hidden="true" class="trigger-icon">⌄</span>
     </Button>
@@ -301,10 +301,10 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 60px;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 8px 8px;
   border: 1px solid var(--slate-200);
-  grid-template-columns: 42px minmax(0, 1fr) 16px;
+  grid-template-columns: 40px minmax(0, 1fr) 16px;
 }
 .student-switcher__trigger:hover {
   background: var(--interactive-hover-background);
@@ -342,14 +342,20 @@ onBeforeUnmount(() => {
 }
 .student-switcher__identity,
 .student-option > span:nth-child(2) {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   min-width: 0;
   gap: 2px;
+  text-align: left;
 }
 .student-switcher__identity strong,
 .student-option strong {
   overflow: hidden;
   color: var(--slate-900);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
