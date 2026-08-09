@@ -117,6 +117,15 @@ const recentTrainingHistory = computed(() =>
 )
 
 const accuracyChartPoints = computed(() => {
+  // 날짜별 추이를 먼저 쓴다. 최근 학습 4건은 같은 날 훈련이 몰리면 네 점의
+  // 날짜가 모두 같아져 가로축이 한 날짜로 반복돼 보인다.
+  const dailyPoints = (accuracyTrend.value?.dailyAccuracy ?? []).slice(-4).map((point) => ({
+    date: point.date,
+    label: '읽기 정확도',
+    value: point.accuracy,
+  }))
+  if (dailyPoints.length >= 2) return dailyPoints
+
   const eventPoints = [...recentLearningEvents.value].reverse().flatMap((event) => {
     const record = accuracyRecords.value?.records.find((item) => recordMatchesEvent(item, event))
     const value = event.accuracy ?? record?.accuracy
@@ -148,6 +157,14 @@ const accuracyChartPoints = computed(() => {
 })
 
 const readingSpeedChartPoints = computed(() => {
+  // 정확도 차트와 같은 이유로 날짜별 추이를 먼저 쓴다.
+  const dailyPoints = (readingSpeedTrend.value?.points ?? []).slice(-4).map((point) => ({
+    date: point.date,
+    label: '읽기 속도',
+    value: point.speed,
+  }))
+  if (dailyPoints.length >= 2) return dailyPoints
+
   const eventPoints = [...recentLearningEvents.value].reverse().flatMap((event) => {
     const record = readingSpeedRecords.value?.records.find((item) =>
       recordMatchesEvent(item, event),
